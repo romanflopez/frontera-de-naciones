@@ -110,6 +110,8 @@ export function loadSettings(): Settings {
     // FDN_PING_ALLOWED_VARIANCE=10000 afloja el corte por ping inestable sin tocar settings.json.
     const v = Number(process.env.FDN_PING_ALLOWED_VARIANCE);
     if (Number.isFinite(v) && v > 0) s.ping.allowedVariance = v;
+    const port = Number(process.env.PORT);
+    if (Number.isInteger(port) && port > 0) s.port = port; // los hosts (Fly, Render, Koyeb) mandan el puerto por PORT
     return s;
 }
 
