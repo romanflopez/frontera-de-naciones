@@ -1,0 +1,6 @@
+* text=auto eol=lf
+*.spr binary
+*.amd binary
+*.png binary
+*.jpg binary
+*.mp3 binary

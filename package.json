@@ -1,0 +1,19 @@
+{
+  "name": "frontera-de-naciones",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "dev": "pnpm --filter @fdn/tools placeholders:ensure && pnpm --filter @fdn/client dev",
+    "build": "pnpm --filter @fdn/tools placeholders:ensure && pnpm --filter @fdn/client build",
+    "assets": "pnpm --filter @fdn/tools placeholders",
+    "proto": "pnpm --filter @fdn/proto generate",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "grpc-tools",
+      "@napi-rs/canvas"
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.vite/
+*.log
+.DS_Store
+# Nunca subir assets del Helbreath original
+**/*.pak
+reference/**/Chars/
+# Assets provisorios: se generan con `pnpm assets`
+apps/client/public/assets/
