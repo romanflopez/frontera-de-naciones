@@ -10,7 +10,7 @@
 export const MAP_SIZE = 40;
 
 export interface Prop { id: number; x: number; y: number }
-export interface Zone { type: 'goblin' | 'zombie' | 'skeleton' | 'barbaro'; x: number; y: number; r: number; n: number; name: string }
+export interface Zone { type: 'goblin' | 'zombie' | 'skeleton' | 'barbaro' | 'arana' | 'golem' | 'demonio'; x: number; y: number; r: number; n: number; name: string }
 
 export interface WorldMap {
     size: number;
@@ -76,6 +76,10 @@ export function buildSolmar(): WorldMap {
         { type: 'zombie', x: 28, y: 11, r: 5, n: 3, name: 'Pantano muerto' },
         { type: 'skeleton', x: 29, y: 29, r: 5, n: 2, name: 'Cementerio viejo' },
         { type: 'barbaro', x: 34, y: 20, r: 2, n: 1, name: 'Guarida del bárbaro' },
+        // más lejos del campamento = boss más duro (van al final para no mover los índices de arriba)
+        { type: 'arana', x: 10, y: 28, r: 2, n: 1, name: 'Nido de la araña' },
+        { type: 'golem', x: 20, y: 36, r: 2, n: 1, name: 'Cueva del gólem de hielo' },
+        { type: 'demonio', x: 35, y: 35, r: 2, n: 1, name: 'Foso del demonio' },
     ];
     const near = (x: number, y: number, z: Zone, r: number) => Math.hypot(x - z.x, y - z.y) < r;
     prop(102, 15, 15, true); prop(100, 19, 20, true); prop(99, 14, 16, true); prop(97, 18, 15, true); prop(101, 13, 19, true);

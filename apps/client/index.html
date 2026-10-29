@@ -31,6 +31,11 @@ canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
 .hp i{background:linear-gradient(#e0583f,var(--hp))} .mp i{background:linear-gradient(#5b95ea,var(--mp))} .xp{height:6px} .xp i{background:var(--xp)}
 #target{top:calc(10px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);padding:8px 12px;width:min(240px,40vw);display:grid;gap:5px}
 #target .name{font-size:14px}
+#target.boss{width:min(420px,70vw);border-color:#c9a227;box-shadow:0 0 14px rgba(201,162,39,.35),0 2px 10px rgba(0,0,0,.4)}
+#target.boss .name{font-size:18px;color:#ffd24a}
+#target.boss .bar{height:20px}
+#target.boss .bar i{background:linear-gradient(#e0a82e,#8c6a1e)}
+#target.boss .bar span{font-size:12px;line-height:20px}
 .chips{display:flex;gap:4px;flex-wrap:wrap}
 .chip{font-size:11px;padding:1px 6px;border-radius:9px;border:1px solid}
 .chip.par{color:var(--par);border-color:var(--par)} .chip.imm{color:var(--muted);border-color:var(--muted)} .chip.ven{color:#8fd14f;border-color:#8fd14f}

@@ -113,9 +113,10 @@ const BASES: Base[] = [
 const SLOTS: Slot[] = ['arma', 'armadura', 'cabeza', 'anillo'];
 interface Item extends Base { id: number; rar: Rarity; attrs: { id: AttrId; v: number }[] }
 let uid = 1;
-function rollItem(lvl: number): Item {
+function rollItem(lvl: number, minRar = 0): Item {
     const base = BASES[rint(0, BASES.length - 1)];
     let r = R(), rar = RAR[0]; for (const x of RAR) { if (r < x.p) { rar = x; break; } r -= x.p; }
+    if (rar.k < minRar) rar = RAR[minRar]; // bosses: drop garantizado de rareza alta
     const pool = ATTRS.slice(), attrs: Item['attrs'] = [];
     for (let i = 0; i < rar.k; i++) {
         const a = pool.splice(rint(0, pool.length - 1), 1)[0];
@@ -132,16 +133,22 @@ interface Ent { x: number; y: number; dir: number; ang?: number; moving: boolean
 interface Step { fx: number; fy: number; tx: number; ty: number; t0: number; dur: number }
 
 type MobType = Zone['type'];
-interface MobDef { name: string; lvl: number; hp: number; dmg: [number, number]; spd: number; ref: number; exp: number; hitR: number; head: number; atk: number }
+/** Habilidad de boss: cada `every` s, si el jugador está a menos de `range`, carga un golpe y lo lanza a los 0,8 s. Alcanza a quien esté a menos de `r`. */
+interface BossSpecial { name: string; every: number; range: number; r: number; dmg?: [number, number]; stun?: number; col: string }
+interface BossDef { respawn: number; minRar: number; gold: [number, number]; special: BossSpecial }
+interface MobDef { name: string; lvl: number; hp: number; dmg: [number, number]; spd: number; ref: number; exp: number; hitR: number; head: number; atk: number; boss?: BossDef }
 const MOBS: Record<MobType, MobDef> = {
     goblin: { name: 'Goblin lancero', lvl: 1, hp: 42, dmg: [4, 7], spd: 1.8, ref: 2.6, exp: 14, hitR: 20, head: 42, atk: 1.3 },
     zombie: { name: 'Zombi del pantano', lvl: 3, hp: 85, dmg: [7, 11], spd: 1.0, ref: 1.5, exp: 30, hitR: 22, head: 50, atk: 1.6 },
-    barbaro: { name: 'Bárbaro sangriento (boss)', lvl: 8, hp: 900, dmg: [18, 28], spd: 1.3, ref: 2.4, exp: 420, hitR: 40, head: 150, atk: 1.8 },
+    barbaro: { name: 'Bárbaro sangriento', lvl: 8, hp: 900, dmg: [18, 28], spd: 1.3, ref: 2.4, exp: 420, hitR: 40, head: 90, atk: 1.8, boss: { respawn: 120, minRar: 2, gold: [60, 110], special: { name: 'Rugido', every: 11, range: 3.2, r: 3, stun: 1.2, dmg: [8, 12], col: '#ff8a4a' } } },
+    arana: { name: 'Reina araña', lvl: 7, hp: 720, dmg: [14, 22], spd: 1.7, ref: 2.8, exp: 520, hitR: 52, head: 88, atk: 1.4, boss: { respawn: 150, minRar: 2, gold: [70, 120], special: { name: 'Telaraña', every: 9, range: 4, r: 3.5, stun: 1.8, col: '#9fe8ff' } } },
+    golem: { name: 'Gólem de hielo', lvl: 10, hp: 1300, dmg: [24, 34], spd: 1.0, ref: 1.8, exp: 900, hitR: 50, head: 112, atk: 2.0, boss: { respawn: 180, minRar: 2, gold: [110, 170], special: { name: 'Grito helado', every: 10, range: 3, r: 3, dmg: [30, 42], stun: 0.8, col: '#7fd6ff' } } },
+    demonio: { name: 'Demonio del foso', lvl: 12, hp: 1900, dmg: [30, 44], spd: 1.4, ref: 2.4, exp: 1500, hitR: 44, head: 120, atk: 1.7, boss: { respawn: 240, minRar: 3, gold: [180, 260], special: { name: 'Salto sísmico', every: 12, range: 4.5, r: 3.2, dmg: [45, 60], stun: 1, col: '#ff5a3c' } } },
     skeleton: { name: 'Esqueleto guerrero', lvl: 5, hp: 150, dmg: [11, 17], spd: 1.5, ref: 2.1, exp: 62, hitR: 23, head: 53, atk: 1.4 },
 };
 interface Mob extends Omit<Ent, 'ref'>, MobDef {
     id: number; sprite: MobType; zone: Zone; hpMax: number; state: 'idle' | 'chase' | 'return';
-    wx: number; wy: number; wait: number; nextAtk: number; par: number; parT: number; imm: number; poison: number; poisonTick: number;
+    wx: number; wy: number; wait: number; nextAtk: number; nextSp: number; busy: number; par: number; parT: number; imm: number; poison: number; poisonTick: number;
 }
 interface Casting { i: number; start: number; end: number; len: number }
 const P = {
@@ -170,7 +177,7 @@ function spawnMob(z: Zone) {
         const x = Math.floor(z.x + (R() * 2 - 1) * z.r), y = Math.floor(z.y + (R() * 2 - 1) * z.r);
         if (!walk(x, y) || safe[y]?.[x]) continue;
         const d = MOBS[z.type];
-        mobs.push({ ...d, sprite: z.type, zone: z, x: x + 0.5, y: y + 0.5, hpMax: d.hp, hp: d.hp, state: 'idle', wx: x + 0.5, wy: y + 0.5, wait: R() * 2, nextAtk: 0, par: 0, parT: 0, imm: 0, poison: 0, poisonTick: 0, dir: rint(0, 7), moving: false, flash: 0, one: null, t0: R() * 5, id: uid++ });
+        mobs.push({ ...d, sprite: z.type, zone: z, x: x + 0.5, y: y + 0.5, hpMax: d.hp, hp: d.hp, state: 'idle', wx: x + 0.5, wy: y + 0.5, wait: R() * 2, nextAtk: 0, nextSp: now() + 4, busy: 0, par: 0, parT: 0, imm: 0, poison: 0, poisonTick: 0, dir: rint(0, 7), moving: false, flash: 0, one: null, t0: R() * 5, id: uid++ });
         return;
     }
 }
@@ -302,7 +309,7 @@ function damageMob(m: Mob, dmg: number, crit: boolean, src: 'melee' | 'spell') {
     if (m.hp <= 0 || !mobs.includes(m)) return;
     if (src === 'melee' && P.fury > now()) dmg = Math.round(dmg * 1.3);
     m.hp -= dmg; m.flash = 0.12;
-    if (!(m.one && m.one.anim === 'swing' && now() < m.one.until)) oneShot(m, 'hit', 0.2);
+    if (!(m.one && (m.one.anim === 'swing' || m.one.anim === 'special') && now() < m.one.until) && !(m.boss && R() < 0.6)) oneShot(m, 'hit', 0.2);
     float(m.x, m.y, (crit ? '¡' : '') + dmg + (crit ? '!' : ''), crit ? '#ffd24a' : '#fff', crit);
     hitstop = Math.max(hitstop, crit ? 0.09 : 0.045); if (crit && !reduce) shake = 0.25;
     if (m.par > now() && dmg >= m.hpMax * 0.45) { m.par = 0; log(`La parálisis de ${m.name} se rompió por el golpe.`); }
@@ -319,13 +326,30 @@ function aggro(m: Mob) {
 function killMob(m: Mob) {
     const t = totals(), gain = Math.round(m.exp * (1 + t.exp / 100));
     P.exp += gain; float(m.x, m.y - 0.3, `+${gain} exp`, '#c9a227');
-    if (R() < 0.62) { const it = rollItem(m.lvl); drops.push({ x: m.x, y: m.y, item: it, t: 0 }); if (it.rar.k >= 2) log(`¡Cayó un item <span style="color:${it.rar.c}">${it.rar.n.toLowerCase()}</span>!`, true); }
+    if (m.boss) {
+        // boss: item garantizado de rareza alta (+1 al nivel de botín) y un buen puñado de oro al lado
+        const it = rollItem(m.lvl + 2, m.boss.minRar);
+        drops.push({ x: m.x, y: m.y, item: it, t: 0 }); drops.push({ x: m.x + 0.6, y: m.y + 0.4, gold: rint(m.boss.gold[0], m.boss.gold[1]), t: 0 });
+        log(`¡${m.name} cayó! Soltó un item <span style="color:${it.rar.c}">${it.rar.n.toLowerCase()}</span>.`, true); shake = Math.max(shake, 0.4);
+    } else if (R() < 0.62) { const it = rollItem(m.lvl); drops.push({ x: m.x, y: m.y, item: it, t: 0 }); if (it.rar.k >= 2) log(`¡Cayó un item <span style="color:${it.rar.c}">${it.rar.n.toLowerCase()}</span>!`, true); }
     else drops.push({ x: m.x, y: m.y, gold: rint(3, 8) * m.lvl, t: 0 });
     mobs.splice(mobs.indexOf(m), 1);
     corpses.push({ sprite: m.sprite, x: m.x, y: m.y, dir: m.dir, t: now() });
     if (P.target === m) P.target = null;
-    later(m.sprite === 'barbaro' ? 120 : 22, () => spawnMob(m.zone));
+    later(m.boss?.respawn ?? 22, () => spawnMob(m.zone));
     while (P.exp >= expNeed()) { P.exp -= expNeed(); P.lvl++; P.hp = maxHp(); P.mp = maxMp(); float(P.x, P.y - 0.5, `¡Nivel ${P.lvl}!`, '#ffd24a', true); log(`Subiste a nivel ${P.lvl}.`, true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd24a' }); }
+}
+/** Habilidad distintiva del boss: aviso (anillo + nombre), 0,8 s de carga y recién ahí pega; se puede esquivar alejándose. */
+function bossSpecial(m: Mob, sp: BossSpecial, T: number) {
+    m.nextSp = T + sp.every; m.busy = T + 1.1; m.nextAtk = Math.max(m.nextAtk, T + 1.4);
+    oneShot(m, 'special', 1.3); float(m.x, m.y - 0.4, `¡${sp.name}!`, sp.col, true);
+    later(0.8, () => {
+        if (!mobs.includes(m) || m.par > now() || P.dead) return;
+        fx.push({ k: 'boom', x: m.x, y: m.y, t: 0, c: sp.col, r: sp.r }); if (!reduce) shake = Math.max(shake, 0.3);
+        if (dist(m, P) > sp.r) return;
+        if (sp.dmg) hurtPlayer(rint(sp.dmg[0], sp.dmg[1]));
+        if (sp.stun && !P.dead) { P.frozenUntil = now() + sp.stun; P.path = []; P.engage = false; cancelCast(); log(`${m.name}: ${sp.name}. Quedaste inmovilizado ${sp.stun} s.`, true); }
+    });
 }
 function meleeHit(m: Mob) {
     const t = totals(); let d = rint(CLS.melee[0], CLS.melee[1]) + P.lvl + rint(t.wdmg[0], t.wdmg[1]);
@@ -628,7 +652,7 @@ function update(dt: number) {
             if (d > 1.6) { P.repath -= dt; if (P.repath <= 0 || !P.path.length) { moveTo(m.x, m.y); P.repath = 0.35; } }
             else if (!P.step) {
                 P.path = []; turnTo(P, m.x - P.x, m.y - P.y, dt);
-                if (T >= P.nextAtk) { const iv = 0.85 / (1 + tot.aspd / 100); P.nextAtk = T + iv; sendFacing(); oneShot(P, 'swing', Math.min(0.4, iv)); later(0.18, () => { if (mobs.includes(m) && dist(P, m) < 1.9 && !P.dead) meleeHit(m); }); }
+                if (T >= P.nextAtk && T >= P.frozenUntil) { const iv = 0.85 / (1 + tot.aspd / 100); P.nextAtk = T + iv; sendFacing(); oneShot(P, 'swing', Math.min(0.4, iv)); later(0.18, () => { if (mobs.includes(m) && dist(P, m) < 1.9 && !P.dead) meleeHit(m); }); }
             }
         }
         // caminar: un paso por vez; el server valida cada uno
@@ -675,6 +699,10 @@ function update(dt: number) {
             else { m.wait -= dt; if (m.wait <= 0) { if (stepEntity(m, m.wx, m.wy, m.spd * 0.45, dt, true)) { m.wait = 1.5 + R() * 3; m.wx = clamp(m.zone.x + (R() * 2 - 1) * m.zone.r, 1, N - 2); m.wy = clamp(m.zone.y + (R() * 2 - 1) * m.zone.r, 1, N - 2); } else m.wait = 0; } }
         } else if (m.state === 'chase') {
             if (!playerOk || dist(m, home) > 17) { m.state = 'return'; continue; }
+            if (T < m.busy) { turnTo(m, P.x - m.x, P.y - m.y, dt); continue; } // cargando la habilidad: se queda quieto
+            const sp = m.boss?.special;
+            if (sp && T >= m.nextSp && dp <= sp.range) bossSpecial(m, sp, T);
+            if (T < m.busy) continue;
             if (dp > 1.1) stepEntity(m, P.x, P.y, m.spd, dt, true);
             for (const o of mobs) { if (o === m || o.state !== 'chase') continue; const sx = m.x - o.x, sy = m.y - o.y, sd = Math.hypot(sx, sy); if (sd > 0.01 && sd < 0.85) { const k = (0.85 - sd) * dt * 3, nx = m.x + (sx / sd) * k, ny = m.y + (sy / sd) * k; if (walk(Math.floor(nx), Math.floor(ny))) { m.x = nx; m.y = ny; } } }
             if (dp <= 1.5) {
@@ -720,8 +748,8 @@ function animFor(e: Ent, T: number): [string, number] {
     if (e.one && T < e.one.until) return [e.one.anim, T - e.one.t];
     return e.moving ? ['run', (e.phase || 0) + (e.t0 || 0)] : ['stance', T + (e.t0 || 0)];
 }
-function nameTag(name: string, x: number, y: number, col: string, alpha = 1) {
-    ctx.globalAlpha = alpha; ctx.textAlign = 'center'; ctx.font = "600 11px 'Alegreya Sans', system-ui, sans-serif";
+function nameTag(name: string, x: number, y: number, col: string, alpha = 1, size = 11) {
+    ctx.globalAlpha = alpha; ctx.textAlign = 'center'; ctx.font = `600 ${size}px 'Alegreya Sans', system-ui, sans-serif`;
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.strokeText(name, x, y); ctx.fillStyle = col; ctx.fillText(name, x, y); ctx.globalAlpha = 1;
 }
 function render() {
@@ -760,7 +788,7 @@ function render() {
     for (const c of corpses) objs.push({ d: c.x + c.y - 0.3, f: () => { const p = iso(c.x, c.y), age = T - c.t; drawSprite(c.sprite, 'die', age, c.dir, p.x, p.y, null, age > 2 ? 3 - age : 1); } });
     for (const m of mobs) objs.push({ d: m.x + m.y, f: () => drawMob(m, T) });
     for (const o of others.values()) objs.push({ d: o.x + o.y, f: () => { const p = iso(o.x, o.y), [a, t] = animFor(o, T); drawSprite('hero_other', a, t, o.dir, p.x, p.y, null, o.gone ? 0.45 : 1); } });
-    objs.push({ d: P.x + P.y, f: () => { const p = iso(P.x, P.y); if (P.dead) drawSprite('hero', 'die', T - P.deadT, P.dir, p.x, p.y); else { const [a, t] = animFor(P, T); drawSprite('hero', a, t, P.dir, p.x, p.y, P.flash > 0 ? 'rgba(255,70,50,.35)' : null); } } });
+    objs.push({ d: P.x + P.y, f: () => { const p = iso(P.x, P.y); if (P.frozenUntil > T && !P.dead) { ctx.strokeStyle = 'rgba(190,235,255,.85)'; ctx.lineWidth = 1.5; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(p.x, p.y - 8 - i * 14, 16, 6, 0, 0, Math.PI * 2); ctx.stroke(); } } if (P.dead) drawSprite('hero', 'die', T - P.deadT, P.dir, p.x, p.y); else { const [a, t] = animFor(P, T); drawSprite('hero', a, t, P.dir, p.x, p.y, P.flash > 0 ? 'rgba(255,70,50,.35)' : null); } } });
     objs.sort((a, b) => a.d - b.d).forEach((o) => o.f());
     // nombres arriba de todo
     for (const o of others.values()) { const p = iso(o.x, o.y); nameTag(o.name, p.x, p.y - 70, '#e9dfc0', o.gone ? 0.5 : 1); }
@@ -783,8 +811,8 @@ function render() {
     for (const f of fx) if (f.k === 'boom') {
         const p = iso(f.x, f.y), k = f.t / 0.6, R2 = f.r! * TW * 0.5;
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1 - k;
-        const g = ctx.createRadialGradient(p.x, p.y - 10, 0, p.x, p.y - 10, R2 * (0.4 + k)); g.addColorStop(0, '#fff3c0'); g.addColorStop(0.35, '#ff8a3d'); g.addColorStop(1, 'rgba(120,30,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(p.x, p.y - 10, R2 * (0.4 + k), R2 * (0.4 + k) * 0.6, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = '#ffb070'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(p.x, p.y, R2 * k * 1.1, R2 * k * 0.55, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+        const g = ctx.createRadialGradient(p.x, p.y - 10, 0, p.x, p.y - 10, R2 * (0.4 + k)); g.addColorStop(0, '#fff3c0'); g.addColorStop(0.35, f.c ?? '#ff8a3d'); g.addColorStop(1, 'rgba(120,30,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(p.x, p.y - 10, R2 * (0.4 + k), R2 * (0.4 + k) * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = f.c ?? '#ffb070'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(p.x, p.y, R2 * k * 1.1, R2 * k * 0.55, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
     }
     for (const f of fx) if (f.k === 'burst') { const p = iso(f.x, f.y), k = f.t / 0.6; if (k > 0.5) continue; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1 - k * 2; ctx.fillStyle = f.c!; ctx.beginPath(); ctx.arc(p.x, p.y - 34, 10 + k * 30, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
     for (const f of fx) if (f.k === 'ring') { const p = iso(f.x, f.y), k = f.t / 0.6; ctx.strokeStyle = f.c!; ctx.globalAlpha = 1 - k; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(p.x, p.y, 10 + k * 34, (10 + k * 34) * 0.5, 0, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
@@ -807,7 +835,16 @@ function drawMob(m: Mob, T: number) {
     const [a, t] = par ? animFor(m, m.parT) : animFor(m, T);
     drawSprite(m.sprite, a, t, m.dir, p.x, p.y, m.flash > 0 ? 'rgba(255,255,255,.6)' : par ? 'rgba(110,200,255,.45)' : m.poison > T ? 'rgba(120,220,80,.25)' : null);
     if (par) { ctx.strokeStyle = 'rgba(127,214,255,.85)'; ctx.lineWidth = 1.5; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(p.x, p.y - 8 - i * 16, 18, 6, 0, 0, Math.PI * 2); ctx.stroke(); } }
-    if (m.hp < m.hpMax) { const w = 34; ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - w / 2 - 1, p.y - m.head - 5, w + 2, 5); ctx.fillStyle = '#c43e2b'; ctx.fillRect(p.x - w / 2, p.y - m.head - 4, w * Math.max(0, m.hp / m.hpMax), 3); }
+    if (m.boss) {
+        const sp = m.boss.special;
+        if (m.busy > T) { // aviso de la habilidad: zona que va a pegar
+            const rx = sp.r * TW * 0.707, k = 1 - (m.busy - T) / 1.1; ctx.save(); ctx.globalAlpha = 0.18 + 0.25 * k; ctx.fillStyle = sp.col; ctx.beginPath(); ctx.ellipse(p.x, p.y, rx, rx / 2, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.globalAlpha = 0.8; ctx.strokeStyle = sp.col; ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
+        }
+        const w = 70, y = p.y - m.head - 6; // boss: nombre dorado y barra grande siempre visibles
+        nameTag(m.name, p.x, y - 9, '#ffd24a', 1, 14);
+        ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(p.x - w / 2 - 1, y - 1, w + 2, 8); ctx.fillStyle = '#8c6a1e'; ctx.fillRect(p.x - w / 2, y, w * Math.max(0, m.hp / m.hpMax), 6); ctx.fillStyle = '#e0a82e'; ctx.fillRect(p.x - w / 2, y, w * Math.max(0, m.hp / m.hpMax), 3);
+    } else if (m.hp < m.hpMax) { const w = 34; ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - w / 2 - 1, p.y - m.head - 5, w + 2, 5); ctx.fillStyle = '#c43e2b'; ctx.fillRect(p.x - w / 2, p.y - m.head - 4, w * Math.max(0, m.hp / m.hpMax), 3); }
 }
 function drawDrop(d: Drop, T: number) {
     const p = iso(d.x, d.y), y = p.y - 5 - (reduce ? 0 : Math.sin(T * 3 + d.x) * 2);
@@ -843,7 +880,8 @@ function hud() {
     const m = P.target && mobs.includes(P.target) ? P.target : null;
     $('target').hidden = !m;
     if (m) {
-        $('tName').textContent = m.name; $('tLvl').textContent = 'Nv ' + m.lvl;
+        $('target').classList.toggle('boss', !!m.boss);
+        $('tName').textContent = m.name; $('tLvl').textContent = (m.boss ? 'Boss · ' : '') + 'Nv ' + m.lvl;
         $('tHpI').style.width = Math.max(0, (m.hp / m.hpMax) * 100) + '%'; $('tHpT').textContent = `${Math.max(0, Math.ceil(m.hp))} / ${m.hpMax}`;
         const ch: string[] = [];
         if (m.par > T) ch.push(`<span class="chip par">Paralizado ${(m.par - T).toFixed(1)} s</span>`);
@@ -939,13 +977,13 @@ async function boot() {
         WORLD = meta.world; delete meta.world;
         PAPER = meta.paper; delete meta.paper; SPR.hero = SPR.hero_other = PAPER as unknown as SpriteMeta;
         Object.assign(SPR, meta);
-        const names = ['world', 'goblin', 'zombie', 'skeleton', 'barbaro'];
+        const names = ['world', 'goblin', 'zombie', 'skeleton', 'barbaro', 'arana', 'golem', 'demonio'];
         const imgs = await Promise.all(names.map((n) => load(`assets/${n}.webp`)));
         names.forEach((n, i) => (IMG[n] = imgs[i]));
     } catch { $('loading').textContent = 'No se pudieron cargar los gráficos. Recargá la página.'; return; }
     $('loading').hidden = true;
     refreshLook();
-    if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { mobs, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
+    if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { mobs, drops, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();
     requestAnimationFrame(frame);
