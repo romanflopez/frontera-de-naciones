@@ -27,8 +27,9 @@ for (const wc of worldConfigs) {
     const teleportCells = (wc.teleportLocs ?? []).flatMap((t) => t.locs);
     // Mapas generados por código (iguales en cliente y server) o, si no, un .amd en data/maps
     const generated = MAPS[wc.map];
-    const occ = generated ? occupancyFromGrid(generated().blocked, teleportCells) : loadOccupancy(wc.map, teleportCells);
-    worlds.set(wc.id, new GameWorld(wc, settings, catalogs, occ));
+    const wmap = generated?.();
+    const occ = wmap ? occupancyFromGrid(wmap.blocked, teleportCells) : loadOccupancy(wc.map, teleportCells);
+    worlds.set(wc.id, new GameWorld(wc, settings, catalogs, occ, wmap));
     console.log(`[Server] Mundo '${wc.id}' (${wc.name}): mapa ${wc.map}, ${occ.sizeX}x${occ.sizeY}, ${occ.occupiedCount} celdas bloqueadas`);
 }
 if (!worlds.has(settings.initialMap)) throw new Error(`initialMap '${settings.initialMap}' no está en worlds.json`);

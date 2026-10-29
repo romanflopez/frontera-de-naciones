@@ -11,6 +11,8 @@ import type { Catalogs, GameWorldConfig, Settings } from './config.ts';
 import { adjacentCellsAt45, distance, findNearestFreeLocation, nextGridDirection } from './location.ts';
 import type { Occupancy } from './map.ts';
 import * as M from './messages.ts';
+import { MobSim } from './mobs.ts';
+import type { WorldMap } from '@fdn/world';
 import { Player, type PersistedPlayer, type Send } from './player.ts';
 
 interface Timer { at: number; fn: () => void }
@@ -26,13 +28,23 @@ export class GameWorld {
     private readonly playersById = new Map<bigint, Player>();
     private timers: Timer[] = [];
     private readonly tickHandle: NodeJS.Timeout;
+    private mobSim?: MobSim;
 
     constructor(
         readonly config: GameWorldConfig,
         private readonly settings: Settings,
         private readonly catalogs: Catalogs,
         private readonly occupancy: Occupancy,
+        map?: WorldMap,
     ) {
+        if (map) {
+            this.mobSim = new MobSim(map, {
+                players: () => this.players.values(),
+                playerById: (id) => this.playersById.get(id),
+                nearby: (cx, cy) => this.nearbyPlayers(cx, cy),
+                after: (ms, fn) => this.setTimeout(ms, fn),
+            });
+        }
         this.tickHandle = setInterval(() => this.tick(), settings.tickInterval);
         this.tickHandle.unref();
     }
@@ -52,6 +64,7 @@ export class GameWorld {
             this.timers = this.timers.filter((t) => t.at > now);
             for (const t of due) this.safe('temporizador', t.fn);
         }
+        if (this.mobSim) this.safe('mobs', () => this.mobSim!.update());
         this.checkPingTimeouts(now);
     }
 
@@ -247,6 +260,8 @@ export class GameWorld {
                     this.broadcastNear(p, M.pvpHit(p.playerId, { fx, x: num(v.x, 0, 200), y: num(v.y, 0, 200), targetId: v.targetId, dmg: Math.round(num(v.dmg, 0, 600)), secs: num(v.secs, 0, 6), r: num(v.r, 0, 6) }));
                     break;
                 }
+                case 'mobHitRequest': this.mobSim?.hit(p, payload.value); break;
+                case 'pveStatusRequest': this.mobSim?.status(p, payload.value); break;
                 case 'changePlayerProfileRequest': {
                     const v = String(payload.value.profile ?? '').slice(0, 240);
                     if (!/^[\w;,.\- ]*$/.test(v)) break;
@@ -334,8 +349,7 @@ export class GameWorld {
         this.syncVisibilityAfterMovement(p, fromX, fromY, toX, toY, dashAttack, teleport);
     }
 
-    private handleTeleport(p: Player, x: number, y: number): void {
-        if (p.isDead || (x === p.posX && y === p.posY) || !this.occupancy.isFree(x, y)) return;
+    private handleTeleport(p: Player, x: number, y: number): void {        if (p.isDead || (x === p.posX && y === p.posY) || !this.occupancy.isFree(x, y)) return;
         this.moveTo(p, p.posX, p.posY, x, y, false, true);
         p.send(M.playerTeleported(x, y));
     }
