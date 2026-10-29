@@ -159,7 +159,7 @@ interface Mob extends Omit<Ent, 'ref'>, MobDef {
 interface Casting { i: number; start: number; end: number; len: number }
 const P = {
     x: MAP.spawn.x + 0.5, y: MAP.spawn.y + 0.5, dir: 6, ang: undefined as number | undefined, moving: false, phase: 0, ref: 3.4, one: null as OneShot | null, t0: 0, flash: 0,
-    name: '', cell: { x: MAP.spawn.x, y: MAP.spawn.y }, path: [] as Cell[], step: null as Step | null, stepMs: 380, frozenUntil: 0,
+    name: '', cell: { x: MAP.spawn.x, y: MAP.spawn.y }, path: [] as Cell[], step: null as Step | null, stepMs: 260, frozenUntil: 0,
     target: null as Mob | null, engage: false, pickup: null as Drop | null, repath: 0, queued: null as number | null,
     lvl: 1, exp: 0, hp: 100, mp: 60, fury: 0, gold: 0, nextAtk: 0, dead: false, deadT: 0,
     bag: [] as Item[], eq: { arma: null, armadura: null, cabeza: null, anillo: null } as Record<Slot, Item | null>,
@@ -204,7 +204,7 @@ function totals() {
 interface ClassDef { id: string; name: string; hidden?: boolean; desc: string; head: string; armor?: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; spells: string[] }
 const CLASSES: ClassDef[] = [
     { id: 'guerrero', name: 'Guerrero', desc: 'Resistente, pega cuerpo a cuerpo y frena enemigos.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'aturdir', 'vendar', 'torbellino'] },
-    { id: 'mago', name: 'Mago', desc: 'Frágil pero con hechizos a distancia, parálisis y cura.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'paralisis', 'curar', 'bola', 'hoja', 'lanza'] },
+    { id: 'mago', name: 'Mago', desc: 'Frágil pero con hechizos a distancia, parálisis y cura.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'paralisis', 'curar', 'bola', 'hoja', 'lanza', 'lluvia', 'marejada', 'luz', 'furia', 'rugido', 'ejecutar'] },
     { id: 'berserk', hidden: true, name: 'Berserk', desc: 'Mucho daño físico. Furia sube daño y velocidad de ataque y le abre dos habilidades extra.', head: 'head_bald', hp: 120, hpL: 14, mp: 30, mpL: 3, melee: [8, 13], weapon: 'Hacha de leñador', spells: ['tajo', 'aturdir', 'furia', 'torbellino', 'rugido', 'ejecutar'] },
 ];
 let CLS: ClassDef = CLASSES[0];
@@ -235,7 +235,7 @@ function sendFacing() {
 function addOther(p: { profile?: string; playerId: bigint; x: number; y: number; direction: number; characterName: string; movementSpeedMs: number }) {
     if (p.playerId === myId) return;
     const [dx, dy] = GRID_VEC[p.direction] ?? [0, 1];
-    const o: Other = { profile: p.profile ?? '', id: p.playerId, name: p.characterName, x: p.x + 0.5, y: p.y + 0.5, cell: { x: p.x, y: p.y }, queue: [], step: null, stepMs: p.movementSpeedMs || 380, dir: 6, moving: false, one: null, flash: 0, phase: 0, ref: 3.4, t0: R() * 5, gone: false };
+    const o: Other = { profile: p.profile ?? '', id: p.playerId, name: p.characterName, x: p.x + 0.5, y: p.y + 0.5, cell: { x: p.x, y: p.y }, queue: [], step: null, stepMs: p.movementSpeedMs || 260, dir: 6, moving: false, one: null, flash: 0, phase: 0, ref: 3.4, t0: R() * 5, gone: false };
     turnTo(o, dx, dy, 0, true);
     others.set(o.id, o);
 }
@@ -248,7 +248,7 @@ function onServer(m: ServerPayload) {
     switch (m.$case) {
         case 'initialState':
             myId = m.value.playerId;
-            P.stepMs = m.value.movementSpeedMs || 380;
+            P.stepMs = m.value.movementSpeedMs || 260;
             break;
         case 'initialGameWorldState': {
             snapTo(m.value.playerX, m.value.playerY);
@@ -316,7 +316,7 @@ function onServer(m: ServerPayload) {
 // ---------- combate ----------
 function damageMob(m: Mob, dmg: number, crit: boolean, src: 'melee' | 'spell') {
     if (m.hp <= 0 || !mobs.includes(m)) return;
-    if (src === 'melee' && P.fury > now()) dmg = Math.round(dmg * 1.3);
+    if (P.fury > now()) dmg = Math.round(dmg * (src === 'melee' ? 1.3 : CLS.id === 'mago' ? 1.2 : 1));
     m.hp -= dmg; m.flash = 0.12;
     if (!(m.one && (m.one.anim === 'swing' || m.one.anim === 'special') && now() < m.one.until) && !(m.boss && R() < 0.6)) oneShot(m, 'hit', 0.2);
     float(m.x, m.y, (crit ? '¡' : '') + dmg + (crit ? '!' : ''), crit ? '#ffd24a' : '#fff', crit);
@@ -421,10 +421,26 @@ const LIB: Record<string, SpellDef> = {
         cast(m) { if (!isMob(m)) return false; efx('windblade', m.x, m.y, 10); damageMob(m, rint(13, 19) + P.lvl * 2 + totals().mag, false, 'spell'); } },
     lanza: { name: 'Lanza de piedra', mp: 30, cd: 5, col: '#d9a45a', range: 7, target: true,
         cast(m) { if (!isMob(m)) return false; efx('rocklance', m.x, m.y, 4); if (!reduce) shake = Math.max(shake, 0.2); damageMob(m, rint(30, 42) + P.lvl * 3 + totals().mag, true, 'spell'); } },
+    lluvia: { name: 'Lluvia de fuego', mp: 45, cd: 9, col: '#ff7a2f', range: 7, target: true, aoe: 2.4,
+        cast(m) { if (!m) return false; zone(m.x, m.y, 2.4, 4, 0.5, () => rint(11, 16) + P.lvl * 2 + totals().mag, 'cataclysm'); } },
+    marejada: { name: 'Marejada', mp: 40, cd: 8, col: '#4aa8ff', range: 7, target: true, aoe: 2.2,
+        cast(m) { if (!m) return false; zone(m.x, m.y, 2.2, 3, 0.6, () => rint(12, 17) + P.lvl * 2 + totals().mag, 'tidal', 1.2); } },
+    luz: { name: 'Pilar de luz', mp: 35, cd: 7, col: '#bfe6ff', range: 7, target: true, aoe: 1.9,
+        cast(m) { if (!m) return false; const x = m.x, y = m.y; zone(x, y, 1.9, 2, 0.7, () => rint(14, 20) + P.lvl * 2 + totals().mag, 'spread'); later(0.5, () => { if (!P.dead && Math.hypot(P.x - x, P.y - y) <= 1.9) heal(25 + P.lvl * 3); }); } },
     furia: { name: 'Furia', mp: 15, cd: 20, col: '#ff3b2f', range: 0, target: false,
-        cast() { P.fury = now() + 10; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log('Furia: +30% de daño físico y +25% de velocidad de ataque por 10 s, sin castigo. Se abren Rugido y Ejecutar.', true); } },
+        cast() { P.fury = now() + 10; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log('Furia: +30% de daño físico (+20% en hechizos si sos Mago) y +25% de velocidad de ataque por 10 s, sin castigo. Se abren Rugido y Ejecutar.', true); } },
 };
 let SPELLS: Spell[] = [];
+const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
+/** Hechizo de área estilo Blizzard: varios golpes sobre las celdas cercanas al punto elegido. */
+function zone(x: number, y: number, r: number, ticks: number, every: number, dmg: () => number, effect: string, slow = 0) {
+    for (let i = 0; i < ticks; i++) later(i * every, () => {
+        if (P.dead) return;
+        if (i === 0 || effect === 'cataclysm') efx(effect, x, y);
+        if (!reduce && i === 0) shake = Math.max(shake, 0.15);
+        for (const m of mobs.slice()) if (Math.hypot(m.x - x, m.y - y) <= r && !isSafe(m.x, m.y)) { damageMob(m, dmg(), false, 'spell'); if (slow && m.imm <= now() && i === ticks - 1) { m.par = now() + slow; m.parT = now(); m.imm = now() + slow + 6; m.moving = false; } }
+    });
+}
 function heal(h: number) { P.hp = Math.min(maxHp(), P.hp + h); float(P.x, P.y - 0.2, '+' + h, '#7ee08a'); efx('sphere', P.x, P.y); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#7ee08a' }); }
 function control(m: Target | null, secs: number, verb: string, noun: string): false | void {
     if (!isMob(m)) return false;
@@ -645,7 +661,7 @@ window.addEventListener('keydown', (e) => {
     }
     if (e.target instanceof HTMLInputElement) return;
     if (e.key === 'Enter') { e.preventDefault(); chatIn.focus(); return; }
-    const dm = /^(?:Digit|Numpad)([1-6])$/.exec(e.code) ?? /^([1-6])$/.exec(e.key), k = dm ? Number(dm[1]) - 1 : null;
+    const hk = KEYS.indexOf(e.key), dm = /^(?:Digit|Numpad)([0-9])$/.exec(e.code), k = hk >= 0 ? hk : dm ? KEYS.indexOf(dm[1]) : null;
     if (k != null && k < SPELLS.length && !e.repeat) { e.preventDefault(); cast(k); }
     if (e.key === 'i' || e.key === 'I') toggleBag();
     if (e.key === 'Escape') { if (P.casting || P.ready) cancelCast('Hechizo cancelado.'); else P.target = null; }
@@ -905,7 +921,7 @@ function drawDrop(d: Drop, T: number) {
 // ---------- HUD ----------
 function setClass(id: string) {
     CLS = CLASSES.find((c) => c.id === id) ?? CLASSES[0];
-    SPELLS = CLS.spells.map((sid, i) => ({ key: String(i + 1), ...LIB[sid] }));
+    SPELLS = CLS.spells.map((sid, i) => ({ key: KEYS[i], ...LIB[sid] }));
     cds.fill(0); P.fury = 0; P.ready = null; P.casting = null;
     const mk = (n: string): Item => ({ id: uid++, ...BASES.find((b) => b.name === n)!, rar: RAR[0], attrs: [] });
     P.eq.arma = mk(CLS.weapon); P.eq.armadura = CLS.armor ? mk(CLS.armor) : null; P.eq.cabeza = null; P.bag = [];
@@ -913,7 +929,7 @@ function setClass(id: string) {
     P.lvl = 1; P.exp = 0; P.hp = maxHp(); P.mp = maxMp();
     $('bar').innerHTML = SPELLS.map((s, i) => `<button class="slot box" id="sp${i}" type="button" title="${s.name} (${s.mp} maná)"><kbd>${s.key}</kbd><b>${s.name.replace(/ (?=\S+$)/, '<br>')}</b><em>${s.mp}</em><div class="cd" id="cd${i}"></div></button>`).join('');
     SPELLS.forEach((_, i) => $('sp' + i).addEventListener('click', () => { cast(i); cv.focus({ preventScroll: true }); }));
-    $('helpKeys').textContent = `Click o mantener: caminar · Click en mob: atacar · 1–6 usar habilidad (las de objetivo: esperá que cargue y click en el blanco) · Click derecho: cancelar · ${SPELLS.map((x) => x.key + ' ' + x.name).join(' · ')} · I Bolsa · Enter chat`;
+    $('helpKeys').textContent = `Click o mantener: caminar · Click en mob: atacar · teclas 1–0 usar habilidad (las de objetivo: esperá que cargue y click en el blanco) · Click derecho: cancelar · ${SPELLS.map((x) => x.key + ' ' + x.name).join(' · ')} · I Bolsa · Enter chat`;
 }
 function hud() {
     const T = now(), mh = maxHp(), mm = maxMp();
