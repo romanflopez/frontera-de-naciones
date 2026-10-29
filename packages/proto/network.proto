@@ -96,6 +96,8 @@ message ClientMessage {
     ChangePlayerProfileRequest change_player_profile_request = 42;
     PvpHitRequest pvp_hit_request = 43;
     SaveCharacterRequest save_character_request = 80;
+    MobHitRequest mob_hit_request = 120;
+    PveStatusRequest pve_status_request = 121;
   }
 }
 
@@ -450,6 +452,12 @@ message ServerMessage {
     PlayerProfileChanged player_profile_changed = 64;
     PvpHit pvp_hit = 65;
     CharacterLoaded character_loaded = 80;
+    MobsSnapshot mobs_snapshot = 120;
+    MobDamaged mob_damaged = 121;
+    MobAttack mob_attack = 122;
+    MobHitPlayer mob_hit_player = 123;
+    MobSpecialEvent mob_special_event = 124;
+    MobDied mob_died = 125;
   }
 }
 
@@ -1069,4 +1077,70 @@ message PingResponse {
   int32 game_world_queue_length = 2;
   int32 players_in_map = 3;
   double ping_variance = 4;
+}
+
+// ---------- PvE autoritativo: el server maneja los mobs ----------
+/** El cliente avisa un golpe/hechizo propio contra un mob; el server valida rango, ritmo y tope de daño. */
+message MobHitRequest {
+  int32 mob_id = 1;
+  int32 dmg = 2;
+  bool melee = 3;
+  bool crit = 4;
+  double par_secs = 5;
+  double poison_secs = 6;
+}
+/** Estado del jugador que el server necesita para los mobs (si murió, nivel para el tope de daño). */
+message PveStatusRequest {
+  bool dead = 1;
+  int32 lvl = 2;
+}
+message MobSnap {
+  int32 id = 1;
+  int32 type = 2;
+  int32 zone = 3;
+  float x = 4;
+  float y = 5;
+  int32 hp = 6;
+  float par = 7;
+  float imm = 8;
+  bool poison = 9;
+  bool moving = 10;
+}
+/** Mobs a la vista del jugador, 10 veces por segundo. */
+message MobsSnapshot {
+  repeated MobSnap mobs = 1;
+}
+message MobDamaged {
+  int32 mob_id = 1;
+  int64 attacker_id = 2;
+  int32 dmg = 3;
+  bool crit = 4;
+  int32 hp = 5;
+}
+/** El mob levanta el arma hacia (tx, ty) (animación para todos). */
+message MobAttack {
+  int32 mob_id = 1;
+  float tx = 2;
+  float ty = 3;
+}
+/** Solo para el jugador golpeado: daño (antes de defensa) y/o inmovilización en segundos. */
+message MobHitPlayer {
+  int32 mob_id = 1;
+  int32 dmg = 2;
+  double stun = 3;
+}
+/** Habilidad de boss: fase 0 = aviso (carga 0,8 s), fase 1 = estallido en (x, y). */
+message MobSpecialEvent {
+  int32 mob_id = 1;
+  int32 phase = 2;
+  float x = 3;
+  float y = 4;
+}
+message MobDied {
+  int32 mob_id = 1;
+  int64 killer_id = 2;
+  float x = 3;
+  float y = 4;
+  int32 type = 5;
+  int32 zone = 6;
 }

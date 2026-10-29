@@ -112,6 +112,8 @@ export interface ClientMessage {
     | { $case: "changePlayerProfileRequest"; value: ChangePlayerProfileRequest }
     | { $case: "pvpHitRequest"; value: PvpHitRequest }
     | { $case: "saveCharacterRequest"; value: SaveCharacterRequest }
+    | { $case: "mobHitRequest"; value: MobHitRequest }
+    | { $case: "pveStatusRequest"; value: PveStatusRequest }
     | undefined;
 }
 
@@ -475,6 +477,12 @@ export interface ServerMessage {
     | { $case: "playerProfileChanged"; value: PlayerProfileChanged }
     | { $case: "pvpHit"; value: PvpHit }
     | { $case: "characterLoaded"; value: CharacterLoaded }
+    | { $case: "mobsSnapshot"; value: MobsSnapshot }
+    | { $case: "mobDamaged"; value: MobDamaged }
+    | { $case: "mobAttack"; value: MobAttack }
+    | { $case: "mobHitPlayer"; value: MobHitPlayer }
+    | { $case: "mobSpecialEvent"; value: MobSpecialEvent }
+    | { $case: "mobDied"; value: MobDied }
     | undefined;
 }
 
@@ -1123,6 +1131,79 @@ export interface PingResponse {
   pingVariance: number;
 }
 
+/** El cliente avisa un golpe/hechizo propio contra un mob; el server valida rango, ritmo y tope de daño. */
+export interface MobHitRequest {
+  mobId: number;
+  dmg: number;
+  melee: boolean;
+  crit: boolean;
+  parSecs: number;
+  poisonSecs: number;
+}
+
+/** Estado del jugador que el server necesita para los mobs (si murió, nivel para el tope de daño). */
+export interface PveStatusRequest {
+  dead: boolean;
+  lvl: number;
+}
+
+export interface MobSnap {
+  id: number;
+  type: number;
+  zone: number;
+  x: number;
+  y: number;
+  hp: number;
+  par: number;
+  imm: number;
+  poison: boolean;
+  moving: boolean;
+}
+
+/** Mobs a la vista del jugador, 10 veces por segundo. */
+export interface MobsSnapshot {
+  mobs: MobSnap[];
+}
+
+export interface MobDamaged {
+  mobId: number;
+  attackerId: bigint;
+  dmg: number;
+  crit: boolean;
+  hp: number;
+}
+
+/** El mob levanta el arma hacia (tx, ty) (animación para todos). */
+export interface MobAttack {
+  mobId: number;
+  tx: number;
+  ty: number;
+}
+
+/** Solo para el jugador golpeado: daño (antes de defensa) y/o inmovilización en segundos. */
+export interface MobHitPlayer {
+  mobId: number;
+  dmg: number;
+  stun: number;
+}
+
+/** Habilidad de boss: fase 0 = aviso (carga 0,8 s), fase 1 = estallido en (x, y). */
+export interface MobSpecialEvent {
+  mobId: number;
+  phase: number;
+  x: number;
+  y: number;
+}
+
+export interface MobDied {
+  mobId: number;
+  killerId: bigint;
+  x: number;
+  y: number;
+  type: number;
+  zone: number;
+}
+
 function createBaseClientMessage(): ClientMessage {
   return { payload: undefined };
 }
@@ -1261,6 +1342,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         break;
       case "saveCharacterRequest":
         SaveCharacterRequest.encode(message.payload.value, writer.uint32(642).fork()).join();
+        break;
+      case "mobHitRequest":
+        MobHitRequest.encode(message.payload.value, writer.uint32(962).fork()).join();
+        break;
+      case "pveStatusRequest":
+        PveStatusRequest.encode(message.payload.value, writer.uint32(970).fork()).join();
         break;
     }
     return writer;
@@ -1739,6 +1826,22 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             };
             continue;
           }
+          case 120: {
+            if (tag !== 962) {
+              break;
+            }
+
+            message.payload = { $case: "mobHitRequest", value: MobHitRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 121: {
+            if (tag !== 970) {
+              break;
+            }
+
+            message.payload = { $case: "pveStatusRequest", value: PveStatusRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -2126,6 +2229,18 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             $case: "saveCharacterRequest",
             value: SaveCharacterRequest.fromPartial(object.payload.value),
           };
+        }
+        break;
+      }
+      case "mobHitRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "mobHitRequest", value: MobHitRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "pveStatusRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "pveStatusRequest", value: PveStatusRequest.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -6007,6 +6122,24 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "characterLoaded":
         CharacterLoaded.encode(message.payload.value, writer.uint32(642).fork()).join();
         break;
+      case "mobsSnapshot":
+        MobsSnapshot.encode(message.payload.value, writer.uint32(962).fork()).join();
+        break;
+      case "mobDamaged":
+        MobDamaged.encode(message.payload.value, writer.uint32(970).fork()).join();
+        break;
+      case "mobAttack":
+        MobAttack.encode(message.payload.value, writer.uint32(978).fork()).join();
+        break;
+      case "mobHitPlayer":
+        MobHitPlayer.encode(message.payload.value, writer.uint32(986).fork()).join();
+        break;
+      case "mobSpecialEvent":
+        MobSpecialEvent.encode(message.payload.value, writer.uint32(994).fork()).join();
+        break;
+      case "mobDied":
+        MobDied.encode(message.payload.value, writer.uint32(1002).fork()).join();
+        break;
     }
     return writer;
   },
@@ -6620,6 +6753,54 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "characterLoaded", value: CharacterLoaded.decode(reader, reader.uint32()) };
             continue;
           }
+          case 120: {
+            if (tag !== 962) {
+              break;
+            }
+
+            message.payload = { $case: "mobsSnapshot", value: MobsSnapshot.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 121: {
+            if (tag !== 970) {
+              break;
+            }
+
+            message.payload = { $case: "mobDamaged", value: MobDamaged.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 122: {
+            if (tag !== 978) {
+              break;
+            }
+
+            message.payload = { $case: "mobAttack", value: MobAttack.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 123: {
+            if (tag !== 986) {
+              break;
+            }
+
+            message.payload = { $case: "mobHitPlayer", value: MobHitPlayer.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 124: {
+            if (tag !== 994) {
+              break;
+            }
+
+            message.payload = { $case: "mobSpecialEvent", value: MobSpecialEvent.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 125: {
+            if (tag !== 1002) {
+              break;
+            }
+
+            message.payload = { $case: "mobDied", value: MobDied.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -7103,6 +7284,42 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "characterLoaded": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "characterLoaded", value: CharacterLoaded.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "mobsSnapshot": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "mobsSnapshot", value: MobsSnapshot.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "mobDamaged": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "mobDamaged", value: MobDamaged.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "mobAttack": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "mobAttack", value: MobAttack.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "mobHitPlayer": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "mobHitPlayer", value: MobHitPlayer.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "mobSpecialEvent": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "mobSpecialEvent", value: MobSpecialEvent.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "mobDied": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "mobDied", value: MobDied.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -14955,6 +15172,881 @@ export const PingResponse: MessageFns<PingResponse> = {
     message.gameWorldQueueLength = object.gameWorldQueueLength ?? 0;
     message.playersInMap = object.playersInMap ?? 0;
     message.pingVariance = object.pingVariance ?? 0;
+    return message;
+  },
+};
+
+function createBaseMobHitRequest(): MobHitRequest {
+  return { mobId: 0, dmg: 0, melee: false, crit: false, parSecs: 0, poisonSecs: 0 };
+}
+
+export const MobHitRequest: MessageFns<MobHitRequest> = {
+  encode(message: MobHitRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mobId !== 0) {
+      writer.uint32(8).int32(message.mobId);
+    }
+    if (message.dmg !== 0) {
+      writer.uint32(16).int32(message.dmg);
+    }
+    if (message.melee !== false) {
+      writer.uint32(24).bool(message.melee);
+    }
+    if (message.crit !== false) {
+      writer.uint32(32).bool(message.crit);
+    }
+    if (message.parSecs !== 0) {
+      writer.uint32(41).double(message.parSecs);
+    }
+    if (message.poisonSecs !== 0) {
+      writer.uint32(49).double(message.poisonSecs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MobHitRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseMobHitRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.mobId = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.dmg = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.melee = reader.bool();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.crit = reader.bool();
+            continue;
+          }
+          case 5: {
+            if (tag !== 41) {
+              break;
+            }
+
+            message.parSecs = reader.double();
+            continue;
+          }
+          case 6: {
+            if (tag !== 49) {
+              break;
+            }
+
+            message.poisonSecs = reader.double();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<MobHitRequest>, I>>(base?: I): MobHitRequest {
+    return MobHitRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MobHitRequest>, I>>(object: I): MobHitRequest {
+    const message = createBaseMobHitRequest();
+    message.mobId = object.mobId ?? 0;
+    message.dmg = object.dmg ?? 0;
+    message.melee = object.melee ?? false;
+    message.crit = object.crit ?? false;
+    message.parSecs = object.parSecs ?? 0;
+    message.poisonSecs = object.poisonSecs ?? 0;
+    return message;
+  },
+};
+
+function createBasePveStatusRequest(): PveStatusRequest {
+  return { dead: false, lvl: 0 };
+}
+
+export const PveStatusRequest: MessageFns<PveStatusRequest> = {
+  encode(message: PveStatusRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.dead !== false) {
+      writer.uint32(8).bool(message.dead);
+    }
+    if (message.lvl !== 0) {
+      writer.uint32(16).int32(message.lvl);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PveStatusRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBasePveStatusRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.dead = reader.bool();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.lvl = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<PveStatusRequest>, I>>(base?: I): PveStatusRequest {
+    return PveStatusRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PveStatusRequest>, I>>(object: I): PveStatusRequest {
+    const message = createBasePveStatusRequest();
+    message.dead = object.dead ?? false;
+    message.lvl = object.lvl ?? 0;
+    return message;
+  },
+};
+
+function createBaseMobSnap(): MobSnap {
+  return { id: 0, type: 0, zone: 0, x: 0, y: 0, hp: 0, par: 0, imm: 0, poison: false, moving: false };
+}
+
+export const MobSnap: MessageFns<MobSnap> = {
+  encode(message: MobSnap, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== 0) {
+      writer.uint32(8).int32(message.id);
+    }
+    if (message.type !== 0) {
+      writer.uint32(16).int32(message.type);
+    }
+    if (message.zone !== 0) {
+      writer.uint32(24).int32(message.zone);
+    }
+    if (message.x !== 0) {
+      writer.uint32(37).float(message.x);
+    }
+    if (message.y !== 0) {
+      writer.uint32(45).float(message.y);
+    }
+    if (message.hp !== 0) {
+      writer.uint32(48).int32(message.hp);
+    }
+    if (message.par !== 0) {
+      writer.uint32(61).float(message.par);
+    }
+    if (message.imm !== 0) {
+      writer.uint32(69).float(message.imm);
+    }
+    if (message.poison !== false) {
+      writer.uint32(72).bool(message.poison);
+    }
+    if (message.moving !== false) {
+      writer.uint32(80).bool(message.moving);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MobSnap {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseMobSnap();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.id = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.type = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.zone = reader.int32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 37) {
+              break;
+            }
+
+            message.x = reader.float();
+            continue;
+          }
+          case 5: {
+            if (tag !== 45) {
+              break;
+            }
+
+            message.y = reader.float();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.hp = reader.int32();
+            continue;
+          }
+          case 7: {
+            if (tag !== 61) {
+              break;
+            }
+
+            message.par = reader.float();
+            continue;
+          }
+          case 8: {
+            if (tag !== 69) {
+              break;
+            }
+
+            message.imm = reader.float();
+            continue;
+          }
+          case 9: {
+            if (tag !== 72) {
+              break;
+            }
+
+            message.poison = reader.bool();
+            continue;
+          }
+          case 10: {
+            if (tag !== 80) {
+              break;
+            }
+
+            message.moving = reader.bool();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<MobSnap>, I>>(base?: I): MobSnap {
+    return MobSnap.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MobSnap>, I>>(object: I): MobSnap {
+    const message = createBaseMobSnap();
+    message.id = object.id ?? 0;
+    message.type = object.type ?? 0;
+    message.zone = object.zone ?? 0;
+    message.x = object.x ?? 0;
+    message.y = object.y ?? 0;
+    message.hp = object.hp ?? 0;
+    message.par = object.par ?? 0;
+    message.imm = object.imm ?? 0;
+    message.poison = object.poison ?? false;
+    message.moving = object.moving ?? false;
+    return message;
+  },
+};
+
+function createBaseMobsSnapshot(): MobsSnapshot {
+  return { mobs: [] };
+}
+
+export const MobsSnapshot: MessageFns<MobsSnapshot> = {
+  encode(message: MobsSnapshot, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.mobs) {
+      MobSnap.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MobsSnapshot {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseMobsSnapshot();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.mobs.push(MobSnap.decode(reader, reader.uint32()));
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<MobsSnapshot>, I>>(base?: I): MobsSnapshot {
+    return MobsSnapshot.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MobsSnapshot>, I>>(object: I): MobsSnapshot {
+    const message = createBaseMobsSnapshot();
+    message.mobs = object.mobs?.map((e) => MobSnap.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseMobDamaged(): MobDamaged {
+  return { mobId: 0, attackerId: 0n, dmg: 0, crit: false, hp: 0 };
+}
+
+export const MobDamaged: MessageFns<MobDamaged> = {
+  encode(message: MobDamaged, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mobId !== 0) {
+      writer.uint32(8).int32(message.mobId);
+    }
+    if (message.attackerId !== 0n) {
+      if (BigInt.asIntN(64, message.attackerId) !== message.attackerId) {
+        throw new globalThis.Error("value provided for field message.attackerId of type int64 too large");
+      }
+      writer.uint32(16).int64(message.attackerId);
+    }
+    if (message.dmg !== 0) {
+      writer.uint32(24).int32(message.dmg);
+    }
+    if (message.crit !== false) {
+      writer.uint32(32).bool(message.crit);
+    }
+    if (message.hp !== 0) {
+      writer.uint32(40).int32(message.hp);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MobDamaged {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseMobDamaged();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.mobId = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.attackerId = reader.int64() as bigint;
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.dmg = reader.int32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.crit = reader.bool();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.hp = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<MobDamaged>, I>>(base?: I): MobDamaged {
+    return MobDamaged.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MobDamaged>, I>>(object: I): MobDamaged {
+    const message = createBaseMobDamaged();
+    message.mobId = object.mobId ?? 0;
+    message.attackerId = (object.attackerId !== undefined && object.attackerId !== null)
+      ? BigInt(object.attackerId)
+      : 0n;
+    message.dmg = object.dmg ?? 0;
+    message.crit = object.crit ?? false;
+    message.hp = object.hp ?? 0;
+    return message;
+  },
+};
+
+function createBaseMobAttack(): MobAttack {
+  return { mobId: 0, tx: 0, ty: 0 };
+}
+
+export const MobAttack: MessageFns<MobAttack> = {
+  encode(message: MobAttack, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mobId !== 0) {
+      writer.uint32(8).int32(message.mobId);
+    }
+    if (message.tx !== 0) {
+      writer.uint32(21).float(message.tx);
+    }
+    if (message.ty !== 0) {
+      writer.uint32(29).float(message.ty);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MobAttack {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseMobAttack();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.mobId = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 21) {
+              break;
+            }
+
+            message.tx = reader.float();
+            continue;
+          }
+          case 3: {
+            if (tag !== 29) {
+              break;
+            }
+
+            message.ty = reader.float();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<MobAttack>, I>>(base?: I): MobAttack {
+    return MobAttack.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MobAttack>, I>>(object: I): MobAttack {
+    const message = createBaseMobAttack();
+    message.mobId = object.mobId ?? 0;
+    message.tx = object.tx ?? 0;
+    message.ty = object.ty ?? 0;
+    return message;
+  },
+};
+
+function createBaseMobHitPlayer(): MobHitPlayer {
+  return { mobId: 0, dmg: 0, stun: 0 };
+}
+
+export const MobHitPlayer: MessageFns<MobHitPlayer> = {
+  encode(message: MobHitPlayer, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mobId !== 0) {
+      writer.uint32(8).int32(message.mobId);
+    }
+    if (message.dmg !== 0) {
+      writer.uint32(16).int32(message.dmg);
+    }
+    if (message.stun !== 0) {
+      writer.uint32(25).double(message.stun);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MobHitPlayer {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseMobHitPlayer();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.mobId = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.dmg = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 25) {
+              break;
+            }
+
+            message.stun = reader.double();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<MobHitPlayer>, I>>(base?: I): MobHitPlayer {
+    return MobHitPlayer.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MobHitPlayer>, I>>(object: I): MobHitPlayer {
+    const message = createBaseMobHitPlayer();
+    message.mobId = object.mobId ?? 0;
+    message.dmg = object.dmg ?? 0;
+    message.stun = object.stun ?? 0;
+    return message;
+  },
+};
+
+function createBaseMobSpecialEvent(): MobSpecialEvent {
+  return { mobId: 0, phase: 0, x: 0, y: 0 };
+}
+
+export const MobSpecialEvent: MessageFns<MobSpecialEvent> = {
+  encode(message: MobSpecialEvent, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mobId !== 0) {
+      writer.uint32(8).int32(message.mobId);
+    }
+    if (message.phase !== 0) {
+      writer.uint32(16).int32(message.phase);
+    }
+    if (message.x !== 0) {
+      writer.uint32(29).float(message.x);
+    }
+    if (message.y !== 0) {
+      writer.uint32(37).float(message.y);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MobSpecialEvent {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseMobSpecialEvent();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.mobId = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.phase = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 29) {
+              break;
+            }
+
+            message.x = reader.float();
+            continue;
+          }
+          case 4: {
+            if (tag !== 37) {
+              break;
+            }
+
+            message.y = reader.float();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<MobSpecialEvent>, I>>(base?: I): MobSpecialEvent {
+    return MobSpecialEvent.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MobSpecialEvent>, I>>(object: I): MobSpecialEvent {
+    const message = createBaseMobSpecialEvent();
+    message.mobId = object.mobId ?? 0;
+    message.phase = object.phase ?? 0;
+    message.x = object.x ?? 0;
+    message.y = object.y ?? 0;
+    return message;
+  },
+};
+
+function createBaseMobDied(): MobDied {
+  return { mobId: 0, killerId: 0n, x: 0, y: 0, type: 0, zone: 0 };
+}
+
+export const MobDied: MessageFns<MobDied> = {
+  encode(message: MobDied, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mobId !== 0) {
+      writer.uint32(8).int32(message.mobId);
+    }
+    if (message.killerId !== 0n) {
+      if (BigInt.asIntN(64, message.killerId) !== message.killerId) {
+        throw new globalThis.Error("value provided for field message.killerId of type int64 too large");
+      }
+      writer.uint32(16).int64(message.killerId);
+    }
+    if (message.x !== 0) {
+      writer.uint32(29).float(message.x);
+    }
+    if (message.y !== 0) {
+      writer.uint32(37).float(message.y);
+    }
+    if (message.type !== 0) {
+      writer.uint32(40).int32(message.type);
+    }
+    if (message.zone !== 0) {
+      writer.uint32(48).int32(message.zone);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MobDied {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseMobDied();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.mobId = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.killerId = reader.int64() as bigint;
+            continue;
+          }
+          case 3: {
+            if (tag !== 29) {
+              break;
+            }
+
+            message.x = reader.float();
+            continue;
+          }
+          case 4: {
+            if (tag !== 37) {
+              break;
+            }
+
+            message.y = reader.float();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.type = reader.int32();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.zone = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<MobDied>, I>>(base?: I): MobDied {
+    return MobDied.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MobDied>, I>>(object: I): MobDied {
+    const message = createBaseMobDied();
+    message.mobId = object.mobId ?? 0;
+    message.killerId = (object.killerId !== undefined && object.killerId !== null) ? BigInt(object.killerId) : 0n;
+    message.x = object.x ?? 0;
+    message.y = object.y ?? 0;
+    message.type = object.type ?? 0;
+    message.zone = object.zone ?? 0;
     return message;
   },
 };

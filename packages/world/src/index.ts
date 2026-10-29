@@ -9,6 +9,8 @@
 
 import { extendSolmar } from './frontier';
 import { extendAshlands } from './ashlands';
+import type { MobType } from './mobs';
+export * from './mobs';
 
 export const MAP_SIZE = 40;
 
@@ -17,7 +19,7 @@ export interface Prop { id: number; x: number; y: number; /** profundidad al ord
 export interface Building { id: string; x: number; y: number; w: number; h: number }
 /** Personaje no jugador quieto; ocupa su celda. dir: 0 = oeste, en sentido horario (6 = sur). */
 export interface Npc { id: string; name: string; x: number; y: number; dir: number }
-export interface Zone { type: 'goblin' | 'zombie' | 'skeleton' | 'barbaro' | 'goblin_elite' | 'antlion' | 'skeleton_mage' | 'fire_ant' | 'wyvern' | 'minotaur' | 'arana' | 'golem' | 'demonio'; x: number; y: number; r: number; n: number; name: string }
+export interface Zone { type: MobType; x: number; y: number; r: number; n: number; name: string }
 
 export interface WorldMap {
     size: number;

@@ -5,7 +5,7 @@
  * quién ve a quién y el chat. Lo que todavía corre solo en este navegador, como en el prototipo:
  * mobs, combate, hechizos, loot y experiencia (pasan al server en la fase 1b).
  */
-import { buildSolmar } from '@fdn/world';
+import { buildSolmar, MOBS, MOB_TYPES, type MobType, type MobDef } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import { spellIcon } from './icons.ts';
 import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
@@ -136,29 +136,12 @@ interface Ent { x: number; y: number; dir: number; ang?: number; moving: boolean
 /** Un paso de una celda a otra, animado en `dur` segundos. */
 interface Step { fx: number; fy: number; tx: number; ty: number; t0: number; dur: number }
 
-type MobType = Zone['type'];
-/** Habilidad de boss: cada `every` s, si el jugador está a menos de `range`, carga un golpe y lo lanza a los 0,8 s. Alcanza a quien esté a menos de `r`. */
-interface BossSpecial { name: string; every: number; range: number; r: number; dmg?: [number, number]; stun?: number; col: string }
-interface BossDef { respawn: number; minRar: number; gold: [number, number]; special: BossSpecial }
-interface MobDef { name: string; lvl: number; hp: number; dmg: [number, number]; spd: number; ref: number; exp: number; hitR: number; head: number; atk: number; boss?: BossDef }
-const MOBS: Record<MobType, MobDef> = {
-    goblin: { name: 'Goblin lancero', lvl: 1, hp: 42, dmg: [4, 7], spd: 1.8, ref: 2.6, exp: 14, hitR: 20, head: 42, atk: 1.3 },
-    zombie: { name: 'Zombi del pantano', lvl: 3, hp: 85, dmg: [7, 11], spd: 1.0, ref: 1.5, exp: 30, hitR: 22, head: 50, atk: 1.6 },
-    barbaro: { name: 'Bárbaro sangriento', lvl: 8, hp: 900, dmg: [18, 28], spd: 1.3, ref: 2.4, exp: 420, hitR: 40, head: 90, atk: 1.8, boss: { respawn: 120, minRar: 2, gold: [60, 110], special: { name: 'Rugido', every: 11, range: 3.2, r: 3, stun: 1.2, dmg: [8, 12], col: '#ff8a4a' } } },
-    arana: { name: 'Reina araña', lvl: 7, hp: 720, dmg: [14, 22], spd: 1.7, ref: 2.8, exp: 520, hitR: 52, head: 88, atk: 1.4, boss: { respawn: 150, minRar: 2, gold: [70, 120], special: { name: 'Telaraña', every: 9, range: 4, r: 3.5, stun: 1.8, col: '#9fe8ff' } } },
-    golem: { name: 'Gólem de hielo', lvl: 10, hp: 1300, dmg: [24, 34], spd: 1.0, ref: 1.8, exp: 900, hitR: 50, head: 112, atk: 2.0, boss: { respawn: 180, minRar: 2, gold: [110, 170], special: { name: 'Grito helado', every: 10, range: 3, r: 3, dmg: [30, 42], stun: 0.8, col: '#7fd6ff' } } },
-    demonio: { name: 'Demonio del foso', lvl: 12, hp: 1900, dmg: [30, 44], spd: 1.4, ref: 2.4, exp: 1500, hitR: 44, head: 120, atk: 1.7, boss: { respawn: 240, minRar: 3, gold: [180, 260], special: { name: 'Salto sísmico', every: 12, range: 4.5, r: 3.2, dmg: [45, 60], stun: 1, col: '#ff5a3c' } } },
-    skeleton: { name: 'Esqueleto guerrero', lvl: 5, hp: 150, dmg: [11, 17], spd: 1.5, ref: 2.1, exp: 62, hitR: 23, head: 53, atk: 1.4 },
-    goblin_elite: { name: 'Goblin de élite', lvl: 2, hp: 62, dmg: [5, 9], spd: 1.9, ref: 2.6, exp: 22, hitR: 21, head: 46, atk: 1.2 },
-    antlion: { name: 'Hormiga león', lvl: 4, hp: 115, dmg: [9, 14], spd: 1.5, ref: 2.0, exp: 45, hitR: 24, head: 40, atk: 1.5 },
-    skeleton_mage: { name: 'Esqueleto hechicero', lvl: 5, hp: 130, dmg: [12, 18], spd: 1.3, ref: 2.1, exp: 58, hitR: 22, head: 55, atk: 1.6 },
-    fire_ant: { name: 'Hormiga de fuego', lvl: 6, hp: 190, dmg: [13, 20], spd: 1.7, ref: 2.0, exp: 80, hitR: 24, head: 42, atk: 1.3 },
-    wyvern: { name: 'Wyvern', lvl: 7, hp: 300, dmg: [16, 24], spd: 1.6, ref: 2.3, exp: 130, hitR: 32, head: 90, atk: 1.7 },
-    minotaur: { name: 'Minotauro (mini-boss)', lvl: 9, hp: 1200, dmg: [22, 34], spd: 1.4, ref: 2.4, exp: 560, hitR: 40, head: 130, atk: 1.9 },
-};
 interface Mob extends Omit<Ent, 'ref'>, MobDef {
-    id: number; sprite: MobType; zone: Zone; hpMax: number; state: 'idle' | 'chase' | 'return';
-    wx: number; wy: number; wait: number; nextAtk: number; nextSp: number; busy: number; par: number; parT: number; imm: number; poison: number; poisonTick: number;
+    id: number; sprite: MobType; zone: Zone; hpMax: number;
+    /** Última posición que mandó el server: el mob dibujado la persigue suavemente. */
+    sx: number; sy: number;
+    /** Instante (reloj local) hasta el que sigue en ese estado; `busy` es la carga de la habilidad de boss. */
+    busy: number; par: number; parT: number; imm: number; poison: number;
 }
 interface Casting { i: number; start: number; end: number; len: number }
 const P = {
@@ -182,16 +165,29 @@ const mobs: Mob[] = [], corpses: { sprite: string; x: number; y: number; dir: nu
 const floats: { x: number; y: number; text: string; col: string; t: number; big?: boolean }[] = [], fx: Fx[] = [], pending: { t: number; fn: () => void }[] = [];
 let hitstop = 0, shake = 0;
 
-function spawnMob(z: Zone) {
-    for (let i = 0; i < 40; i++) {
-        const x = Math.floor(z.x + (R() * 2 - 1) * z.r), y = Math.floor(z.y + (R() * 2 - 1) * z.r);
-        if (!walk(x, y) || safe[y]?.[x]) continue;
-        const d = MOBS[z.type];
-        mobs.push({ ...d, sprite: z.type, zone: z, x: x + 0.5, y: y + 0.5, hpMax: d.hp, hp: d.hp, state: 'idle', wx: x + 0.5, wy: y + 0.5, wait: R() * 2, nextAtk: 0, nextSp: now() + 4, busy: 0, par: 0, parT: 0, imm: 0, poison: 0, poisonTick: 0, dir: rint(0, 7), moving: false, flash: 0, one: null, t0: R() * 5, id: uid++ });
-        return;
-    }
+/** Los mobs los simula el server: acá solo hay un espejo que se actualiza con cada foto (`mobsSnapshot`). */
+const mobMap = new Map<number, Mob>();
+function dropMob(m: Mob) {
+    const i = mobs.indexOf(m); if (i >= 0) mobs.splice(i, 1);
+    mobMap.delete(m.id); if (P.target === m) P.target = null;
 }
-ZONES.forEach((z) => { for (let i = 0; i < z.n; i++) spawnMob(z); });
+function syncMobs(list: { id: number; type: number; zone: number; x: number; y: number; hp: number; par: number; imm: number; poison: boolean; moving: boolean }[]) {
+    const T = now(), seen = new Set<number>();
+    for (const s of list) {
+        seen.add(s.id);
+        let m = mobMap.get(s.id);
+        if (!m) {
+            const type = MOB_TYPES[s.type], z = ZONES[s.zone]; if (!type || !z) continue;
+            const d = MOBS[type];
+            m = { ...d, sprite: type, zone: z, x: s.x, y: s.y, sx: s.x, sy: s.y, hpMax: d.hp, hp: s.hp, busy: 0, par: 0, parT: 0, imm: 0, poison: 0, dir: rint(0, 7), moving: false, flash: 0, one: null, t0: R() * 5, id: s.id };
+            mobs.push(m); mobMap.set(s.id, m);
+        }
+        m.sx = s.x; m.sy = s.y; m.hp = s.hp;
+        if (s.par > 0.05) { if (m.par <= T) m.parT = T; m.par = T + s.par; } else m.par = 0;
+        m.imm = T + s.imm; m.poison = s.poison ? T + 1 : 0;
+    }
+    for (const m of mobs.slice()) if (!seen.has(m.id)) dropMob(m);
+}
 
 // ---------- stats ----------
 function totals() {
@@ -275,6 +271,16 @@ function onServer(m: ServerPayload) {
             }
             break;
         }
+        case 'mobsSnapshot': syncMobs(m.value.mobs); break;
+        case 'mobDamaged': onMobDamaged(m.value); break;
+        case 'mobAttack': {
+            const mob = mobMap.get(m.value.mobId); if (!mob) break;
+            turnTo(mob, m.value.tx - mob.x, m.value.ty - mob.y, 0, true); oneShot(mob, 'swing', 0.4);
+            break;
+        }
+        case 'mobHitPlayer': onMobHitPlayer(m.value); break;
+        case 'mobSpecialEvent': onMobSpecial(m.value); break;
+        case 'mobDied': onMobDied(m.value); break;
         case 'playerProfileChanged': { const o = others.get(m.value.playerId); if (o) o.profile = m.value.profile; break; }
         case 'playersLeftRange':
             for (const id of m.value.playerIds) others.delete(id);
@@ -328,28 +334,37 @@ function onServer(m: ServerPayload) {
 }
 
 // ---------- combate ----------
-function damageMob(m: Mob, dmg: number, crit: boolean, src: 'melee' | 'spell') {
-    if (m.hp <= 0 || !mobs.includes(m)) return;
+/** Pide el golpe al server: él valida alcance y tope de daño, lo aplica y avisa a todos (`mobDamaged`). */
+function damageMob(m: Mob, dmg: number, crit: boolean, src: 'melee' | 'spell', parSecs = 0) {
+    if (!mobs.includes(m) || P.dead) return;
     if (P.fury > now()) dmg = Math.round(dmg * (src === 'melee' ? 1.3 : CLS.id === 'mago' ? 1.2 : 1));
-    m.hp -= dmg; m.flash = 0.12;
-    if (!(m.one && (m.one.anim === 'swing' || m.one.anim === 'special') && now() < m.one.until) && !(m.boss && R() < 0.6)) oneShot(m, 'hit', 0.2);
-    float(m.x, m.y, (crit ? '¡' : '') + dmg + (crit ? '!' : ''), crit ? '#ffd24a' : '#fff', crit);
-    hitstop = Math.max(hitstop, crit ? 0.09 : 0.045); if (crit && !reduce) shake = 0.25;
-    if (m.par > now() && dmg >= m.hpMax * 0.45) { m.par = 0; log(`La parálisis de ${m.name} se rompió por el golpe.`); }
-    if (m.state === 'idle') aggro(m);
     const t = totals();
     if (src === 'melee' && t.leech) P.hp = Math.min(maxHp(), P.hp + Math.max(1, Math.round((dmg * t.leech) / 100)));
-    if (src === 'melee' && t.poison && R() * 100 < t.poison) { m.poison = now() + 4; log(`${m.name} quedó envenenado.`); }
-    if (m.hp <= 0) killMob(m);
+    let poisonSecs = 0;
+    if (src === 'melee' && t.poison && R() * 100 < t.poison) { poisonSecs = 4; log(`${m.name} quedó envenenado.`); }
+    net.send({ $case: 'mobHitRequest', value: { mobId: m.id, dmg, melee: src === 'melee', crit, parSecs, poisonSecs } });
 }
-function aggro(m: Mob) {
-    if (m.state === 'chase') return; m.state = 'chase';
-    for (const o of mobs) if (o !== m && o.state === 'idle' && o.zone === m.zone && dist(o, m) < 3.2) { o.state = 'chase'; o.nextAtk = now() + 0.4 + R() * 0.6; }
+/** Lo que se ve cuando el server confirma un golpe (propio o de otro jugador). */
+function onMobDamaged(v: { mobId: number; attackerId: bigint; dmg: number; crit: boolean; hp: number }) {
+    const m = mobMap.get(v.mobId); if (!m) return;
+    const mine = v.attackerId === myId, poisonTick = v.dmg === 3 && !v.crit && m.poison > now();
+    m.hp = v.hp; m.flash = 0.12;
+    if (!poisonTick && !(m.one && (m.one.anim === 'swing' || m.one.anim === 'special') && now() < m.one.until) && !(m.boss && R() < 0.6)) oneShot(m, 'hit', 0.2);
+    float(m.x, m.y, poisonTick ? '3' : (v.crit ? '¡' : '') + v.dmg + (v.crit ? '!' : ''), poisonTick ? '#8fd14f' : v.crit ? '#ffd24a' : '#fff', v.crit);
+    if (mine) { hitstop = Math.max(hitstop, v.crit ? 0.09 : 0.045); if (v.crit && !reduce) shake = 0.25; }
 }
 function levelUp() {
     while (P.exp >= expNeed()) { P.exp -= expNeed(); P.lvl++; P.hp = maxHp(); P.mp = maxMp(); float(P.x, P.y - 0.5, `¡Nivel ${P.lvl}!`, '#ffd24a', true); log(`Subiste a nivel ${P.lvl}.`, true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd24a' }); }
 }
-function killMob(m: Mob) {
+/** El server avisó que un mob murió: lo saca del espejo, deja el cadáver y, si el golpe final fue mío, cobro el botín. */
+function onMobDied(v: { mobId: number; killerId: bigint; x: number; y: number; type: number; zone: number }) {
+    const type = MOB_TYPES[v.type], z = ZONES[v.zone]; if (!type || !z) return;
+    const mob = mobMap.get(v.mobId); if (mob) dropMob(mob);
+    corpses.push({ sprite: type, x: v.x, y: v.y, dir: mob?.dir ?? 6, t: now() });
+    if (v.killerId === myId) rewardKill(type, v.x, v.y, z);
+}
+function rewardKill(type: MobType, x: number, y: number, zone: Zone) {
+    const m = { ...MOBS[type], sprite: type, x, y, zone };
     const t = totals(), gain = Math.round(m.exp * (1 + t.exp / 100));
     P.exp += gain; float(m.x, m.y - 0.3, `+${gain} exp`, '#c9a227');
     if (m.boss) {
@@ -359,25 +374,25 @@ function killMob(m: Mob) {
         log(`¡${m.name} cayó! Soltó un item <span style="color:${it.rar.c}">${it.rar.n.toLowerCase()}</span>.`, true); shake = Math.max(shake, 0.4);
     } else if (R() < 0.62) { const it = rollItem(m.lvl); drops.push({ x: m.x, y: m.y, item: it, t: 0 }); if (it.rar.k >= 2) log(`¡Cayó un item <span style="color:${it.rar.c}">${it.rar.n.toLowerCase()}</span>!`, true); }
     else drops.push({ x: m.x, y: m.y, gold: rint(3, 8) * m.lvl, t: 0 });
-    mobs.splice(mobs.indexOf(m), 1);
-    corpses.push({ sprite: m.sprite, x: m.x, y: m.y, dir: m.dir, t: now() });
-    if (P.target === m) P.target = null;
-    later(m.boss?.respawn ?? (m.sprite === 'minotaur' ? 120 : 22), () => spawnMob(m.zone));
     levelUp(); questKill(m.sprite);
     if (R() < 0.14) { const k = R() < 0.6 ? 'hp' : 'mp'; pots[k]++; log(`Encontraste una ${POTS[k].name.toLowerCase()}.`, true); renderPots(); }
     if (m.boss) { const kid = m.zone.name === 'Cripta olvidada' ? 'foso' : 'cripta', kd = KEYDEFS[kid]; Q.shards[kid]++; log(`El boss soltó una <b>${kd.shard}</b>. Con ${SHARDS_PER_KEY} esquirlas y ${kd.gold} de oro el Capitán te forja una ${kd.name}.`, true); renderQuest(); }
 }
-/** Habilidad distintiva del boss: aviso (anillo + nombre), 0,8 s de carga y recién ahí pega; se puede esquivar alejándose. */
-function bossSpecial(m: Mob, sp: BossSpecial, T: number) {
-    m.nextSp = T + sp.every; m.busy = T + 1.1; m.nextAtk = Math.max(m.nextAtk, T + 1.4);
-    oneShot(m, 'special', 1.3); float(m.x, m.y - 0.4, `¡${sp.name}!`, sp.col, true);
-    later(0.8, () => {
-        if (!mobs.includes(m) || m.par > now() || P.dead) return;
-        fx.push({ k: 'boom', x: m.x, y: m.y, t: 0, c: sp.col, r: sp.r }); if (!reduce) shake = Math.max(shake, 0.3);
-        if (dist(m, P) > sp.r) return;
-        if (sp.dmg) hurtPlayer(rint(sp.dmg[0], sp.dmg[1]));
-        if (sp.stun && !P.dead) { P.frozenUntil = now() + sp.stun; P.path = []; P.engage = false; cancelCast(); log(`${m.name}: ${sp.name}. Quedaste inmovilizado ${sp.stun} s.`, true); }
-    });
+/** Habilidad distintiva del boss (el server decide cuándo y a quién pega): fase 0 = aviso y carga, fase 1 = el golpe en área. */
+function onMobSpecial(v: { mobId: number; phase: number; x: number; y: number }) {
+    const m = mobMap.get(v.mobId), sp = m?.boss?.special; if (!m || !sp) return;
+    if (v.phase === 0) { m.busy = now() + 1.1; oneShot(m, 'special', 1.3); float(m.x, m.y - 0.4, `¡${sp.name}!`, sp.col, true); }
+    else { fx.push({ k: 'boom', x: v.x, y: v.y, t: 0, c: sp.col, r: sp.r }); if (!reduce) shake = Math.max(shake, 0.3); }
+}
+/** El server me pegó un mob (el daño ya viene calculado; acá solo resto la defensa). */
+function onMobHitPlayer(v: { mobId: number; dmg: number; stun: number }) {
+    if (P.dead) return;
+    const m = mobMap.get(v.mobId);
+    if (v.dmg > 0) hurtPlayer(v.dmg);
+    if (v.stun > 0 && !P.dead) {
+        P.frozenUntil = now() + v.stun; P.path = []; P.engage = false; cancelCast();
+        const sp = m?.boss?.special; log(`${m ? m.name : 'Un enemigo'}${sp ? ': ' + sp.name : ''}. Quedaste inmovilizado ${v.stun} s.`, true);
+    }
 }
 function meleeHit(m: Mob) {
     const t = totals(); let d = rint(CLS.melee[0], CLS.melee[1]) + P.lvl + rint(t.wdmg[0], t.wdmg[1]);
@@ -404,7 +419,7 @@ function hurtPlayer(d: number) {
         later(2.2, () => {
             // volver al campamento: el server confirma con playerTeleported
             net.send({ $case: 'playerTeleportRequested', value: { x: MAP.spawn.x, y: MAP.spawn.y } });
-            P.dead = false; P.one = null; P.hp = maxHp(); P.mp = maxMp(); mobs.forEach((m) => { m.state = 'return'; });
+            P.dead = false; P.one = null; P.hp = maxHp(); P.mp = maxMp();
         });
     }
 }
@@ -461,14 +476,14 @@ function zone(x: number, y: number, r: number, ticks: number, every: number, dmg
         if (effect === 'blizz') { if (i === 0) { fx.push({ k: 'blizz', x, y, t: 0, r, d: ticks * every + 0.5 }); pvpSend('blizz', x, y, 0n, 0, 0, r); } } else if (i === 0 || effect === 'cataclysm') efx(effect, x, y);
         if (!reduce && i === 0) shake = Math.max(shake, 0.15);
         for (const o of enemiesNear(x, y, r)) pvpDamage(o, dmg(), '', false, slow && i === ticks - 1 ? slow : 0);
-        for (const m of mobs.slice()) if (Math.hypot(m.x - x, m.y - y) <= r && !isSafe(m.x, m.y)) { damageMob(m, dmg(), false, 'spell'); if (slow && m.imm <= now() && i === ticks - 1) { m.par = now() + slow; m.parT = now(); m.imm = now() + slow + 6; m.moving = false; } }
+        for (const m of mobs.slice()) if (Math.hypot(m.x - x, m.y - y) <= r && !isSafe(m.x, m.y)) damageMob(m, dmg(), false, 'spell', slow && m.imm <= now() && i === ticks - 1 ? slow : 0);
     });
 }
 function heal(h: number, eff = 'sphere') { P.hp = Math.min(maxHp(), P.hp + h); float(P.x, P.y - 0.2, '+' + h, '#7ee08a'); efx(eff, P.x, P.y); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#7ee08a' }); }
 function control(m: Target | null, secs: number, verb: string, noun: string, eff = 'stop'): false | void {
     if (!isMob(m)) return false;
     if (m.imm > now()) { log(`${m.name} es inmune al control por unos segundos.`); return false; }
-    efx(eff, m.x, m.y); m.par = now() + secs; m.parT = now(); m.imm = now() + secs + 8; m.moving = false; if (m.state === 'idle') m.state = 'chase';
+    efx(eff, m.x, m.y); net.send({ $case: 'mobHitRequest', value: { mobId: m.id, dmg: 0, melee: false, crit: false, parSecs: secs, poisonSecs: 0 } });
     fx.push({ k: 'ring', x: m.x, y: m.y, t: 0, c: '#7fd6ff' }); log(`${verb} a ${m.name} por ${secs} s. ${noun} se rompe si lo golpean fuerte.`, true);
 }
 const cds = [0, 0, 0, 0, 0, 0];
@@ -754,15 +769,6 @@ window.addEventListener('keydown', (e) => {
 });
 
 // ---------- update ----------
-function stepEntity(e: Ent, tx: number, ty: number, spd: number, dt: number, mob: boolean) {
-    const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy); if (d < 0.02) return true;
-    const s = Math.min(d, spd * dt), nx = e.x + (dx / d) * s, ny = e.y + (dy / d) * s;
-    const ok = (x: number, y: number) => walk(Math.floor(x), Math.floor(y)) && !(mob && isSafe(x, y));
-    if (ok(nx, ny)) { e.x = nx; e.y = ny; } else if (ok(nx, e.y)) e.x = nx; else if (ok(e.x, ny)) e.y = ny;
-    turnTo(e, dx, dy, dt);
-    e.phase = (e.phase || 0) + (dt * spd) / (e.ref || 3.4);
-    e.moving = true; return false;
-}
 /** Avanza un paso celda a celda (jugadores): posición interpolada, giro y fase de la animación. */
 function advanceStep(e: Ent & { step: Step | null }, T: number, dt: number) {
     const s = e.step!; const k = Math.min(1, (T - s.t0) / s.dur);
@@ -774,12 +780,15 @@ function advanceStep(e: Ent & { step: Step | null }, T: number, dt: number) {
 }
 /** Margen sobre la velocidad del server para que la latencia no haga parecer que vamos rápido de más. */
 const STEP_MARGIN = 0.015;
-let regenT = 0, pingT = 0, pingSeq = 0;
+let regenT = 0, pingT = 0, pingSeq = 0, pveT = 0, pveSent = { dead: false, lvl: 0 };
 function update(dt: number) {
     const T = now(), tot = totals();
     for (const p of pending.slice()) if (T >= p.t) { pending.splice(pending.indexOf(p), 1); p.fn(); }
     pingT -= dt; if (pingT <= 0 && connected) { pingT = 1; net.send({ $case: 'pingRequest', value: { sequence: ++pingSeq } }); }
     if (holding && !P.dead && !P.target && !P.casting && mouse.x >= 0) { holdT -= dt; if (holdT <= 0) { holdT = 0.18; const g = toGrid(mouse.x, mouse.y); if (Math.hypot(g.x - P.x, g.y - P.y) > 0.7) moveTo(g.x, g.y); } }
+    // el server necesita saber si estoy muerto (los mobs me ignoran) y mi nivel (tope de daño por golpe)
+    pveT -= dt;
+    if (connected && (pveT <= 0 || pveSent.dead !== P.dead || pveSent.lvl !== P.lvl)) { pveT = 5; pveSent = { dead: P.dead, lvl: P.lvl }; net.send({ $case: 'pveStatusRequest', value: { dead: P.dead, lvl: P.lvl } }); }
     P.moving = false; P.flash = Math.max(0, P.flash - dt);
     if (!P.dead) {
         const m = P.target;
@@ -840,27 +849,13 @@ function update(dt: number) {
     }
     for (const m of mobs.slice()) {
         m.flash = Math.max(0, m.flash - dt); m.moving = false;
-        if (m.poison > T && T >= m.poisonTick) { m.poisonTick = T + 1; m.hp -= 3; float(m.x, m.y, '3', '#8fd14f'); if (m.hp <= 0) { killMob(m); continue; } }
-        if (m.par > T) continue;
-        const home = { x: m.zone.x + 0.5, y: m.zone.y + 0.5 };
-        const dp = dist(m, P), playerOk = !P.dead && !isSafe(P.x, P.y);
-        if (m.state === 'idle') {
-            if (playerOk && dp < 4.5) aggro(m);
-            else { m.wait -= dt; if (m.wait <= 0) { if (stepEntity(m, m.wx, m.wy, m.spd * 0.45, dt, true)) { m.wait = 1.5 + R() * 3; m.wx = clamp(m.zone.x + (R() * 2 - 1) * m.zone.r, 1, N - 2); m.wy = clamp(m.zone.y + (R() * 2 - 1) * m.zone.r, 1, N - 2); } else m.wait = 0; } }
-        } else if (m.state === 'chase') {
-            if (!playerOk || dist(m, home) > 17) { m.state = 'return'; continue; }
-            if (T < m.busy) { turnTo(m, P.x - m.x, P.y - m.y, dt); continue; } // cargando la habilidad: se queda quieto
-            const sp = m.boss?.special;
-            if (sp && T >= m.nextSp && dp <= sp.range) bossSpecial(m, sp, T);
-            if (T < m.busy) continue;
-            if (dp > 1.1) stepEntity(m, P.x, P.y, m.spd, dt, true);
-            for (const o of mobs) { if (o === m || o.state !== 'chase') continue; const sx = m.x - o.x, sy = m.y - o.y, sd = Math.hypot(sx, sy); if (sd > 0.01 && sd < 0.85) { const k = (0.85 - sd) * dt * 3, nx = m.x + (sx / sd) * k, ny = m.y + (sy / sd) * k; if (walk(Math.floor(nx), Math.floor(ny))) { m.x = nx; m.y = ny; } } }
-            if (dp <= 1.5) {
-                turnTo(m, P.x - m.x, P.y - m.y, dt);
-                if (T >= m.nextAtk) { m.nextAtk = T + m.atk; oneShot(m, 'swing', 0.4); const dmg = rint(m.dmg[0], m.dmg[1]); later(0.2, () => { if (mobs.includes(m) && m.par <= now() && dist(m, P) < 1.8) hurtPlayer(dmg); }); }
-            }
-        } else if (m.state === 'return') {
-            if (stepEntity(m, home.x, home.y, m.spd * 1.3, dt, true) || dist(m, home) < 0.5) { m.state = 'idle'; m.hp = m.hpMax; }
+        // el server manda la posición real unas 10 veces por segundo: acá se la persigue para que el movimiento se vea fluido
+        const dx = m.sx - m.x, dy = m.sy - m.y, d = Math.hypot(dx, dy);
+        if (d > 4) { m.x = m.sx; m.y = m.sy; }
+        else if (d > 0.05) {
+            const s = Math.min(d, (m.spd * 1.4 + d * 4) * dt);
+            m.x += (dx / d) * s; m.y += (dy / d) * s; m.moving = true;
+            turnTo(m, dx, dy, dt); m.phase = (m.phase || 0) + s / (m.ref || 3.4);
         }
     }
     for (const p of projs.slice()) {

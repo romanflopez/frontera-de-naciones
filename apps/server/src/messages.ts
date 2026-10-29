@@ -166,3 +166,13 @@ export const pvpHit = (casterId: bigint, v: { fx: string; x: number; y: number; 
     msg({ $case: 'pvpHit', value: { casterId, ...v } });
 
 export const characterLoaded = (exists: boolean, data: string): ServerMessage => msg({ $case: 'characterLoaded', value: { exists, data } });
+// ---------- PvE autoritativo ----------
+export const mobsSnapshot = (mobs: { id: number; type: number; zone: number; x: number; y: number; hp: number; par: number; imm: number; poison: boolean; moving: boolean }[]): ServerMessage =>
+    msg({ $case: 'mobsSnapshot', value: { mobs } });
+export const mobDamaged = (mobId: number, attackerId: bigint, dmg: number, crit: boolean, hp: number): ServerMessage =>
+    msg({ $case: 'mobDamaged', value: { mobId, attackerId, dmg, crit, hp } });
+export const mobAttack = (mobId: number, tx: number, ty: number): ServerMessage => msg({ $case: 'mobAttack', value: { mobId, tx, ty } });
+export const mobHitPlayer = (mobId: number, dmg: number, stun: number): ServerMessage => msg({ $case: 'mobHitPlayer', value: { mobId, dmg, stun } });
+export const mobSpecialEvent = (mobId: number, phase: number, x: number, y: number): ServerMessage => msg({ $case: 'mobSpecialEvent', value: { mobId, phase, x, y } });
+export const mobDied = (mobId: number, killerId: bigint, x: number, y: number, type: number, zone: number): ServerMessage =>
+    msg({ $case: 'mobDied', value: { mobId, killerId, x, y, type, zone } });
