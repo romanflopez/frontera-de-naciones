@@ -136,6 +136,7 @@ interface MobDef { name: string; lvl: number; hp: number; dmg: [number, number];
 const MOBS: Record<MobType, MobDef> = {
     goblin: { name: 'Goblin lancero', lvl: 1, hp: 42, dmg: [4, 7], spd: 1.8, ref: 2.6, exp: 14, hitR: 20, head: 42, atk: 1.3 },
     zombie: { name: 'Zombi del pantano', lvl: 3, hp: 85, dmg: [7, 11], spd: 1.0, ref: 1.5, exp: 30, hitR: 22, head: 50, atk: 1.6 },
+    barbaro: { name: 'Bárbaro sangriento (boss)', lvl: 8, hp: 900, dmg: [18, 28], spd: 1.3, ref: 2.4, exp: 420, hitR: 40, head: 150, atk: 1.8 },
     skeleton: { name: 'Esqueleto guerrero', lvl: 5, hp: 150, dmg: [11, 17], spd: 1.5, ref: 2.1, exp: 62, hitR: 23, head: 53, atk: 1.4 },
 };
 interface Mob extends Omit<Ent, 'ref'>, MobDef {
@@ -323,7 +324,7 @@ function killMob(m: Mob) {
     mobs.splice(mobs.indexOf(m), 1);
     corpses.push({ sprite: m.sprite, x: m.x, y: m.y, dir: m.dir, t: now() });
     if (P.target === m) P.target = null;
-    later(22, () => spawnMob(m.zone));
+    later(m.sprite === 'barbaro' ? 120 : 22, () => spawnMob(m.zone));
     while (P.exp >= expNeed()) { P.exp -= expNeed(); P.lvl++; P.hp = maxHp(); P.mp = maxMp(); float(P.x, P.y - 0.5, `¡Nivel ${P.lvl}!`, '#ffd24a', true); log(`Subiste a nivel ${P.lvl}.`, true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd24a' }); }
 }
 function meleeHit(m: Mob) {
@@ -444,7 +445,7 @@ function toast(t: string) { const el = $('toast'); el.textContent = t; el.hidden
 
 // ---------- assets ----------
 interface Anim { row: number; n: number; dur: number; type: string }
-interface SpriteMeta { cw: number; ch: number; ax: number; ay: number; anims: Record<string, Anim> }
+interface SpriteMeta { sc?: number; cw: number; ch: number; ax: number; ay: number; anims: Record<string, Anim> }
 const SPR: Record<string, SpriteMeta> = {};
 let WORLD: Record<string, number[]> = {};
 const IMG: Record<string, CanvasImageSource> = {};
@@ -492,7 +493,7 @@ function refreshLook() {
 }
 function drawSprite(name: string, anim: string, t: number, dir: number, x: number, y: number, tint?: string | null, alpha?: number) {
     const M = SPR[name], A = M?.anims[anim], im = IMG[name]; if (!A || !im) return;
-    const i = frameIndex(A, t), sx = i * M.cw, sy = (A.row + dir) * M.ch, dw = M.cw * SS, dh = M.ch * SS, dx = x - M.ax * SS, dy = y - M.ay * SS;
+    const i = frameIndex(A, t), sx = i * M.cw, sy = (A.row + dir) * M.ch, k = SS * (M.sc ?? 1), dw = M.cw * k, dh = M.ch * k, dx = x - M.ax * k, dy = y - M.ay * k;
     ctx.globalAlpha = alpha ?? 1;
     ctx.drawImage(im, sx, sy, M.cw, M.ch, dx, dy, dw, dh);
     if (tint) {
@@ -938,13 +939,13 @@ async function boot() {
         WORLD = meta.world; delete meta.world;
         PAPER = meta.paper; delete meta.paper; SPR.hero = SPR.hero_other = PAPER as unknown as SpriteMeta;
         Object.assign(SPR, meta);
-        const names = ['world', 'goblin', 'zombie', 'skeleton'];
+        const names = ['world', 'goblin', 'zombie', 'skeleton', 'barbaro'];
         const imgs = await Promise.all(names.map((n) => load(`assets/${n}.webp`)));
         names.forEach((n, i) => (IMG[n] = imgs[i]));
     } catch { $('loading').textContent = 'No se pudieron cargar los gráficos. Recargá la página.'; return; }
     $('loading').hidden = true;
     refreshLook();
-    if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
+    if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { mobs, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();
     requestAnimationFrame(frame);

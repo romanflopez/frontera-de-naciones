@@ -10,7 +10,7 @@
 export const MAP_SIZE = 40;
 
 export interface Prop { id: number; x: number; y: number }
-export interface Zone { type: 'goblin' | 'zombie' | 'skeleton'; x: number; y: number; r: number; n: number; name: string }
+export interface Zone { type: 'goblin' | 'zombie' | 'skeleton' | 'barbaro'; x: number; y: number; r: number; n: number; name: string }
 
 export interface WorldMap {
     size: number;
@@ -75,6 +75,7 @@ export function buildSolmar(): WorldMap {
         { type: 'goblin', x: 16, y: 18, r: 5, n: 3, name: 'Campamento goblin' },
         { type: 'zombie', x: 28, y: 11, r: 5, n: 3, name: 'Pantano muerto' },
         { type: 'skeleton', x: 29, y: 29, r: 5, n: 2, name: 'Cementerio viejo' },
+        { type: 'barbaro', x: 34, y: 20, r: 2, n: 1, name: 'Guarida del bárbaro' },
     ];
     const near = (x: number, y: number, z: Zone, r: number) => Math.hypot(x - z.x, y - z.y) < r;
     prop(102, 15, 15, true); prop(100, 19, 20, true); prop(99, 14, 16, true); prop(97, 18, 15, true); prop(101, 13, 19, true);

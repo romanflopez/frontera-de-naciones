@@ -101,7 +101,9 @@ async function build(name: string, layers: Layer[], anims: string[], fixed?: { b
 }
 
 mkdirSync(out, { recursive: true });
-const meta: Record<string, unknown> = {};
+// conserva lo que armaron otros scripts (bosses, etc.) en meta.json
+const metaFile = join(out, 'meta.json');
+const meta: Record<string, unknown> = existsSync(metaFile) ? JSON.parse(readFileSync(metaFile, 'utf8')) : {};
 const EA = ['stance', 'run', 'swing', 'hit', 'die'];
 for (const n of ['goblin', 'zombie', 'skeleton']) {
     meta[n] = await build(n, [{ type: 'x', anim: parse(`animations/enemies/${n}.txt`) }], EA);
@@ -161,5 +163,5 @@ wctx.imageSmoothingQuality = 'high';
 for (const it of items) { const [px, py] = pos[it.id]; wctx.drawImage(ts, it.x, it.y, it.w, it.h, px, py, it.sw, it.sh); }
 writeFileSync(join(out, 'world.webp'), world.toBuffer('image/webp', 86));
 meta.world = pos;
-writeFileSync(join(out, 'meta.json'), JSON.stringify(meta));
+writeFileSync(metaFile, JSON.stringify(meta));
 console.log(`Atlas de Flare listos en apps/client/public/assets (${Object.keys(meta).length - 1} personajes + mundo).`);
