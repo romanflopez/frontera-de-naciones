@@ -172,6 +172,7 @@ function totals() {
         if (it.dmg) t.wdmg = it.dmg; if (it.def) t.def += it.def; if (it.mag) t.mag += it.mag;
         for (const a of it.attrs) t[a.id] += a.v;
     }
+    if (P.fury > now()) t.aspd += 25;
     return t;
 }
 // ---------- clases ----------
@@ -179,7 +180,7 @@ interface ClassDef { id: string; name: string; desc: string; sprite: string; hp:
 const CLASSES: ClassDef[] = [
     { id: 'guerrero', name: 'Guerrero', desc: 'Resistente, pega cuerpo a cuerpo y frena enemigos.', sprite: 'hero_warrior', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 0, spells: ['golpe', 'aturdir', 'vendar', 'torbellino'] },
     { id: 'mago', name: 'Mago', desc: 'Frágil pero con hechizos a distancia, parálisis y cura.', sprite: 'hero_mage', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 2, spells: ['proyectil', 'paralisis', 'curar', 'bola'] },
-    { id: 'berserk', name: 'Berserk', desc: 'Mucho daño físico. Furia pega más, recibe más y le abre dos habilidades extra.', sprite: 'hero_berserk', hp: 120, hpL: 14, mp: 30, mpL: 3, melee: [8, 13], weapon: 1, spells: ['tajo', 'aturdir', 'furia', 'torbellino', 'rugido', 'ejecutar'] },
+    { id: 'berserk', name: 'Berserk', desc: 'Mucho daño físico. Furia sube daño y velocidad de ataque y le abre dos habilidades extra.', sprite: 'hero_berserk', hp: 120, hpL: 14, mp: 30, mpL: 3, melee: [8, 13], weapon: 1, spells: ['tajo', 'aturdir', 'furia', 'torbellino', 'rugido', 'ejecutar'] },
 ];
 let CLS: ClassDef = CLASSES[0];
 const maxHp = () => CLS.hp + (P.lvl - 1) * CLS.hpL + totals().hp;
@@ -329,7 +330,7 @@ function explode(p: Proj) {
 }
 function hurtPlayer(d: number) {
     if (P.dead) return;
-    const dmg = Math.max(1, Math.round((d - totals().def) * (P.fury > now() ? 1.25 : 1))); P.hp -= dmg; P.flash = 0.12; float(P.x, P.y, '-' + dmg, '#ff6b55');
+    const dmg = Math.max(1, d - totals().def); P.hp -= dmg; P.flash = 0.12; float(P.x, P.y, '-' + dmg, '#ff6b55');
     if (P.casting) P.casting.end = Math.min(P.casting.end + 0.2, P.casting.start + P.casting.len * 1.6);
     if (!(P.one && P.one.anim !== 'hit' && now() < P.one.until)) oneShot(P, 'hit', 0.15);
     if (P.hp <= 0) {
@@ -372,7 +373,7 @@ const LIB: Record<string, SpellDef> = {
     ejecutar: { name: 'Ejecutar', mp: 12, cd: 4, col: '#ff3b2f', range: 1.9, target: true, fury: true,
         cast(m) { if (!isMob(m)) return false; const low = m.hp < m.hpMax * 0.35; damageMob(m, (rint(26, 36) + P.lvl * 3 + rint(totals().wdmg[0], totals().wdmg[1])) * (low ? 2 : 1), true, 'melee'); } },
     furia: { name: 'Furia', mp: 15, cd: 20, col: '#ff3b2f', range: 0, target: false,
-        cast() { P.fury = now() + 10; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log('Furia: +30% de daño físico y +25% de daño recibido por 10 s y se abren Rugido y Ejecutar.', true); } },
+        cast() { P.fury = now() + 10; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log('Furia: +30% de daño físico y +25% de velocidad de ataque por 10 s, sin castigo. Se abren Rugido y Ejecutar.', true); } },
 };
 let SPELLS: Spell[] = [];
 function heal(h: number) { P.hp = Math.min(maxHp(), P.hp + h); float(P.x, P.y - 0.2, '+' + h, '#7ee08a'); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#7ee08a' }); }
