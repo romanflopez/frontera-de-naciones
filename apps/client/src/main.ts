@@ -276,9 +276,11 @@ function onServer(m: ServerPayload) {
         case 'positionCorrected':
             snapTo(m.value.destX, m.value.destY);
             break;
-        case 'playerTeleported':
+        case 'playerTeleported': {
             snapTo(m.value.x, m.value.y);
+            const pt = iso(P.x, P.y); if (Math.hypot(pt.x - cam.x, pt.y - cam.y) > 500) { cam.x = pt.x; cam.y = pt.y; }
             break;
+        }
         case 'playerParalyzed':
             P.frozenUntil = now() + m.value.durationSeconds; P.path = [];
             toast(`El server te frenó ${m.value.durationSeconds} s.`);
@@ -504,7 +506,9 @@ function drawSprite(name: string, anim: string, t: number, dir: number, x: numbe
     }
     ctx.globalAlpha = 1;
 }
-function drawWorld(id: number, x: number, y: number) { const w = WORLD[id]; if (!w) return; ctx.drawImage(IMG.world, w[0], w[1], w[2], w[3], x - w[4], y - w[5], w[2], w[3]); }
+/** Atlas extra (cripta de Kenney y terreno de SBS): id -> imagen y recorte [x, y, w, h, ox, oy]. */
+const EXT: Record<number, { im: CanvasImageSource; p: number[] }> = {};
+function drawWorld(id: number, x: number, y: number) { const e = EXT[id]; if (e) { const q = e.p; ctx.drawImage(e.im, q[0], q[1], q[2], q[3], Math.round(x - q[4]), Math.round(y - q[5]), q[2], q[3]); return; } const w = WORLD[id]; if (!w) return; ctx.drawImage(IMG.world, w[0], w[1], w[2], w[3], x - w[4], y - w[5], w[2], w[3]); }
 
 // ---------- canvas ----------
 const cv = $('cv') as HTMLCanvasElement, ctx = cv.getContext('2d')!;
@@ -755,7 +759,7 @@ function render() {
     for (const m of [P.target, hover]) if (m && mobs.includes(m)) { const p = iso(m.x, m.y); ctx.strokeStyle = m === P.target ? 'rgba(226,85,63,.9)' : 'rgba(255,255,255,.45)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 17, 8.5, 0, 0, Math.PI * 2); ctx.stroke(); }
     // objetos por profundidad
     const objs: { d: number; f: () => void }[] = [];
-    for (const o of props) if (o.x > minX - 3 && o.x < maxX + 3 && o.y > minY - 3 && o.y < maxY + 3) objs.push({ d: o.x + o.y, f: () => { const p = iso(o.x, o.y); drawWorld(o.id, p.x, p.y); } });
+    for (const o of props) if (o.x > minX - 3 && o.x < maxX + 3 && o.y > minY - 3 && o.y < maxY + 3) objs.push({ d: o.d ?? o.x + o.y, f: () => { const p = iso(o.x, o.y); drawWorld(o.id, p.x, p.y); } });
     for (const d of drops) objs.push({ d: d.x + d.y - 0.2, f: () => drawDrop(d, T) });
     for (const c of corpses) objs.push({ d: c.x + c.y - 0.3, f: () => { const p = iso(c.x, c.y), age = T - c.t; drawSprite(c.sprite, 'die', age, c.dir, p.x, p.y, null, age > 2 ? 3 - age : 1); } });
     for (const m of mobs) objs.push({ d: m.x + m.y, f: () => drawMob(m, T) });
@@ -798,6 +802,7 @@ function render() {
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     const pp = toScreen(P.x, P.y); const g = ctx.createRadialGradient(pp.x, pp.y - 25 * Z, 110 * Z, pp.x, pp.y - 25 * Z, Math.max(W, H) * 0.6);
     g.addColorStop(0, 'rgba(6,8,12,0)'); g.addColorStop(1, 'rgba(6,8,12,.82)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    if (inDungeon(P.x, P.y)) { ctx.fillStyle = 'rgba(12,8,24,.28)'; ctx.fillRect(0, 0, W, H); }
     ctx.textAlign = 'center';
     const zone = isSafe(P.x, P.y) ? 'Campamento de Solmar · zona segura' : ZONES.find((z) => near(P.x, P.y, z, z.r + 2))?.name || '';
     if (zone) { ctx.font = "600 13px 'Alegreya SC', Georgia, serif"; ctx.fillStyle = 'rgba(214,164,69,.9)'; ctx.fillText(zone, W / 2, H - 98); }
@@ -882,13 +887,24 @@ function renderBag() {
     if (uneqBtn) uneqBtn.onclick = () => { if (P.bag.length >= 18) { log('La bolsa está llena.'); return; } P.eq[it.slot] = null; refreshLook(); P.bag.push(it); sel = { it, from: 'bag' }; P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); renderBag(); };
 }
 
+// ---------- escaleras entre zonas (el server valida el teletransporte; la celda de destino tiene que estar libre) ----------
+let portalLock = 0;
+function checkPortals() {
+    if (!MAP.portals || !connected || P.dead || P.step || now() < portalLock) return;
+    const p = MAP.portals.find((q) => q.x === P.cell.x && q.y === P.cell.y); if (!p) return;
+    portalLock = now() + 1.5; P.path = []; P.target = null; P.engage = false; P.pickup = null;
+    net.send({ $case: 'playerTeleportRequested', value: { x: p.tx, y: p.ty } });
+    log(p.msg, true);
+}
+const inDungeon = (gx: number, gy: number) => { const d = MAP.dungeon; return !!d && gx >= d.x0 && gx < d.x1 + 1 && gy >= d.y0 && gy < d.y1 + 1; };
+
 // ---------- loop ----------
 const MAP_WORLD_ID = 'solmar';
 let last = now(), lastCam = now();
 function frame() {
     const T = now(); let dt = Math.min(0.05, T - last); last = T;
     if (hitstop > 0) { hitstop -= dt; dt = 0; }
-    update(dt); updateCam(Math.min(0.05, T - lastCam)); lastCam = T;
+    update(dt); checkPortals(); updateCam(Math.min(0.05, T - lastCam)); lastCam = T;
     updateHover(); render(); hud(); requestAnimationFrame(frame);
 }
 
@@ -937,6 +953,10 @@ async function boot() {
     try {
         const meta = await (await fetch('assets/meta.json')).json();
         WORLD = meta.world; delete meta.world;
+        for (const k of ['dungeon', 'terrain']) {
+            const m = meta[k]; delete meta[k]; if (!m) continue;
+            try { const im = await load(`assets/${k}.webp`); for (const [id, p] of Object.entries(m.pos as Record<string, number[]>)) EXT[Number(id)] = { im, p }; } catch { /* sin ese atlas se ve el mapa sin esas piezas */ }
+        }
         PAPER = meta.paper; delete meta.paper; SPR.hero = SPR.hero_other = PAPER as unknown as SpriteMeta;
         Object.assign(SPR, meta);
         const names = ['world', 'goblin', 'zombie', 'skeleton', 'barbaro'];
@@ -945,7 +965,7 @@ async function boot() {
     } catch { $('loading').textContent = 'No se pudieron cargar los gráficos. Recargá la página.'; return; }
     $('loading').hidden = true;
     refreshLook();
-    if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { mobs, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
+    if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { mobs, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5), tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();
     requestAnimationFrame(frame);

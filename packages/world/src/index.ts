@@ -7,9 +7,11 @@
  * (vista isométrica 2:1). Los ids de tiles y objetos son los del tileset de pasto de Flare.
  */
 
+import { extendSolmar } from './frontier';
+
 export const MAP_SIZE = 40;
 
-export interface Prop { id: number; x: number; y: number }
+export interface Prop { id: number; x: number; y: number; /** profundidad al ordenar (por defecto x + y) */ d?: number }
 export interface Zone { type: 'goblin' | 'zombie' | 'skeleton' | 'barbaro'; x: number; y: number; r: number; n: number; name: string }
 
 export interface WorldMap {
@@ -26,6 +28,10 @@ export interface WorldMap {
     spawn: { x: number; y: number };
     /** Celda de la fogata, para la luz. */
     fire: { x: number; y: number };
+    /** Escaleras entre zonas del mismo mapa: al terminar de pisar (x, y) se pasa a (tx, ty). */
+    portals?: { x: number; y: number; tx: number; ty: number; msg: string }[];
+    /** Rectángulo de la cripta (el cliente la oscurece). */
+    dungeon?: { x0: number; y0: number; x1: number; y1: number };
 }
 
 const GRASS = [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31];
@@ -89,7 +95,7 @@ export function buildSolmar(): WorldMap {
         else if (r < 0.085) prop(pick([136, 137]), x, y, true);
         else if (r < 0.16) prop(pick([112, 113, 114, 115, 116, 117, 120, 121, 122, 123, 124, 125, 126, 127]), x, y, false);
     }
-    return { size: N, tiles, blocked, safe, props, decals, zones, spawn: { x: 6, y: 7 }, fire: { x: 8, y: 8 } };
+    return extendSolmar({ size: N, tiles, blocked, safe, props, decals, zones, spawn: { x: 6, y: 7 }, fire: { x: 8, y: 8 } });
 }
 
 /** Mapas por nombre (el que figura en worlds.json del server). */
