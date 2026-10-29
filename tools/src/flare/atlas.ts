@@ -57,14 +57,20 @@ for (const l of readFileSync(join(mod, 'engine', 'hero_layers.txt'), 'utf8').spl
 
 interface Layer { type: string; anim: ReturnType<typeof parse> }
 
-async function build(name: string, layers: Layer[], anims: string[]) {
+interface Bounds { minx: number; miny: number; maxx: number; maxy: number }
+function boundsOf(layers: Layer[], anims: string[]): Bounds {
     let minx = 1e9, miny = 1e9, maxx = -1e9, maxy = -1e9;
     for (const { anim } of layers) for (const a of anims) for (const [, , w, h, ox, oy] of anim.sections.get(a)?.f.values() ?? []) {
         minx = Math.min(minx, -ox); miny = Math.min(miny, -oy); maxx = Math.max(maxx, w - ox); maxy = Math.max(maxy, h - oy);
     }
-    minx = Math.floor(minx / 2) * 2; miny = Math.floor(miny / 2) * 2; maxx = Math.ceil(maxx / 2) * 2; maxy = Math.ceil(maxy / 2) * 2;
+    return { minx: Math.floor(minx / 2) * 2, miny: Math.floor(miny / 2) * 2, maxx: Math.ceil(maxx / 2) * 2, maxy: Math.ceil(maxy / 2) * 2 };
+}
+
+/** Con `fixed`, todas las piezas salen con el mismo tamaño de celda y filas, para poder apilarlas en el cliente. */
+async function build(name: string, layers: Layer[], anims: string[], fixed?: { b: Bounds; ref: Layer }) {
+    const { minx, miny, maxx, maxy } = fixed?.b ?? boundsOf(layers, anims);
     const cw = maxx - minx, ch = maxy - miny;
-    const first = layers[0].anim.sections;
+    const first = (fixed?.ref ?? layers[0]).anim.sections;
     const cols = Math.max(...anims.map((a) => first.get(a)!.frames));
     const full = createCanvas(cw * cols, ch * 8 * anims.length), ctx = full.getContext('2d');
     const meta = { cw: cw / 2, ch: ch / 2, ax: -minx / 2, ay: -miny / 2, cols, anims: {} as Record<string, { row: number; n: number; dur: number; type: string }> };
@@ -100,15 +106,37 @@ const EA = ['stance', 'run', 'swing', 'hit', 'die'];
 for (const n of ['goblin', 'zombie', 'skeleton']) {
     meta[n] = await build(n, [{ type: 'x', anim: parse(`animations/enemies/${n}.txt`) }], EA);
 }
-// una pieza de arte por clase: guerrero (cuero + espada + escudo), mago (túnica + bastón), berserk (torso curtido + hacha grande)
-const classes: Record<string, [string, string][]> = {
-    hero_warrior: [['feet', 'leather_boots'], ['legs', 'leather_pants'], ['hands', 'leather_gloves'], ['chest', 'leather_chest'], ['head', 'head_short'], ['main', 'longsword'], ['off', 'buckler']],
-    hero_mage: [['feet', 'mage_boots'], ['legs', 'mage_skirt'], ['hands', 'mage_sleeves'], ['chest', 'mage_vest'], ['head', 'head_short'], ['main', 'staff']],
-    hero_berserk: [['feet', 'leather_boots'], ['legs', 'leather_pants'], ['hands', 'leather_gloves'], ['head', 'head_bald'], ['main', 'battle_axe']],
+// Muñeco por capas: cada pieza de equipo es su propio atlas (misma grilla), el cliente las apila según lo que lleva puesto.
+const SETS: Record<string, [string, string, string, string]> = { // [feet, legs, hands, chest]
+    default: ['default_feet', 'default_legs', 'default_hands', 'default_chest'],
+    leather: ['leather_boots', 'leather_pants', 'leather_gloves', 'leather_chest'],
+    chain: ['chain_boots', 'chain_greaves', 'chain_gloves', 'chain_cuirass'],
+    plate: ['plate_boots', 'plate_greaves', 'plate_gauntlets', 'plate_cuirass'],
+    mage: ['mage_boots', 'mage_skirt', 'mage_sleeves', 'mage_vest'],
+    cloth: ['cloth_sandals', 'cloth_pants', 'cloth_gloves', 'cloth_shirt'],
 };
-for (const [n, parts] of Object.entries(classes)) {
-    meta[n] = await build(n, parts.map(([type, f]) => ({ type, anim: parse(`animations/avatar/male/${f}.txt`) })), [...EA, 'cast']);
-}
+const HEADS = ['head_short', 'head_bald'];
+const HELMS = ['leather_hood', 'chain_coif', 'plate_helm', 'mage_hood'];
+const WEAPONS = ['shortsword', 'longsword', 'hand_axe', 'battle_axe', 'mace', 'maul', 'zweihander', 'staff', 'wand'];
+const SHIELDS = ['buckler', 'iron_buckler', 'kite_shield'];
+const pieces: Record<string, string> = {}; // pieza -> tipo de capa
+for (const [, [f, l, h, c]] of Object.entries(SETS)) { pieces[f] = 'feet'; pieces[l] = 'legs'; pieces[h] = 'hands'; pieces[c] = 'chest'; }
+for (const n of HEADS) pieces[n] = 'head';
+for (const n of HELMS) pieces[n] = 'head';
+for (const n of WEAPONS) pieces[n] = 'main';
+for (const n of SHIELDS) pieces[n] = 'off';
+const ref: Layer = { type: 'chest', anim: parse('animations/avatar/male/default_chest.txt') };
+const HA = [...EA, 'cast'];
+const loaded = Object.entries(pieces).map(([n, type]) => ({ n, layer: { type, anim: parse(`animations/avatar/male/${n}.txt`) } }));
+const fixedB = boundsOf(loaded.map((x) => x.layer), HA);
+mkdirSync(join(out, 'paper'), { recursive: true });
+let paper: Record<string, unknown> = {};
+for (const { n, layer } of loaded) paper = { ...paper, ...(await build(`paper/${n}`, [layer], HA, { b: fixedB, ref })) };
+meta.paper = {
+    ...(paper as object), // cw, ch, ax, ay, cols, anims (iguales para todas las piezas)
+    order: Object.fromEntries(DIRS.map((d, i) => [i, order.get(d)])),
+    pieces, sets: SETS, heads: HEADS, helms: HELMS, weapons: WEAPONS, shields: SHIELDS,
+};
 
 // mundo: tiles de piso y objetos del tileset de pasto, empaquetados en estantes
 const ts = await loadImage(readFileSync(join(mod, 'images', 'tilesets', 'tileset_grassland.png')));

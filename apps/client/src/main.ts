@@ -88,14 +88,26 @@ const ATTRS: { id: AttrId; r: [number, number]; f: (v: number) => string }[] = [
     { id: 'rpar', r: [5, 15], f: (v) => `+${v}% resistencia a parálisis` },
 ];
 type Slot = 'arma' | 'armadura' | 'cabeza' | 'anillo';
-interface Base { name: string; slot: Slot; dmg?: [number, number]; def?: number; mag?: number }
+interface Base { name: string; slot: Slot; dmg?: [number, number]; def?: number; mag?: number; look?: string; off?: string }
 const BASES: Base[] = [
-    { name: 'Espada corta', slot: 'arma', dmg: [4, 8] },
-    { name: 'Hacha de leñador', slot: 'arma', dmg: [6, 11] },
-    { name: 'Báculo de fresno', slot: 'arma', dmg: [2, 4], mag: 5 },
-    { name: 'Coraza de cuero', slot: 'armadura', def: 3 },
-    { name: 'Cota de malla', slot: 'armadura', def: 6 },
-    { name: 'Yelmo de hierro', slot: 'cabeza', def: 2 },
+    { name: 'Espada corta', slot: 'arma', dmg: [4, 8], look: 'shortsword', off: 'buckler' },
+    { name: 'Hacha de leñador', slot: 'arma', dmg: [6, 11], look: 'hand_axe', off: 'buckler' },
+    { name: 'Báculo de fresno', slot: 'arma', dmg: [2, 4], mag: 5, look: 'staff' },
+    { name: 'Espada larga', slot: 'arma', dmg: [7, 12], look: 'longsword', off: 'iron_buckler' },
+    { name: 'Hacha de guerra', slot: 'arma', dmg: [9, 15], look: 'battle_axe' },
+    { name: 'Maza', slot: 'arma', dmg: [6, 11], look: 'mace', off: 'kite_shield' },
+    { name: 'Martillo pesado', slot: 'arma', dmg: [10, 16], look: 'maul' },
+    { name: 'Mandoble', slot: 'arma', dmg: [12, 18], look: 'zweihander' },
+    { name: 'Varita', slot: 'arma', dmg: [1, 3], mag: 8, look: 'wand' },
+    { name: 'Coraza de cuero', slot: 'armadura', def: 3, look: 'leather' },
+    { name: 'Cota de malla', slot: 'armadura', def: 6, look: 'chain' },
+    { name: 'Armadura de placas', slot: 'armadura', def: 9, look: 'plate' },
+    { name: 'Túnica de mago', slot: 'armadura', def: 1, mag: 4, look: 'mage' },
+    { name: 'Ropas de tela', slot: 'armadura', def: 1, look: 'cloth' },
+    { name: 'Capucha de cuero', slot: 'cabeza', def: 1, look: 'leather_hood' },
+    { name: 'Cofia de malla', slot: 'cabeza', def: 2, look: 'chain_coif' },
+    { name: 'Yelmo de hierro', slot: 'cabeza', def: 3, look: 'plate_helm' },
+    { name: 'Capucha de mago', slot: 'cabeza', def: 0, mag: 3, look: 'mage_hood' },
     { name: 'Anillo opaco', slot: 'anillo' },
 ];
 const SLOTS: Slot[] = ['arma', 'armadura', 'cabeza', 'anillo'];
@@ -139,7 +151,6 @@ const P = {
     bag: [] as Item[], eq: { arma: null, armadura: null, cabeza: null, anillo: null } as Record<Slot, Item | null>,
     casting: null as Casting | null, ready: null as { i: number; t: number } | null, sentDir: -1,
 };
-P.eq.arma = { id: uid++, ...BASES[0], rar: RAR[0], attrs: [] };
 
 /** Otros jugadores, según lo que manda el server. */
 interface Other extends Ent { id: bigint; name: string; cell: Cell; queue: Cell[]; step: Step | null; stepMs: number; gone: boolean }
@@ -176,11 +187,11 @@ function totals() {
     return t;
 }
 // ---------- clases ----------
-interface ClassDef { id: string; name: string; desc: string; sprite: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: number; spells: string[] }
+interface ClassDef { id: string; name: string; desc: string; head: string; armor?: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; spells: string[] }
 const CLASSES: ClassDef[] = [
-    { id: 'guerrero', name: 'Guerrero', desc: 'Resistente, pega cuerpo a cuerpo y frena enemigos.', sprite: 'hero_warrior', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 0, spells: ['golpe', 'aturdir', 'vendar', 'torbellino'] },
-    { id: 'mago', name: 'Mago', desc: 'Frágil pero con hechizos a distancia, parálisis y cura.', sprite: 'hero_mage', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 2, spells: ['proyectil', 'paralisis', 'curar', 'bola'] },
-    { id: 'berserk', name: 'Berserk', desc: 'Mucho daño físico. Furia sube daño y velocidad de ataque y le abre dos habilidades extra.', sprite: 'hero_berserk', hp: 120, hpL: 14, mp: 30, mpL: 3, melee: [8, 13], weapon: 1, spells: ['tajo', 'aturdir', 'furia', 'torbellino', 'rugido', 'ejecutar'] },
+    { id: 'guerrero', name: 'Guerrero', desc: 'Resistente, pega cuerpo a cuerpo y frena enemigos.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'aturdir', 'vendar', 'torbellino'] },
+    { id: 'mago', name: 'Mago', desc: 'Frágil pero con hechizos a distancia, parálisis y cura.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'paralisis', 'curar', 'bola'] },
+    { id: 'berserk', name: 'Berserk', desc: 'Mucho daño físico. Furia sube daño y velocidad de ataque y le abre dos habilidades extra.', head: 'head_bald', hp: 120, hpL: 14, mp: 30, mpL: 3, melee: [8, 13], weapon: 'Hacha de leñador', spells: ['tajo', 'aturdir', 'furia', 'torbellino', 'rugido', 'ejecutar'] },
 ];
 let CLS: ClassDef = CLASSES[0];
 const maxHp = () => CLS.hp + (P.lvl - 1) * CLS.hpL + totals().hp;
@@ -436,7 +447,7 @@ interface Anim { row: number; n: number; dur: number; type: string }
 interface SpriteMeta { cw: number; ch: number; ax: number; ay: number; anims: Record<string, Anim> }
 const SPR: Record<string, SpriteMeta> = {};
 let WORLD: Record<string, number[]> = {};
-const IMG: Record<string, HTMLImageElement> = {};
+const IMG: Record<string, CanvasImageSource> = {};
 const load = (src: string) => new Promise<HTMLImageElement>((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = src; });
 const off = document.createElement('canvas'), octx = off.getContext('2d')!;
 function frameIndex(A: Anim, t: number) {
@@ -446,6 +457,39 @@ function frameIndex(A: Anim, t: number) {
     return Math.min(A.n - 1, k);
 }
 const SS = 0.8; // escala de personajes y mobs respecto del mundo
+// ---------- muñeco por capas ----------
+interface Paper { cw: number; ch: number; cols: number; order: Record<string, string[]>; pieces: Record<string, string>; sets: Record<string, string[]> }
+let PAPER: Paper;
+const PIECES = new Map<string, HTMLImageElement>();
+/** Devuelve la pieza si ya cargó; si no, la pide y vuelve a componer cuando llegue. */
+function piece(n: string): HTMLImageElement | null {
+    let im = PIECES.get(n);
+    if (!im) { im = new Image(); im.onload = () => refreshLook(); im.src = `assets/paper/${n}.webp`; PIECES.set(n, im); }
+    return im.complete && im.naturalWidth ? im : null;
+}
+function composeLook(names: string[]): HTMLCanvasElement | null {
+    const ims = names.map(piece); if (ims.some((i) => !i)) return null;
+    const { cw, ch, cols } = PAPER, rows = Object.keys(SPR.hero.anims).length * 8, c = document.createElement('canvas'), g = c.getContext('2d')!;
+    c.width = cw * cols; c.height = ch * rows;
+    for (let d = 0; d < 8; d++) for (const t of PAPER.order[d]) names.forEach((n, k) => {
+        if (PAPER.pieces[n] !== t) return;
+        for (let r = 0; r < rows / 8; r++) g.drawImage(ims[k]!, 0, (r * 8 + d) * ch, c.width, ch, 0, (r * 8 + d) * ch, c.width, ch);
+    });
+    return c;
+}
+/** Piezas que lleva puesto el personaje, según su equipo. */
+function lookOf(): string[] {
+    const set = PAPER.sets[P.eq.armadura?.look ?? 'default'] ?? PAPER.sets.default, w = P.eq.arma;
+    return [...set, CLS.head, ...(P.eq.cabeza?.look ? [P.eq.cabeza.look] : []), ...(w?.look ? [w.look] : []), ...(w?.off ? [w.off] : [])];
+}
+let lookKey = '';
+function refreshLook() {
+    if (!PAPER) return;
+    const names = lookOf(), key = names.join('|');
+    if (key !== lookKey) { const c = composeLook(names); if (c) { IMG.hero = c; lookKey = key; } }
+    const other = ['leather_boots', 'leather_pants', 'leather_gloves', 'leather_chest', 'head_short', 'shortsword', 'buckler'];
+    if (!IMG.hero_other) { const c = composeLook(other); if (c) IMG.hero_other = c; }
+}
 function drawSprite(name: string, anim: string, t: number, dir: number, x: number, y: number, tint?: string | null, alpha?: number) {
     const M = SPR[name], A = M?.anims[anim], im = IMG[name]; if (!A || !im) return;
     const i = frameIndex(A, t), sx = i * M.cw, sy = (A.row + dir) * M.ch, dw = M.cw * SS, dh = M.ch * SS, dx = x - M.ax * SS, dy = y - M.ay * SS;
@@ -714,8 +758,8 @@ function render() {
     for (const d of drops) objs.push({ d: d.x + d.y - 0.2, f: () => drawDrop(d, T) });
     for (const c of corpses) objs.push({ d: c.x + c.y - 0.3, f: () => { const p = iso(c.x, c.y), age = T - c.t; drawSprite(c.sprite, 'die', age, c.dir, p.x, p.y, null, age > 2 ? 3 - age : 1); } });
     for (const m of mobs) objs.push({ d: m.x + m.y, f: () => drawMob(m, T) });
-    for (const o of others.values()) objs.push({ d: o.x + o.y, f: () => { const p = iso(o.x, o.y), [a, t] = animFor(o, T); drawSprite('hero_warrior', a, t, o.dir, p.x, p.y, null, o.gone ? 0.45 : 1); } });
-    objs.push({ d: P.x + P.y, f: () => { const p = iso(P.x, P.y); if (P.dead) drawSprite(CLS.sprite, 'die', T - P.deadT, P.dir, p.x, p.y); else { const [a, t] = animFor(P, T); drawSprite(CLS.sprite, a, t, P.dir, p.x, p.y, P.flash > 0 ? 'rgba(255,70,50,.35)' : null); } } });
+    for (const o of others.values()) objs.push({ d: o.x + o.y, f: () => { const p = iso(o.x, o.y), [a, t] = animFor(o, T); drawSprite('hero_other', a, t, o.dir, p.x, p.y, null, o.gone ? 0.45 : 1); } });
+    objs.push({ d: P.x + P.y, f: () => { const p = iso(P.x, P.y); if (P.dead) drawSprite('hero', 'die', T - P.deadT, P.dir, p.x, p.y); else { const [a, t] = animFor(P, T); drawSprite('hero', a, t, P.dir, p.x, p.y, P.flash > 0 ? 'rgba(255,70,50,.35)' : null); } } });
     objs.sort((a, b) => a.d - b.d).forEach((o) => o.f());
     // nombres arriba de todo
     for (const o of others.values()) { const p = iso(o.x, o.y); nameTag(o.name, p.x, p.y - 70, '#e9dfc0', o.gone ? 0.5 : 1); }
@@ -780,7 +824,9 @@ function setClass(id: string) {
     CLS = CLASSES.find((c) => c.id === id) ?? CLASSES[0];
     SPELLS = CLS.spells.map((sid, i) => ({ key: String(i + 1), ...LIB[sid] }));
     cds.fill(0); P.fury = 0; P.ready = null; P.casting = null;
-    P.eq.arma = { id: uid++, ...BASES[CLS.weapon], rar: RAR[0], attrs: [] };
+    const mk = (n: string): Item => ({ id: uid++, ...BASES.find((b) => b.name === n)!, rar: RAR[0], attrs: [] });
+    P.eq.arma = mk(CLS.weapon); P.eq.armadura = CLS.armor ? mk(CLS.armor) : null; P.eq.cabeza = null; P.bag = [];
+    refreshLook();
     P.lvl = 1; P.exp = 0; P.hp = maxHp(); P.mp = maxMp();
     $('bar').innerHTML = SPELLS.map((s, i) => `<button class="slot box" id="sp${i}" type="button" title="${s.name} (${s.mp} maná)"><kbd>${s.key}</kbd><b>${s.name.replace(/ (?=\S+$)/, '<br>')}</b><em>${s.mp}</em><div class="cd" id="cd${i}"></div></button>`).join('');
     SPELLS.forEach((_, i) => $('sp' + i).addEventListener('click', () => { cast(i); cv.focus({ preventScroll: true }); }));
@@ -830,9 +876,9 @@ function renderBag() {
     ${it.attrs.length ? `<ul>${it.attrs.map((a) => `<li style="color:#8fb6f0">${attrText(a)}</li>`).join('')}</ul>` : `<div class="label">Sin atributos extra</div>`}
     <div class="row">${sel.from === 'bag' ? `<button type="button" id="eqBtn">Equipar</button><button type="button" id="dropBtn">Tirar</button>` : `<button type="button" id="uneqBtn">Sacar</button>`}</div>`;
     const eqBtn = document.getElementById('eqBtn'), dropBtn = document.getElementById('dropBtn'), uneqBtn = document.getElementById('uneqBtn');
-    if (eqBtn) eqBtn.onclick = () => { P.bag.splice(P.bag.indexOf(it), 1); const prev = P.eq[it.slot]; if (prev) P.bag.push(prev); P.eq[it.slot] = it; sel = { it, from: 'eq' }; P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); renderBag(); };
+    if (eqBtn) eqBtn.onclick = () => { P.bag.splice(P.bag.indexOf(it), 1); const prev = P.eq[it.slot]; if (prev) P.bag.push(prev); P.eq[it.slot] = it; refreshLook(); sel = { it, from: 'eq' }; P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); renderBag(); };
     if (dropBtn) dropBtn.onclick = () => { P.bag.splice(P.bag.indexOf(it), 1); sel = null; renderBag(); };
-    if (uneqBtn) uneqBtn.onclick = () => { if (P.bag.length >= 18) { log('La bolsa está llena.'); return; } P.eq[it.slot] = null; P.bag.push(it); sel = { it, from: 'bag' }; P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); renderBag(); };
+    if (uneqBtn) uneqBtn.onclick = () => { if (P.bag.length >= 18) { log('La bolsa está llena.'); return; } P.eq[it.slot] = null; refreshLook(); P.bag.push(it); sel = { it, from: 'bag' }; P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); renderBag(); };
 }
 
 // ---------- loop ----------
@@ -890,12 +936,15 @@ async function boot() {
     try {
         const meta = await (await fetch('assets/meta.json')).json();
         WORLD = meta.world; delete meta.world;
+        PAPER = meta.paper; delete meta.paper; SPR.hero = SPR.hero_other = PAPER as unknown as SpriteMeta;
         Object.assign(SPR, meta);
-        const names = ['world', 'hero_warrior', 'hero_mage', 'hero_berserk', 'goblin', 'zombie', 'skeleton'];
+        const names = ['world', 'goblin', 'zombie', 'skeleton'];
         const imgs = await Promise.all(names.map((n) => load(`assets/${n}.webp`)));
         names.forEach((n, i) => (IMG[n] = imgs[i]));
     } catch { $('loading').textContent = 'No se pudieron cargar los gráficos. Recargá la página.'; return; }
     $('loading').hidden = true;
+    refreshLook();
+    if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();
     requestAnimationFrame(frame);
