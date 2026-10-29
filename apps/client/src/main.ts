@@ -332,6 +332,9 @@ function aggro(m: Mob) {
     if (m.state === 'chase') return; m.state = 'chase';
     for (const o of mobs) if (o !== m && o.state === 'idle' && o.zone === m.zone && dist(o, m) < 3.2) { o.state = 'chase'; o.nextAtk = now() + 0.4 + R() * 0.6; }
 }
+function levelUp() {
+    while (P.exp >= expNeed()) { P.exp -= expNeed(); P.lvl++; P.hp = maxHp(); P.mp = maxMp(); float(P.x, P.y - 0.5, `¡Nivel ${P.lvl}!`, '#ffd24a', true); log(`Subiste a nivel ${P.lvl}.`, true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd24a' }); }
+}
 function killMob(m: Mob) {
     const t = totals(), gain = Math.round(m.exp * (1 + t.exp / 100));
     P.exp += gain; float(m.x, m.y - 0.3, `+${gain} exp`, '#c9a227');
@@ -346,7 +349,8 @@ function killMob(m: Mob) {
     corpses.push({ sprite: m.sprite, x: m.x, y: m.y, dir: m.dir, t: now() });
     if (P.target === m) P.target = null;
     later(m.boss?.respawn ?? (m.sprite === 'minotaur' ? 120 : 22), () => spawnMob(m.zone));
-    while (P.exp >= expNeed()) { P.exp -= expNeed(); P.lvl++; P.hp = maxHp(); P.mp = maxMp(); float(P.x, P.y - 0.5, `¡Nivel ${P.lvl}!`, '#ffd24a', true); log(`Subiste a nivel ${P.lvl}.`, true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd24a' }); }
+    levelUp(); questKill(m.sprite);
+    if (m.boss) { Q.shards++; log('El boss soltó una <b>Esquirla de llave</b>. Con 3 esquirlas y 60 de oro el Capitán te forja una Llave de la cripta.', true); renderQuest(); }
 }
 /** Habilidad distintiva del boss: aviso (anillo + nombre), 0,8 s de carga y recién ahí pega; se puede esquivar alejándose. */
 function bossSpecial(m: Mob, sp: BossSpecial, T: number) {
@@ -848,7 +852,7 @@ function render() {
     // nombres arriba de todo
     for (const o of others.values()) { const p = iso(o.x, o.y); nameTag(o.name, p.x, p.y - 70, factionCol(o.profile.split(';')[0]), o.gone ? 0.5 : 1); }
     { const p = iso(P.x, P.y); nameTag(P.name, p.x, p.y - 70, factionCol(selectedFaction)); }
-    for (const n of MAP.npcs) { const p = iso(n.x + 0.5, n.y + 0.5); nameTag(n.name, p.x, p.y - 70, '#9fd36b'); }
+    for (const n of MAP.npcs) { const p = iso(n.x + 0.5, n.y + 0.5); nameTag(n.name, p.x, p.y - 70, '#9fd36b'); if (n.id === 'capitan' && questMark()) { ctx.font = "700 22px 'Alegreya SC', Georgia, serif"; ctx.textAlign = 'center'; ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#2a1a00'; ctx.lineWidth = 3; ctx.strokeText(questMark(), p.x, p.y - 90 + Math.sin(now() * 4) * 2); ctx.fillText(questMark(), p.x, p.y - 90 + Math.sin(now() * 4) * 2); } }
     for (const p of projs) {
         const s = iso(p.x, p.y); s.y -= p.arc || 0;
         (p.trail ||= []).push({ x: s.x, y: s.y - 24 }); if (p.trail.length > 8) p.trail.shift();
@@ -902,8 +906,10 @@ function render() {
     g.addColorStop(0, 'rgba(6,8,12,0)'); g.addColorStop(1, 'rgba(6,8,12,.82)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     if (inDungeon(P.x, P.y)) { ctx.fillStyle = 'rgba(12,8,24,.28)'; ctx.fillRect(0, 0, W, H); }
     ctx.textAlign = 'center';
-    const zone = isSafe(P.x, P.y) ? 'Campamento de Solmar · zona segura' : ZONES.find((z) => near(P.x, P.y, z, z.r + 2))?.name || '';
-    if (zone) { ctx.font = "600 13px 'Alegreya SC', Georgia, serif"; ctx.fillStyle = 'rgba(214,164,69,.9)'; ctx.fillText(zone, W / 2, H - 98); }
+    const zn = isSafe(P.x, P.y) ? null : ZONES.find((z) => near(P.x, P.y, z, z.r + 2)), zl = zn ? MOBS[zn.type].lvl : 0;
+    const zone = isSafe(P.x, P.y) ? 'Campamento de Solmar · zona segura' : zn ? `${zn.name} · Nv ${Math.max(1, zl - 1)}–${zl + 1}` : '';
+    const danger = zl - P.lvl; // verde: tranquila · dorado: a tu nivel · rojo: te pasa por mucho
+    if (zone) { ctx.font = "600 13px 'Alegreya SC', Georgia, serif"; ctx.fillStyle = !zn ? 'rgba(214,164,69,.9)' : danger >= 4 ? '#ff6b5a' : danger >= 1 ? '#ffb347' : danger >= -3 ? 'rgba(214,164,69,.9)' : '#8fd18b'; ctx.fillText(zone + (zn && danger >= 4 ? ' · ¡peligrosa!' : ''), W / 2, H - 98); }
 }
 function drawMob(m: Mob, T: number) {
     const p = iso(m.x, m.y), par = m.par > T;
@@ -1013,6 +1019,7 @@ type Npc = (typeof MAP.npcs)[number];
 /** Piezas de avatar (las mismas del muñeco por capas) de cada NPC. */
 const NPC_LOOKS: Record<string, string[]> = {
     mercader: ['leather_boots', 'cloth_pants', 'cloth_gloves', 'cloth_shirt', 'head_short', 'leather_hood'],
+    capitan: ['leather_boots', 'cloth_pants', 'cloth_gloves', 'cloth_shirt', 'head_short', 'plate_helm'],
 };
 function refreshNpcLook() {
     if (!PAPER) return;
@@ -1034,6 +1041,54 @@ function pickNpc(sx: number, sy: number): Npc | null {
     return null;
 }
 
+// ---------- misiones y progreso por zonas (lógica tipo Dreadmyst) ----------
+// Un solo pueblo seguro; cada zona tiene un rango de nivel y el Capitán te empuja de una a la siguiente. La cripta se abre con llave.
+interface Quest { name: string; zone: string; type: MobType; n: number; xp: number; gold: number; say: string; key?: boolean }
+const QUESTS: Quest[] = [
+    { name: 'Goblins del campamento', zone: 'Campamento goblin', type: 'goblin', n: 5, xp: 70, gold: 30, say: 'Unos goblins lanceros rondan al sureste y asustan a los mercaderes. Matá a 5 y volvé.' },
+    { name: 'La avanzada goblin', zone: 'Avanzada goblin', type: 'goblin_elite', n: 4, xp: 120, gold: 55, say: 'Más al norte armaron una avanzada con goblins de élite. Eliminá a 4.' },
+    { name: 'Hoyos traicioneros', zone: 'Hoyos de hormiga león', type: 'antlion', n: 5, xp: 190, gold: 80, say: 'Al oeste las hormigas león cavaron hoyos en el camino. Acabá con 5.' },
+    { name: 'El pantano muerto', zone: 'Pantano muerto', type: 'zombie', n: 5, xp: 260, gold: 110, say: 'Del pantano del este salen zombis. Necesito que mates a 5.' },
+    { name: 'Huesos inquietos', zone: 'Cementerio viejo', type: 'skeleton', n: 5, xp: 420, gold: 150, say: 'Los esqueletos del cementerio ya no descansan. Derrotá a 5.' },
+    { name: 'Magia prohibida', zone: 'Ruinas del nigromante', type: 'skeleton_mage', n: 4, xp: 520, gold: 190, say: 'Hay hechiceros esqueleto en las ruinas del sur. Cuidado con sus hechizos: matá a 4.' },
+    { name: 'Fuego en el hormiguero', zone: 'Hormiguero ardiente', type: 'fire_ant', n: 6, xp: 700, gold: 260, key: true, say: 'El hormiguero ardiente del noreste es peligroso. Si volvés con 6 cabezas te doy una esquirla de llave: con 3 más de los bosses te forjo la llave de la cripta.' },
+];
+const SHARDS_PER_KEY = 3, KEY_GOLD = 60;
+const Q = { i: 0, st: 'new' as 'new' | 'active' | 'ready', prog: 0, keys: 0, shards: 0 };
+function questKill(t: MobType) {
+    const q = QUESTS[Q.i]; if (!q || Q.st !== 'active' || q.type !== t) return;
+    Q.prog = Math.min(q.n, Q.prog + 1);
+    if (Q.prog >= q.n) { Q.st = 'ready'; log(`Misión lista: volvé con el Capitán (${q.name}).`, true); } else float(P.x, P.y - 0.9, `${Q.prog}/${q.n}`, '#ffd24a');
+    renderQuest();
+}
+function renderQuest() {
+    const q = QUESTS[Q.i], el = $('quest');
+    el.hidden = (!q || Q.st === 'new') && !Q.keys && !Q.shards;
+    if (!q) { el.innerHTML = `<b>Cripta</b>${Q.keys ? `<em>Llaves: ${Q.keys}</em>` : ''}${Q.shards ? `<em>Esquirlas: ${Q.shards}/${SHARDS_PER_KEY}</em>` : ''}`; return; }
+    el.innerHTML = `<b>${q.name}</b><span>${Q.st === 'ready' ? 'Volvé con el Capitán' : `${q.zone}: ${Q.prog}/${q.n}`}</span>${Q.keys ? `<em>Llaves de la cripta: ${Q.keys}</em>` : ''}${Q.shards ? `<em>Esquirlas de llave: ${Q.shards}/${SHARDS_PER_KEY}</em>` : ''}`;
+}
+function questLevel(q: Quest) { const l = MOBS[q.type].lvl; return `Nv ${Math.max(1, l - 1)}–${l + 1}`; }
+function openQuestDlg(n: Npc) {
+    const q = QUESTS[Q.i], d = $('qdlg'); shopNpc = n; talkNpc = null;
+    $('qdName').textContent = n.name; d.hidden = false;
+    let body = '', btn = '';
+    if (!q) body = 'Ya limpiaste todo lo que te pedí. Más encargos cuando abramos nuevos caminos. Para abrir la escalera de la cripta forjá una llave (abajo).';
+    else if (Q.st === 'new') { body = `<b>${q.name}</b> <small>${q.zone} · ${questLevel(q)}</small><br>${q.say}<br><small>Recompensa: ${q.xp} exp · ${q.gold} oro${q.key ? ' · Esquirla de llave' : ''}</small>`; btn = 'Aceptar'; }
+    else if (Q.st === 'active') body = `<b>${q.name}</b><br>Todavía te faltan ${q.n - Q.prog} en ${q.zone}.`;
+    else { body = `<b>${q.name}</b><br>Buen trabajo. Tomá tu paga.<br><small>${q.xp} exp · ${q.gold} oro${q.key ? ' · Esquirla de llave' : ''}</small>`; btn = 'Entregar'; }
+    body += `<br><small>Forja: ${SHARDS_PER_KEY} esquirlas (las sueltan los bosses) + ${KEY_GOLD} oro = 1 Llave de la cripta. Tenés ${Q.shards} esquirlas y ${Q.keys} llaves.</small>`;
+    const fb = $('qdForge') as HTMLButtonElement; fb.hidden = false; fb.disabled = Q.shards < SHARDS_PER_KEY || P.gold < KEY_GOLD;
+    fb.onclick = () => { if (Q.shards < SHARDS_PER_KEY || P.gold < KEY_GOLD) return; Q.shards -= SHARDS_PER_KEY; P.gold -= KEY_GOLD; Q.keys++; log('El Capitán forjó una <b>Llave de la cripta</b>.', true); renderQuest(); openQuestDlg(n); };
+    $('qdBody').innerHTML = body; const b = $('qdBtn'); b.hidden = !btn; b.textContent = btn;
+    b.onclick = () => {
+        if (Q.st === 'new') { Q.st = 'active'; Q.prog = 0; log(`Misión aceptada: ${q!.name}.`, true); }
+        else if (Q.st === 'ready') { P.exp += q!.xp; P.gold += q!.gold; if (q!.key) Q.shards++; log(`Entregaste «${q!.name}»: +${q!.xp} exp, +${q!.gold} oro${q!.key ? ' y una Esquirla de llave' : ''}.`, true); Q.i++; Q.st = 'new'; Q.prog = 0; levelUp(); }
+        renderQuest(); closeShop(); if (n) openQuestDlg(n);
+    };
+}
+/** "!" amarillo sobre el Capitán cuando tiene misión para vos; "?" cuando podés entregar. */
+const questMark = () => (!QUESTS[Q.i] ? '' : Q.st === 'new' ? '!' : Q.st === 'ready' ? '?' : '');
+
 // ---------- mercader: vender items de la bolsa ----------
 const SELL_PRICE = [4, 15, 50, 150]; // oro por rareza (Común, Mágico, Raro, Épico)
 const sellPrice = (it: Item) => SELL_PRICE[it.rar.k] ?? 1;
@@ -1046,10 +1101,11 @@ function talkTo(n: Npc) {
     if (moveTo(n.x + 0.5, n.y + 0.5)) talkNpc = n; else toast('No llegás hasta ahí.');
 }
 function openShop(n: Npc = MAP.npcs[0]) {
+    if (n.id === 'capitan') { openQuestDlg(n); return; }
     shopNpc = n; talkNpc = null; $('shopName').textContent = n.name; $('shop').hidden = false; renderShop();
     log(`${n.name}: «Traeme lo que no uses y te lo pago en oro.»`);
 }
-function closeShop() { shopNpc = null; $('shop').hidden = true; }
+function closeShop() { shopNpc = null; $('shop').hidden = true; $('qdlg').hidden = true; }
 function renderShop() {
     if ($('shop').hidden) return;
     $('shopGold').textContent = P.gold + ' oro';
@@ -1071,7 +1127,7 @@ function npcTick() {
     else if (talkNpc && !P.step && !P.path.length) { talkNpc = null; }
     if (shopNpc && (npcDist(shopNpc) > TALK_RANGE + 1.5 || P.dead)) closeShop();
 }
-$('shopClose').addEventListener('click', closeShop);
+$('shopClose').addEventListener('click', closeShop); $('qdClose').addEventListener('click', closeShop);
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && shopNpc) closeShop(); });
 
 // ---------- escaleras entre zonas (el server valida el teletransporte; la celda de destino tiene que estar libre) ----------
@@ -1079,6 +1135,8 @@ let portalLock = 0;
 function checkPortals() {
     if (!MAP.portals || !connected || P.dead || P.step || now() < portalLock) return;
     const p = MAP.portals.find((q) => q.x === P.cell.x && q.y === P.cell.y); if (!p) return;
+    if (p.tx >= 41 && p.tx < 62 && p.ty < 24 && !inDungeon(P.x, P.y) && Q.keys < 1) { portalLock = now() + 2; toast('La escalera está sellada: necesitás una Llave de la cripta.'); log('La escalera está sellada. Forjá una Llave de la cripta con el Capitán: 3 esquirlas (las sueltan los bosses) y 60 de oro.', true); return; }
+    if (p.tx >= 41 && p.tx < 62 && p.ty < 24 && !inDungeon(P.x, P.y)) { Q.keys--; renderQuest(); log('Usaste una Llave de la cripta.', true); }
     portalLock = now() + 1.5; P.path = []; P.target = null; P.engage = false; P.pickup = null;
     net.send({ $case: 'playerTeleportRequested', value: { x: p.tx, y: p.ty } });
     log(p.msg, true);

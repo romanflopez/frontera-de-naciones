@@ -115,7 +115,7 @@ export function buildSolmar(): WorldMap {
     // casa del campamento (Fantasy House, 3x3) y el mercader, que también ocupa su celda
     const buildings: Building[] = [{ id: 'fantasy_house', x: 5, y: 2, w: 3, h: 3 }];
     for (const b of buildings) for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) blocked[y][x] = true;
-    const npcs: Npc[] = [{ id: 'mercader', name: 'Mercader', x: 9, y: 7, dir: 6 }];
+    const npcs: Npc[] = [{ id: 'mercader', name: 'Mercader', x: 9, y: 7, dir: 6 }, { id: 'capitan', name: 'Capitán Aldric', x: 6, y: 10, dir: 2 }];
     for (const n of npcs) blocked[n.y][n.x] = true;
     return extendSolmar({ size: N, tiles, blocked, safe, props, decals, zones, buildings, npcs, spawn: { x: 6, y: 7 }, fire: { x: 8, y: 8 } });
 }

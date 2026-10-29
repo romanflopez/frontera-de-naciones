@@ -7,15 +7,15 @@ from playwright.sync_api import sync_playwright
 S = 160  # tamaño de cada cuadro
 # nombre: (ruta, frames, paso, cam, at, fov, escala_en_pantalla, y_ancla)
 EFX = {
-  'eruption':  ('Fire/Eruption.efkefc',        14, 3, [0, 11, 14], [0, 1.5, 0], 40, 1.9),
-  'sphere':    ('Water/Blue Sphere.efkefc',    14, 4, [0, 7, 9],   [0, 1.2, 0], 40, 1.0),
-  'cyclone':   ('Wind/Cyclone.efkefc',         14, 4, [0, 7, 9],   [0, 1.2, 0], 40, 1.4),
-  'windblade': ('Wind/Wind Blade.efkefc',      14, 3, [0, 7, 9],   [0, 1.2, 0], 40, 1.2),
-  'rocklance': ('Earth/Rock Lance.efkefc',     14, 3, [0, 5, 6],   [0, 0.8, 0], 40, 1.3),
+  'eruption':  ('Fire/Eruption.efkefc',        14, 3, [0, 11, 14], [0, 1.5, 0], 40, 2.2),
+  'sphere':    ('Water/Blue Sphere.efkefc',    14, 4, [0, 7, 9],   [0, 1.2, 0], 40, 1.5),
+  'cyclone':   ('Wind/Cyclone.efkefc',         14, 4, [0, 7, 9],   [0, 1.2, 0], 40, 1.9),
+  'windblade': ('Wind/Wind Blade.efkefc',      14, 3, [0, 7, 9],   [0, 1.2, 0], 40, 2.2),
+  'rocklance': ('Earth/Rock Lance.efkefc',     14, 3, [0, 5, 6],   [0, 0.8, 0], 40, 1.9),
   'cataclysm': ('Earth/Grand Cataclysm.efkefc',  14, 6, [0, 11, 14], [0, 1.0, 0], 40, 2.8),
   'tidal':     ('Water/Tidal Wave.efkefc',       14, 4, [0, 9, 11],  [0, 0.6, 0], 40, 2.6),
   'spread':    ('Water/Spread.efkefc',          14, 4, [0, 9, 11],  [0, 1.6, 0], 40, 1.7),
-  'stop':      ('Ailment/Stop Flow.efkefc',    14, 4, [0, 7, 9],   [0, 1.0, 0], 40, 1.0),
+  'stop':      ('Ailment/Stop Flow.efkefc',    14, 4, [0, 7, 9],   [0, 1.0, 0], 40, 1.5),
 }
 src, out = sys.argv[1], sys.argv[2]
 N = 14
