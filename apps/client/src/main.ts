@@ -402,15 +402,15 @@ const LIB: Record<string, SpellDef> = {
     paralisis: { name: 'Parálisis', mp: 20, cd: 4, col: '#7fd6ff', range: 6, target: true, ctrl: true,
         cast(m) { return control(m, 3, 'Paralizaste', 'La parálisis'); } },
     aturdir: { name: 'Aturdir', mp: 18, cd: 5, col: '#ffd24a', range: 1.9, target: true, ctrl: true,
-        cast(m) { return control(m, 2.5, 'Aturdiste', 'El aturdimiento'); } },
+        cast(m) { return control(m, 2.5, 'Aturdiste', 'El aturdimiento', 'turbulence'); } },
     curar: { name: 'Curar', mp: 15, cd: 2, col: '#7ee08a', range: 0, target: false,
         cast() { heal(35 + P.lvl * 3); } },
     vendar: { name: 'Vendar', mp: 14, cd: 3, col: '#7ee08a', range: 0, target: false,
-        cast() { heal(30 + P.lvl * 4); } },
+        cast() { heal(30 + P.lvl * 4, 'godsbreath'); } },
     bola: { name: 'Bola de fuego', mp: 25, cd: 4, col: '#ff8a3d', range: 7, target: true, aoe: 1.9,
         cast(m) { if (!m) return false; const t = totals(), dmg = rint(18, 26) + P.lvl * 2 + t.mag; projs.push({ x: P.x, y: P.y, tx: m.x, ty: m.y, m: isMob(m) ? m : null, spd: 8, dmg, col: '#ff8a3d', aoe: 1.9, sx: P.x, sy: P.y }); } },
     golpe: { name: 'Golpe brutal', mp: 10, cd: 1, col: '#ffb347', range: 1.9, target: true,
-        cast(m) { if (!isMob(m)) return false; damageMob(m, rint(14, 20) + P.lvl * 2 + rint(totals().wdmg[0], totals().wdmg[1]), true, 'melee'); } },
+        cast(m) { if (!isMob(m)) return false; efx('crosswind', m.x, m.y, 8); damageMob(m, rint(14, 20) + P.lvl * 2 + rint(totals().wdmg[0], totals().wdmg[1]), true, 'melee'); } },
     tajo: { name: 'Tajo salvaje', mp: 12, cd: 1, col: '#ff6b55', range: 1.9, target: true,
         cast(m) { if (!isMob(m)) return false; damageMob(m, rint(22, 30) + P.lvl * 3 + rint(totals().wdmg[0], totals().wdmg[1]), true, 'melee'); } },
     torbellino: { name: 'Torbellino', mp: 22, cd: 5, col: '#e0e0e0', range: 0, target: false,
@@ -426,7 +426,7 @@ const LIB: Record<string, SpellDef> = {
     luz: { name: 'Pilar de luz', mp: 35, cd: 7, col: '#bfe6ff', range: 7, target: true, aoe: 1.9,
         cast(m) { if (!m) return false; const x = m.x, y = m.y; zone(x, y, 1.9, 2, 0.7, () => rint(14, 20) + P.lvl * 2 + totals().mag, 'spread'); later(0.5, () => { if (!P.dead && Math.hypot(P.x - x, P.y - y) <= 1.9) heal(25 + P.lvl * 3); }); } },
     furia: { name: 'Furia', mp: 15, cd: 20, col: '#ff3b2f', range: 0, target: false,
-        cast() { P.fury = now() + 10; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log('Furia: +30% de daño físico y +20% de daño en hechizos por 10 s, sin castigo.', true); } },
+        cast() { efx('flamme', P.x, P.y); P.fury = now() + 10; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log('Furia: +30% de daño físico y +20% de daño en hechizos por 10 s, sin castigo.', true); } },
 };
 let SPELLS: Spell[] = [];
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
@@ -439,11 +439,11 @@ function zone(x: number, y: number, r: number, ticks: number, every: number, dmg
         for (const m of mobs.slice()) if (Math.hypot(m.x - x, m.y - y) <= r && !isSafe(m.x, m.y)) { damageMob(m, dmg(), false, 'spell'); if (slow && m.imm <= now() && i === ticks - 1) { m.par = now() + slow; m.parT = now(); m.imm = now() + slow + 6; m.moving = false; } }
     });
 }
-function heal(h: number) { P.hp = Math.min(maxHp(), P.hp + h); float(P.x, P.y - 0.2, '+' + h, '#7ee08a'); efx('sphere', P.x, P.y); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#7ee08a' }); }
-function control(m: Target | null, secs: number, verb: string, noun: string): false | void {
+function heal(h: number, eff = 'sphere') { P.hp = Math.min(maxHp(), P.hp + h); float(P.x, P.y - 0.2, '+' + h, '#7ee08a'); efx(eff, P.x, P.y); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#7ee08a' }); }
+function control(m: Target | null, secs: number, verb: string, noun: string, eff = 'stop'): false | void {
     if (!isMob(m)) return false;
     if (m.imm > now()) { log(`${m.name} es inmune al control por unos segundos.`); return false; }
-    efx('stop', m.x, m.y); m.par = now() + secs; m.parT = now(); m.imm = now() + secs + 8; m.moving = false; if (m.state === 'idle') m.state = 'chase';
+    efx(eff, m.x, m.y); m.par = now() + secs; m.parT = now(); m.imm = now() + secs + 8; m.moving = false; if (m.state === 'idle') m.state = 'chase';
     fx.push({ k: 'ring', x: m.x, y: m.y, t: 0, c: '#7fd6ff' }); log(`${verb} a ${m.name} por ${secs} s. ${noun} se rompe si lo golpean fuerte.`, true);
 }
 const cds = [0, 0, 0, 0, 0, 0];
@@ -775,7 +775,7 @@ function update(dt: number) {
         }
         const pm = p.m!;
         if (pm.hp <= 0 || !mobs.includes(pm)) { projs.splice(projs.indexOf(p), 1); continue; }
-        const d = dist(p, pm); if (d < 0.3) { fx.push({ k: 'ring', x: pm.x, y: pm.y, t: 0, c: '#c9b6ff' }); damageMob(pm, p.dmg, false, 'spell'); projs.splice(projs.indexOf(p), 1); continue; }
+        const d = dist(p, pm); if (d < 0.3) { fx.push({ k: 'ring', x: pm.x, y: pm.y, t: 0, c: '#c9b6ff' }); efx('splash', pm.x, pm.y, 10); damageMob(pm, p.dmg, false, 'spell'); projs.splice(projs.indexOf(p), 1); continue; }
         p.x += ((pm.x - p.x) / d) * p.spd * dt; p.y += ((pm.y - p.y) / d) * p.spd * dt;
     }
     for (const c of corpses.slice()) if (T - c.t > 3) corpses.splice(corpses.indexOf(c), 1);
