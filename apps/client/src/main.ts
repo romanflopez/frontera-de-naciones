@@ -159,7 +159,7 @@ interface Mob extends Omit<Ent, 'ref'>, MobDef {
 interface Casting { i: number; start: number; end: number; len: number }
 const P = {
     x: MAP.spawn.x + 0.5, y: MAP.spawn.y + 0.5, dir: 6, ang: undefined as number | undefined, moving: false, phase: 0, ref: 3.4, one: null as OneShot | null, t0: 0, flash: 0,
-    name: '', cell: { x: MAP.spawn.x, y: MAP.spawn.y }, path: [] as Cell[], step: null as Step | null, stepMs: 220, frozenUntil: 0, foe: null as Other | null, med: false, medHp: 0,
+    name: '', cell: { x: MAP.spawn.x, y: MAP.spawn.y }, path: [] as Cell[], step: null as Step | null, stepMs: 270, frozenUntil: 0, foe: null as Other | null, med: false, medHp: 0,
     target: null as Mob | null, engage: false, pickup: null as Drop | null, repath: 0, queued: null as number | null,
     lvl: 1, exp: 0, hp: 100, mp: 60, fury: 0, gold: 0, nextAtk: 0, dead: false, deadT: 0,
     bag: [] as Item[], eq: { arma: null, armadura: null, cabeza: null, anillo: null } as Record<Slot, Item | null>,
@@ -233,7 +233,7 @@ function sendFacing() {
 function addOther(p: { profile?: string; playerId: bigint; x: number; y: number; direction: number; characterName: string; movementSpeedMs: number }) {
     if (p.playerId === myId) return;
     const [dx, dy] = GRID_VEC[p.direction] ?? [0, 1];
-    const o: Other = { profile: p.profile ?? '', id: p.playerId, name: p.characterName, x: p.x + 0.5, y: p.y + 0.5, cell: { x: p.x, y: p.y }, queue: [], step: null, stepMs: p.movementSpeedMs || 220, dir: 6, moving: false, one: null, flash: 0, phase: 0, ref: 3.4, t0: R() * 5, gone: false };
+    const o: Other = { profile: p.profile ?? '', id: p.playerId, name: p.characterName, x: p.x + 0.5, y: p.y + 0.5, cell: { x: p.x, y: p.y }, queue: [], step: null, stepMs: p.movementSpeedMs || 270, dir: 6, moving: false, one: null, flash: 0, phase: 0, ref: 3.4, t0: R() * 5, gone: false };
     turnTo(o, dx, dy, 0, true);
     others.set(o.id, o);
 }
@@ -246,7 +246,7 @@ function onServer(m: ServerPayload) {
     switch (m.$case) {
         case 'initialState':
             myId = m.value.playerId;
-            P.stepMs = m.value.movementSpeedMs || 220;
+            P.stepMs = m.value.movementSpeedMs || 270;
             break;
         case 'initialGameWorldState': {
             snapTo(m.value.playerX, m.value.playerY);
