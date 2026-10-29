@@ -197,14 +197,13 @@ function totals() {
         if (it.dmg) t.wdmg = it.dmg; if (it.def) t.def += it.def; if (it.mag) t.mag += it.mag;
         for (const a of it.attrs) t[a.id] += a.v;
     }
-    if (P.fury > now()) t.aspd += 25;
     return t;
 }
 // ---------- clases ----------
 interface ClassDef { id: string; name: string; hidden?: boolean; desc: string; head: string; armor?: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; spells: string[] }
 const CLASSES: ClassDef[] = [
-    { id: 'guerrero', name: 'Guerrero', desc: 'Resistente, pega cuerpo a cuerpo y frena enemigos.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'aturdir', 'vendar', 'torbellino', 'furia', 'rugido', 'ejecutar'] },
-    { id: 'mago', name: 'Mago', desc: 'Frágil pero con hechizos a distancia, parálisis y cura.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'paralisis', 'curar', 'bola', 'hoja', 'lanza', 'lluvia', 'ventisca', 'luz', 'furia', 'rugido', 'ejecutar'] },
+    { id: 'guerrero', name: 'Guerrero', desc: 'Resistente, pega cuerpo a cuerpo y frena enemigos.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'aturdir', 'vendar', 'torbellino', 'furia'] },
+    { id: 'mago', name: 'Mago', desc: 'Frágil pero con hechizos a distancia, parálisis y cura.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'paralisis', 'curar', 'bola', 'hoja', 'lanza', 'lluvia', 'ventisca', 'luz', 'furia'] },
 ];
 let CLS: ClassDef = CLASSES[0];
 const maxHp = () => CLS.hp + (P.lvl - 1) * CLS.hpL + totals().hp;
@@ -416,10 +415,6 @@ const LIB: Record<string, SpellDef> = {
         cast(m) { if (!isMob(m)) return false; damageMob(m, rint(22, 30) + P.lvl * 3 + rint(totals().wdmg[0], totals().wdmg[1]), true, 'melee'); } },
     torbellino: { name: 'Torbellino', mp: 22, cd: 5, col: '#e0e0e0', range: 0, target: false,
         cast() { fx.push({ k: 'boom', x: P.x, y: P.y, t: 0, r: 2.2 }); efx('cyclone', P.x, P.y); let n = 0; for (const m of mobs.slice()) if (dist(P, m) <= 2.2 && !isSafe(m.x, m.y)) { n++; damageMob(m, rint(12, 18) + P.lvl * 2 + rint(totals().wdmg[0], totals().wdmg[1]), false, 'melee'); } if (!n) log('El torbellino no alcanzó a nadie.'); } },
-    rugido: { name: 'Rugido', mp: 10, cd: 6, col: '#ff3b2f', range: 0, target: false, fury: true,
-        cast() { fx.push({ k: 'boom', x: P.x, y: P.y, t: 0, r: 3.5 }); let n = 0; for (const m of mobs) if (dist(P, m) <= 3.5 && m.imm <= now()) { n++; m.par = now() + 2; m.parT = now(); m.imm = now() + 8; m.moving = false; if (m.state === 'idle') m.state = 'chase'; } log(n ? `Tu rugido aturdió a ${n} enemigo(s).` : 'Tu rugido no alcanzó a nadie.', true); } },
-    ejecutar: { name: 'Ejecutar', mp: 12, cd: 4, col: '#ff3b2f', range: 1.9, target: true, fury: true,
-        cast(m) { if (!isMob(m)) return false; const low = m.hp < m.hpMax * 0.35; damageMob(m, (rint(26, 36) + P.lvl * 3 + rint(totals().wdmg[0], totals().wdmg[1])) * (low ? 2 : 1), true, 'melee'); } },
     hoja: { name: 'Hoja de viento', mp: 14, cd: 1.5, col: '#8dffa0', range: 7, target: true,
         cast(m) { if (!isMob(m)) return false; efx('windblade', m.x, m.y, 10); damageMob(m, rint(13, 19) + P.lvl * 2 + totals().mag, false, 'spell'); } },
     lanza: { name: 'Lanza de piedra', mp: 30, cd: 5, col: '#d9a45a', range: 7, target: true,
@@ -431,7 +426,7 @@ const LIB: Record<string, SpellDef> = {
     luz: { name: 'Pilar de luz', mp: 35, cd: 7, col: '#bfe6ff', range: 7, target: true, aoe: 1.9,
         cast(m) { if (!m) return false; const x = m.x, y = m.y; zone(x, y, 1.9, 2, 0.7, () => rint(14, 20) + P.lvl * 2 + totals().mag, 'spread'); later(0.5, () => { if (!P.dead && Math.hypot(P.x - x, P.y - y) <= 1.9) heal(25 + P.lvl * 3); }); } },
     furia: { name: 'Furia', mp: 15, cd: 20, col: '#ff3b2f', range: 0, target: false,
-        cast() { P.fury = now() + 10; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log('Furia: +30% de daño físico (+20% en hechizos si sos Mago) y +25% de velocidad de ataque por 10 s, sin castigo. Se abren Rugido y Ejecutar.', true); } },
+        cast() { P.fury = now() + 10; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log('Furia: +30% de daño físico y +20% de daño en hechizos por 10 s, sin castigo.', true); } },
 };
 let SPELLS: Spell[] = [];
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
