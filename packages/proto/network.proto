@@ -93,6 +93,7 @@ message ClientMessage {
     WeatherChangeRequest weather_change_request = 39;
     SummonNpcRequest summon_npc_request = 40;
     KillAllNpcsRequest kill_all_npcs_request = 41;
+    ChangePlayerProfileRequest change_player_profile_request = 42;
   }
 }
 
@@ -442,6 +443,7 @@ message ServerMessage {
     NpcsEnteredRange npcs_entered_range = 61;
     NpcsLeftRange npcs_left_range = 62;
     LogoutCancelled logout_cancelled = 63;
+    PlayerProfileChanged player_profile_changed = 64;
   }
 }
 
@@ -473,6 +475,16 @@ message CastEffect {
 }
 
 message SpellCastFailed {
+}
+
+/** El cliente avisa su bando, clase y equipo visible: "bando;clase;pieza,pieza,...". */
+message ChangePlayerProfileRequest {
+  string profile = 1;
+}
+
+message PlayerProfileChanged {
+  int64 player_id = 1;
+  string profile = 2;
 }
 
 message PlayerAppearanceChanged {
@@ -895,6 +907,8 @@ message PlayerEnteredRange {
   repeated TemporaryEffectType active_temporary_effects = 16;
   optional int32 attack_speed_ms = 17;
   optional int32 cast_speed_ms = 18;
+  // Perfil del juego isométrico: bando, clase y piezas de equipo visibles (texto corto).
+  string profile = 19;
 }
 
 message MonsterInRange {

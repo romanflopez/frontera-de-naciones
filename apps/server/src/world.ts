@@ -239,6 +239,13 @@ export class GameWorld {
                     this.broadcastNear(p, M.playerIdleDirectionChanged(p.playerId, d));
                     break;
                 }
+                case 'changePlayerProfileRequest': {
+                    const v = String(payload.value.profile ?? '').slice(0, 240);
+                    if (!/^[\w;,.\- ]*$/.test(v)) break;
+                    p.profile = v;
+                    this.broadcastNear(p, M.playerProfileChanged(p));
+                    break;
+                }
                 case 'changePlayerAppearanceRequest': {
                     const v = payload.value;
                     p.gender = clampInt(v.gender, 0, 1);

@@ -160,7 +160,7 @@ const P = {
 };
 
 /** Otros jugadores, según lo que manda el server. */
-interface Other extends Ent { id: bigint; name: string; cell: Cell; queue: Cell[]; step: Step | null; stepMs: number; gone: boolean }
+interface Other extends Ent { profile: string; id: bigint; name: string; cell: Cell; queue: Cell[]; step: Step | null; stepMs: number; gone: boolean }
 const others = new Map<bigint, Other>();
 
 interface Drop { x: number; y: number; item?: Item; gold?: number; t: number }
@@ -225,10 +225,10 @@ function sendFacing() {
     if (d !== P.sentDir && !P.step) { P.sentDir = d; net.send({ $case: 'changePlayerIdleDirectionRequest', value: { direction: d } }); }
 }
 
-function addOther(p: { playerId: bigint; x: number; y: number; direction: number; characterName: string; movementSpeedMs: number }) {
+function addOther(p: { profile?: string; playerId: bigint; x: number; y: number; direction: number; characterName: string; movementSpeedMs: number }) {
     if (p.playerId === myId) return;
     const [dx, dy] = GRID_VEC[p.direction] ?? [0, 1];
-    const o: Other = { id: p.playerId, name: p.characterName, x: p.x + 0.5, y: p.y + 0.5, cell: { x: p.x, y: p.y }, queue: [], step: null, stepMs: p.movementSpeedMs || 380, dir: 6, moving: false, one: null, flash: 0, phase: 0, ref: 3.4, t0: R() * 5, gone: false };
+    const o: Other = { profile: p.profile ?? '', id: p.playerId, name: p.characterName, x: p.x + 0.5, y: p.y + 0.5, cell: { x: p.x, y: p.y }, queue: [], step: null, stepMs: p.movementSpeedMs || 380, dir: 6, moving: false, one: null, flash: 0, phase: 0, ref: 3.4, t0: R() * 5, gone: false };
     turnTo(o, dx, dy, 0, true);
     others.set(o.id, o);
 }
@@ -254,6 +254,7 @@ function onServer(m: ServerPayload) {
         case 'playersEnteredRange':
             for (const p of m.value.players) addOther(p);
             break;
+        case 'playerProfileChanged': { const o = others.get(m.value.playerId); if (o) o.profile = m.value.profile; break; }
         case 'playersLeftRange':
             for (const id of m.value.playerIds) others.delete(id);
             break;
@@ -489,11 +490,26 @@ function lookOf(): string[] {
     const set = PAPER.sets[P.eq.armadura?.look ?? 'default'] ?? PAPER.sets.default, w = P.eq.arma;
     return [...set, CLS.head, ...(P.eq.cabeza?.look ? [P.eq.cabeza.look] : []), ...(w?.look ? [w.look] : []), ...(w?.off ? [w.off] : [])];
 }
+// ---------- bando y perfil visible para los demás ----------
+const FACTIONS = [{ id: 'solmar', name: 'Solmar', col: '#6fb3ff', desc: 'Reino del sol y el mar' }, { id: 'vhar', name: 'Vhar', col: '#ff7a6b', desc: 'Tierras del hierro y la ceniza' }];
+let selectedFaction = 'solmar';
+const factionCol = (id: string) => FACTIONS.find((f) => f.id === id)?.col ?? '#e9dfc0';
+const profileOf = () => `${selectedFaction};${CLS.id};${lookOf().join(',')}`;
+function sendProfile() { if (connected) net.send({ $case: 'changePlayerProfileRequest', value: { profile: profileOf() } }); }
+const otherLooks = new Map<string, HTMLCanvasElement>();
+/** Sprite del muñeco de otro jugador según el equipo que anunció (o uno por defecto mientras cargan las piezas). */
+function otherSprite(o: Other): string {
+    const parts = o.profile.split(';'), names = (parts[2] ?? '').split(',').filter((n) => PAPER.pieces[n]);
+    if (!names.length) return 'hero_other';
+    const key = names.join('|'), id = 'p:' + key;
+    if (!otherLooks.has(key)) { const c = composeLook(names); if (c) { otherLooks.set(key, c); IMG[id] = c; SPR[id] = SPR.hero; } }
+    return otherLooks.has(key) ? id : 'hero_other';
+}
 let lookKey = '';
 function refreshLook() {
     if (!PAPER) return;
     const names = lookOf(), key = names.join('|');
-    if (key !== lookKey) { const c = composeLook(names); if (c) { IMG.hero = c; lookKey = key; } }
+    if (key !== lookKey) { const c = composeLook(names); if (c) { IMG.hero = c; lookKey = key; sendProfile(); } }
     const other = ['leather_boots', 'leather_pants', 'leather_gloves', 'leather_chest', 'head_short', 'shortsword', 'buckler'];
     if (!IMG.hero_other) { const c = composeLook(other); if (c) IMG.hero_other = c; }
 }
@@ -765,12 +781,12 @@ function render() {
     for (const d of drops) objs.push({ d: d.x + d.y - 0.2, f: () => drawDrop(d, T) });
     for (const c of corpses) objs.push({ d: c.x + c.y - 0.3, f: () => { const p = iso(c.x, c.y), age = T - c.t; drawSprite(c.sprite, 'die', age, c.dir, p.x, p.y, null, age > 2 ? 3 - age : 1); } });
     for (const m of mobs) objs.push({ d: m.x + m.y, f: () => drawMob(m, T) });
-    for (const o of others.values()) objs.push({ d: o.x + o.y, f: () => { const p = iso(o.x, o.y), [a, t] = animFor(o, T); drawSprite('hero_other', a, t, o.dir, p.x, p.y, null, o.gone ? 0.45 : 1); } });
+    for (const o of others.values()) objs.push({ d: o.x + o.y, f: () => { const p = iso(o.x, o.y), [a, t] = animFor(o, T); drawSprite(otherSprite(o), a, t, o.dir, p.x, p.y, null, o.gone ? 0.45 : 1); } });
     objs.push({ d: P.x + P.y, f: () => { const p = iso(P.x, P.y); if (P.dead) drawSprite('hero', 'die', T - P.deadT, P.dir, p.x, p.y); else { const [a, t] = animFor(P, T); drawSprite('hero', a, t, P.dir, p.x, p.y, P.flash > 0 ? 'rgba(255,70,50,.35)' : null); } } });
     objs.sort((a, b) => a.d - b.d).forEach((o) => o.f());
     // nombres arriba de todo
-    for (const o of others.values()) { const p = iso(o.x, o.y); nameTag(o.name, p.x, p.y - 70, '#e9dfc0', o.gone ? 0.5 : 1); }
-    { const p = iso(P.x, P.y); nameTag(P.name, p.x, p.y - 70, '#d6a445'); }
+    for (const o of others.values()) { const p = iso(o.x, o.y); nameTag(o.name, p.x, p.y - 70, factionCol(o.profile.split(';')[0]), o.gone ? 0.5 : 1); }
+    { const p = iso(P.x, P.y); nameTag(P.name, p.x, p.y - 70, factionCol(selectedFaction)); }
     for (const p of projs) {
         const s = iso(p.x, p.y); s.y -= p.arc || 0;
         (p.trail ||= []).push({ x: s.x, y: s.y - 24 }); if (p.trail.length > 8) p.trail.shift();
@@ -906,6 +922,11 @@ function storedId(name: string): string {
     try { localStorage.setItem(key, id); } catch { /* sin almacenamiento */ }
     return id;
 }
+try { const f = localStorage.getItem('fdn:faction'); if (FACTIONS.some((x) => x.id === f)) selectedFaction = f!; } catch { /* sin almacenamiento */ }
+$('factions').innerHTML = FACTIONS.map((f) => `<button type="button" class="fac" data-id="${f.id}" style="--c:${f.col}"><b>${f.name}</b><small>${f.desc}</small></button>`).join('');
+function markFaction() { $('factions').querySelectorAll<HTMLElement>('.fac').forEach((b) => b.classList.toggle('on', b.dataset.id === selectedFaction)); }
+$('factions').addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest<HTMLElement>('.fac'); if (!b) return; selectedFaction = b.dataset.id!; try { localStorage.setItem('fdn:faction', selectedFaction); } catch { /* sin almacenamiento */ } markFaction(); });
+markFaction();
 let selectedClass = 'guerrero';
 try { const c = localStorage.getItem('fdn:class'); if (CLASSES.some((x) => x.id === c && !x.hidden)) selectedClass = c!; } catch { /* sin almacenamiento */ }
 $('classes').innerHTML = CLASSES.filter((c) => !c.hidden).map((c) => `<button type="button" class="cls" data-id="${c.id}"><b>${c.name}</b><small>${c.desc}</small></button>`).join('');
@@ -932,7 +953,7 @@ $('loginForm').addEventListener('submit', async (e) => {
     catch (err) { $('loginErr').textContent = `${(err as Error).message} ¿Está corriendo el server (pnpm dev)?`; btn.disabled = false; }
 });
 function enterWorld(name: string) {
-    setClass(selectedClass); connected = true; P.name = name; $('meName').textContent = name;
+    setClass(selectedClass); connected = true; P.name = name; lookKey = ''; refreshLook(); sendProfile(); $('meName').textContent = name;
     $('login').hidden = true; ($('loginForm').querySelector('button') as HTMLButtonElement).disabled = false;
     cv.focus({ preventScroll: true });
     log('Bienvenido al campamento de Solmar. Goblins al sureste, zombis en el pantano del este, esqueletos en el cementerio.', true);
@@ -951,7 +972,7 @@ async function boot() {
     } catch { $('loading').textContent = 'No se pudieron cargar los gráficos. Recargá la página.'; return; }
     $('loading').hidden = true;
     refreshLook();
-    if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { mobs, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
+    if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();
     requestAnimationFrame(frame);

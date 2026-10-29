@@ -113,6 +113,7 @@ export function playerSnapshot(p: Player): PlayerEnteredRange {
         activeTemporaryEffects: [],
         attackSpeedMs: p.attackSpeedMs,
         castSpeedMs: p.castSpeedMs,
+        profile: p.profile,
     };
 }
 
@@ -157,3 +158,6 @@ export const pingResponse = (sequence: number, gameWorldQueueLength: number, pla
 
 export const chatMessageReceived = (senderCharacterName: string, text: string): ServerMessage =>
     msg({ $case: 'chatMessageReceived', value: { senderCharacterName, timestampMs: BigInt(Date.now()), message: text } });
+
+export const playerProfileChanged = (p: Player): ServerMessage =>
+    msg({ $case: 'playerProfileChanged', value: { playerId: p.playerId, profile: p.profile } });

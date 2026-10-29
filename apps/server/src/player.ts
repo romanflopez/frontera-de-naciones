@@ -42,6 +42,8 @@ export class Player {
     posY = 0;
     facingDirection = 4;
     characterName = '';
+    /** Bando;clase;piezas visibles, lo manda el cliente (solo se retransmite a los demás). */
+    profile = '';
     disconnected = false;
 
     hp = 1000;

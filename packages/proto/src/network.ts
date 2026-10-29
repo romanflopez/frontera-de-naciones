@@ -109,6 +109,7 @@ export interface ClientMessage {
     | { $case: "weatherChangeRequest"; value: WeatherChangeRequest }
     | { $case: "summonNpcRequest"; value: SummonNpcRequest }
     | { $case: "killAllNpcsRequest"; value: KillAllNpcsRequest }
+    | { $case: "changePlayerProfileRequest"; value: ChangePlayerProfileRequest }
     | undefined;
 }
 
@@ -467,6 +468,7 @@ export interface ServerMessage {
     | { $case: "npcsEnteredRange"; value: NpcsEnteredRange }
     | { $case: "npcsLeftRange"; value: NpcsLeftRange }
     | { $case: "logoutCancelled"; value: LogoutCancelled }
+    | { $case: "playerProfileChanged"; value: PlayerProfileChanged }
     | undefined;
 }
 
@@ -498,6 +500,16 @@ export interface CastEffect {
 }
 
 export interface SpellCastFailed {
+}
+
+/** El cliente avisa su bando, clase y equipo visible: "bando;clase;pieza,pieza,...". */
+export interface ChangePlayerProfileRequest {
+  profile: string;
+}
+
+export interface PlayerProfileChanged {
+  playerId: bigint;
+  profile: string;
 }
 
 export interface PlayerAppearanceChanged {
@@ -940,7 +952,11 @@ export interface PlayerEnteredRange {
   characterName: string;
   activeTemporaryEffects: TemporaryEffectType[];
   attackSpeedMs?: number | undefined;
-  castSpeedMs?: number | undefined;
+  castSpeedMs?:
+    | number
+    | undefined;
+  /** Perfil del juego isométrico: bando, clase y piezas de equipo visibles (texto corto). */
+  profile: string;
 }
 
 export interface MonsterInRange {
@@ -1198,6 +1214,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         break;
       case "killAllNpcsRequest":
         KillAllNpcsRequest.encode(message.payload.value, writer.uint32(330).fork()).join();
+        break;
+      case "changePlayerProfileRequest":
+        ChangePlayerProfileRequest.encode(message.payload.value, writer.uint32(338).fork()).join();
         break;
     }
     return writer;
@@ -1646,6 +1665,17 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             };
             continue;
           }
+          case 42: {
+            if (tag !== 338) {
+              break;
+            }
+
+            message.payload = {
+              $case: "changePlayerProfileRequest",
+              value: ChangePlayerProfileRequest.decode(reader, reader.uint32()),
+            };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -2008,6 +2038,15 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           message.payload = {
             $case: "killAllNpcsRequest",
             value: KillAllNpcsRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "changePlayerProfileRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "changePlayerProfileRequest",
+            value: ChangePlayerProfileRequest.fromPartial(object.payload.value),
           };
         }
         break;
@@ -5869,6 +5908,9 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "logoutCancelled":
         LogoutCancelled.encode(message.payload.value, writer.uint32(506).fork()).join();
         break;
+      case "playerProfileChanged":
+        PlayerProfileChanged.encode(message.payload.value, writer.uint32(514).fork()).join();
+        break;
     }
     return writer;
   },
@@ -6455,6 +6497,17 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "logoutCancelled", value: LogoutCancelled.decode(reader, reader.uint32()) };
             continue;
           }
+          case 64: {
+            if (tag !== 514) {
+              break;
+            }
+
+            message.payload = {
+              $case: "playerProfileChanged",
+              value: PlayerProfileChanged.decode(reader, reader.uint32()),
+            };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -6920,6 +6973,15 @@ export const ServerMessage: MessageFns<ServerMessage> = {
         }
         break;
       }
+      case "playerProfileChanged": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "playerProfileChanged",
+            value: PlayerProfileChanged.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
     }
     return message;
   },
@@ -7305,6 +7367,131 @@ export const SpellCastFailed: MessageFns<SpellCastFailed> = {
   },
   fromPartial<I extends Exact<DeepPartial<SpellCastFailed>, I>>(_: I): SpellCastFailed {
     const message = createBaseSpellCastFailed();
+    return message;
+  },
+};
+
+function createBaseChangePlayerProfileRequest(): ChangePlayerProfileRequest {
+  return { profile: "" };
+}
+
+export const ChangePlayerProfileRequest: MessageFns<ChangePlayerProfileRequest> = {
+  encode(message: ChangePlayerProfileRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.profile !== "") {
+      writer.uint32(10).string(message.profile);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ChangePlayerProfileRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseChangePlayerProfileRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.profile = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<ChangePlayerProfileRequest>, I>>(base?: I): ChangePlayerProfileRequest {
+    return ChangePlayerProfileRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ChangePlayerProfileRequest>, I>>(object: I): ChangePlayerProfileRequest {
+    const message = createBaseChangePlayerProfileRequest();
+    message.profile = object.profile ?? "";
+    return message;
+  },
+};
+
+function createBasePlayerProfileChanged(): PlayerProfileChanged {
+  return { playerId: 0n, profile: "" };
+}
+
+export const PlayerProfileChanged: MessageFns<PlayerProfileChanged> = {
+  encode(message: PlayerProfileChanged, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.playerId !== 0n) {
+      if (BigInt.asIntN(64, message.playerId) !== message.playerId) {
+        throw new globalThis.Error("value provided for field message.playerId of type int64 too large");
+      }
+      writer.uint32(8).int64(message.playerId);
+    }
+    if (message.profile !== "") {
+      writer.uint32(18).string(message.profile);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PlayerProfileChanged {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBasePlayerProfileChanged();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.playerId = reader.int64() as bigint;
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.profile = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<PlayerProfileChanged>, I>>(base?: I): PlayerProfileChanged {
+    return PlayerProfileChanged.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PlayerProfileChanged>, I>>(object: I): PlayerProfileChanged {
+    const message = createBasePlayerProfileChanged();
+    message.playerId = (object.playerId !== undefined && object.playerId !== null) ? BigInt(object.playerId) : 0n;
+    message.profile = object.profile ?? "";
     return message;
   },
 };
@@ -12338,6 +12525,7 @@ function createBasePlayerEnteredRange(): PlayerEnteredRange {
     activeTemporaryEffects: [],
     attackSpeedMs: undefined,
     castSpeedMs: undefined,
+    profile: "",
   };
 }
 
@@ -12403,6 +12591,9 @@ export const PlayerEnteredRange: MessageFns<PlayerEnteredRange> = {
     }
     if (message.castSpeedMs !== undefined) {
       writer.uint32(144).int32(message.castSpeedMs);
+    }
+    if (message.profile !== "") {
+      writer.uint32(154).string(message.profile);
     }
     return writer;
   },
@@ -12574,6 +12765,14 @@ export const PlayerEnteredRange: MessageFns<PlayerEnteredRange> = {
             message.castSpeedMs = reader.int32();
             continue;
           }
+          case 19: {
+            if (tag !== 154) {
+              break;
+            }
+
+            message.profile = reader.string();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -12610,6 +12809,7 @@ export const PlayerEnteredRange: MessageFns<PlayerEnteredRange> = {
     message.activeTemporaryEffects = object.activeTemporaryEffects?.map((e) => e) || [];
     message.attackSpeedMs = object.attackSpeedMs ?? undefined;
     message.castSpeedMs = object.castSpeedMs ?? undefined;
+    message.profile = object.profile ?? "";
     return message;
   },
 };
