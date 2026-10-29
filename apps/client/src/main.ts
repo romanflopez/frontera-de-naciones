@@ -490,6 +490,7 @@ function refreshLook() {
     if (key !== lookKey) { const c = composeLook(names); if (c) { IMG.hero = c; lookKey = key; } }
     const other = ['leather_boots', 'leather_pants', 'leather_gloves', 'leather_chest', 'head_short', 'shortsword', 'buckler'];
     if (!IMG.hero_other) { const c = composeLook(other); if (c) IMG.hero_other = c; }
+    refreshNpcLook();
 }
 function drawSprite(name: string, anim: string, t: number, dir: number, x: number, y: number, tint?: string | null, alpha?: number) {
     const M = SPR[name], A = M?.anims[anim], im = IMG[name]; if (!A || !im) return;
@@ -552,6 +553,9 @@ cv.addEventListener('pointerdown', (e) => {
     cv.focus({ preventScroll: true });
     if (P.dead || !connected) return; const r = cv.getBoundingClientRect(); const sx = e.clientX - r.left, sy = e.clientY - r.top;
     const m = pickMob(sx, sy);
+    talkNpc = null;
+    const npc = !m && !P.ready ? pickNpc(sx, sy) : null;
+    if (npc) { talkTo(npc); return; }
     if (P.ready) {
         const s = SPELLS[P.ready.i];
         if (m) { release(m); return; }
@@ -706,7 +710,7 @@ function update(dt: number) {
 }
 function updateHover() {
     hover = mouse.x >= 0 ? pickMob(mouse.x, mouse.y) : null;
-    cv.style.cursor = P.ready ? 'cell' : hover ? 'pointer' : mouse.x >= 0 && pickDrop(mouse.x, mouse.y) ? 'grab' : 'crosshair';
+    cv.style.cursor = !hover && !P.ready && mouse.x >= 0 && pickNpc(mouse.x, mouse.y) ? 'pointer' : P.ready ? 'cell' : hover ? 'pointer' : mouse.x >= 0 && pickDrop(mouse.x, mouse.y) ? 'grab' : 'crosshair';
 }
 function updateCam(dt: number) {
     const pt = iso(P.x, P.y); const k = 1 - Math.exp(-dt * 7); cam.x += (pt.x - cam.x) * k; cam.y += (pt.y - cam.y) * k;
@@ -756,6 +760,8 @@ function render() {
     // objetos por profundidad
     const objs: { d: number; f: () => void }[] = [];
     for (const o of props) if (o.x > minX - 3 && o.x < maxX + 3 && o.y > minY - 3 && o.y < maxY + 3) objs.push({ d: o.x + o.y, f: () => { const p = iso(o.x, o.y); drawWorld(o.id, p.x, p.y); } });
+    for (const b of MAP.buildings) objs.push({ d: b.x + b.y + (b.w + b.h) / 2, f: () => drawBuilding(b) });
+    for (const n of MAP.npcs) objs.push({ d: n.x + n.y + 1, f: () => drawNpc(n, T) });
     for (const d of drops) objs.push({ d: d.x + d.y - 0.2, f: () => drawDrop(d, T) });
     for (const c of corpses) objs.push({ d: c.x + c.y - 0.3, f: () => { const p = iso(c.x, c.y), age = T - c.t; drawSprite(c.sprite, 'die', age, c.dir, p.x, p.y, null, age > 2 ? 3 - age : 1); } });
     for (const m of mobs) objs.push({ d: m.x + m.y, f: () => drawMob(m, T) });
@@ -765,6 +771,7 @@ function render() {
     // nombres arriba de todo
     for (const o of others.values()) { const p = iso(o.x, o.y); nameTag(o.name, p.x, p.y - 70, '#e9dfc0', o.gone ? 0.5 : 1); }
     { const p = iso(P.x, P.y); nameTag(P.name, p.x, p.y - 70, '#d6a445'); }
+    for (const n of MAP.npcs) { const p = iso(n.x + 0.5, n.y + 0.5); nameTag(n.name, p.x, p.y - 70, '#9fd36b'); }
     for (const p of projs) {
         const s = iso(p.x, p.y); s.y -= p.arc || 0;
         (p.trail ||= []).push({ x: s.x, y: s.y - 24 }); if (p.trail.length > 8) p.trail.shift();
@@ -882,13 +889,92 @@ function renderBag() {
     if (uneqBtn) uneqBtn.onclick = () => { if (P.bag.length >= 18) { log('La bolsa está llena.'); return; } P.eq[it.slot] = null; refreshLook(); P.bag.push(it); sel = { it, from: 'bag' }; P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); renderBag(); };
 }
 
+// ---------- edificios y NPCs ----------
+interface BuildMeta { w: number; h: number; ax: number; ay: number; fw: number; fh: number }
+let BUILD: Record<string, BuildMeta> = {};
+/** Los PNG de edificios los arma tools/src/house/atlas.ts; si faltan, simplemente no se dibujan. */
+function loadBuildingImages() {
+    for (const id of Object.keys(BUILD)) load(`assets/${id}.webp`).then((im) => { IMG[id] = im; }).catch(() => { /* sin imagen */ });
+}
+/** El edificio se apoya en la esquina sur de su huella. */
+function drawBuilding(b: { id: string; x: number; y: number; w: number; h: number }) {
+    const M = BUILD[b.id], im = IMG[b.id]; if (!M || !im) return;
+    const p = iso(b.x + b.w, b.y + b.h);
+    ctx.drawImage(im, p.x - M.ax, p.y - M.ay, M.w, M.h);
+}
+
+type Npc = (typeof MAP.npcs)[number];
+/** Piezas de avatar (las mismas del muñeco por capas) de cada NPC. */
+const NPC_LOOKS: Record<string, string[]> = {
+    mercader: ['leather_boots', 'cloth_pants', 'cloth_gloves', 'cloth_shirt', 'head_short', 'leather_hood'],
+};
+function refreshNpcLook() {
+    if (!PAPER) return;
+    for (const n of MAP.npcs) {
+        const names = NPC_LOOKS[n.id], key = 'npc_' + n.id;
+        if (!names || IMG[key]) continue;
+        const c = composeLook(names); if (c) { IMG[key] = c; SPR[key] = SPR.hero; }
+    }
+}
+function drawNpc(n: Npc, T: number) {
+    const p = iso(n.x + 0.5, n.y + 0.5);
+    drawSprite('npc_' + n.id, 'stance', T + n.x * 0.37, n.dir, p.x, p.y);
+}
+function pickNpc(sx: number, sy: number): Npc | null {
+    for (const n of MAP.npcs) {
+        const p = toScreen(n.x + 0.5, n.y + 0.5);
+        if (Math.abs(sx - p.x) < 22 * Z && sy > p.y - 76 * Z && sy < p.y + 12 * Z) return n;
+    }
+    return null;
+}
+
+// ---------- mercader: vender items de la bolsa ----------
+const SELL_PRICE = [4, 15, 50, 150]; // oro por rareza (Común, Mágico, Raro, Épico)
+const sellPrice = (it: Item) => SELL_PRICE[it.rar.k] ?? 1;
+const TALK_RANGE = 2.6;
+let talkNpc: Npc | null = null, shopNpc: Npc | null = null;
+const npcDist = (n: Npc) => Math.hypot(n.x + 0.5 - P.x, n.y + 0.5 - P.y);
+function talkTo(n: Npc) {
+    cancelCast(); P.target = null; P.engage = false; P.pickup = null; P.queued = null;
+    if (npcDist(n) <= TALK_RANGE) { openShop(n); return; }
+    if (moveTo(n.x + 0.5, n.y + 0.5)) talkNpc = n; else toast('No llegás hasta ahí.');
+}
+function openShop(n: Npc = MAP.npcs[0]) {
+    shopNpc = n; talkNpc = null; $('shopName').textContent = n.name; $('shop').hidden = false; renderShop();
+    log(`${n.name}: «Traeme lo que no uses y te lo pago en oro.»`);
+}
+function closeShop() { shopNpc = null; $('shop').hidden = true; }
+function renderShop() {
+    if ($('shop').hidden) return;
+    $('shopGold').textContent = P.gold + ' oro';
+    $('shopList').innerHTML = P.bag.length
+        ? P.bag.map((it, i) => `<button type="button" class="srow" data-sell="${i}"><span style="color:${it.rar.c}">${esc(it.name)}<small>${it.rar.n} · ${it.slot}</small></span><em>${sellPrice(it)} oro</em></button>`).join('')
+        : `<div class="label">La bolsa está vacía</div>`;
+    document.querySelectorAll<HTMLElement>('[data-sell]').forEach((b) => (b.onclick = () => sellItem(+b.dataset.sell!)));
+}
+function sellItem(i: number) {
+    const it = P.bag[i]; if (!it) return;
+    const g = sellPrice(it);
+    P.bag.splice(i, 1); P.gold += g; if (sel && sel.it === it) sel = null;
+    log(`Vendiste <span style="color:${it.rar.c}">${esc(it.name)}</span> por ${g} de oro.`);
+    renderBag(); renderShop();
+}
+/** Abre la tienda al llegar y la cierra si te alejás. */
+function npcTick() {
+    if (talkNpc && !P.step && npcDist(talkNpc) <= TALK_RANGE) openShop(talkNpc);
+    else if (talkNpc && !P.step && !P.path.length) { talkNpc = null; }
+    if (shopNpc && (npcDist(shopNpc) > TALK_RANGE + 1.5 || P.dead)) closeShop();
+}
+$('shopClose').addEventListener('click', closeShop);
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && shopNpc) closeShop(); });
+
 // ---------- loop ----------
 const MAP_WORLD_ID = 'solmar';
 let last = now(), lastCam = now();
 function frame() {
     const T = now(); let dt = Math.min(0.05, T - last); last = T;
     if (hitstop > 0) { hitstop -= dt; dt = 0; }
-    update(dt); updateCam(Math.min(0.05, T - lastCam)); lastCam = T;
+    update(dt); npcTick(); updateCam(Math.min(0.05, T - lastCam)); lastCam = T;
     updateHover(); render(); hud(); requestAnimationFrame(frame);
 }
 
@@ -937,6 +1023,7 @@ async function boot() {
     try {
         const meta = await (await fetch('assets/meta.json')).json();
         WORLD = meta.world; delete meta.world;
+        BUILD = meta.buildings ?? {}; delete meta.buildings;
         PAPER = meta.paper; delete meta.paper; SPR.hero = SPR.hero_other = PAPER as unknown as SpriteMeta;
         Object.assign(SPR, meta);
         const names = ['world', 'goblin', 'zombie', 'skeleton', 'barbaro'];
@@ -944,8 +1031,10 @@ async function boot() {
         names.forEach((n, i) => (IMG[n] = imgs[i]));
     } catch { $('loading').textContent = 'No se pudieron cargar los gráficos. Recargá la página.'; return; }
     $('loading').hidden = true;
+    loadBuildingImages();
     refreshLook();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { mobs, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { MAP, openShop, toScreen, give: (n: number) => { for (let i = 0; i < n; i++) P.bag.push(rollItem(1 + i)); renderBag(); } });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();
     requestAnimationFrame(frame);

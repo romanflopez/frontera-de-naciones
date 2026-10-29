@@ -60,6 +60,14 @@ button:hover{border-color:var(--brass)} button:focus-visible{outline:2px solid v
 .cell.empty{color:#3e453f}
 .equip .cell{aspect-ratio:auto;height:50px;display:grid;gap:2px}
 .equip .cell span{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+#shop{top:calc(84px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(330px,calc(100vw - 24px));padding:12px;display:grid;gap:8px;max-height:calc(100% - 220px);overflow:auto}
+#shop h2{margin:0;font-family:var(--f-display);font-size:15px;color:var(--brass);letter-spacing:.04em;display:flex;align-items:center;gap:8px}
+#shop h2 small{font-family:var(--f-body);color:var(--text);font-variant-numeric:tabular-nums;margin-left:auto}
+#shop h2 button{padding:0 8px;line-height:22px;font-size:16px}
+#shopList{display:grid;gap:4px}
+.srow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 8px;text-align:left;background:#181c19;border-color:#2b312c}
+.srow span{display:grid;line-height:1.15} .srow small{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.srow em{font-style:normal;color:var(--brass);font-variant-numeric:tabular-nums;white-space:nowrap}
 #detail{display:grid;gap:4px;font-size:13px}
 #detail .iname{font-family:var(--f-display);font-size:15px}
 #detail ul{margin:0;padding-left:16px}
@@ -127,6 +135,12 @@ canvas:focus{outline:none}
     <div class="label">Bolsa</div>
     <div class="grid" id="inv"></div>
     <div id="detail"></div>
+  </div>
+
+  <div id="shop" class="hud box" hidden>
+    <h2><span id="shopName">Mercader</span> <small id="shopGold"></small><button id="shopClose" type="button" aria-label="Cerrar">×</button></h2>
+    <div class="label">Tu bolsa · tocá un item para venderlo</div>
+    <div id="shopList"></div>
   </div>
 
   <div id="bar" class="hud box"></div>
