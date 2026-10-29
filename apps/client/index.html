@@ -76,7 +76,7 @@ button:hover{border-color:var(--brass)} button:focus-visible{outline:2px solid v
 #shop h2 button{padding:0 8px;line-height:22px;font-size:16px}
 #qdlg{top:calc(84px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(340px,calc(100vw - 24px));padding:12px;display:grid;gap:10px}
 #qdlg h2{margin:0;font-family:var(--f-display);font-size:15px;color:var(--brass);display:flex;align-items:center;gap:8px} #qdlg h2 button{margin-left:auto;padding:0 8px;line-height:22px}
-#qdBody{line-height:1.35} #qdBody small{color:var(--muted)}
+#qdForges{display:grid;gap:6px} #qdBody{line-height:1.35} #qdBody small{color:var(--muted)}
 #quest{top:calc(84px + env(safe-area-inset-top,0px));left:12px;padding:8px 10px;display:grid;gap:2px;max-width:230px;font-size:12px}
 #quest b{font-family:var(--f-display);color:var(--brass);font-size:13px} #quest em{font-style:normal;color:#bfe6ff}
 #pots{bottom:calc(14px + env(safe-area-inset-bottom,0px));left:14px;display:flex;gap:6px}
@@ -171,7 +171,7 @@ canvas:focus{outline:none}
     <h2><span id="qdName">Capitán</span><button id="qdClose" type="button" aria-label="Cerrar">×</button></h2>
     <div id="qdBody"></div>
     <button id="qdBtn" type="button">Aceptar</button>
-    <button id="qdForge" type="button">Forjar llave</button>
+    <div id="qdForges"></div>
   </div>
   <div id="quest" class="hud box" hidden></div>
 
