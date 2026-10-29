@@ -1,9 +1,13 @@
 [
   {
-    "id": "campamento",
-    "name": "Campamento",
-    "map": "campamento",
-    "music": "default.mp3",
+    "id": "solmar",
+    "name": "Campamento de Solmar",
+    "map": "solmar",
+    "music": "",
+    "spawn": {
+      "x": 6,
+      "y": 7
+    },
     "teleportLocs": [],
     "dwellAreas": [],
     "npcs": []

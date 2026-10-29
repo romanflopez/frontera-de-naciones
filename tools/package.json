@@ -4,14 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "placeholders": "tsx src/placeholders/index.ts",
-    "client-simulator": "tsx src/client-simulator.ts",
-    "typecheck": "tsc --noEmit -p .",
-    "placeholders:ensure": "tsx src/placeholders/ensure.ts",
-    "flare:fetch": "tsx src/flare/fetch.ts"
+    "atlas": "tsx src/flare/atlas.ts",
+    "flare:fetch": "tsx src/flare/fetch.ts",
+    "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
-    "@fdn/proto": "workspace:*",
     "@napi-rs/canvas": "^0.1.65"
   },
   "devDependencies": {

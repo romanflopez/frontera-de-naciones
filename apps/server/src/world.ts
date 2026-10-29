@@ -94,7 +94,7 @@ export class GameWorld {
     // ---------- entrada y salida ----------
     playerConnected(sessionId: string, characterName: string, send: Send, requestDisconnect: (r: string) => void, persisted?: PersistedPlayer): void {
         const usePersisted = persisted && persisted.worldId === this.id;
-        const spawn = this.spawnLocation(usePersisted ? persisted.x : undefined, usePersisted ? persisted.y : undefined);
+        const spawn = this.spawnLocation(usePersisted ? persisted.x : this.config.spawn?.x, usePersisted ? persisted.y : this.config.spawn?.y);
         const p = new Player(sessionId, send, requestDisconnect, this.settings);
         p.characterName = characterName;
         if (persisted) p.applyPersisted(persisted);

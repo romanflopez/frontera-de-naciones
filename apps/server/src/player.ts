@@ -65,7 +65,8 @@ export class Player {
     /** Ids de jugadores que este jugador tiene "a la vista". */
     readonly playersInRange = new Set<bigint>();
 
-    private baseMovementSpeedMs = 220;
+    /** 380 ms por celda: el ritmo del prototipo (unas 2,6 celdas por segundo). */
+    private baseMovementSpeedMs = 380;
     private lastMovementRequestMs = 0;
     private paralysisUntil = 0;
     private violations: SlidingWindow;
@@ -177,7 +178,7 @@ export class Player {
         this.skinColor = p.skinColor ?? 0;
         this.hairStyleIndex = p.hairStyleIndex ?? 0;
         this.underwearColorIndex = p.underwearColorIndex ?? 0;
-        this.baseMovementSpeedMs = p.movementSpeedMs ?? 220;
+        this.baseMovementSpeedMs = p.movementSpeedMs ?? 380;
         this.runningMode = p.runningMode ?? true;
         this.attackMode = p.attackMode ?? true;
     }

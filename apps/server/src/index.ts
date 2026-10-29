@@ -10,7 +10,8 @@ import { randomUUID } from 'node:crypto';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { ClientMessage, ServerMessage } from '@fdn/proto';
 import { DATA_DIR, loadCatalogs, loadSettings, loadWorlds } from './config.ts';
-import { loadOccupancy } from './map.ts';
+import { MAPS } from '@fdn/world';
+import { loadOccupancy, occupancyFromGrid } from './map.ts';
 import * as M from './messages.ts';
 import type { PersistedPlayer } from './player.ts';
 import { GameWorld } from './world.ts';
@@ -23,7 +24,9 @@ const worldConfigs = loadWorlds();
 const worlds = new Map<string, GameWorld>();
 for (const wc of worldConfigs) {
     const teleportCells = (wc.teleportLocs ?? []).flatMap((t) => t.locs);
-    const occ = loadOccupancy(wc.map, teleportCells);
+    // Mapas generados por código (iguales en cliente y server) o, si no, un .amd en data/maps
+    const generated = MAPS[wc.map];
+    const occ = generated ? occupancyFromGrid(generated().blocked, teleportCells) : loadOccupancy(wc.map, teleportCells);
     worlds.set(wc.id, new GameWorld(wc, settings, catalogs, occ));
     console.log(`[Server] Mundo '${wc.id}' (${wc.name}): mapa ${wc.map}, ${occ.sizeX}x${occ.sizeY}, ${occ.occupiedCount} celdas bloqueadas`);
 }
@@ -122,8 +125,10 @@ wss.on('connection', (ws, req) => {
                 return;
             }
 
-            const persisted = loadChar(networkId);
-            const worldId = persisted && worlds.has(persisted.worldId) ? persisted.worldId : settings.initialMap;
+            // un personaje guardado en un mundo que ya no existe arranca de cero
+            const saved = loadChar(networkId);
+            const persisted = saved && worlds.has(saved.worldId) ? saved : undefined;
+            const worldId = persisted ? persisted.worldId : settings.initialMap;
             session = { networkId, sessionId: randomUUID(), worldId, characterName, socket: ws, disconnectDeadline: null, logoutAllowedAt: null };
             sessionsByNetworkId.set(networkId, session);
             worlds.get(worldId)!.playerConnected(session.sessionId, characterName, send, disconnect, persisted);

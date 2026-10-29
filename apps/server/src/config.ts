@@ -45,6 +45,8 @@ export interface GameWorldConfig {
     name: string;
     map: string;
     music?: string;
+    /** Dónde aparece un personaje nuevo (si no, el centro del mapa o un lugar al azar). */
+    spawn?: WorldLocationConfig;
     teleportLocs?: { locs: WorldLocationConfig[]; target: { worldId: string; loc: WorldLocationConfig } }[];
 }
 

@@ -6,8 +6,8 @@ dist/
 # Nunca subir assets del Helbreath original
 **/*.pak
 reference/**/Chars/
-# Assets provisorios: se generan con `pnpm assets`
-apps/client/public/assets/
-apps/server/data/maps/
+# Personajes guardados por el server de desarrollo
 apps/server/data/chars/
 reference/flare-game/
+reference/flare-game
+apps/server/data/maps/*.amd

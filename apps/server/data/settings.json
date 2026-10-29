@@ -1,9 +1,9 @@
 {
   "port": 1337,
-  "initialMap": "campamento",
+  "initialMap": "solmar",
   "logoutTime": 5,
   "courseCorrection": true,
-  "spawnInMiddle": true,
+  "spawnInMiddle": false,
   "spawnToRandomMap": false,
   "chatMessageMaxLength": 500,
   "maxCellsJumpDistance": 3,

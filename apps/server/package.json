@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@fdn/proto": "workspace:*",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "@fdn/world": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

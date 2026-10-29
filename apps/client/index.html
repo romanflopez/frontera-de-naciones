@@ -1,27 +1,151 @@
 <!doctype html>
-<html lang="en">
-
+<html lang="es">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="stylesheet" href="/style.css">
-    <title>Frontera de Naciones</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Frontera de Naciones</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@500;700&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<style>
+[hidden]{display:none!important}
+/* Layout: full-bleed canvas world, HUD floats at the corners like an old MMO client, brass-on-iron panels */
+:root{
+  --ink:#0d100e; --panel:rgba(16,19,17,.88); --line:#3b423b; --text:#ebe4cf; --muted:#9c9683;
+  --brass:#d6a445; --hp:#c43e2b; --mp:#3a78d6; --xp:#c9a227; --par:#7fd6ff;
+  --f-display:"Alegreya SC", Georgia, serif; --f-body:"Alegreya Sans", system-ui, sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%;background:var(--ink);color:var(--text);font-family:var(--f-body);overflow:hidden}
+#game{position:relative;height:100%;width:100%;}
+canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+.hud{position:absolute;pointer-events:none;font-size:14px}
+.hud > *{pointer-events:auto}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:4px;box-shadow:0 2px 10px rgba(0,0,0,.4)}
+#me{top:calc(10px + env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));padding:10px 12px;width:min(230px,52vw);display:grid;gap:6px}
+.name{font-family:var(--f-display);font-size:16px;letter-spacing:.02em;display:flex;justify-content:space-between;gap:8px}
+.name small{font-family:var(--f-body);color:var(--muted);font-size:12px;align-self:center}
+.bar{position:relative;height:12px;background:#1c201d;border:1px solid #2a302b;border-radius:2px;overflow:hidden}
+.bar i{position:absolute;inset:0 auto 0 0;display:block;transition:width .15s}
+.bar span{position:relative;font-size:10px;line-height:12px;padding-left:5px;font-variant-numeric:tabular-nums;text-shadow:0 1px 1px #000}
+.hp i{background:linear-gradient(#e0583f,var(--hp))} .mp i{background:linear-gradient(#5b95ea,var(--mp))} .xp{height:6px} .xp i{background:var(--xp)}
+#target{top:calc(10px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);padding:8px 12px;width:min(240px,40vw);display:grid;gap:5px}
+#target .name{font-size:14px}
+.chips{display:flex;gap:4px;flex-wrap:wrap}
+.chip{font-size:11px;padding:1px 6px;border-radius:9px;border:1px solid}
+.chip.par{color:var(--par);border-color:var(--par)} .chip.imm{color:var(--muted);border-color:var(--muted)} .chip.ven{color:#8fd14f;border-color:#8fd14f}
+#bagBtn{top:calc(10px + env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px))}
+button{font:inherit;color:var(--text);background:#1d221e;border:1px solid var(--line);border-radius:4px;cursor:pointer}
+button:hover{border-color:var(--brass)} button:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+#bagBtn button{padding:8px 12px;font-family:var(--f-display)}
+#bar{bottom:calc(12px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);display:flex;gap:8px;padding:8px}
+.slot{position:relative;width:62px;height:62px;display:grid;place-items:center;padding:4px;overflow:hidden}
+.slot b{font-family:var(--f-display);font-size:12px;line-height:1.05;text-align:center}
+.slot kbd{position:absolute;top:3px;left:5px;font-size:10px;color:var(--muted);font-family:var(--f-body)}
+.slot em{position:absolute;bottom:2px;right:5px;font-style:normal;font-size:10px;color:#8fb6f0;font-variant-numeric:tabular-nums}
+.slot .cd{position:absolute;inset:auto 0 0 0;background:rgba(0,0,0,.6);pointer-events:none}
+.slot.nomp b{color:var(--muted)}
+#log{bottom:calc(92px + env(safe-area-inset-bottom,0px));left:max(12px,env(safe-area-inset-left,0px));width:min(360px,70vw);font-size:12.5px;line-height:1.35;color:var(--muted);text-shadow:0 1px 2px #000;pointer-events:none}
+#log p{margin:0}
+#log p.hi{color:var(--text)}
+#bag{top:calc(56px + env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));width:min(300px,calc(100vw - 24px));padding:12px;display:grid;gap:10px;max-height:calc(100% - 180px);overflow:auto}
+#bag h2{margin:0;font-family:var(--f-display);font-size:15px;color:var(--brass);letter-spacing:.04em;display:flex;justify-content:space-between}
+#bag h2 small{font-family:var(--f-body);color:var(--text);font-variant-numeric:tabular-nums}
+.label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.equip{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+.cell{aspect-ratio:1;max-width:100%;display:grid;place-items:center;font-size:11px;text-align:center;line-height:1;padding:2px;border-radius:3px;background:#181c19;border:1px solid #2b312c;overflow:hidden}
+.cell.sel{outline:2px solid var(--brass)}
+.cell.empty{color:#3e453f}
+.equip .cell{aspect-ratio:auto;height:50px;display:grid;gap:2px}
+.equip .cell span{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+#detail{display:grid;gap:4px;font-size:13px}
+#detail .iname{font-family:var(--f-display);font-size:15px}
+#detail ul{margin:0;padding-left:16px}
+#detail .row{display:flex;gap:6px;margin-top:4px}
+#detail .row button{padding:5px 10px;flex:1}
+#toast{bottom:calc(96px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--brass);color:var(--text);padding:6px 12px;border-radius:4px;font-size:13px;white-space:nowrap;max-width:calc(100vw - 32px);overflow:hidden;text-overflow:ellipsis}
+.slot.ready{border-color:var(--brass);box-shadow:0 0 10px var(--brass) inset}
+.slot.fired{animation:fired .35s ease-out}
+@keyframes fired{from{border-color:var(--brass);box-shadow:0 0 14px var(--brass)}to{box-shadow:none}}
+canvas:focus{outline:none}
+#help{bottom:calc(12px + env(safe-area-inset-bottom,0px));right:max(12px,env(safe-area-inset-right,0px));font-size:11.5px;color:var(--muted);text-align:right;line-height:1.4;pointer-events:none;max-width:210px}
+#help a{color:var(--muted);pointer-events:auto}
+#loading{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--f-display);font-size:18px;color:var(--brass);background:var(--ink)}
+@media (max-width:620px){#target{top:calc(118px + env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));transform:none;width:min(230px,60vw)} #help{display:none} #log{bottom:calc(88px + env(safe-area-inset-bottom,0px))} .slot{width:56px;height:56px}}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
 
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-TLGC0MYRNB"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag() { dataLayer.push(arguments); }
-        gtag('js', new Date());
-
-        gtag('config', 'G-TLGC0MYRNB');
-    </script>
+#login{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(ellipse at center,rgba(13,16,14,.55),rgba(13,16,14,.95));z-index:5}
+#login form{display:grid;gap:12px;padding:22px 24px;width:min(360px,calc(100vw - 32px))}
+#login h1{margin:0;font-family:var(--f-display);font-size:24px;color:var(--brass);letter-spacing:.03em;text-align:center}
+#login p{margin:0;color:var(--muted);font-size:13px;text-align:center}
+#login input{font:inherit;color:var(--text);background:#151916;border:1px solid var(--line);border-radius:4px;padding:9px 10px}
+#login input:focus{outline:2px solid var(--brass);outline-offset:1px}
+#login button{padding:9px 12px;font-family:var(--f-display);font-size:15px}
+#classes{display:grid;gap:6px}
+#classes .cls{display:grid;gap:2px;text-align:left;padding:8px 10px;background:#151916;border:1px solid var(--line);border-radius:4px;color:var(--text);cursor:pointer;font:inherit}
+#classes .cls b{font-family:var(--f-display);color:var(--brass);font-size:15px}
+#classes .cls small{color:var(--muted);font-size:12px}
+#classes .cls.on{outline:2px solid var(--brass);background:#1d231e}
+#login .err{color:#ff8a6b;min-height:1.2em}
+#chat{bottom:calc(92px + env(safe-area-inset-bottom,0px));left:max(12px,env(safe-area-inset-left,0px));width:min(360px,70vw)}
+#chat input{width:100%;box-sizing:border-box;font:inherit;font-size:13px;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:6px 8px}
+#chat input:focus{outline:1px solid var(--brass)}
+#log{bottom:calc(128px + env(safe-area-inset-bottom,0px))}
+#log p.chat{color:#e9dfc0}
+#log p.chat b{color:var(--brass);font-weight:600}
+#log p.sys{color:#8fb6f0}
+#net{top:calc(10px + env(safe-area-inset-top,0px));right:calc(max(12px,env(safe-area-inset-right,0px)) + 92px);font-size:12px;color:var(--muted);padding:9px 10px;pointer-events:none}
+#net.off{color:#ff8a6b}
+</style>
 </head>
-
 <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+<div id="game">
+  <canvas id="cv" tabindex="0" aria-label="Mundo del juego"></canvas>
+  <div id="toast" class="hud" role="status" hidden></div>
 
+  <div id="me" class="hud box">
+    <div class="name"><span id="meName">Viajero de Solmar</span><small id="meLvl">Nv 1</small></div>
+    <div class="bar hp"><i id="hpI"></i><span id="hpT"></span></div>
+    <div class="bar mp"><i id="mpI"></i><span id="mpT"></span></div>
+    <div class="bar xp"><i id="xpI"></i></div>
+  </div>
+
+  <div id="target" class="hud box" hidden>
+    <div class="name"><span id="tName"></span><small id="tLvl"></small></div>
+    <div class="bar hp"><i id="tHpI"></i><span id="tHpT"></span></div>
+    <div class="chips" id="tChips"></div>
+  </div>
+
+  <div id="bagBtn" class="hud"><button id="openBag" type="button">Bolsa (I)</button></div>
+
+  <div id="bag" class="hud box" hidden>
+    <h2>Equipo <small id="gold">0 oro</small></h2>
+    <div class="label">Puesto</div>
+    <div class="equip" id="equip"></div>
+    <div class="label">Bolsa</div>
+    <div class="grid" id="inv"></div>
+    <div id="detail"></div>
+  </div>
+
+  <div id="bar" class="hud box"></div>
+  <div id="log" class="hud"></div>
+  <div id="chat" class="hud"><input id="chatIn" maxlength="200" autocomplete="off" placeholder="Enter para chatear" aria-label="Chat"></div>
+  <div id="net" class="hud" aria-live="polite"></div>
+  <div id="help" class="hud"><span id="helpKeys"></span><br>Arte: <a href="https://github.com/flareteam/flare-game" target="_blank" rel="noopener">Flare</a> (CC-BY-SA 3.0)</div>
+  <div id="loading">Cargando el mundo…</div>
+  <div id="login" hidden>
+    <form id="loginForm" class="box">
+      <h1>Frontera de Naciones</h1>
+      <p>Elegí tu clase y el nombre de tu personaje</p>
+      <div id="classes"></div>
+      <input id="nameIn" maxlength="16" required autocomplete="nickname" placeholder="Nombre" aria-label="Nombre del personaje">
+      <button type="submit">Entrar al mundo</button>
+      <div class="err" id="loginErr" role="alert"></div>
+    </form>
+  </div>
+</div>
+
+<script type="module" src="/src/main.ts"></script>
 </body>
-
 </html>

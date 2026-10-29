@@ -3,13 +3,13 @@
   "private": true,
   "packageManager": "pnpm@10.28.0",
   "scripts": {
-    "dev": "pnpm --filter @fdn/tools placeholders:ensure && pnpm --parallel --filter @fdn/server --filter @fdn/client dev",
-    "build": "pnpm --filter @fdn/tools placeholders:ensure && pnpm --filter @fdn/client build",
-    "assets": "pnpm --filter @fdn/tools placeholders",
-    "proto": "pnpm --filter @fdn/proto generate",
-    "typecheck": "pnpm -r typecheck",
+    "dev": "pnpm --parallel --filter @fdn/server --filter @fdn/client dev",
     "server": "pnpm --filter @fdn/server dev",
-    "assets:flare": "pnpm --filter @fdn/tools flare:fetch && pnpm --filter @fdn/tools placeholders"
+    "client": "pnpm --filter @fdn/client dev",
+    "build": "pnpm --filter @fdn/client build",
+    "assets:flare": "pnpm --filter @fdn/tools flare:fetch && pnpm --filter @fdn/tools atlas",
+    "proto": "pnpm --filter @fdn/proto generate",
+    "typecheck": "pnpm -r typecheck"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

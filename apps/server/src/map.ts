@@ -50,6 +50,13 @@ export class Occupancy {
     }
 }
 
+/** Registro de ocupación a partir de un mapa generado por código (paquete @fdn/world). */
+export function occupancyFromGrid(blocked: boolean[][], teleportCells: WorldLocationConfig[] = []): Occupancy {
+    const cells: [number, number][] = [];
+    blocked.forEach((row, y) => row.forEach((b, x) => { if (b) cells.push([x, y]); }));
+    return new Occupancy(blocked[0].length, blocked.length, cells, teleportCells.map((l) => [l.x, l.y] as [number, number]));
+}
+
 /** Lee el .amd y devuelve el registro de ocupación con las celdas bloqueadas marcadas. */
 export function loadOccupancy(mapName: string, teleportCells: WorldLocationConfig[] = []): Occupancy {
     const path = join(DATA_DIR, 'maps', `${mapName}.amd`);

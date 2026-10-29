@@ -1,0 +1,4 @@
+Arte de estos atlas: Flare (https://github.com/flareteam/flare-game), de Clint Bellanger y colaboradores.
+Licencia: CC-BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/). Los atlas son una adaptación
+(recortados, combinados y escalados a la mitad con tools/src/flare/atlas.ts) y quedan bajo la misma licencia.
+El resto del repo es MIT.
