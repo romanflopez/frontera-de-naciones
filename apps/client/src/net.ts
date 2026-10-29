@@ -26,7 +26,7 @@ export class Net {
 
     get open(): boolean { return this.ws?.readyState === WebSocket.OPEN; }
 
-    connect(url: string, id: string, characterName: string): Promise<void> {
+    connect(url: string, id: string, characterName: string, password = ''): Promise<void> {
         return new Promise((resolve, reject) => {
             const ws = new WebSocket(url);
             ws.binaryType = 'arraybuffer';
@@ -34,7 +34,7 @@ export class Net {
             ws.onopen = () => {
                 opened = true;
                 this.ws = ws;
-                this.send({ $case: 'authenticateRequest', value: { id, characterName } });
+                this.send({ $case: 'authenticateRequest', value: { id, characterName, password } });
                 resolve();
             };
             ws.onmessage = (ev) => {

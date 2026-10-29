@@ -95,6 +95,7 @@ message ClientMessage {
     KillAllNpcsRequest kill_all_npcs_request = 41;
     ChangePlayerProfileRequest change_player_profile_request = 42;
     PvpHitRequest pvp_hit_request = 43;
+    SaveCharacterRequest save_character_request = 80;
   }
 }
 
@@ -263,6 +264,8 @@ message LogoutCancelledRequest {
 message AuthenticateRequest {
   string id = 1;
   string character_name = 2;
+  /** Cuenta: si el nombre no existe se crea con esta contraseña; si existe tiene que coincidir. */
+  string password = 3;
 }
 
 message LogoutRequest {
@@ -446,6 +449,7 @@ message ServerMessage {
     LogoutCancelled logout_cancelled = 63;
     PlayerProfileChanged player_profile_changed = 64;
     PvpHit pvp_hit = 65;
+    CharacterLoaded character_loaded = 80;
   }
 }
 
@@ -499,6 +503,15 @@ message PvpHit {
   int32 dmg = 6;
   double secs = 7;
   double r = 8;
+}
+/** Progreso del personaje (JSON validado por el server) para guardarlo en la cuenta. */
+message SaveCharacterRequest {
+  string data = 1;
+}
+/** Lo guardado en la cuenta, antes de entrar al mundo. exists=false si es una cuenta nueva. */
+message CharacterLoaded {
+  bool exists = 1;
+  string data = 2;
 }
 message ChangePlayerProfileRequest {
   string profile = 1;

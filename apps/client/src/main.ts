@@ -8,6 +8,7 @@
 import { buildSolmar } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import { spellIcon } from './icons.ts';
+import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
 import { itemIcon } from './itemicons.ts';
 const ico = (it: { look?: string; slot: string; rar: { c: string; k: number } }) => `<img class="iico" alt="" src="${itemIcon(it.look, it.slot, it.rar.c, it.rar.k)}">`;
 
@@ -1296,6 +1297,31 @@ $('classes').innerHTML = CLASSES.filter((c) => !c.hidden).map((c) => `<button ty
 function markClass() { $('classes').querySelectorAll<HTMLElement>('.cls').forEach((b) => b.classList.toggle('on', b.dataset.id === selectedClass)); }
 $('classes').addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest<HTMLElement>('.cls'); if (!b) return; selectedClass = b.dataset.id!; try { localStorage.setItem('fdn:class', selectedClass); } catch { /* sin almacenamiento */ } markClass(); });
 markClass();
+// ---------- guardado en la cuenta (ver persist.ts) ----------
+let pendingSave: CharSave | null = null, welcomeBack = false;
+const saveItem = (it: Item): SavedItem => ({ n: it.name, r: it.rar.k, a: it.attrs.map((a) => ({ id: a.id, v: a.v })) });
+function loadItem(v: SavedItem | null | undefined): Item | null {
+    const b = v && BASES.find((x) => x.name === v.n); if (!v || !b) return null;
+    return { id: uid++, ...b, rar: RAR[Math.min(3, Math.max(0, v.r))], attrs: v.a.filter((a) => ATTRS.some((t) => t.id === a.id)).map((a) => ({ id: a.id as AttrId, v: a.v })) };
+}
+function buildSave(): CharSave {
+    return {
+        v: 1, faction: selectedFaction, cls: CLS.id, lvl: P.lvl, exp: Math.floor(P.exp), gold: P.gold, hp: Math.max(1, Math.round(P.hp)), mp: Math.round(P.mp),
+        bag: P.bag.map(saveItem), eq: Object.fromEntries((['arma', 'armadura', 'cabeza', 'anillo'] as const).map((sl) => [sl, P.eq[sl] ? saveItem(P.eq[sl]!) : null])),
+        q: { i: Q.i, st: Q.st, prog: Q.prog, keys: { ...Q.keys }, shards: { ...Q.shards } }, pots: { hp: pots.hp, mp: pots.mp },
+    };
+}
+function applySave(sv: CharSave) {
+    P.lvl = sv.lvl; P.exp = sv.exp; P.gold = sv.gold;
+    P.bag = sv.bag.map(loadItem).filter((x): x is Item => !!x).slice(0, 18);
+    for (const sl of ['arma', 'armadura', 'cabeza', 'anillo'] as const) { const it = loadItem(sv.eq?.[sl]); if (it && it.slot === sl) P.eq[sl] = it; }
+    Q.i = sv.q.i; Q.st = sv.q.st; Q.prog = sv.q.prog;
+    for (const k of KEY_IDS) { Q.keys[k] = sv.q.keys?.[k] ?? 0; Q.shards[k] = sv.q.shards?.[k] ?? 0; }
+    pots.hp = sv.pots.hp; pots.mp = sv.pots.mp;
+    refreshLook(); P.hp = Math.min(maxHp(), sv.hp); P.mp = Math.min(maxMp(), sv.mp);
+    renderBag(); renderQuest(); renderPots();
+}
+const saver = new Saver(buildSave, (data) => net.send({ $case: 'saveCharacterRequest', value: { data } }));
 function showLogin(error = '') {
     connected = false;
     $('login').hidden = false; $('loginErr').textContent = error;
@@ -1305,20 +1331,23 @@ function showLogin(error = '') {
 }
 $('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const name = ($('nameIn') as HTMLInputElement).value.trim();
+    const name = ($('nameIn') as HTMLInputElement).value.trim(), password = ($('passIn') as HTMLInputElement).value;
     if (!name) return;
     const btn = $('loginForm').querySelector('button')!;
     btn.disabled = true; $('loginErr').textContent = 'Conectando…';
     try { localStorage.setItem('fdn:lastName', name); } catch { /* sin almacenamiento */ }
-    net.onMessage = (m) => { onServer(m); if (m.$case === 'initialGameWorldState' && !connected) enterWorld(name); };
-    net.onClose = (reason) => { const was = connected; others.clear(); showLogin(was ? `Se cortó la conexión: ${reason}` : reason); btn.disabled = false; };
-    try { await net.connect(serverUrl(), storedId(name), name); }
+    pendingSave = null; welcomeBack = false;
+    net.onMessage = (m) => { if (m.$case === 'characterLoaded') { pendingSave = m.value.exists ? parseSave(m.value.data) : null; if (pendingSave) { selectedClass = pendingSave.cls; selectedFaction = pendingSave.faction; welcomeBack = true; } return; } onServer(m); if (m.$case === 'initialGameWorldState' && !connected) enterWorld(name); };
+    net.onClose = (reason) => { const was = connected; saver.stop(); others.clear(); showLogin(was ? `Se cortó la conexión: ${reason}` : reason); btn.disabled = false; };
+    try { await net.connect(serverUrl(), storedId(name), name, password); }
     catch (err) { $('loginErr').textContent = `${(err as Error).message} ¿Está corriendo el server (pnpm dev)?`; btn.disabled = false; }
 });
 function enterWorld(name: string) {
-    setClass(selectedClass); connected = true; P.name = name; lookKey = ''; refreshLook(); sendProfile(); $('meName').textContent = name;
+    setClass(selectedClass); if (pendingSave) applySave(pendingSave); connected = true; P.name = name; lookKey = ''; refreshLook(); sendProfile(); $('meName').textContent = name;
     $('login').hidden = true; ($('loginForm').querySelector('button') as HTMLButtonElement).disabled = false;
     cv.focus({ preventScroll: true });
+    saver.start();
+    if (welcomeBack) log(`Bienvenido de vuelta, ${name}. Nivel ${P.lvl}.`, true);
     log('Bienvenido al campamento de Solmar. Goblins al sureste, zombis en el pantano del este, esqueletos en el cementerio.', true);
     log('Tocá un mob para atacarlo. Apretá un hechizo (1–4), esperá que cargue y hacé clic en el objetivo. Enter para chatear.');
 }

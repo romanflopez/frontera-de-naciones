@@ -164,3 +164,5 @@ export const playerProfileChanged = (p: Player): ServerMessage =>
 
 export const pvpHit = (casterId: bigint, v: { fx: string; x: number; y: number; targetId: bigint; dmg: number; secs: number; r: number }): ServerMessage =>
     msg({ $case: 'pvpHit', value: { casterId, ...v } });
+
+export const characterLoaded = (exists: boolean, data: string): ServerMessage => msg({ $case: 'characterLoaded', value: { exists, data } });

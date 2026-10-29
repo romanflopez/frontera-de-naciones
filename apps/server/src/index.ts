@@ -16,8 +16,10 @@ import { loadOccupancy, occupancyFromGrid } from './map.ts';
 import * as M from './messages.ts';
 import type { PersistedPlayer } from './player.ts';
 import { GameWorld } from './world.ts';
+import { authenticate, sanitizeCharacter } from './accounts.ts';
+import { FileStorage } from './storage.ts';
 
-const MAX_INCOMING_BYTES = 4096;
+const MAX_INCOMING_BYTES = 24576;
 
 const settings = loadSettings();
 const catalogs = loadCatalogs();
@@ -37,7 +39,9 @@ const worldsListMessage = M.worldsList(worldConfigs);
 const monstersListMessage = M.monstersList(catalogs);
 
 // ---------- guardado de personajes (un JSON por id, igual que el original: solo para desarrollo) ----------
-const charsDir = join(DATA_DIR, 'chars');
+/** Dónde se guardan cuentas y personajes: DATA_DIR (env) o, por defecto, la carpeta data del server. */
+const SAVE_DIR = process.env.DATA_DIR || DATA_DIR;
+const charsDir = join(SAVE_DIR, 'chars');
 mkdirSync(charsDir, { recursive: true });
 const charFile = (networkId: string) => join(charsDir, `${networkId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json`);
 function loadChar(networkId: string): PersistedPlayer | undefined {
@@ -46,7 +50,25 @@ function loadChar(networkId: string): PersistedPlayer | undefined {
     try { return JSON.parse(readFileSync(f, 'utf8')) as PersistedPlayer; } catch { return undefined; }
 }
 function saveChar(networkId: string, state: PersistedPlayer | undefined): void {
-    if (state) writeFileSync(charFile(networkId), JSON.stringify(state, null, 2));
+    const s = restPosition(state);
+    if (s) writeFileSync(charFile(networkId), JSON.stringify(s, null, 2));
+}
+
+// ---------- cuentas y progreso (ver docs/PERSISTENCIA.md) ----------
+const storage = new FileStorage(SAVE_DIR);
+const clientIp = (req: { headers: Record<string, string | string[] | undefined>; socket: { remoteAddress?: string } }) => {
+    const xf = req.headers['x-forwarded-for'];
+    const first = (Array.isArray(xf) ? xf[0] : xf)?.split(',')[0]?.trim();
+    return first || req.socket.remoteAddress || 'desconocida';
+};
+/** Las zonas temporales (arena, mazmorras) no se guardan como posición: se vuelve al campamento. */
+const home = MAPS[settings.initialMap] ? MAPS[settings.initialMap]() : null;
+const inRect = (r: { x0: number; y0: number; x1: number; y1: number }, x: number, y: number) => x >= r.x0 && x <= r.x1 + 1 && y >= r.y0 && y <= r.y1 + 1;
+function restPosition(state: PersistedPlayer | undefined): PersistedPlayer | undefined {
+    if (!state || !home) return state;
+    const arena = { x0: 46, y0: 26, x1: 60, y1: 38 };
+    const temp = [arena, ...(home.dungeon ? [home.dungeon] : []), ...(home.dungeons ?? [])].some((r) => inRect(r, state.x, state.y));
+    return temp ? { ...state, x: home.spawn.x, y: home.spawn.y } : state;
 }
 
 // ---------- sesiones ----------
@@ -94,6 +116,8 @@ wss.on('connection', (ws, req) => {
     console.log(`[Server] WebSocket abierto desde ${remote}`);
     let session: Session | null = null;
     let closing = false;
+    let lastSaveAt = 0;
+    let accountKeyOfSession = '';
 
     const send = (m: ServerMessage) => { if (ws.readyState === ws.OPEN) ws.send(encode(m)); };
     const disconnect = (reason: string) => {
@@ -120,10 +144,13 @@ wss.on('connection', (ws, req) => {
         if (!session) {
             if (payload?.$case !== 'authenticateRequest') { disconnect('Autenticate antes de mandar otros mensajes.'); return; }
             clearTimeout(authTimeout);
-            const networkId = payload.value.id.trim();
-            const characterName = payload.value.characterName.trim();
-            if (!networkId) { disconnect('Falta el id de autenticación.'); return; }
-            if (!characterName) { disconnect('Falta el nombre del personaje.'); return; }
+            if (!payload.value.characterName.trim()) { disconnect('Falta el nombre del personaje.'); return; }
+            const auth = authenticate(storage, payload.value.characterName, payload.value.password ?? '', clientIp(req));
+            if (!auth.ok) { disconnect(auth.error); return; }
+            // la identidad la define la cuenta, no lo que mande el cliente
+            const networkId = `acc:${auth.key}`, characterName = auth.account.name;
+            accountKeyOfSession = auth.key;
+            send(M.characterLoaded(!!auth.account.character, auth.account.character ?? ''));
 
             const existing = sessionsByNetworkId.get(networkId);
             if (existing) {
@@ -163,6 +190,13 @@ wss.on('connection', (ws, req) => {
             case 'chatMessageSendRequest':
                 handleChat(session, payload.value.message, send);
                 return;
+            case 'saveCharacterRequest': {
+                const t = Date.now(); if (t - lastSaveAt < 800) return; lastSaveAt = t;
+                const clean = sanitizeCharacter(payload.value.data);
+                const acc = storage.get(accountKeyOfSession);
+                if (clean && acc) { acc.character = clean; storage.put(accountKeyOfSession, acc); }
+                return;
+            }
             default:
                 worlds.get(session.worldId)?.handleClientPacket(session.sessionId, message);
         }
@@ -200,6 +234,7 @@ function shutdown(): void {
     console.log('[Server] Cerrando: guardando personajes…');
     for (const s of sessionsByNetworkId.values()) saveChar(s.networkId, worlds.get(s.worldId)?.snapshot(s.sessionId));
     for (const w of worlds.values()) w.dispose();
+    storage.flush();
     process.exit(0);
 }
 process.on('SIGINT', shutdown);

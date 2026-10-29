@@ -111,6 +111,7 @@ export interface ClientMessage {
     | { $case: "killAllNpcsRequest"; value: KillAllNpcsRequest }
     | { $case: "changePlayerProfileRequest"; value: ChangePlayerProfileRequest }
     | { $case: "pvpHitRequest"; value: PvpHitRequest }
+    | { $case: "saveCharacterRequest"; value: SaveCharacterRequest }
     | undefined;
 }
 
@@ -285,6 +286,8 @@ export interface LogoutCancelledRequest {
 export interface AuthenticateRequest {
   id: string;
   characterName: string;
+  /** Cuenta: si el nombre no existe se crea con esta contraseña; si existe tiene que coincidir. */
+  password: string;
 }
 
 export interface LogoutRequest {
@@ -471,6 +474,7 @@ export interface ServerMessage {
     | { $case: "logoutCancelled"; value: LogoutCancelled }
     | { $case: "playerProfileChanged"; value: PlayerProfileChanged }
     | { $case: "pvpHit"; value: PvpHit }
+    | { $case: "characterLoaded"; value: CharacterLoaded }
     | undefined;
 }
 
@@ -524,6 +528,17 @@ export interface PvpHit {
   dmg: number;
   secs: number;
   r: number;
+}
+
+/** Progreso del personaje (JSON validado por el server) para guardarlo en la cuenta. */
+export interface SaveCharacterRequest {
+  data: string;
+}
+
+/** Lo guardado en la cuenta, antes de entrar al mundo. exists=false si es una cuenta nueva. */
+export interface CharacterLoaded {
+  exists: boolean;
+  data: string;
 }
 
 export interface ChangePlayerProfileRequest {
@@ -1244,6 +1259,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "pvpHitRequest":
         PvpHitRequest.encode(message.payload.value, writer.uint32(346).fork()).join();
         break;
+      case "saveCharacterRequest":
+        SaveCharacterRequest.encode(message.payload.value, writer.uint32(642).fork()).join();
+        break;
     }
     return writer;
   },
@@ -1710,6 +1728,17 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "pvpHitRequest", value: PvpHitRequest.decode(reader, reader.uint32()) };
             continue;
           }
+          case 80: {
+            if (tag !== 642) {
+              break;
+            }
+
+            message.payload = {
+              $case: "saveCharacterRequest",
+              value: SaveCharacterRequest.decode(reader, reader.uint32()),
+            };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -2088,6 +2117,15 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "pvpHitRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "pvpHitRequest", value: PvpHitRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "saveCharacterRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "saveCharacterRequest",
+            value: SaveCharacterRequest.fromPartial(object.payload.value),
+          };
         }
         break;
       }
@@ -4116,7 +4154,7 @@ export const LogoutCancelledRequest: MessageFns<LogoutCancelledRequest> = {
 };
 
 function createBaseAuthenticateRequest(): AuthenticateRequest {
-  return { id: "", characterName: "" };
+  return { id: "", characterName: "", password: "" };
 }
 
 export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
@@ -4126,6 +4164,9 @@ export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
     }
     if (message.characterName !== "") {
       writer.uint32(18).string(message.characterName);
+    }
+    if (message.password !== "") {
+      writer.uint32(26).string(message.password);
     }
     return writer;
   },
@@ -4159,6 +4200,14 @@ export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
             message.characterName = reader.string();
             continue;
           }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.password = reader.string();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -4178,6 +4227,7 @@ export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
     const message = createBaseAuthenticateRequest();
     message.id = object.id ?? "";
     message.characterName = object.characterName ?? "";
+    message.password = object.password ?? "";
     return message;
   },
 };
@@ -5954,6 +6004,9 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "pvpHit":
         PvpHit.encode(message.payload.value, writer.uint32(522).fork()).join();
         break;
+      case "characterLoaded":
+        CharacterLoaded.encode(message.payload.value, writer.uint32(642).fork()).join();
+        break;
     }
     return writer;
   },
@@ -6559,6 +6612,14 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "pvpHit", value: PvpHit.decode(reader, reader.uint32()) };
             continue;
           }
+          case 80: {
+            if (tag !== 642) {
+              break;
+            }
+
+            message.payload = { $case: "characterLoaded", value: CharacterLoaded.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -7036,6 +7097,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "pvpHit": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "pvpHit", value: PvpHit.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "characterLoaded": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "characterLoaded", value: CharacterLoaded.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -7699,6 +7766,128 @@ export const PvpHit: MessageFns<PvpHit> = {
     message.dmg = object.dmg ?? 0;
     message.secs = object.secs ?? 0;
     message.r = object.r ?? 0;
+    return message;
+  },
+};
+
+function createBaseSaveCharacterRequest(): SaveCharacterRequest {
+  return { data: "" };
+}
+
+export const SaveCharacterRequest: MessageFns<SaveCharacterRequest> = {
+  encode(message: SaveCharacterRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.data !== "") {
+      writer.uint32(10).string(message.data);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SaveCharacterRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseSaveCharacterRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.data = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<SaveCharacterRequest>, I>>(base?: I): SaveCharacterRequest {
+    return SaveCharacterRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SaveCharacterRequest>, I>>(object: I): SaveCharacterRequest {
+    const message = createBaseSaveCharacterRequest();
+    message.data = object.data ?? "";
+    return message;
+  },
+};
+
+function createBaseCharacterLoaded(): CharacterLoaded {
+  return { exists: false, data: "" };
+}
+
+export const CharacterLoaded: MessageFns<CharacterLoaded> = {
+  encode(message: CharacterLoaded, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.exists !== false) {
+      writer.uint32(8).bool(message.exists);
+    }
+    if (message.data !== "") {
+      writer.uint32(18).string(message.data);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CharacterLoaded {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseCharacterLoaded();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.exists = reader.bool();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.data = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<CharacterLoaded>, I>>(base?: I): CharacterLoaded {
+    return CharacterLoaded.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CharacterLoaded>, I>>(object: I): CharacterLoaded {
+    const message = createBaseCharacterLoaded();
+    message.exists = object.exists ?? false;
+    message.data = object.data ?? "";
     return message;
   },
 };
