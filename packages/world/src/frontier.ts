@@ -191,8 +191,6 @@ export function extendSolmar(w: WorldMap): WorldMap {
     for (const [x, y] of [[52, 29], [56, 29], [52, 35], [56, 35], [54, 32], [59, 32]]) prop(kenney('stoneColumn', 'S'), x, y, true);
     prop(kenney('stairsSpiral', 'S'), arenaBack.x, arenaBack.y, false);
     prop(kenney('stairsSpiral', 'S'), arenaIn.x, arenaIn.y, false);
-    w.zones.push({ type: 'goblin', x: 55, y: 31, r: 4, n: 4, name: 'Arena de arena' } as Zone);
-    w.zones.push({ type: 'skeleton', x: 56, y: 35, r: 3, n: 2, name: 'Arena de arena' } as Zone);
 
     w.portals = [
         { x: portalIn.x, y: portalIn.y, tx: arriveInCrypt.x, ty: arriveInCrypt.y, msg: 'Bajás por la escalera de caracol a la Cripta olvidada.' },
