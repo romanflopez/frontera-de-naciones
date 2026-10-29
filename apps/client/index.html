@@ -47,8 +47,9 @@ button:hover{border-color:var(--brass)} button:focus-visible{outline:2px solid v
 .slot[hidden]{display:none}
 .slot{position:relative;width:62px;height:62px;display:grid;place-items:center;padding:4px;overflow:hidden}
 .slot b{font-family:var(--f-display);font-size:12px;line-height:1.05;text-align:center}
-.slot kbd{position:absolute;top:3px;left:5px;font-size:10px;color:var(--muted);font-family:var(--f-body)}
-.slot em{position:absolute;bottom:2px;right:5px;font-style:normal;font-size:10px;color:#8fb6f0;font-variant-numeric:tabular-nums}
+.slot .ico{position:absolute;inset:2px;width:calc(100% - 4px);height:calc(100% - 4px);border-radius:8px;image-rendering:auto}
+.slot kbd{z-index:2;text-shadow:0 1px 2px #000;color:#fff !important;position:absolute;top:3px;left:5px;font-size:10px;color:var(--muted);font-family:var(--f-body)}
+.slot em{z-index:2;text-shadow:0 1px 2px #000;position:absolute;bottom:2px;right:5px;font-style:normal;font-size:10px;color:#8fb6f0;font-variant-numeric:tabular-nums}
 .slot .cd{position:absolute;inset:auto 0 0 0;background:rgba(0,0,0,.6);pointer-events:none}
 .slot.nomp b{color:var(--muted)}
 #log{bottom:calc(92px + env(safe-area-inset-bottom,0px));left:max(12px,env(safe-area-inset-left,0px));width:min(360px,70vw);font-size:12.5px;line-height:1.35;color:var(--muted);text-shadow:0 1px 2px #000;pointer-events:none}

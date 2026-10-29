@@ -7,6 +7,7 @@
  */
 import { buildSolmar } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
+import { spellIcon } from './icons.ts';
 
 // ---------- utilidades ----------
 const TW = 96, TH = 48;
@@ -1046,7 +1047,7 @@ function setClass(id: string) {
     P.eq.arma = mk(CLS.weapon); P.eq.armadura = CLS.armor ? mk(CLS.armor) : null; P.eq.cabeza = null; P.bag = [];
     refreshLook();
     P.lvl = 1; P.exp = 0; P.hp = maxHp(); P.mp = maxMp();
-    $('bar').innerHTML = SPELLS.map((s, i) => `<button class="slot box" id="sp${i}" type="button" title="${s.name} (${s.mp} maná)"><kbd>${s.key}</kbd><b>${s.name.replace(/ (?=\S+$)/, '<br>')}</b><em>${s.mp}</em><div class="cd" id="cd${i}"></div></button>`).join('');
+    $('bar').innerHTML = SPELLS.map((s, i) => `<button class="slot box" id="sp${i}" type="button" title="${s.name} (${s.mp} maná)"><kbd>${s.key}</kbd><img class="ico" alt="${s.name}" src="${spellIcon(s.id ?? '', s.col)}"><em>${s.mp}</em><div class="cd" id="cd${i}"></div></button>`).join('');
     SPELLS.forEach((_, i) => $('sp' + i).addEventListener('click', () => { cast(i); cv.focus({ preventScroll: true }); }));
     $('helpKeys').textContent = `Click o mantener: caminar · Click en mob: atacar · teclas 1–0 usar habilidad (las de objetivo: esperá que cargue y click en el blanco) · Click derecho: cancelar · ${SPELLS.map((x) => x.key + ' ' + x.name).join(' · ')} · I Bolsa · Enter chat`;
 }
