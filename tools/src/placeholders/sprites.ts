@@ -11,7 +11,7 @@ import {
 type Draw = (ctx: SKRSContext2D, ox: number, oy: number, index: number) => void;
 
 /** Una hoja con `count` celdas en una grilla de `cols` columnas. */
-function sheet(count: number, cols: number, cw: number, ch: number, pivotX: number, pivotY: number, draw: Draw): SprSheet {
+export function sheet(count: number, cols: number, cw: number, ch: number, pivotX: number, pivotY: number, draw: Draw): SprSheet {
     const rows = Math.ceil(count / cols);
     const canvas = createCanvas(cw * Math.min(cols, count), ch * rows);
     const ctx = canvas.getContext('2d');

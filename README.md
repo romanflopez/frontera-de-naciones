@@ -18,6 +18,15 @@ Para probar con dos personajes, abrí el cliente en dos ventanas (una normal y u
 
 Lo que anda hoy: entrar al mundo Campamento, caminar y correr con el control del server (anti-speedhack incluido), ver a otros jugadores, chat global, reconexión dentro de 20 segundos y guardado del personaje al salir.
 
+### Con el arte de Flare (recomendado)
+
+```bash
+pnpm assets:flare
+```
+
+Baja una vez el arte de [Flare](https://github.com/flareteam/flare-game) (unos 150 MB, necesita `git`) a `reference/flare-game/` y lo convierte al formato del motor: personajes, equipo, mobs, NPCs, pasto, árboles y objetos.
+Sin esto el juego anda igual, pero con figuras provisorias dibujadas por código.
+
 Otros comandos:
 
 | Comando | Qué hace |
@@ -55,6 +64,11 @@ Los formatos `.spr` y `.amd` son solo contenedores: lo que va adentro es nuestro
 
 Los assets provisorios se generan en `apps/client/public/assets/` con `tools/src/placeholders/` y no se suben al repo.
 Cuando haya arte definitivo, va a tener su propia carpeta versionada.
+
+## Créditos del arte provisorio
+
+El arte que genera `pnpm assets:flare` sale de Flare (Clint Bellanger y colaboradores, ver `reference/flare-game/CREDITS.txt`) bajo [CC-BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
+Lo convertido también queda bajo CC-BY-SA 3.0. No está en este repo: se genera en cada máquina.
 
 ## Licencia
 

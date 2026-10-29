@@ -8,7 +8,8 @@
     "assets": "pnpm --filter @fdn/tools placeholders",
     "proto": "pnpm --filter @fdn/proto generate",
     "typecheck": "pnpm -r typecheck",
-    "server": "pnpm --filter @fdn/server dev"
+    "server": "pnpm --filter @fdn/server dev",
+    "assets:flare": "pnpm --filter @fdn/tools flare:fetch && pnpm --filter @fdn/tools placeholders"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

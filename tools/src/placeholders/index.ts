@@ -11,6 +11,7 @@ import { buildArmorLayer, buildBody, buildDirectionalLayer, buildEffect, buildIn
 import { backgroundJpeg, silence, soundEffect } from './media.ts';
 import { decodeSprHeader } from './spr.ts';
 import { ASSETS_VERSION } from './version.ts';
+import { applyFlare, flareModDir, type GearUse } from '../flare/index.ts';
 import { buildCampMap, buildTilePacks } from './map.ts';
 import type { FigureStyle, GearLayer } from './figure.ts';
 
@@ -42,19 +43,21 @@ const monsters = uniq([...read('constants/Monsters.ts').matchAll(/spriteName: '(
 const npcs = uniq([...read('constants/NPCs.ts').matchAll(/^\s+'([\w-]+)',$/gm)].map((m) => m[1]));
 const effects = uniq([...all.matchAll(/sprite: '((?:\w*effect)\w*)'/g), ...all.matchAll(/'((?:cru|ys)?effect\d*)'/g)].map((m) => m[1]));
 // equipo: cada entrada de ITEMS dice su tipo, sus sprites puestos y desde qué hoja arranca
-interface GearUse { type: string; maxStart: number }
 const gear = new Map<string, GearUse>();
 const itemsTs = read('constants/Items.ts');
 for (const block of itemsTs.slice(itemsTs.indexOf('export const ITEMS')).split(/\bid: \d+,/).slice(1)) {
     const type = /itemType: ItemTypes\.(\w+)/.exec(block)?.[1]?.toLowerCase();
     if (!type) continue;
     const start = Number(/startSpriteSheetIndex: (\d+)/.exec(block)?.[1] ?? 0);
+    const itemName = /name: '([^']+)'/.exec(block)?.[1] ?? '';
     for (const m of block.matchAll(/equippedSprite(?:Male|Female): '([\w-]+)'/g)) {
-        const g = gear.get(m[1]);
-        gear.set(m[1], { type, maxStart: Math.max(start, g?.maxStart ?? 0) });
+        const g = gear.get(m[1]) ?? { type, maxStart: 0, blocks: new Map<number, string>() };
+        g.maxStart = Math.max(start, g.maxStart);
+        if (!g.blocks.has(start)) g.blocks.set(start, itemName);
+        gear.set(m[1], g);
     }
 }
-for (const m of itemsTs.matchAll(/(?:maleSprite|femaleSprite): '([\w-]+)'/g)) if (!gear.has(m[1])) gear.set(m[1], { type: 'weapon', maxStart: 0 });
+for (const m of itemsTs.matchAll(/(?:maleSprite|femaleSprite): '([\w-]+)'/g)) if (!gear.has(m[1])) gear.set(m[1], { type: 'weapon', maxStart: 0, blocks: new Map([[0, m[1].includes('axe') ? 'Axe' : '']]) });
 const placeholderMonster = /MONSTER_PLACEHOLDER_SPRITE = '([\w-]+)'/.exec(read('Config.ts'))?.[1] ?? 'ghk';
 
 // ---------- estilos ----------
@@ -117,7 +120,14 @@ writeFileSync(join(serverData, 'maps', 'campamento.amd'), campMap);
 const check = decodeSprHeader(readFileSync(join(out, 'sprites/wm.spr')));
 if (check.sheets.length !== 96 || check.sheets[64].frames.length !== 16) throw new Error('wm.spr no tiene la estructura esperada');
 
-writeFileSync(join(out, '.version'), String(ASSETS_VERSION));
+// arte de Flare encima de los provisorios, si está bajado (pnpm assets:flare)
+const flareMod = flareModDir(root);
+if (flareMod) {
+    const t1 = Date.now();
+    await applyFlare(flareMod, { write, gear, monsters: [...monsters, placeholderMonster], npcs, log: console.log });
+    console.log(`  Flare aplicado en ${((Date.now() - t1) / 1000).toFixed(1)} s`);
+}
+writeFileSync(join(out, '.version'), `${ASSETS_VERSION}${flareMod ? '+flare' : ''}`);
 console.log(`Assets provisorios: ${files} archivos, ${(bytes / 1048576).toFixed(1)} MB en ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 console.log(`  ${gear.size} sprites de equipo`);
 console.log(`  ${monsters.length + 1} mobs, ${npcs.length} NPCs, ${effects.length} efectos, ${sounds.length} sonidos, ${music.length} músicas`);

@@ -87,7 +87,7 @@ function rocks(): SprSheet {
         ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.beginPath(); ctx.ellipse(-4, -10, 7, 4, -0.4, 0, Math.PI * 2); ctx.fill();
     });
 }
-function fence(): SprSheet {
+export function fence(): SprSheet {
     return objectSheet(2, 40, 48, 20, 44, (ctx, ox, i) => {
         ctx.translate(ox + 20, 44);
         ctx.fillStyle = '#5a3b22'; ctx.fillRect(-3, -30, 6, 30);
