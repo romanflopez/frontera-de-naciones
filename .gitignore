@@ -8,3 +8,5 @@ dist/
 reference/**/Chars/
 # Assets provisorios: se generan con `pnpm assets`
 apps/client/public/assets/
+apps/server/data/maps/
+apps/server/data/chars/

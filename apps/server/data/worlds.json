@@ -1,0 +1,11 @@
+[
+  {
+    "id": "campamento",
+    "name": "Campamento",
+    "map": "campamento",
+    "music": "default.mp3",
+    "teleportLocs": [],
+    "dwellAreas": [],
+    "npcs": []
+  }
+]

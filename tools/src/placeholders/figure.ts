@@ -27,7 +27,8 @@ export const PLAYER_FRAMES: Record<PlayerStateName, number> = {
 
 const DIR_VEC: [number, number][] = [[0, -1], [0.7, -0.7], [1, 0], [0.7, 0.7], [0, 1], [-0.7, 0.7], [-1, 0], [-0.7, -0.7]];
 
-export type Layer = 'body' | 'hair' | 'underwear' | 'robe';
+export type GearLayer = 'armor' | 'hauberk' | 'leggings' | 'boots' | 'helmet' | 'cape' | 'weapon' | 'shield' | 'wings';
+export type Layer = 'body' | 'hair' | 'underwear' | 'robe' | GearLayer;
 
 export interface FigureStyle {
     skin: string;
@@ -36,6 +37,8 @@ export interface FigureStyle {
     hairStyle: number;
     underwear: string;
     robe: string;
+    /** Color de la pieza de equipo cuando la capa es de equipo. */
+    gear?: string;
 }
 
 interface Pose {
@@ -149,6 +152,48 @@ export function drawFigure(
         if (style.female) roundRect(ctx, -torsoW / 2, shoulderY + 1, torsoW, 6, 2);
     } else if (layer === 'hair') {
         drawHair(ctx, style, dx * 1.5, headY, dx, dy);
+    } else {
+        const c = style.gear ?? '#8a8f99';
+        ctx.fillStyle = c; ctx.strokeStyle = c;
+        switch (layer) {
+            case 'armor':
+                roundRect(ctx, -torsoW / 2 - 1.5, shoulderY - 3, torsoW + 3, hipY - shoulderY + 8, 4);
+                ctx.fillStyle = shade(c, 0.25); ctx.fillRect(-torsoW / 2, shoulderY + 4, torsoW, 2);
+                break;
+            case 'hauberk':
+                roundRect(ctx, -torsoW / 2 - 1, shoulderY - 2, torsoW + 2, hipY - shoulderY + 4, 3);
+                ctx.lineWidth = 4.5; line(ctx, -torsoW / 2 - 1, shoulderY + 2, handL[0] * 0.6 - torsoW * 0.2, (shoulderY + handL[1]) / 2); line(ctx, torsoW / 2 + 1, shoulderY + 2, handR[0] * 0.6 + torsoW * 0.2, (shoulderY + handR[1]) / 2);
+                break;
+            case 'leggings':
+                ctx.lineWidth = 6; line(ctx, -legOff, hipY, (legA[0] - legOff) / 2, (legA[1] + hipY) / 2 + 6); line(ctx, legOff, hipY, (legB[0] + legOff) / 2, (legB[1] + hipY) / 2 + 6);
+                break;
+            case 'boots':
+                roundRect(ctx, legA[0] - 3.5, legA[1] - 6, 7 + dx * 2, 7, 2); roundRect(ctx, legB[0] - 3.5, legB[1] - 6, 7 + dx * 2, 7, 2);
+                break;
+            case 'helmet':
+                ctx.beginPath(); ctx.arc(dx * 1.5, headY - 1, 8.5, Math.PI, 0); ctx.closePath(); ctx.fill();
+                ctx.fillRect(dx * 1.5 - 9, headY - 2, 18, 3);
+                break;
+            case 'cape':
+                if (dy < 0.1) { ctx.beginPath(); ctx.moveTo(-torsoW / 2 - 2, shoulderY); ctx.lineTo(torsoW / 2 + 2, shoulderY); ctx.lineTo(torsoW / 2 + 6, -6); ctx.lineTo(-torsoW / 2 - 6, -6); ctx.closePath(); ctx.fill(); }
+                else { ctx.fillRect(-torsoW / 2 - 2, shoulderY - 2, 3, 30); ctx.fillRect(torsoW / 2 - 1, shoulderY - 2, 3, 30); }
+                break;
+            case 'weapon': {
+                const ang = Math.atan2(handR[1] - shoulderY, handR[0] - torsoW / 2) ;
+                ctx.lineWidth = 3; ctx.strokeStyle = shade(c, 0.3);
+                line(ctx, handR[0], handR[1], handR[0] + Math.cos(ang - 1.2) * 20, handR[1] + Math.sin(ang - 1.2) * 20);
+                ctx.strokeStyle = '#5a3b22'; ctx.lineWidth = 3; line(ctx, handR[0] - 3, handR[1] + 2, handR[0] + 3, handR[1] - 2);
+                break;
+            }
+            case 'shield':
+                ctx.beginPath(); ctx.moveTo(handL[0], handL[1] - 9); ctx.lineTo(handL[0] + 7, handL[1] - 5); ctx.lineTo(handL[0] + 5, handL[1] + 6); ctx.lineTo(handL[0], handL[1] + 10); ctx.lineTo(handL[0] - 5, handL[1] + 6); ctx.lineTo(handL[0] - 7, handL[1] - 5); ctx.closePath(); ctx.fill();
+                ctx.fillStyle = shade(c, 0.35); circle(ctx, handL[0], handL[1], 2);
+                break;
+            case 'wings':
+                ctx.globalAlpha = 0.7;
+                for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(s * 3, shoulderY + 2); ctx.quadraticCurveTo(s * 22, shoulderY - 18, s * 20, shoulderY + 14); ctx.closePath(); ctx.fill(); }
+                break;
+        }
     }
     ctx.restore();
 }

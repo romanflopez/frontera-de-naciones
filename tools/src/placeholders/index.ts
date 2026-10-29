@@ -7,14 +7,17 @@
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildBody, buildDirectionalLayer, buildEffect, buildInterface, buildItemIcons, buildMonster, buildNpc } from './sprites.ts';
+import { buildArmorLayer, buildBody, buildDirectionalLayer, buildEffect, buildInterface, buildItemIcons, buildMonster, buildNpc, buildShield, buildWeapon, buildWings } from './sprites.ts';
 import { backgroundJpeg, silence, soundEffect } from './media.ts';
 import { decodeSprHeader } from './spr.ts';
-import type { FigureStyle } from './figure.ts';
+import { ASSETS_VERSION } from './version.ts';
+import { buildCampMap, buildTilePacks } from './map.ts';
+import type { FigureStyle, GearLayer } from './figure.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const clientSrc = join(root, 'apps', 'client', 'src');
 const out = join(root, 'apps', 'client', 'public', 'assets');
+const serverData = join(root, 'apps', 'server', 'data');
 
 // ---------- leer qué nombres usa el cliente ----------
 function walk(dir: string): string[] {
@@ -38,6 +41,20 @@ const sounds = uniq([
 const monsters = uniq([...read('constants/Monsters.ts').matchAll(/spriteName: '([\w-]+)'/g)].map((m) => m[1]));
 const npcs = uniq([...read('constants/NPCs.ts').matchAll(/^\s+'([\w-]+)',$/gm)].map((m) => m[1]));
 const effects = uniq([...all.matchAll(/sprite: '((?:\w*effect)\w*)'/g), ...all.matchAll(/'((?:cru|ys)?effect\d*)'/g)].map((m) => m[1]));
+// equipo: cada entrada de ITEMS dice su tipo, sus sprites puestos y desde qué hoja arranca
+interface GearUse { type: string; maxStart: number }
+const gear = new Map<string, GearUse>();
+const itemsTs = read('constants/Items.ts');
+for (const block of itemsTs.slice(itemsTs.indexOf('export const ITEMS')).split(/\bid: \d+,/).slice(1)) {
+    const type = /itemType: ItemTypes\.(\w+)/.exec(block)?.[1]?.toLowerCase();
+    if (!type) continue;
+    const start = Number(/startSpriteSheetIndex: (\d+)/.exec(block)?.[1] ?? 0);
+    for (const m of block.matchAll(/equippedSprite(?:Male|Female): '([\w-]+)'/g)) {
+        const g = gear.get(m[1]);
+        gear.set(m[1], { type, maxStart: Math.max(start, g?.maxStart ?? 0) });
+    }
+}
+for (const m of itemsTs.matchAll(/(?:maleSprite|femaleSprite): '([\w-]+)'/g)) if (!gear.has(m[1])) gear.set(m[1], { type: 'weapon', maxStart: 0 });
 const placeholderMonster = /MONSTER_PLACEHOLDER_SPRITE = '([\w-]+)'/.exec(read('Config.ts'))?.[1] ?? 'ghk';
 
 // ---------- estilos ----------
@@ -72,6 +89,15 @@ npcs.forEach((n, i) => write(`sprites/${n}.spr`, buildNpc(style(Object.values(SK
 const monsterColors = ['#6aa84f', '#a64d79', '#3d85c6', '#e69138', '#999999', '#cc0000', '#674ea7', '#45818e'];
 [...monsters, placeholderMonster].forEach((m, i) => write(`sprites/${m}.spr`, buildMonster(monsterColors[i % monsterColors.length], 0.9 + (i % 4) * 0.25)));
 effects.forEach((e, i) => write(`sprites/${e}.spr`, buildEffect(i)));
+const GEAR_COLORS = ['#8a8f99', '#6b4a2a', '#a8a070', '#4a6b8c', '#7a2f2f', '#3a5a3a', '#b08a3a', '#5a4a6b'];
+[...gear.keys()].sort().forEach((name, i) => {
+    const { type, maxStart } = gear.get(name)!;
+    const s: FigureStyle = { ...style(SKIN.w, name.startsWith('w'), i), gear: GEAR_COLORS[i % GEAR_COLORS.length] };
+    if (type === 'weapon') write(`sprites/${name}.spr`, buildWeapon(s, maxStart + 56));
+    else if (type === 'shield') write(`sprites/${name}.spr`, buildShield(s, maxStart + 7));
+    else if (type === 'accessory') write(`sprites/${name}.spr`, buildWings(s));
+    else write(`sprites/${name}.spr`, buildArmorLayer(type as GearLayer, s));
+});
 write('sprites/interface.spr', buildInterface());
 write('sprites/item-pack.spr', buildItemIcons(24, 192));
 write('sprites/item-ground.spr', buildItemIcons(24, 192));
@@ -80,10 +106,18 @@ for (const m of music) write(`music/${m}.mp3`, silence());
 write('images/LoadingBg.jpg', backgroundJpeg(1280, 800, 'Cargando el mundo…'));
 write('images/LoginScreenBg.jpg', backgroundJpeg(1280, 800, 'Prototipo con arte provisorio'));
 write('images/SiteBg.jpg', backgroundJpeg(1280, 800, ''));
+for (const [file, data] of Object.entries(buildTilePacks())) write(`sprites/${file}`, data);
+const campMap = buildCampMap();
+write('maps/campamento.amd', campMap);
+// el server lee el mismo mapa para saber qué celdas están bloqueadas
+mkdirSync(join(serverData, 'maps'), { recursive: true });
+writeFileSync(join(serverData, 'maps', 'campamento.amd'), campMap);
 
 // verificación rápida de un archivo
 const check = decodeSprHeader(readFileSync(join(out, 'sprites/wm.spr')));
 if (check.sheets.length !== 96 || check.sheets[64].frames.length !== 16) throw new Error('wm.spr no tiene la estructura esperada');
 
+writeFileSync(join(out, '.version'), String(ASSETS_VERSION));
 console.log(`Assets provisorios: ${files} archivos, ${(bytes / 1048576).toFixed(1)} MB en ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+console.log(`  ${gear.size} sprites de equipo`);
 console.log(`  ${monsters.length + 1} mobs, ${npcs.length} NPCs, ${effects.length} efectos, ${sounds.length} sonidos, ${music.length} músicas`);

@@ -5,7 +5,7 @@ import { createCanvas, type SKRSContext2D } from '@napi-rs/canvas';
 import { encodeSpr, type SprFrame, type SprSheet } from './spr.ts';
 import {
     CELL_H, CELL_W, FOOT_X, FOOT_Y, PLAYER_FRAMES, PLAYER_STATES,
-    circle, drawFigure, line, roundRect, shade, type FigureStyle, type Layer,
+    circle, drawFigure, line, roundRect, shade, type FigureStyle, type GearLayer, type Layer,
 } from './figure.ts';
 
 type Draw = (ctx: SKRSContext2D, ox: number, oy: number, index: number) => void;
@@ -112,9 +112,17 @@ export function buildEffect(seed: number, sheets = 32): Uint8Array {
     const out: SprSheet[] = [];
     for (let s = 0; s < sheets; s++) {
         const hue = (seed * 53 + s * 37) % 360;
-        out.push(sheet(8, 8, 64, 64, -32, -48, (ctx, x, y, f) => {
-            const t = (f + 1) / 8;
+        // 40 frames: algunos efectos usan rangos altos (las pisadas van del 28 al 32).
+        // Del 20 en adelante son polvo chico y tenue, para que pisadas y salpicaduras no tapen nada.
+        out.push(sheet(40, 8, 64, 64, -32, -48, (ctx, x, y, f) => {
+            const small = f >= 20;
+            const t = ((f % 8) + 1) / 8;
             ctx.translate(x + 32, y + 40);
+            if (small) {
+                ctx.fillStyle = `rgba(150,130,100,${0.45 - t * 0.4})`;
+                circle(ctx, 0, 4, 2 + t * 5);
+                return;
+            }
             const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 6 + t * 22);
             g.addColorStop(0, `hsla(${hue},90%,85%,${1 - t * 0.7})`);
             g.addColorStop(0.6, `hsla(${hue},90%,55%,${0.8 - t * 0.6})`);
@@ -169,4 +177,54 @@ const ICONS: Draw = (ctx, x, y, i) => {
 /** Íconos de items: hojas × frames, todos mapeados a 8 dibujos que se repiten. */
 export function buildItemIcons(sheets: number, framesPerSheet: number): Uint8Array {
     return encodeSpr(Array.from({ length: sheets }, () => repeatedSheet(framesPerSheet, 8, 32, 32, -16, -16, ICONS)));
+}
+
+// ---------- equipo ----------
+const ARMAMENT_STATES = ['idlePeace', 'idleCombat', 'walkPeace', 'walkCombat', 'melee', 'damage', 'run'] as const;
+
+/**
+ * Ropa y armadura (armor, hauberk, leggings, boots, helmet, cape): 12 hojas, una por estado,
+ * con las 8 direcciones adentro a 8 frames cada una (frame = dirección*8 + f).
+ */
+export function buildArmorLayer(layer: GearLayer, style: FigureStyle): Uint8Array {
+    const sheets: SprSheet[] = [];
+    for (const state of PLAYER_STATES) {
+        const n = PLAYER_FRAMES[state];
+        sheets.push(sheet(64, 8, CELL_W, CELL_H, PIVOT_X, PIVOT_Y, (ctx, x, y, i) =>
+            drawFigure(ctx, x, y, layer, style, state, Math.floor(i / 8), Math.floor(((i % 8) * n) / 8))));
+    }
+    return encodeSpr(sheets);
+}
+
+/** Armas: bloques de 7 estados × 8 direcciones (56 hojas); varias armas comparten un pack con un índice de arranque. */
+export function buildWeapon(style: FigureStyle, totalSheets: number): Uint8Array {
+    const sheets: SprSheet[] = [];
+    for (let s = 0; s < totalSheets; s++) {
+        const state = ARMAMENT_STATES[Math.floor((s % 56) / 8)], dir = s % 8, n = PLAYER_FRAMES[state];
+        sheets.push(sheet(n, n, CELL_W, CELL_H, PIVOT_X, PIVOT_Y, (ctx, x, y, f) => drawFigure(ctx, x, y, 'weapon', style, state, dir, f)));
+    }
+    return encodeSpr(sheets);
+}
+
+/** Escudos: bloques de 7 hojas (una por estado) con las 8 direcciones adentro a 8 frames. */
+export function buildShield(style: FigureStyle, totalSheets: number): Uint8Array {
+    const sheets: SprSheet[] = [];
+    for (let s = 0; s < totalSheets; s++) {
+        const state = ARMAMENT_STATES[s % 7], n = PLAYER_FRAMES[state];
+        sheets.push(sheet(64, 8, CELL_W, CELL_H, PIVOT_X, PIVOT_Y, (ctx, x, y, i) =>
+            drawFigure(ctx, x, y, 'shield', style, state, Math.floor(i / 8), Math.floor(((i % 8) * n) / 8))));
+    }
+    return encodeSpr(sheets);
+}
+
+/** Accesorio de alas: 6 estados × 8 direcciones = 48 hojas. */
+export function buildWings(style: FigureStyle): Uint8Array {
+    const states = ['melee', 'idleCombat', 'damage', 'die', 'cast', 'idlePeace'] as const;
+    const frames = [8, 8, 4, 8, 16, 4];
+    const sheets: SprSheet[] = [];
+    for (let a = 0; a < 6; a++) for (let dir = 0; dir < 8; dir++) {
+        const n = frames[a], state = states[a], sn = PLAYER_FRAMES[state];
+        sheets.push(sheet(n, n, CELL_W, CELL_H, PIVOT_X, PIVOT_Y, (ctx, x, y, f) => drawFigure(ctx, x, y, 'wings', style, state, dir, Math.floor((f * sn) / n))));
+    }
+    return encodeSpr(sheets);
 }

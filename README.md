@@ -13,13 +13,16 @@ pnpm install
 pnpm dev
 ```
 
-La primera vez, `pnpm dev` genera los assets provisorios (unos 25 segundos) y después abre el cliente en http://localhost:8080.
-Por ahora llega hasta la pantalla de conexión: el server en TypeScript es la fase 1.
+La primera vez, `pnpm dev` genera los assets provisorios (alrededor de un minuto). Después levanta el server en `ws://localhost:1337/ws` y el cliente en http://localhost:8080.
+Para probar con dos personajes, abrí el cliente en dos ventanas (una normal y una de incógnito) y conectá con nombres distintos.
+
+Lo que anda hoy: entrar al mundo Campamento, caminar y correr con el control del server (anti-speedhack incluido), ver a otros jugadores, chat global, reconexión dentro de 20 segundos y guardado del personaje al salir.
 
 Otros comandos:
 
 | Comando | Qué hace |
 | --- | --- |
+| `pnpm server` | Solo el server, con recarga al guardar cambios |
 | `pnpm assets` | Vuelve a generar los assets provisorios |
 | `pnpm proto` | Regenera el protocolo TypeScript desde `packages/proto/network.proto` |
 | `pnpm build` | Build de producción del cliente |
@@ -29,7 +32,7 @@ Otros comandos:
 
 ```
 apps/client         Cliente: Phaser 3 + React + TypeScript
-apps/server         Server en TypeScript (fase 1, todavía no existe)
+apps/server         Server autoritativo en TypeScript (Node + ws), mismo protocolo que el cliente
 packages/proto      Protocolo de red compartido (network.proto + código generado)
 tools               Generador de assets provisorios y simulador de clientes
 reference           Server original en C#, solo como guía para portarlo (se borra al terminar la fase 1)
@@ -40,7 +43,7 @@ reference           Server original en C#, solo como guía para portarlo (se bor
 | Fase | Qué | Estado |
 | --- | --- | --- |
 | 0 | Base limpia: monorepo, sin assets del HB, assets provisorios | Hecha |
-| 1 | Server en TypeScript con el mismo protocolo | Pendiente |
+| 1 | Server en TypeScript con el mismo protocolo | En curso: conexión, mapa, movimiento y visibilidad listos. Faltan mobs, combate, hechizos, ítems y teletransportes |
 | 2 | Pipeline de arte: PNG → `.spr`, Tiled → `.amd`, script de Blender | Pendiente |
 | 3 | Contenido del MVP | Pendiente |
 | 4 | Naciones, loot random, upgrade +N, cuentas | En paralelo |
