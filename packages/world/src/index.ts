@@ -8,6 +8,7 @@
  */
 
 import { extendSolmar } from './frontier';
+import { extendAshlands } from './ashlands';
 
 export const MAP_SIZE = 40;
 
@@ -35,9 +36,11 @@ export interface WorldMap {
     /** Celda de la fogata, para la luz. */
     fire: { x: number; y: number };
     /** Escaleras entre zonas del mismo mapa: al terminar de pisar (x, y) se pasa a (tx, ty). */
-    portals?: { x: number; y: number; tx: number; ty: number; msg: string }[];
+    portals?: { x: number; y: number; tx: number; ty: number; msg: string; /** id de la llave que pide para pasar (la escalera está sellada sin ella) */ key?: string }[];
     /** Rectángulo de la cripta (el cliente la oscurece). */
     dungeon?: { x0: number; y0: number; x1: number; y1: number };
+    /** Otras mazmorras (Cámara del foso): el cliente las oscurece igual. */
+    dungeons?: { x0: number; y0: number; x1: number; y1: number }[];
 }
 
 const GRASS = [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31];
@@ -117,7 +120,7 @@ export function buildSolmar(): WorldMap {
     for (const b of buildings) for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) blocked[y][x] = true;
     const npcs: Npc[] = [{ id: 'mercader', name: 'Mercader', x: 9, y: 7, dir: 6 }, { id: 'capitan', name: 'Capitán Aldric', x: 6, y: 10, dir: 2 }];
     for (const n of npcs) blocked[n.y][n.x] = true;
-    return extendSolmar({ size: N, tiles, blocked, safe, props, decals, zones, buildings, npcs, spawn: { x: 6, y: 7 }, fire: { x: 8, y: 8 } });
+    return extendAshlands(extendSolmar({ size: N, tiles, blocked, safe, props, decals, zones, buildings, npcs, spawn: { x: 6, y: 7 }, fire: { x: 8, y: 8 } }));
 }
 
 /** Mapas por nombre (el que figura en worlds.json del server). */

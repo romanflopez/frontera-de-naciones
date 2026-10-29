@@ -362,7 +362,7 @@ function killMob(m: Mob) {
     later(m.boss?.respawn ?? (m.sprite === 'minotaur' ? 120 : 22), () => spawnMob(m.zone));
     levelUp(); questKill(m.sprite);
     if (R() < 0.14) { const k = R() < 0.6 ? 'hp' : 'mp'; pots[k]++; log(`Encontraste una ${POTS[k].name.toLowerCase()}.`, true); renderPots(); }
-    if (m.boss) { Q.shards++; log('El boss soltó una <b>Esquirla de llave</b>. Con 3 esquirlas y 60 de oro el Capitán te forja una Llave de la cripta.', true); renderQuest(); }
+    if (m.boss) { const kid = m.zone.name === 'Cripta olvidada' ? 'foso' : 'cripta', kd = KEYDEFS[kid]; Q.shards[kid]++; log(`El boss soltó una <b>${kd.shard}</b>. Con ${SHARDS_PER_KEY} esquirlas y ${kd.gold} de oro el Capitán te forja una ${kd.name}.`, true); renderQuest(); }
 }
 /** Habilidad distintiva del boss: aviso (anillo + nombre), 0,8 s de carga y recién ahí pega; se puede esquivar alejándose. */
 function bossSpecial(m: Mob, sp: BossSpecial, T: number) {
@@ -1143,7 +1143,7 @@ function pickNpc(sx: number, sy: number): Npc | null {
 
 // ---------- misiones y progreso por zonas (lógica tipo Dreadmyst) ----------
 // Un solo pueblo seguro; cada zona tiene un rango de nivel y el Capitán te empuja de una a la siguiente. La cripta se abre con llave.
-interface Quest { name: string; zone: string; type: MobType; n: number; xp: number; gold: number; say: string; key?: boolean }
+interface Quest { name: string; zone: string; type: MobType; n: number; xp: number; gold: number; say: string; shard?: 'cripta' | 'foso' }
 const QUESTS: Quest[] = [
     { name: 'Goblins del campamento', zone: 'Campamento goblin', type: 'goblin', n: 5, xp: 70, gold: 30, say: 'Unos goblins lanceros rondan al sureste y asustan a los mercaderes. Matá a 5 y volvé.' },
     { name: 'La avanzada goblin', zone: 'Avanzada goblin', type: 'goblin_elite', n: 4, xp: 120, gold: 55, say: 'Más al norte armaron una avanzada con goblins de élite. Eliminá a 4.' },
@@ -1151,10 +1151,22 @@ const QUESTS: Quest[] = [
     { name: 'El pantano muerto', zone: 'Pantano muerto', type: 'zombie', n: 5, xp: 260, gold: 110, say: 'Del pantano del este salen zombis. Necesito que mates a 5.' },
     { name: 'Huesos inquietos', zone: 'Cementerio viejo', type: 'skeleton', n: 5, xp: 420, gold: 150, say: 'Los esqueletos del cementerio ya no descansan. Derrotá a 5.' },
     { name: 'Magia prohibida', zone: 'Ruinas del nigromante', type: 'skeleton_mage', n: 4, xp: 520, gold: 190, say: 'Hay hechiceros esqueleto en las ruinas del sur. Cuidado con sus hechizos: matá a 4.' },
-    { name: 'Fuego en el hormiguero', zone: 'Hormiguero ardiente', type: 'fire_ant', n: 6, xp: 700, gold: 260, key: true, say: 'El hormiguero ardiente del noreste es peligroso. Si volvés con 6 cabezas te doy una esquirla de llave: con 3 más de los bosses te forjo la llave de la cripta.' },
+    { name: 'Fuego en el hormiguero', zone: 'Hormiguero ardiente', type: 'fire_ant', n: 6, xp: 700, gold: 260, shard: 'cripta', say: 'El hormiguero ardiente del noreste es peligroso. Si volvés con 6 cabezas te doy una esquirla de llave: con 3 más de los bosses te forjo la llave de la cripta.' },
+    { name: 'Alas de ceniza', zone: 'Nidal de ceniza', type: 'wyvern', n: 4, xp: 950, gold: 320, say: 'Al sur del páramo hay un corredor que baja a las Tierras de ceniza. Los wyverns anidan en el centro: derribá a 4.' },
+    { name: 'El osario ardiente', zone: 'Osario ardiente', type: 'skeleton_mage', n: 5, xp: 1150, gold: 400, say: 'Más al este, los hechiceros del osario no se apagan. Acabá con 5.' },
+    { name: 'La cantera del minotauro', zone: 'Cantera del minotauro', type: 'minotaur', n: 2, xp: 1700, gold: 650, shard: 'foso', say: 'Los minotauros de la cantera cuidan el camino al foso. Si matás a 2 te doy una esquirla del foso: con 3 y 120 de oro te forjo la llave de la Cámara del foso.' },
 ];
-const SHARDS_PER_KEY = 3, KEY_GOLD = 60;
-const Q = { i: 0, st: 'new' as 'new' | 'active' | 'ready', prog: 0, keys: 0, shards: 0 };
+const SHARDS_PER_KEY = 3;
+/** Llaves de mazmorra: se forjan con esquirlas que sueltan los bosses (la de la cripta, los de afuera; la del foso, el jefe de la cripta). */
+type KeyId = 'cripta' | 'foso';
+const KEYDEFS: Record<KeyId, { name: string; shard: string; gold: number }> = {
+    cripta: { name: 'Llave de la cripta', shard: 'Esquirla de llave', gold: 60 },
+    foso: { name: 'Llave del foso', shard: 'Esquirla del foso', gold: 120 },
+};
+const KEY_IDS = Object.keys(KEYDEFS) as KeyId[];
+const Q = { i: 0, st: 'new' as 'new' | 'active' | 'ready', prog: 0, keys: { cripta: 0, foso: 0 } as Record<KeyId, number>, shards: { cripta: 0, foso: 0 } as Record<KeyId, number> };
+const keyLines = () => KEY_IDS.map((k) => (Q.keys[k] ? `<em>${KEYDEFS[k].name}: ${Q.keys[k]}</em>` : '') + (Q.shards[k] ? `<em>${KEYDEFS[k].shard}: ${Q.shards[k]}/${SHARDS_PER_KEY}</em>` : '')).join('');
+const hasKeyStuff = () => KEY_IDS.some((k) => Q.keys[k] || Q.shards[k]);
 function questKill(t: MobType) {
     const q = QUESTS[Q.i]; if (!q || Q.st !== 'active' || q.type !== t) return;
     Q.prog = Math.min(q.n, Q.prog + 1);
@@ -1163,26 +1175,31 @@ function questKill(t: MobType) {
 }
 function renderQuest() {
     const q = QUESTS[Q.i], el = $('quest');
-    el.hidden = (!q || Q.st === 'new') && !Q.keys && !Q.shards;
-    if (!q) { el.innerHTML = `<b>Cripta</b>${Q.keys ? `<em>Llaves: ${Q.keys}</em>` : ''}${Q.shards ? `<em>Esquirlas: ${Q.shards}/${SHARDS_PER_KEY}</em>` : ''}`; return; }
-    el.innerHTML = `<b>${q.name}</b><span>${Q.st === 'ready' ? 'Volvé con el Capitán' : `${q.zone}: ${Q.prog}/${q.n}`}</span>${Q.keys ? `<em>Llaves de la cripta: ${Q.keys}</em>` : ''}${Q.shards ? `<em>Esquirlas de llave: ${Q.shards}/${SHARDS_PER_KEY}</em>` : ''}`;
+    el.hidden = (!q || Q.st === 'new') && !hasKeyStuff();
+    if (!q || Q.st === 'new') { el.innerHTML = `<b>Mazmorras</b>${keyLines()}`; return; }
+    el.innerHTML = `<b>${q.name}</b><span>${Q.st === 'ready' ? 'Volvé con el Capitán' : `${q.zone}: ${Q.prog}/${q.n}`}</span>${keyLines()}`;
 }
 function questLevel(q: Quest) { const l = MOBS[q.type].lvl; return `Nv ${Math.max(1, l - 1)}–${l + 1}`; }
 function openQuestDlg(n: Npc) {
     const q = QUESTS[Q.i], d = $('qdlg'); shopNpc = n; talkNpc = null;
     $('qdName').textContent = n.name; d.hidden = false;
     let body = '', btn = '';
-    if (!q) body = 'Ya limpiaste todo lo que te pedí. Más encargos cuando abramos nuevos caminos. Para abrir la escalera de la cripta forjá una llave (abajo).';
-    else if (Q.st === 'new') { body = `<b>${q.name}</b> <small>${q.zone} · ${questLevel(q)}</small><br>${q.say}<br><small>Recompensa: ${q.xp} exp · ${q.gold} oro${q.key ? ' · Esquirla de llave' : ''}</small>`; btn = 'Aceptar'; }
+    if (!q) body = 'Ya limpiaste todo lo que te pedí. Más encargos cuando abramos nuevos caminos. Para abrir las escaleras selladas forjá las llaves (abajo).';
+    else if (Q.st === 'new') { body = `<b>${q.name}</b> <small>${q.zone} · ${questLevel(q)}</small><br>${q.say}<br><small>Recompensa: ${q.xp} exp · ${q.gold} oro${q.shard ? ' · ' + KEYDEFS[q.shard].shard : ''}</small>`; btn = 'Aceptar'; }
     else if (Q.st === 'active') body = `<b>${q.name}</b><br>Todavía te faltan ${q.n - Q.prog} en ${q.zone}.`;
-    else { body = `<b>${q.name}</b><br>Buen trabajo. Tomá tu paga.<br><small>${q.xp} exp · ${q.gold} oro${q.key ? ' · Esquirla de llave' : ''}</small>`; btn = 'Entregar'; }
-    body += `<br><small>Forja: ${SHARDS_PER_KEY} esquirlas (las sueltan los bosses) + ${KEY_GOLD} oro = 1 Llave de la cripta. Tenés ${Q.shards} esquirlas y ${Q.keys} llaves.</small>`;
-    const fb = $('qdForge') as HTMLButtonElement; fb.hidden = false; fb.disabled = Q.shards < SHARDS_PER_KEY || P.gold < KEY_GOLD;
-    fb.onclick = () => { if (Q.shards < SHARDS_PER_KEY || P.gold < KEY_GOLD) return; Q.shards -= SHARDS_PER_KEY; P.gold -= KEY_GOLD; Q.keys++; log('El Capitán forjó una <b>Llave de la cripta</b>.', true); renderQuest(); openQuestDlg(n); };
+    else { body = `<b>${q.name}</b><br>Buen trabajo. Tomá tu paga.<br><small>${q.xp} exp · ${q.gold} oro${q.shard ? ' · ' + KEYDEFS[q.shard].shard : ''}</small>`; btn = 'Entregar'; }
+    body += `<br><small>Forja: ${SHARDS_PER_KEY} esquirlas (las sueltan los bosses) + oro = 1 llave.</small>`;
+    const fg = $('qdForges'); fg.innerHTML = '';
+    for (const k of KEY_IDS) {
+        const kd = KEYDEFS[k]; if (k === 'foso' && Q.i < 7 && !Q.shards.foso && !Q.keys.foso) continue;
+        const fb = document.createElement('button'); fb.type = 'button'; fb.textContent = `Forjar ${kd.name} (${Q.shards[k]}/${SHARDS_PER_KEY} esq. · ${kd.gold} oro)`; fb.disabled = Q.shards[k] < SHARDS_PER_KEY || P.gold < kd.gold;
+        fb.onclick = () => { if (Q.shards[k] < SHARDS_PER_KEY || P.gold < kd.gold) return; Q.shards[k] -= SHARDS_PER_KEY; P.gold -= kd.gold; Q.keys[k]++; log(`El Capitán forjó una <b>${kd.name}</b>.`, true); renderQuest(); openQuestDlg(n); };
+        fg.appendChild(fb);
+    }
     $('qdBody').innerHTML = body; const b = $('qdBtn'); b.hidden = !btn; b.textContent = btn;
     b.onclick = () => {
         if (Q.st === 'new') { Q.st = 'active'; Q.prog = 0; log(`Misión aceptada: ${q!.name}.`, true); }
-        else if (Q.st === 'ready') { P.exp += q!.xp; P.gold += q!.gold; if (q!.key) Q.shards++; log(`Entregaste «${q!.name}»: +${q!.xp} exp, +${q!.gold} oro${q!.key ? ' y una Esquirla de llave' : ''}.`, true); Q.i++; Q.st = 'new'; Q.prog = 0; levelUp(); }
+        else if (Q.st === 'ready') { P.exp += q!.xp; P.gold += q!.gold; if (q!.shard) Q.shards[q!.shard]++; log(`Entregaste «${q!.name}»: +${q!.xp} exp, +${q!.gold} oro${q!.shard ? ' y una ' + KEYDEFS[q!.shard].shard : ''}.`, true); Q.i++; Q.st = 'new'; Q.prog = 0; levelUp(); }
         renderQuest(); closeShop(); if (n) openQuestDlg(n);
     };
 }
@@ -1237,13 +1254,16 @@ let portalLock = 0;
 function checkPortals() {
     if (!MAP.portals || !connected || P.dead || P.step || now() < portalLock) return;
     const p = MAP.portals.find((q) => q.x === P.cell.x && q.y === P.cell.y); if (!p) return;
-    if (p.tx >= 41 && p.tx < 62 && p.ty < 24 && !inDungeon(P.x, P.y) && Q.keys < 1) { portalLock = now() + 2; toast('La escalera está sellada: necesitás una Llave de la cripta.'); log('La escalera está sellada. Forjá una Llave de la cripta con el Capitán: 3 esquirlas (las sueltan los bosses) y 60 de oro.', true); return; }
-    if (p.tx >= 41 && p.tx < 62 && p.ty < 24 && !inDungeon(P.x, P.y)) { Q.keys--; renderQuest(); log('Usaste una Llave de la cripta.', true); }
+    if (p.key) {
+        const kid = p.key as KeyId, kd = KEYDEFS[kid];
+        if (Q.keys[kid] < 1) { portalLock = now() + 2; toast(`La escalera está sellada: necesitás una ${kd.name}.`); log(`La escalera está sellada. Forjá una ${kd.name} con el Capitán: ${SHARDS_PER_KEY} esquirlas (las sueltan los bosses) y ${kd.gold} de oro.`, true); return; }
+        Q.keys[kid]--; renderQuest(); log(`Usaste una ${kd.name}.`, true);
+    }
     portalLock = now() + 1.5; P.path = []; P.target = null; P.engage = false; P.pickup = null;
     net.send({ $case: 'playerTeleportRequested', value: { x: p.tx, y: p.ty } });
     log(p.msg, true);
 }
-const inDungeon = (gx: number, gy: number) => { const d = MAP.dungeon; return !!d && gx >= d.x0 && gx < d.x1 + 1 && gy >= d.y0 && gy < d.y1 + 1; };
+const inDungeon = (gx: number, gy: number) => [MAP.dungeon, ...(MAP.dungeons ?? [])].some((d) => !!d && gx >= d.x0 && gx < d.x1 + 1 && gy >= d.y0 && gy < d.y1 + 1);
 
 // ---------- loop ----------
 const MAP_WORLD_ID = 'solmar';
@@ -1322,7 +1342,7 @@ async function boot() {
     refreshLook();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, openShop, toScreen, give: (n: number) => { for (let i = 0; i < n; i++) P.bag.push(rollItem(1 + i)); renderBag(); } });
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5) });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { Q, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();
     requestAnimationFrame(frame);

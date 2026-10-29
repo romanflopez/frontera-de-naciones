@@ -26,18 +26,18 @@ export const SBS = { dry1: 0, dry2: 1, elements1: 2, elements2: 3, flora1: 4, fl
 export const sbs = (sheet: number, cell: number) => 1000 + sheet * 18 + cell;
 
 export const EXT_SIZE = 64;
-const PATH = [44, 45, 46, 47];
-const ROCKS = [128, 129, 130, 131], DEAD = [244, 245, 246, 247], GRAVES = [140, 141, 142, 143];
+export const PATH = [44, 45, 46, 47];
+export const ROCKS = [128, 129, 130, 131], DEAD = [244, 245, 246, 247], GRAVES = [140, 141, 142, 143];
 
 // tiles de SBS elegidos a mano: se descartaron los cráteres, el negro/violeta y todo lo que desentona; cada familia
 // se mantiene en una gama de color para que el piso no parezca un parche de muestras
-const SAND = [[SBS.dry2, [0, 3, 6, 13, 14]]] as const;
-const DRY = [[SBS.dry1, [0, 3, 4, 6, 7, 13]], [SBS.dry2, [4, 7]]] as const;
-const CLAY = [[SBS.dry1, [12, 16, 17]]] as const;
-const ROCKY = [[SBS.rocky1, [1, 2, 7, 10, 12]], [SBS.dry1, [13]]] as const;
-const OASIS = [[SBS.flora1, [1, 2, 5, 7, 8, 9, 10, 12]], [SBS.flora1, [4]]] as const;
+export const SAND = [[SBS.dry2, [0, 3, 6, 13, 14]]] as const;
+export const DRY = [[SBS.dry1, [0, 3, 4, 6, 7, 13]], [SBS.dry2, [4, 7]]] as const;
+export const CLAY = [[SBS.dry1, [12, 16, 17]]] as const;
+export const ROCKY = [[SBS.rocky1, [1, 2, 7, 10, 12]], [SBS.dry1, [13]]] as const;
+export const OASIS = [[SBS.flora1, [1, 2, 5, 7, 8, 9, 10, 12]], [SBS.flora1, [4]]] as const;
 
-interface Rect { x0: number; y0: number; x1: number; y1: number }
+export interface Rect { x0: number; y0: number; x1: number; y1: number }
 
 export function extendSolmar(w: WorldMap): WorldMap {
     const N = EXT_SIZE;
@@ -174,6 +174,8 @@ export function extendSolmar(w: WorldMap): WorldMap {
     w.zones.push({ type: 'skeleton', x: 17 + OX, y: 5 + OY, r: 3, n: 3, name: 'Cripta olvidada' } as Zone);
     w.zones.push({ type: 'skeleton', x: 6 + OX, y: 5 + OY, r: 2, n: 2, name: 'Cripta olvidada' } as Zone);
     w.zones.push({ type: 'zombie', x: 17 + OX, y: 15 + OY, r: 2, n: 2, name: 'Cripta olvidada' } as Zone);
+    // jefe final de la cripta: suelta la esquirla del foso
+    w.zones.push({ type: 'barbaro', x: 17 + OX, y: 4 + OY, r: 1, n: 1, name: 'Cripta olvidada' } as Zone);
 
     // 6) Arena de arena: un recinto de arena para pelear y probar teletransportes (entrada desde el campamento)
     const AR = { x0: 46, y0: 26, x1: 60, y1: 38 };
@@ -193,7 +195,7 @@ export function extendSolmar(w: WorldMap): WorldMap {
     prop(kenney('stairsSpiral', 'S'), arenaIn.x, arenaIn.y, false);
 
     w.portals = [
-        { x: portalIn.x, y: portalIn.y, tx: arriveInCrypt.x, ty: arriveInCrypt.y, msg: 'Bajás por la escalera de caracol a la Cripta olvidada.' },
+        { x: portalIn.x, y: portalIn.y, tx: arriveInCrypt.x, ty: arriveInCrypt.y, key: 'cripta', msg: 'Bajás por la escalera de caracol a la Cripta olvidada.' },
         { x: exit.x, y: exit.y, tx: arriveFromCrypt.x, ty: arriveFromCrypt.y, msg: 'Subís las escaleras de vuelta al páramo.' },
         { x: arenaIn.x, y: arenaIn.y, tx: arenaArrive.x, ty: arenaArrive.y, msg: 'Entrás a la Arena de arena.' },
         { x: arenaBack.x, y: arenaBack.y, tx: 9, ty: 9, msg: 'Volvés al campamento de Solmar.' },
