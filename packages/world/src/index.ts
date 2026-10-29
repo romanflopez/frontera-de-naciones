@@ -10,7 +10,7 @@
 export const MAP_SIZE = 40;
 
 export interface Prop { id: number; x: number; y: number }
-export interface Zone { type: 'goblin' | 'zombie' | 'skeleton' | 'barbaro'; x: number; y: number; r: number; n: number; name: string }
+export interface Zone { type: 'goblin' | 'zombie' | 'skeleton' | 'barbaro' | 'goblin_elite' | 'antlion' | 'skeleton_mage' | 'fire_ant' | 'wyvern' | 'minotaur'; x: number; y: number; r: number; n: number; name: string }
 
 export interface WorldMap {
     size: number;
@@ -76,6 +76,12 @@ export function buildSolmar(): WorldMap {
         { type: 'zombie', x: 28, y: 11, r: 5, n: 3, name: 'Pantano muerto' },
         { type: 'skeleton', x: 29, y: 29, r: 5, n: 2, name: 'Cementerio viejo' },
         { type: 'barbaro', x: 34, y: 20, r: 2, n: 1, name: 'Guarida del bárbaro' },
+        { type: 'goblin_elite', x: 22, y: 5, r: 3, n: 3, name: 'Avanzada goblin' },
+        { type: 'antlion', x: 6, y: 20, r: 4, n: 3, name: 'Hoyos de hormiga león' },
+        { type: 'skeleton_mage', x: 8, y: 33, r: 4, n: 2, name: 'Ruinas del nigromante' },
+        { type: 'fire_ant', x: 34, y: 6, r: 3, n: 3, name: 'Hormiguero ardiente' },
+        { type: 'wyvern', x: 20, y: 35, r: 3, n: 2, name: 'Nido de wyverns' },
+        { type: 'minotaur', x: 36, y: 34, r: 2, n: 1, name: 'Laberinto del minotauro' },
     ];
     const near = (x: number, y: number, z: Zone, r: number) => Math.hypot(x - z.x, y - z.y) < r;
     prop(102, 15, 15, true); prop(100, 19, 20, true); prop(99, 14, 16, true); prop(97, 18, 15, true); prop(101, 13, 19, true);

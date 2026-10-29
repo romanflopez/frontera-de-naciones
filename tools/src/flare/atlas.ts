@@ -108,6 +108,23 @@ const EA = ['stance', 'run', 'swing', 'hit', 'die'];
 for (const n of ['goblin', 'zombie', 'skeleton']) {
     meta[n] = await build(n, [{ type: 'x', anim: parse(`animations/enemies/${n}.txt`) }], EA);
 }
+// Enemigos extra de fantasycore (progresión nivel 2 a 9). Si a alguno le falta una animación se arma con otra parecida.
+const FALLBACK: Record<string, string[]> = { hit: ['block', 'stance'], swing: ['cast', 'shoot', 'stance'], die: ['critdie'], run: ['stance'] };
+for (const n of ['goblin_elite', 'antlion', 'skeleton_mage', 'fire_ant', 'wyvern', 'minotaur']) {
+    const anim = parse(`animations/enemies/${n}.txt`);
+    for (const a of EA) {
+        const ok = (k: string) => anim.sections.has(k) && (anim.perAnim.has(k) || anim.image) && (anim.sections.get(k)!.f.size > 0)
+            && existsSync(join(mod, anim.perAnim.get(k) ?? anim.image));
+        if (ok(a)) continue;
+        const alt = (FALLBACK[a] ?? []).find(ok);
+        if (!alt) throw new Error(`${n}: no hay animación ${a} ni reemplazo`);
+        console.warn(`${n}: falta ${a}, uso ${alt}`);
+        anim.sections.set(a, { ...anim.sections.get(alt)!, duration: a === 'hit' ? 300 : anim.sections.get(alt)!.duration });
+        anim.perAnim.set(a, anim.perAnim.get(alt) ?? anim.image);
+    }
+    const die = anim.sections.get('die'); if (die) die.type = 'play_once'; // el minotauro la trae back_forth
+    meta[n] = await build(n, [{ type: 'x', anim }], EA);
+}
 // Muñeco por capas: cada pieza de equipo es su propio atlas (misma grilla), el cliente las apila según lo que lleva puesto.
 const SETS: Record<string, [string, string, string, string]> = { // [feet, legs, hands, chest]
     default: ['default_feet', 'default_legs', 'default_hands', 'default_chest'],
