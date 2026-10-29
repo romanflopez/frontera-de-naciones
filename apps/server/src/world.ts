@@ -239,6 +239,14 @@ export class GameWorld {
                     this.broadcastNear(p, M.playerIdleDirectionChanged(p.playerId, d));
                     break;
                 }
+                case 'pvpHitRequest': {
+                    // Relé simple: el server limita valores y avisa a los jugadores cercanos; cada cliente decide si le pega a él.
+                    const v = payload.value, num = (n: number, lo: number, hi: number) => (Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : lo);
+                    const fx = /^[a-z]{0,16}$/.test(v.fx) ? v.fx : '';
+                    const now = Date.now(); if (now - p.lastPvpMs < 40) break; p.lastPvpMs = now;
+                    this.broadcastNear(p, M.pvpHit(p.playerId, { fx, x: num(v.x, 0, 200), y: num(v.y, 0, 200), targetId: v.targetId, dmg: Math.round(num(v.dmg, 0, 600)), secs: num(v.secs, 0, 6), r: num(v.r, 0, 6) }));
+                    break;
+                }
                 case 'changePlayerProfileRequest': {
                     const v = String(payload.value.profile ?? '').slice(0, 240);
                     if (!/^[\w;,.\- ]*$/.test(v)) break;

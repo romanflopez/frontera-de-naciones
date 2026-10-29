@@ -94,6 +94,7 @@ message ClientMessage {
     SummonNpcRequest summon_npc_request = 40;
     KillAllNpcsRequest kill_all_npcs_request = 41;
     ChangePlayerProfileRequest change_player_profile_request = 42;
+    PvpHitRequest pvp_hit_request = 43;
   }
 }
 
@@ -444,6 +445,7 @@ message ServerMessage {
     NpcsLeftRange npcs_left_range = 62;
     LogoutCancelled logout_cancelled = 63;
     PlayerProfileChanged player_profile_changed = 64;
+    PvpHit pvp_hit = 65;
   }
 }
 
@@ -478,6 +480,26 @@ message SpellCastFailed {
 }
 
 /** El cliente avisa su bando, clase y equipo visible: "bando;clase;pieza,pieza,...". */
+/** PvP entre jugadores: el cliente que lanza avisa un efecto y, si hay target_id, daño/parálisis para ese jugador. */
+message PvpHitRequest {
+  string fx = 1;
+  double x = 2;
+  double y = 3;
+  int64 target_id = 4;
+  int32 dmg = 5;
+  double secs = 6;
+  double r = 7;
+}
+message PvpHit {
+  int64 caster_id = 1;
+  string fx = 2;
+  double x = 3;
+  double y = 4;
+  int64 target_id = 5;
+  int32 dmg = 6;
+  double secs = 7;
+  double r = 8;
+}
 message ChangePlayerProfileRequest {
   string profile = 1;
 }

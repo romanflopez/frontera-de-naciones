@@ -44,6 +44,7 @@ export class Player {
     characterName = '';
     /** Bando;clase;piezas visibles, lo manda el cliente (solo se retransmite a los demás). */
     profile = '';
+    lastPvpMs = 0;
     disconnected = false;
 
     hp = 1000;

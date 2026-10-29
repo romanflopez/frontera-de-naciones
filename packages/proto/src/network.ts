@@ -110,6 +110,7 @@ export interface ClientMessage {
     | { $case: "summonNpcRequest"; value: SummonNpcRequest }
     | { $case: "killAllNpcsRequest"; value: KillAllNpcsRequest }
     | { $case: "changePlayerProfileRequest"; value: ChangePlayerProfileRequest }
+    | { $case: "pvpHitRequest"; value: PvpHitRequest }
     | undefined;
 }
 
@@ -469,6 +470,7 @@ export interface ServerMessage {
     | { $case: "npcsLeftRange"; value: NpcsLeftRange }
     | { $case: "logoutCancelled"; value: LogoutCancelled }
     | { $case: "playerProfileChanged"; value: PlayerProfileChanged }
+    | { $case: "pvpHit"; value: PvpHit }
     | undefined;
 }
 
@@ -502,7 +504,28 @@ export interface CastEffect {
 export interface SpellCastFailed {
 }
 
-/** El cliente avisa su bando, clase y equipo visible: "bando;clase;pieza,pieza,...". */
+/** PvP entre jugadores: el cliente que lanza avisa un efecto y, si hay target_id, daño/parálisis para ese jugador. */
+export interface PvpHitRequest {
+  fx: string;
+  x: number;
+  y: number;
+  targetId: bigint;
+  dmg: number;
+  secs: number;
+  r: number;
+}
+
+export interface PvpHit {
+  casterId: bigint;
+  fx: string;
+  x: number;
+  y: number;
+  targetId: bigint;
+  dmg: number;
+  secs: number;
+  r: number;
+}
+
 export interface ChangePlayerProfileRequest {
   profile: string;
 }
@@ -1218,6 +1241,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "changePlayerProfileRequest":
         ChangePlayerProfileRequest.encode(message.payload.value, writer.uint32(338).fork()).join();
         break;
+      case "pvpHitRequest":
+        PvpHitRequest.encode(message.payload.value, writer.uint32(346).fork()).join();
+        break;
     }
     return writer;
   },
@@ -1676,6 +1702,14 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             };
             continue;
           }
+          case 43: {
+            if (tag !== 346) {
+              break;
+            }
+
+            message.payload = { $case: "pvpHitRequest", value: PvpHitRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -2048,6 +2082,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             $case: "changePlayerProfileRequest",
             value: ChangePlayerProfileRequest.fromPartial(object.payload.value),
           };
+        }
+        break;
+      }
+      case "pvpHitRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "pvpHitRequest", value: PvpHitRequest.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -5911,6 +5951,9 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "playerProfileChanged":
         PlayerProfileChanged.encode(message.payload.value, writer.uint32(514).fork()).join();
         break;
+      case "pvpHit":
+        PvpHit.encode(message.payload.value, writer.uint32(522).fork()).join();
+        break;
     }
     return writer;
   },
@@ -6508,6 +6551,14 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             };
             continue;
           }
+          case 65: {
+            if (tag !== 522) {
+              break;
+            }
+
+            message.payload = { $case: "pvpHit", value: PvpHit.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -6982,6 +7033,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
         }
         break;
       }
+      case "pvpHit": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "pvpHit", value: PvpHit.fromPartial(object.payload.value) };
+        }
+        break;
+      }
     }
     return message;
   },
@@ -7367,6 +7424,281 @@ export const SpellCastFailed: MessageFns<SpellCastFailed> = {
   },
   fromPartial<I extends Exact<DeepPartial<SpellCastFailed>, I>>(_: I): SpellCastFailed {
     const message = createBaseSpellCastFailed();
+    return message;
+  },
+};
+
+function createBasePvpHitRequest(): PvpHitRequest {
+  return { fx: "", x: 0, y: 0, targetId: 0n, dmg: 0, secs: 0, r: 0 };
+}
+
+export const PvpHitRequest: MessageFns<PvpHitRequest> = {
+  encode(message: PvpHitRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.fx !== "") {
+      writer.uint32(10).string(message.fx);
+    }
+    if (message.x !== 0) {
+      writer.uint32(17).double(message.x);
+    }
+    if (message.y !== 0) {
+      writer.uint32(25).double(message.y);
+    }
+    if (message.targetId !== 0n) {
+      if (BigInt.asIntN(64, message.targetId) !== message.targetId) {
+        throw new globalThis.Error("value provided for field message.targetId of type int64 too large");
+      }
+      writer.uint32(32).int64(message.targetId);
+    }
+    if (message.dmg !== 0) {
+      writer.uint32(40).int32(message.dmg);
+    }
+    if (message.secs !== 0) {
+      writer.uint32(49).double(message.secs);
+    }
+    if (message.r !== 0) {
+      writer.uint32(57).double(message.r);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PvpHitRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBasePvpHitRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.fx = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 17) {
+              break;
+            }
+
+            message.x = reader.double();
+            continue;
+          }
+          case 3: {
+            if (tag !== 25) {
+              break;
+            }
+
+            message.y = reader.double();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.targetId = reader.int64() as bigint;
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.dmg = reader.int32();
+            continue;
+          }
+          case 6: {
+            if (tag !== 49) {
+              break;
+            }
+
+            message.secs = reader.double();
+            continue;
+          }
+          case 7: {
+            if (tag !== 57) {
+              break;
+            }
+
+            message.r = reader.double();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<PvpHitRequest>, I>>(base?: I): PvpHitRequest {
+    return PvpHitRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PvpHitRequest>, I>>(object: I): PvpHitRequest {
+    const message = createBasePvpHitRequest();
+    message.fx = object.fx ?? "";
+    message.x = object.x ?? 0;
+    message.y = object.y ?? 0;
+    message.targetId = (object.targetId !== undefined && object.targetId !== null) ? BigInt(object.targetId) : 0n;
+    message.dmg = object.dmg ?? 0;
+    message.secs = object.secs ?? 0;
+    message.r = object.r ?? 0;
+    return message;
+  },
+};
+
+function createBasePvpHit(): PvpHit {
+  return { casterId: 0n, fx: "", x: 0, y: 0, targetId: 0n, dmg: 0, secs: 0, r: 0 };
+}
+
+export const PvpHit: MessageFns<PvpHit> = {
+  encode(message: PvpHit, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.casterId !== 0n) {
+      if (BigInt.asIntN(64, message.casterId) !== message.casterId) {
+        throw new globalThis.Error("value provided for field message.casterId of type int64 too large");
+      }
+      writer.uint32(8).int64(message.casterId);
+    }
+    if (message.fx !== "") {
+      writer.uint32(18).string(message.fx);
+    }
+    if (message.x !== 0) {
+      writer.uint32(25).double(message.x);
+    }
+    if (message.y !== 0) {
+      writer.uint32(33).double(message.y);
+    }
+    if (message.targetId !== 0n) {
+      if (BigInt.asIntN(64, message.targetId) !== message.targetId) {
+        throw new globalThis.Error("value provided for field message.targetId of type int64 too large");
+      }
+      writer.uint32(40).int64(message.targetId);
+    }
+    if (message.dmg !== 0) {
+      writer.uint32(48).int32(message.dmg);
+    }
+    if (message.secs !== 0) {
+      writer.uint32(57).double(message.secs);
+    }
+    if (message.r !== 0) {
+      writer.uint32(65).double(message.r);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PvpHit {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBasePvpHit();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.casterId = reader.int64() as bigint;
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.fx = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 25) {
+              break;
+            }
+
+            message.x = reader.double();
+            continue;
+          }
+          case 4: {
+            if (tag !== 33) {
+              break;
+            }
+
+            message.y = reader.double();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.targetId = reader.int64() as bigint;
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.dmg = reader.int32();
+            continue;
+          }
+          case 7: {
+            if (tag !== 57) {
+              break;
+            }
+
+            message.secs = reader.double();
+            continue;
+          }
+          case 8: {
+            if (tag !== 65) {
+              break;
+            }
+
+            message.r = reader.double();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<PvpHit>, I>>(base?: I): PvpHit {
+    return PvpHit.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PvpHit>, I>>(object: I): PvpHit {
+    const message = createBasePvpHit();
+    message.casterId = (object.casterId !== undefined && object.casterId !== null) ? BigInt(object.casterId) : 0n;
+    message.fx = object.fx ?? "";
+    message.x = object.x ?? 0;
+    message.y = object.y ?? 0;
+    message.targetId = (object.targetId !== undefined && object.targetId !== null) ? BigInt(object.targetId) : 0n;
+    message.dmg = object.dmg ?? 0;
+    message.secs = object.secs ?? 0;
+    message.r = object.r ?? 0;
     return message;
   },
 };
