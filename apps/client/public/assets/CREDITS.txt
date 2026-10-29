@@ -3,3 +3,5 @@ Licencia: CC-BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/). Los at
 (recortados, combinados y escalados a la mitad con tools/src/flare/atlas.ts) y quedan bajo la misma licencia.
 El resto del repo es MIT.
 Bosses 3D: origen/licencia por confirmar
+
+Casa "Fantasy House" (apps/client/public/assets/fantasy_house.webp, armada con tools/src/house): origen/licencia por confirmar. Vino en un zip subido por el usuario (Fantesy_House.zip, PSD de 2020) sin archivo de licencia ni autor; hasta confirmarlo no debe considerarse libre para redistribuir.

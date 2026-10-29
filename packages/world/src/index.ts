@@ -10,6 +10,10 @@
 export const MAP_SIZE = 40;
 
 export interface Prop { id: number; x: number; y: number }
+/** Edificio decorativo: ocupa w x h celdas desde (x, y) (esquina norte) y bloquea el paso. */
+export interface Building { id: string; x: number; y: number; w: number; h: number }
+/** Personaje no jugador quieto; ocupa su celda. dir: 0 = oeste, en sentido horario (6 = sur). */
+export interface Npc { id: string; name: string; x: number; y: number; dir: number }
 export interface Zone { type: 'goblin' | 'zombie' | 'skeleton' | 'barbaro' | 'goblin_elite' | 'antlion' | 'skeleton_mage' | 'fire_ant' | 'wyvern' | 'minotaur' | 'arana' | 'golem' | 'demonio'; x: number; y: number; r: number; n: number; name: string }
 
 export interface WorldMap {
@@ -22,6 +26,8 @@ export interface WorldMap {
     props: Prop[];
     decals: Prop[];
     zones: Zone[];
+    buildings: Building[];
+    npcs: Npc[];
     /** Dónde aparece un personaje nuevo. */
     spawn: { x: number; y: number };
     /** Celda de la fogata, para la luz. */
@@ -99,7 +105,13 @@ export function buildSolmar(): WorldMap {
         else if (r < 0.085) prop(pick([136, 137]), x, y, true);
         else if (r < 0.16) prop(pick([112, 113, 114, 115, 116, 117, 120, 121, 122, 123, 124, 125, 126, 127]), x, y, false);
     }
-    return { size: N, tiles, blocked, safe, props, decals, zones, spawn: { x: 6, y: 7 }, fire: { x: 8, y: 8 } };
+
+    // casa del campamento (Fantasy House, 3x3) y el mercader, que también ocupa su celda
+    const buildings: Building[] = [{ id: 'fantasy_house', x: 5, y: 2, w: 3, h: 3 }];
+    for (const b of buildings) for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) blocked[y][x] = true;
+    const npcs: Npc[] = [{ id: 'mercader', name: 'Mercader', x: 9, y: 7, dir: 6 }];
+    for (const n of npcs) blocked[n.y][n.x] = true;
+    return { size: N, tiles, blocked, safe, props, decals, zones, buildings, npcs, spawn: { x: 6, y: 7 }, fire: { x: 8, y: 8 } };
 }
 
 /** Mapas por nombre (el que figura en worlds.json del server). */

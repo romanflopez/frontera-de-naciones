@@ -6,6 +6,7 @@
   "scripts": {
     "atlas": "tsx src/flare/atlas.ts",
     "boss": "tsx src/boss/atlas.ts",
+    "house": "tsx src/house/atlas.ts",
     "flare:fetch": "tsx src/flare/fetch.ts",
     "typecheck": "tsc --noEmit -p ."
   },
