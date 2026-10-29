@@ -7,6 +7,7 @@
     "atlas": "tsx src/flare/atlas.ts",
     "boss": "tsx src/boss/atlas.ts",
     "house": "tsx src/house/atlas.ts",
+    "dungeon": "tsx src/dungeon/atlas.ts",
     "flare:fetch": "tsx src/flare/fetch.ts",
     "typecheck": "tsc --noEmit -p ."
   },

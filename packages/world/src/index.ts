@@ -7,9 +7,11 @@
  * (vista isométrica 2:1). Los ids de tiles y objetos son los del tileset de pasto de Flare.
  */
 
+import { extendSolmar } from './frontier';
+
 export const MAP_SIZE = 40;
 
-export interface Prop { id: number; x: number; y: number }
+export interface Prop { id: number; x: number; y: number; /** profundidad al ordenar (por defecto x + y) */ d?: number }
 /** Edificio decorativo: ocupa w x h celdas desde (x, y) (esquina norte) y bloquea el paso. */
 export interface Building { id: string; x: number; y: number; w: number; h: number }
 /** Personaje no jugador quieto; ocupa su celda. dir: 0 = oeste, en sentido horario (6 = sur). */
@@ -32,6 +34,10 @@ export interface WorldMap {
     spawn: { x: number; y: number };
     /** Celda de la fogata, para la luz. */
     fire: { x: number; y: number };
+    /** Escaleras entre zonas del mismo mapa: al terminar de pisar (x, y) se pasa a (tx, ty). */
+    portals?: { x: number; y: number; tx: number; ty: number; msg: string }[];
+    /** Rectángulo de la cripta (el cliente la oscurece). */
+    dungeon?: { x0: number; y0: number; x1: number; y1: number };
 }
 
 const GRASS = [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31];
@@ -111,7 +117,7 @@ export function buildSolmar(): WorldMap {
     for (const b of buildings) for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) blocked[y][x] = true;
     const npcs: Npc[] = [{ id: 'mercader', name: 'Mercader', x: 9, y: 7, dir: 6 }];
     for (const n of npcs) blocked[n.y][n.x] = true;
-    return { size: N, tiles, blocked, safe, props, decals, zones, buildings, npcs, spawn: { x: 6, y: 7 }, fire: { x: 8, y: 8 } };
+    return extendSolmar({ size: N, tiles, blocked, safe, props, decals, zones, buildings, npcs, spawn: { x: 6, y: 7 }, fire: { x: 8, y: 8 } });
 }
 
 /** Mapas por nombre (el que figura en worlds.json del server). */
