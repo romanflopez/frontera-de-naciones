@@ -187,11 +187,11 @@ function totals() {
     return t;
 }
 // ---------- clases ----------
-interface ClassDef { id: string; name: string; desc: string; head: string; armor?: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; spells: string[] }
+interface ClassDef { id: string; name: string; hidden?: boolean; desc: string; head: string; armor?: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; spells: string[] }
 const CLASSES: ClassDef[] = [
     { id: 'guerrero', name: 'Guerrero', desc: 'Resistente, pega cuerpo a cuerpo y frena enemigos.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'aturdir', 'vendar', 'torbellino'] },
     { id: 'mago', name: 'Mago', desc: 'Frágil pero con hechizos a distancia, parálisis y cura.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'paralisis', 'curar', 'bola'] },
-    { id: 'berserk', name: 'Berserk', desc: 'Mucho daño físico. Furia sube daño y velocidad de ataque y le abre dos habilidades extra.', head: 'head_bald', hp: 120, hpL: 14, mp: 30, mpL: 3, melee: [8, 13], weapon: 'Hacha de leñador', spells: ['tajo', 'aturdir', 'furia', 'torbellino', 'rugido', 'ejecutar'] },
+    { id: 'berserk', hidden: true, name: 'Berserk', desc: 'Mucho daño físico. Furia sube daño y velocidad de ataque y le abre dos habilidades extra.', head: 'head_bald', hp: 120, hpL: 14, mp: 30, mpL: 3, melee: [8, 13], weapon: 'Hacha de leñador', spells: ['tajo', 'aturdir', 'furia', 'torbellino', 'rugido', 'ejecutar'] },
 ];
 let CLS: ClassDef = CLASSES[0];
 const maxHp = () => CLS.hp + (P.lvl - 1) * CLS.hpL + totals().hp;
@@ -900,8 +900,8 @@ function storedId(name: string): string {
     return id;
 }
 let selectedClass = 'guerrero';
-try { selectedClass = localStorage.getItem('fdn:class') ?? selectedClass; } catch { /* sin almacenamiento */ }
-$('classes').innerHTML = CLASSES.map((c) => `<button type="button" class="cls" data-id="${c.id}"><b>${c.name}</b><small>${c.desc}</small></button>`).join('');
+try { const c = localStorage.getItem('fdn:class'); if (CLASSES.some((x) => x.id === c && !x.hidden)) selectedClass = c!; } catch { /* sin almacenamiento */ }
+$('classes').innerHTML = CLASSES.filter((c) => !c.hidden).map((c) => `<button type="button" class="cls" data-id="${c.id}"><b>${c.name}</b><small>${c.desc}</small></button>`).join('');
 function markClass() { $('classes').querySelectorAll<HTMLElement>('.cls').forEach((b) => b.classList.toggle('on', b.dataset.id === selectedClass)); }
 $('classes').addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest<HTMLElement>('.cls'); if (!b) return; selectedClass = b.dataset.id!; try { localStorage.setItem('fdn:class', selectedClass); } catch { /* sin almacenamiento */ } markClass(); });
 markClass();
