@@ -172,7 +172,7 @@ const others = new Map<bigint, Other>();
 
 interface Drop { x: number; y: number; item?: Item; gold?: number; t: number }
 interface Proj { x: number; y: number; m: Mob | null; spd: number; dmg: number; col: string; aoe?: number; tx?: number; ty?: number; sx?: number; sy?: number; arc?: number; trail?: { x: number; y: number }[] }
-interface Fx { k: 'ring' | 'boom' | 'burst' | 'click' | 'efx'; n?: string; dy?: number; x: number; y: number; t: number; c?: string; r?: number }
+interface Fx { k: 'ring' | 'boom' | 'burst' | 'click' | 'efx' | 'blizz'; d?: number; n?: string; dy?: number; x: number; y: number; t: number; c?: string; r?: number }
 const scorch: { x: number; y: number; t: number; r: number }[] = [];
 const mobs: Mob[] = [], corpses: { sprite: string; x: number; y: number; dir: number; t: number }[] = [], drops: Drop[] = [], projs: Proj[] = [];
 const floats: { x: number; y: number; text: string; col: string; t: number; big?: boolean }[] = [], fx: Fx[] = [], pending: { t: number; fn: () => void }[] = [];
@@ -204,7 +204,7 @@ function totals() {
 interface ClassDef { id: string; name: string; hidden?: boolean; desc: string; head: string; armor?: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; spells: string[] }
 const CLASSES: ClassDef[] = [
     { id: 'guerrero', name: 'Guerrero', desc: 'Resistente, pega cuerpo a cuerpo y frena enemigos.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'aturdir', 'vendar', 'torbellino'] },
-    { id: 'mago', name: 'Mago', desc: 'Frágil pero con hechizos a distancia, parálisis y cura.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'paralisis', 'curar', 'bola', 'hoja', 'lanza', 'lluvia', 'marejada', 'luz', 'furia', 'rugido', 'ejecutar'] },
+    { id: 'mago', name: 'Mago', desc: 'Frágil pero con hechizos a distancia, parálisis y cura.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'paralisis', 'curar', 'bola', 'hoja', 'lanza', 'lluvia', 'ventisca', 'luz', 'furia', 'rugido', 'ejecutar'] },
     { id: 'berserk', hidden: true, name: 'Berserk', desc: 'Mucho daño físico. Furia sube daño y velocidad de ataque y le abre dos habilidades extra.', head: 'head_bald', hp: 120, hpL: 14, mp: 30, mpL: 3, melee: [8, 13], weapon: 'Hacha de leñador', spells: ['tajo', 'aturdir', 'furia', 'torbellino', 'rugido', 'ejecutar'] },
 ];
 let CLS: ClassDef = CLASSES[0];
@@ -423,8 +423,8 @@ const LIB: Record<string, SpellDef> = {
         cast(m) { if (!isMob(m)) return false; efx('rocklance', m.x, m.y, 4); if (!reduce) shake = Math.max(shake, 0.2); damageMob(m, rint(30, 42) + P.lvl * 3 + totals().mag, true, 'spell'); } },
     lluvia: { name: 'Lluvia de fuego', mp: 45, cd: 9, col: '#ff7a2f', range: 7, target: true, aoe: 2.4,
         cast(m) { if (!m) return false; zone(m.x, m.y, 2.4, 4, 0.5, () => rint(11, 16) + P.lvl * 2 + totals().mag, 'cataclysm'); } },
-    marejada: { name: 'Marejada', mp: 40, cd: 8, col: '#4aa8ff', range: 7, target: true, aoe: 2.2,
-        cast(m) { if (!m) return false; zone(m.x, m.y, 2.2, 3, 0.6, () => rint(12, 17) + P.lvl * 2 + totals().mag, 'tidal', 1.2); } },
+    ventisca: { name: 'Ventisca', mp: 50, cd: 10, col: '#9fdcff', range: 7, target: true, aoe: 2.7,
+        cast(m) { if (!m) return false; zone(m.x, m.y, 2.7, 6, 0.4, () => rint(9, 14) + P.lvl * 2 + totals().mag, 'blizz', 1.5); } },
     luz: { name: 'Pilar de luz', mp: 35, cd: 7, col: '#bfe6ff', range: 7, target: true, aoe: 1.9,
         cast(m) { if (!m) return false; const x = m.x, y = m.y; zone(x, y, 1.9, 2, 0.7, () => rint(14, 20) + P.lvl * 2 + totals().mag, 'spread'); later(0.5, () => { if (!P.dead && Math.hypot(P.x - x, P.y - y) <= 1.9) heal(25 + P.lvl * 3); }); } },
     furia: { name: 'Furia', mp: 15, cd: 20, col: '#ff3b2f', range: 0, target: false,
@@ -436,7 +436,7 @@ const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
 function zone(x: number, y: number, r: number, ticks: number, every: number, dmg: () => number, effect: string, slow = 0) {
     for (let i = 0; i < ticks; i++) later(i * every, () => {
         if (P.dead) return;
-        if (i === 0 || effect === 'cataclysm') efx(effect, x, y);
+        if (effect === 'blizz') { if (i === 0) fx.push({ k: 'blizz', x, y, t: 0, r, d: ticks * every + 0.5 }); } else if (i === 0 || effect === 'cataclysm') efx(effect, x, y);
         if (!reduce && i === 0) shake = Math.max(shake, 0.15);
         for (const m of mobs.slice()) if (Math.hypot(m.x - x, m.y - y) <= r && !isSafe(m.x, m.y)) { damageMob(m, dmg(), false, 'spell'); if (slow && m.imm <= now() && i === ticks - 1) { m.par = now() + slow; m.parT = now(); m.imm = now() + slow + 6; m.moving = false; } }
     });
@@ -782,7 +782,7 @@ function update(dt: number) {
     }
     for (const c of corpses.slice()) if (T - c.t > 3) corpses.splice(corpses.indexOf(c), 1);
     for (const f of floats.slice()) { f.t += dt; if (f.t > 1.1) floats.splice(floats.indexOf(f), 1); }
-    for (const f of fx.slice()) { f.t += dt; if (f.t > (f.k === 'efx' ? 0.72 : 0.6)) fx.splice(fx.indexOf(f), 1); }
+    for (const f of fx.slice()) { f.t += dt; if (f.t > (f.d ?? (f.k === 'efx' ? 0.72 : 0.6))) fx.splice(fx.indexOf(f), 1); }
     for (const d of drops) d.t += dt;
 }
 function updateHover() {
@@ -874,6 +874,20 @@ function render() {
     if (FXM && IMG.fx) for (const f of fx) if (f.k === 'efx') {
         const r = FXM.rows[f.n!], c = FXM.cell, i = Math.min(FXM.frames - 1, Math.floor(f.t * r.fps)), p = iso(f.x, f.y), w = c * r.scale;
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(IMG.fx, i * c, r.row * c, c, c, p.x - w / 2, p.y - w * 0.62 - (f.dy ?? 0), w, w); ctx.restore();
+    }
+    for (const f of fx) if (f.k === 'blizz') {
+        // Ventisca procedural: escarcha en el piso y astillas de hielo que caen sin parar sobre el área
+        const p = iso(f.x, f.y), R = f.r! * TW * 0.5, fade = Math.min(1, f.t / 0.25, (f.d! - f.t) / 0.5), rnd = (n: number) => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, R); g.addColorStop(0, `rgba(190,235,255,${0.38 * fade})`); g.addColorStop(0.7, `rgba(90,170,255,${0.2 * fade})`); g.addColorStop(1, 'rgba(60,120,255,0)');
+        ctx.save(); ctx.translate(p.x, p.y); ctx.scale(1, 0.5); ctx.translate(-p.x, -p.y); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, R, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        ctx.lineCap = 'round';
+        for (let i = 0; i < 90; i++) {
+            const a = rnd(i) * Math.PI * 2, rr = Math.sqrt(rnd(i + 200)) * R, gx = p.x + Math.cos(a) * rr, gy = p.y + Math.sin(a) * rr * 0.5, per = 0.4 + rnd(i + 400) * 0.35, ph = (f.t / per + rnd(i + 600)) % 1, hgt = 150 * (1 - ph), y = gy - hgt;
+            if (ph < 0.9) { ctx.strokeStyle = `rgba(${200 + rnd(i) * 55 | 0},240,255,${fade * (0.45 + 0.4 * rnd(i + 800))})`; ctx.lineWidth = 1.2 + rnd(i + 900) * 1.8; ctx.beginPath(); ctx.moveTo(gx, y); ctx.lineTo(gx - 3, y - 13 - rnd(i + 50) * 8); ctx.stroke(); }
+            else { const k2 = (ph - 0.9) * 10; ctx.strokeStyle = `rgba(200,240,255,${fade * (1 - k2) * 0.7})`; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(gx, gy, 3 + k2 * 9, (3 + k2 * 9) * 0.5, 0, 0, Math.PI * 2); ctx.stroke(); }
+        }
+        ctx.restore();
     }
     for (const f of fx) if (f.k === 'ring') { const p = iso(f.x, f.y), k = f.t / 0.6; ctx.strokeStyle = f.c!; ctx.globalAlpha = 1 - k; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(p.x, p.y, 10 + k * 34, (10 + k * 34) * 0.5, 0, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
     // luz cálida de la fogata del campamento
