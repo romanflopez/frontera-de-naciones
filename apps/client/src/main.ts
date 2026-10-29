@@ -172,7 +172,7 @@ const others = new Map<bigint, Other>();
 
 interface Drop { x: number; y: number; item?: Item; gold?: number; t: number }
 interface Proj { x: number; y: number; m: Mob | null; spd: number; dmg: number; col: string; aoe?: number; tx?: number; ty?: number; sx?: number; sy?: number; arc?: number; trail?: { x: number; y: number }[] }
-interface Fx { k: 'ring' | 'boom' | 'burst' | 'click'; x: number; y: number; t: number; c?: string; r?: number }
+interface Fx { k: 'ring' | 'boom' | 'burst' | 'click' | 'efx'; n?: string; dy?: number; x: number; y: number; t: number; c?: string; r?: number }
 const scorch: { x: number; y: number; t: number; r: number }[] = [];
 const mobs: Mob[] = [], corpses: { sprite: string; x: number; y: number; dir: number; t: number }[] = [], drops: Drop[] = [], projs: Proj[] = [];
 const floats: { x: number; y: number; text: string; col: string; t: number; big?: boolean }[] = [], fx: Fx[] = [], pending: { t: number; fn: () => void }[] = [];
@@ -204,7 +204,7 @@ function totals() {
 interface ClassDef { id: string; name: string; hidden?: boolean; desc: string; head: string; armor?: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; spells: string[] }
 const CLASSES: ClassDef[] = [
     { id: 'guerrero', name: 'Guerrero', desc: 'Resistente, pega cuerpo a cuerpo y frena enemigos.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'aturdir', 'vendar', 'torbellino'] },
-    { id: 'mago', name: 'Mago', desc: 'Frágil pero con hechizos a distancia, parálisis y cura.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'paralisis', 'curar', 'bola'] },
+    { id: 'mago', name: 'Mago', desc: 'Frágil pero con hechizos a distancia, parálisis y cura.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'paralisis', 'curar', 'bola', 'hoja', 'lanza'] },
     { id: 'berserk', hidden: true, name: 'Berserk', desc: 'Mucho daño físico. Furia sube daño y velocidad de ataque y le abre dos habilidades extra.', head: 'head_bald', hp: 120, hpL: 14, mp: 30, mpL: 3, melee: [8, 13], weapon: 'Hacha de leñador', spells: ['tajo', 'aturdir', 'furia', 'torbellino', 'rugido', 'ejecutar'] },
 ];
 let CLS: ClassDef = CLASSES[0];
@@ -366,7 +366,7 @@ function meleeHit(m: Mob) {
     damageMob(m, d, crit, 'melee');
 }
 function explode(p: Proj) {
-    fx.push({ k: 'boom', x: p.tx!, y: p.ty!, t: 0, r: p.aoe });
+    fx.push({ k: 'boom', x: p.tx!, y: p.ty!, t: 0, r: p.aoe }); efx('eruption', p.tx!, p.ty!);
     scorch.push({ x: p.tx!, y: p.ty!, t: now(), r: p.aoe! });
     if (!reduce) shake = 0.3; hitstop = Math.max(hitstop, 0.06);
     let n = 0;
@@ -412,20 +412,24 @@ const LIB: Record<string, SpellDef> = {
     tajo: { name: 'Tajo salvaje', mp: 12, cd: 1, col: '#ff6b55', range: 1.9, target: true,
         cast(m) { if (!isMob(m)) return false; damageMob(m, rint(22, 30) + P.lvl * 3 + rint(totals().wdmg[0], totals().wdmg[1]), true, 'melee'); } },
     torbellino: { name: 'Torbellino', mp: 22, cd: 5, col: '#e0e0e0', range: 0, target: false,
-        cast() { fx.push({ k: 'boom', x: P.x, y: P.y, t: 0, r: 2.2 }); let n = 0; for (const m of mobs.slice()) if (dist(P, m) <= 2.2 && !isSafe(m.x, m.y)) { n++; damageMob(m, rint(12, 18) + P.lvl * 2 + rint(totals().wdmg[0], totals().wdmg[1]), false, 'melee'); } if (!n) log('El torbellino no alcanzó a nadie.'); } },
+        cast() { fx.push({ k: 'boom', x: P.x, y: P.y, t: 0, r: 2.2 }); efx('cyclone', P.x, P.y); let n = 0; for (const m of mobs.slice()) if (dist(P, m) <= 2.2 && !isSafe(m.x, m.y)) { n++; damageMob(m, rint(12, 18) + P.lvl * 2 + rint(totals().wdmg[0], totals().wdmg[1]), false, 'melee'); } if (!n) log('El torbellino no alcanzó a nadie.'); } },
     rugido: { name: 'Rugido', mp: 10, cd: 6, col: '#ff3b2f', range: 0, target: false, fury: true,
         cast() { fx.push({ k: 'boom', x: P.x, y: P.y, t: 0, r: 3.5 }); let n = 0; for (const m of mobs) if (dist(P, m) <= 3.5 && m.imm <= now()) { n++; m.par = now() + 2; m.parT = now(); m.imm = now() + 8; m.moving = false; if (m.state === 'idle') m.state = 'chase'; } log(n ? `Tu rugido aturdió a ${n} enemigo(s).` : 'Tu rugido no alcanzó a nadie.', true); } },
     ejecutar: { name: 'Ejecutar', mp: 12, cd: 4, col: '#ff3b2f', range: 1.9, target: true, fury: true,
         cast(m) { if (!isMob(m)) return false; const low = m.hp < m.hpMax * 0.35; damageMob(m, (rint(26, 36) + P.lvl * 3 + rint(totals().wdmg[0], totals().wdmg[1])) * (low ? 2 : 1), true, 'melee'); } },
+    hoja: { name: 'Hoja de viento', mp: 14, cd: 1.5, col: '#8dffa0', range: 7, target: true,
+        cast(m) { if (!isMob(m)) return false; efx('windblade', m.x, m.y, 10); damageMob(m, rint(13, 19) + P.lvl * 2 + totals().mag, false, 'spell'); } },
+    lanza: { name: 'Lanza de piedra', mp: 30, cd: 5, col: '#d9a45a', range: 7, target: true,
+        cast(m) { if (!isMob(m)) return false; efx('rocklance', m.x, m.y, 4); if (!reduce) shake = Math.max(shake, 0.2); damageMob(m, rint(30, 42) + P.lvl * 3 + totals().mag, true, 'spell'); } },
     furia: { name: 'Furia', mp: 15, cd: 20, col: '#ff3b2f', range: 0, target: false,
         cast() { P.fury = now() + 10; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log('Furia: +30% de daño físico y +25% de velocidad de ataque por 10 s, sin castigo. Se abren Rugido y Ejecutar.', true); } },
 };
 let SPELLS: Spell[] = [];
-function heal(h: number) { P.hp = Math.min(maxHp(), P.hp + h); float(P.x, P.y - 0.2, '+' + h, '#7ee08a'); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#7ee08a' }); }
+function heal(h: number) { P.hp = Math.min(maxHp(), P.hp + h); float(P.x, P.y - 0.2, '+' + h, '#7ee08a'); efx('sphere', P.x, P.y); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#7ee08a' }); }
 function control(m: Target | null, secs: number, verb: string, noun: string): false | void {
     if (!isMob(m)) return false;
     if (m.imm > now()) { log(`${m.name} es inmune al control por unos segundos.`); return false; }
-    m.par = now() + secs; m.parT = now(); m.imm = now() + secs + 8; m.moving = false; if (m.state === 'idle') m.state = 'chase';
+    efx('stop', m.x, m.y); m.par = now() + secs; m.parT = now(); m.imm = now() + secs + 8; m.moving = false; if (m.state === 'idle') m.state = 'chase';
     fx.push({ k: 'ring', x: m.x, y: m.y, t: 0, c: '#7fd6ff' }); log(`${verb} a ${m.name} por ${secs} s. ${noun} se rompe si lo golpean fuerte.`, true);
 }
 const cds = [0, 0, 0, 0, 0, 0];
@@ -482,6 +486,9 @@ interface SpriteMeta { sc?: number; cw: number; ch: number; ax: number; ay: numb
 const SPR: Record<string, SpriteMeta> = {};
 let WORLD: Record<string, number[]> = {};
 const IMG: Record<string, CanvasImageSource> = {};
+// Efectos TOMAS (Miradin, CC-BY-SA) horneados a cuadros; se dibujan en aditivo. Si no cargan, el juego sigue con los efectos simples.
+let FXM: { cell: number; frames: number; rows: Record<string, { row: number; fps: number; scale: number }> } | null = null;
+const efx = (n: string, x: number, y: number, dy = 0) => { if (FXM?.rows[n]) fx.push({ k: 'efx', n, x, y, t: 0, dy }); };
 const load = (src: string) => new Promise<HTMLImageElement>((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = src; });
 const off = document.createElement('canvas'), octx = off.getContext('2d')!;
 function frameIndex(A: Anim, t: number) {
@@ -759,7 +766,7 @@ function update(dt: number) {
     }
     for (const c of corpses.slice()) if (T - c.t > 3) corpses.splice(corpses.indexOf(c), 1);
     for (const f of floats.slice()) { f.t += dt; if (f.t > 1.1) floats.splice(floats.indexOf(f), 1); }
-    for (const f of fx.slice()) { f.t += dt; if (f.t > 0.6) fx.splice(fx.indexOf(f), 1); }
+    for (const f of fx.slice()) { f.t += dt; if (f.t > (f.k === 'efx' ? 0.72 : 0.6)) fx.splice(fx.indexOf(f), 1); }
     for (const d of drops) d.t += dt;
 }
 function updateHover() {
@@ -848,6 +855,10 @@ function render() {
         ctx.strokeStyle = f.c ?? '#ffb070'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(p.x, p.y, R2 * k * 1.1, R2 * k * 0.55, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
     }
     for (const f of fx) if (f.k === 'burst') { const p = iso(f.x, f.y), k = f.t / 0.6; if (k > 0.5) continue; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1 - k * 2; ctx.fillStyle = f.c!; ctx.beginPath(); ctx.arc(p.x, p.y - 34, 10 + k * 30, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+    if (FXM && IMG.fx) for (const f of fx) if (f.k === 'efx') {
+        const r = FXM.rows[f.n!], c = FXM.cell, i = Math.min(FXM.frames - 1, Math.floor(f.t * r.fps)), p = iso(f.x, f.y), w = c * r.scale;
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(IMG.fx, i * c, r.row * c, c, c, p.x - w / 2, p.y - w * 0.62 - (f.dy ?? 0), w, w); ctx.restore();
+    }
     for (const f of fx) if (f.k === 'ring') { const p = iso(f.x, f.y), k = f.t / 0.6; ctx.strokeStyle = f.c!; ctx.globalAlpha = 1 - k; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(p.x, p.y, 10 + k * 34, (10 + k * 34) * 0.5, 0, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
     // luz cálida de la fogata del campamento
     const fp = iso(MAP.fire.x + 0.5, MAP.fire.y + 0.5), fl = reduce ? 1 : 0.9 + Math.sin(T * 9) * 0.05 + Math.sin(T * 23) * 0.04;
@@ -1116,10 +1127,11 @@ async function boot() {
         names.forEach((n, i) => (IMG[n] = imgs[i]));
     } catch { $('loading').textContent = 'No se pudieron cargar los gráficos. Recargá la página.'; return; }
     $('loading').hidden = true;
+    try { FXM = await (await fetch('assets/fx.json')).json(); IMG.fx = await load('assets/fx.webp'); } catch { FXM = null; }
     loadBuildingImages();
     refreshLook();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { MAP, openShop, toScreen, give: (n: number) => { for (let i = 0; i < n; i++) P.bag.push(rollItem(1 + i)); renderBag(); } });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, openShop, toScreen, give: (n: number) => { for (let i = 0; i < n; i++) P.bag.push(rollItem(1 + i)); renderBag(); } });
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();

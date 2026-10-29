@@ -1,0 +1,34 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0;background:#000">
+<canvas id="c" width="256" height="256"></canvas>
+<script src="effekseer.js"></script>
+<script>
+// Pagina de horneado: reproduce un efecto de Effekseer y devuelve cuadros PNG (fondo negro o blanco) para armar spritesheets.
+const cv = document.getElementById('c');
+const gl = cv.getContext('webgl2', { alpha: false, preserveDrawingBuffer: true, premultipliedAlpha: false, antialias: true });
+let ctx = null;
+window.ready = new Promise((ok) => effekseer.initRuntime('effekseer.wasm', () => { ctx = effekseer.createContext(); ctx.init(gl); ok(true); }));
+window.bake = async (path, o) => {
+    await window.ready;
+    const eff = await new Promise((ok, ko) => { const e = ctx.loadEffect(path, o.scale || 1, () => ok(e), (m) => ko(m)); });
+    const out = {};
+    const size = o.size || 256, aspect = 1;
+    cv.width = cv.height = size; gl.viewport(0, 0, size, size);
+    const cam = o.cam || [0, 7, 9], at = o.at || [0, 1.2, 0], fov = o.fov || 40;
+    ctx.setProjectionPerspective(fov, aspect, 0.1, 100);
+    ctx.setCameraLookAt(cam[0], cam[1], cam[2], at[0], at[1], at[2], 0, 1, 0);
+    const res = {};
+    for (const bg of o.bgs || [0]) {
+        const frames = [];
+        const h = ctx.play(eff, o.pos ? o.pos[0] : 0, o.pos ? o.pos[1] : 0, o.pos ? o.pos[2] : 0);
+        if (o.rot) h.setRotation(o.rot[0], o.rot[1], o.rot[2]);
+        for (let f = 0; f < o.frames; f++) {
+            gl.clearColor(bg, bg, bg, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            ctx.update(o.step || 2); ctx.draw();
+            frames.push(cv.toDataURL('image/png'));
+        }
+        ctx.stopAll();
+        res[bg] = frames;
+    }
+    return res;
+};
+</script>
