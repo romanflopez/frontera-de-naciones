@@ -8,6 +8,8 @@
 import { buildSolmar } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import { spellIcon } from './icons.ts';
+import { itemIcon } from './itemicons.ts';
+const ico = (it: { look?: string; slot: string; rar: { c: string; k: number } }) => `<img class="iico" alt="" src="${itemIcon(it.look, it.slot, it.rar.c, it.rar.k)}">`;
 
 // ---------- utilidades ----------
 const TW = 96, TH = 48;
@@ -1082,8 +1084,8 @@ function toggleBag() { $('bag').hidden = !$('bag').hidden; renderBag(); }
 $('openBag').addEventListener('click', toggleBag);
 function renderBag() {
     if ($('bag').hidden) return;
-    $('equip').innerHTML = SLOTS.map((s) => { const it = P.eq[s]; return `<button type="button" class="cell${sel && it && sel.it === it ? ' sel' : ''}" data-eq="${s}" style="${it ? `color:${it.rar.c}` : ''}"><span>${s}</span>${it ? it.name.split(' ')[0] : '—'}</button>`; }).join('');
-    const cells: string[] = []; for (let i = 0; i < 18; i++) { const it = P.bag[i]; cells.push(it ? `<button type="button" class="cell${sel && sel.it === it ? ' sel' : ''}" data-bag="${i}" style="color:${it.rar.c};border-color:${it.rar.k ? it.rar.c + '66' : '#2b312c'}">${it.name.split(' ')[0]}</button>` : `<div class="cell empty">·</div>`); }
+    $('equip').innerHTML = SLOTS.map((s) => { const it = P.eq[s]; return `<button type="button" class="cell${sel && it && sel.it === it ? ' sel' : ''}" data-eq="${s}" style="${it ? `color:${it.rar.c}` : ''}"><span>${s}</span>${it ? ico(it) : '—'}</button>`; }).join('');
+    const cells: string[] = []; for (let i = 0; i < 18; i++) { const it = P.bag[i]; cells.push(it ? `<button type="button" class="cell${sel && sel.it === it ? ' sel' : ''}" data-bag="${i}" title="${esc(it.name)}" style="color:${it.rar.c};border-color:${it.rar.k ? it.rar.c + '66' : '#2b312c'}">${ico(it)}</button>` : `<div class="cell empty">·</div>`); }
     $('inv').innerHTML = cells.join('');
     document.querySelectorAll<HTMLElement>('[data-bag]').forEach((b) => (b.onclick = () => { sel = { it: P.bag[+b.dataset.bag!], from: 'bag' }; renderBag(); }));
     document.querySelectorAll<HTMLElement>('[data-eq]').forEach((b) => (b.onclick = () => { const it = P.eq[b.dataset.eq as Slot]; sel = it ? { it, from: 'eq' } : null; renderBag(); }));
@@ -1211,7 +1213,7 @@ function renderShop() {
     $('shopGold').textContent = P.gold + ' oro';
     const buy = (['hp', 'mp'] as const).map((k) => `<button type="button" class="srow" data-buy="${k}"><span style="color:${POTS[k].col}">${POTS[k].name}<small>Tenés ${pots[k]}</small></span><em>${POTS[k].price} oro</em></button>`).join('');
     $('shopList').innerHTML = `<div class="label">Comprar</div>${buy}<div class="label">Tu bolsa · tocá un item para venderlo</div>` + (P.bag.length
-        ? P.bag.map((it, i) => `<button type="button" class="srow" data-sell="${i}"><span style="color:${it.rar.c}">${esc(it.name)}<small>${it.rar.n} · ${it.slot}</small></span><em>${sellPrice(it)} oro</em></button>`).join('')
+        ? P.bag.map((it, i) => `<button type="button" class="srow" data-sell="${i}">${ico(it)}<span style="color:${it.rar.c}">${esc(it.name)}<small>${it.rar.n} · ${it.slot}</small></span><em>${sellPrice(it)} oro</em></button>`).join('')
         : `<div class="label">La bolsa está vacía</div>`);
     document.querySelectorAll<HTMLElement>('[data-buy]').forEach((b) => (b.onclick = () => { const k = b.dataset.buy as 'hp' | 'mp'; if (P.gold < POTS[k].price) { toast('No te alcanza el oro.'); return; } P.gold -= POTS[k].price; pots[k]++; renderPots(); renderShop(); }));
     document.querySelectorAll<HTMLElement>('[data-sell]').forEach((b) => (b.onclick = () => sellItem(+b.dataset.sell!)));
