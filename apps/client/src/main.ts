@@ -179,7 +179,7 @@ interface ClassDef { id: string; name: string; desc: string; sprite: string; hp:
 const CLASSES: ClassDef[] = [
     { id: 'guerrero', name: 'Guerrero', desc: 'Resistente, pega cuerpo a cuerpo y frena enemigos.', sprite: 'hero_warrior', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 0, spells: ['golpe', 'aturdir', 'vendar', 'torbellino'] },
     { id: 'mago', name: 'Mago', desc: 'Frágil pero con hechizos a distancia, parálisis y cura.', sprite: 'hero_mage', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 2, spells: ['proyectil', 'paralisis', 'curar', 'bola'] },
-    { id: 'berserk', name: 'Berserk', desc: 'Mucho daño físico; con Furia pega más y recibe más.', sprite: 'hero_berserk', hp: 120, hpL: 14, mp: 30, mpL: 3, melee: [8, 13], weapon: 1, spells: ['tajo', 'aturdir', 'furia', 'torbellino'] },
+    { id: 'berserk', name: 'Berserk', desc: 'Mucho daño físico. Furia pega más, recibe más y le abre dos habilidades extra.', sprite: 'hero_berserk', hp: 120, hpL: 14, mp: 30, mpL: 3, melee: [8, 13], weapon: 1, spells: ['tajo', 'aturdir', 'furia', 'torbellino', 'rugido', 'ejecutar'] },
 ];
 let CLS: ClassDef = CLASSES[0];
 const maxHp = () => CLS.hp + (P.lvl - 1) * CLS.hpL + totals().hp;
@@ -345,7 +345,7 @@ function hurtPlayer(d: number) {
 
 // ---------- hechizos ----------
 type Target = Mob | { x: number; y: number; ground: true };
-interface Spell { ctrl?: boolean; key: string; name: string; mp: number; cd: number; col: string; range: number; target: boolean; aoe?: number; cast: (m: Target | null) => false | void }
+interface Spell { ctrl?: boolean; fury?: boolean; key: string; name: string; mp: number; cd: number; col: string; range: number; target: boolean; aoe?: number; cast: (m: Target | null) => false | void }
 const isMob = (t: Target | null): t is Mob => !!t && 'hp' in t;
 interface SpellDef extends Omit<Spell, 'key'> { ctrl?: boolean }
 const LIB: Record<string, SpellDef> = {
@@ -367,8 +367,12 @@ const LIB: Record<string, SpellDef> = {
         cast(m) { if (!isMob(m)) return false; damageMob(m, rint(22, 30) + P.lvl * 3 + rint(totals().wdmg[0], totals().wdmg[1]), true, 'melee'); } },
     torbellino: { name: 'Torbellino', mp: 22, cd: 5, col: '#e0e0e0', range: 0, target: false,
         cast() { fx.push({ k: 'boom', x: P.x, y: P.y, t: 0, r: 2.2 }); let n = 0; for (const m of mobs.slice()) if (dist(P, m) <= 2.2 && !isSafe(m.x, m.y)) { n++; damageMob(m, rint(12, 18) + P.lvl * 2 + rint(totals().wdmg[0], totals().wdmg[1]), false, 'melee'); } if (!n) log('El torbellino no alcanzó a nadie.'); } },
+    rugido: { name: 'Rugido', mp: 10, cd: 6, col: '#ff3b2f', range: 0, target: false, fury: true,
+        cast() { fx.push({ k: 'boom', x: P.x, y: P.y, t: 0, r: 3.5 }); let n = 0; for (const m of mobs) if (dist(P, m) <= 3.5 && m.imm <= now()) { n++; m.par = now() + 2; m.parT = now(); m.imm = now() + 8; m.moving = false; if (m.state === 'idle') m.state = 'chase'; } log(n ? `Tu rugido aturdió a ${n} enemigo(s).` : 'Tu rugido no alcanzó a nadie.', true); } },
+    ejecutar: { name: 'Ejecutar', mp: 12, cd: 4, col: '#ff3b2f', range: 1.9, target: true, fury: true,
+        cast(m) { if (!isMob(m)) return false; const low = m.hp < m.hpMax * 0.35; damageMob(m, (rint(26, 36) + P.lvl * 3 + rint(totals().wdmg[0], totals().wdmg[1])) * (low ? 2 : 1), true, 'melee'); } },
     furia: { name: 'Furia', mp: 15, cd: 20, col: '#ff3b2f', range: 0, target: false,
-        cast() { P.fury = now() + 8; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log('Furia: +30% de daño físico y +25% de daño recibido por 8 s.', true); } },
+        cast() { P.fury = now() + 10; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log('Furia: +30% de daño físico y +25% de daño recibido por 10 s y se abren Rugido y Ejecutar.', true); } },
 };
 let SPELLS: Spell[] = [];
 function heal(h: number) { P.hp = Math.min(maxHp(), P.hp + h); float(P.x, P.y - 0.2, '+' + h, '#7ee08a'); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#7ee08a' }); }
@@ -378,7 +382,7 @@ function control(m: Target | null, secs: number, verb: string, noun: string): fa
     m.par = now() + secs; m.parT = now(); m.imm = now() + secs + 8; m.moving = false; if (m.state === 'idle') m.state = 'chase';
     fx.push({ k: 'ring', x: m.x, y: m.y, t: 0, c: '#7fd6ff' }); log(`${verb} a ${m.name} por ${secs} s. ${noun} se rompe si lo golpean fuerte.`, true);
 }
-const cds = [0, 0, 0, 0];
+const cds = [0, 0, 0, 0, 0, 0];
 const alive = (m: Mob | null): m is Mob => !!m && m.hp > 0 && mobs.includes(m);
 function autoTarget(range: number) {
     if (alive(P.target)) return P.target;
@@ -391,6 +395,7 @@ const CAST_T = 0.7; // como en HB: todos los hechizos tardan lo mismo en cargar
 function cast(i: number) {
     if (P.dead) return; const s = SPELLS[i];
     if (P.ready && P.ready.i === i && s.target) { const m = autoTarget(s.range); if (m) release(m); else toast('Hacé clic en el objetivo.'); return; }
+    if (s.fury && P.fury <= now()) { toast(`${s.name} solo se puede usar con Furia.`); return; }
     if (P.casting) { toast('Ya estás casteando.'); return; }
     if (cds[i] > now()) { toast(`${s.name} se está recargando.`); return; }
     if (P.mp < s.mp) { toast('No te alcanza el maná.'); return; }
@@ -533,8 +538,8 @@ window.addEventListener('keydown', (e) => {
     }
     if (e.target instanceof HTMLInputElement) return;
     if (e.key === 'Enter') { e.preventDefault(); chatIn.focus(); return; }
-    const k = ({ Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Numpad1: 0, Numpad2: 1, Numpad3: 2, Numpad4: 3 } as Record<string, number>)[e.code] ?? ({ '1': 0, '2': 1, '3': 2, '4': 3 } as Record<string, number>)[e.key];
-    if (k != null && !e.repeat) { e.preventDefault(); cast(k); }
+    const dm = /^(?:Digit|Numpad)([1-6])$/.exec(e.code) ?? /^([1-6])$/.exec(e.key), k = dm ? Number(dm[1]) - 1 : null;
+    if (k != null && k < SPELLS.length && !e.repeat) { e.preventDefault(); cast(k); }
     if (e.key === 'i' || e.key === 'I') toggleBag();
     if (e.key === 'Escape') { if (P.casting || P.ready) cancelCast('Hechizo cancelado.'); else P.target = null; }
 });
@@ -778,7 +783,7 @@ function setClass(id: string) {
     P.lvl = 1; P.exp = 0; P.hp = maxHp(); P.mp = maxMp();
     $('bar').innerHTML = SPELLS.map((s, i) => `<button class="slot box" id="sp${i}" type="button" title="${s.name} (${s.mp} maná)"><kbd>${s.key}</kbd><b>${s.name.replace(/ (?=\S+$)/, '<br>')}</b><em>${s.mp}</em><div class="cd" id="cd${i}"></div></button>`).join('');
     SPELLS.forEach((_, i) => $('sp' + i).addEventListener('click', () => { cast(i); cv.focus({ preventScroll: true }); }));
-    $('helpKeys').textContent = `Click o mantener: caminar · Click en mob: atacar · 1–4 usar habilidad (las de objetivo: esperá que cargue y click en el blanco) · Click derecho: cancelar · ${SPELLS.map((x) => x.key + ' ' + x.name).join(' · ')} · I Bolsa · Enter chat`;
+    $('helpKeys').textContent = `Click o mantener: caminar · Click en mob: atacar · 1–6 usar habilidad (las de objetivo: esperá que cargue y click en el blanco) · Click derecho: cancelar · ${SPELLS.map((x) => x.key + ' ' + x.name).join(' · ')} · I Bolsa · Enter chat`;
 }
 function hud() {
     const T = now(), mh = maxHp(), mm = maxMp();
@@ -786,7 +791,7 @@ function hud() {
     $('hpI').style.width = (P.hp / mh) * 100 + '%'; $('hpT').textContent = `${Math.ceil(P.hp)} / ${mh}`;
     $('mpI').style.width = (P.mp / mm) * 100 + '%'; $('mpT').textContent = `${Math.floor(P.mp)} / ${mm}`;
     $('xpI').style.width = (P.exp / expNeed()) * 100 + '%';
-    SPELLS.forEach((s, i) => { const left = Math.max(0, cds[i] - T); $('cd' + i).style.height = (left / s.cd) * 100 + '%'; $('sp' + i).classList.toggle('nomp', P.mp < s.mp); $('sp' + i).classList.toggle('ready', !!(P.ready && P.ready.i === i)); });
+    SPELLS.forEach((s, i) => { const left = Math.max(0, cds[i] - T); $('cd' + i).style.height = (left / s.cd) * 100 + '%'; $('sp' + i).hidden = !!s.fury && P.fury <= T; $('sp' + i).classList.toggle('nomp', P.mp < s.mp); $('sp' + i).classList.toggle('ready', !!(P.ready && P.ready.i === i)); });
     const m = P.target && mobs.includes(P.target) ? P.target : null;
     $('target').hidden = !m;
     if (m) {
