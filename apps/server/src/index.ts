@@ -3,9 +3,10 @@
  * acepta WebSockets en /ws, autentica una vez por conexión, manda los paquetes al mundo
  * donde está el jugador, maneja la gracia de reconexión y guarda el personaje al salir.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { join } from 'node:path';
+import { dirname, extname, join, normalize } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { ClientMessage, ServerMessage } from '@fdn/proto';
@@ -74,7 +75,18 @@ setInterval(() => {
     }
 }, 1000).unref();
 
-const http = createServer((_req, res) => { res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' }); res.end('Frontera de Naciones: server en marcha. Conectate por WebSocket a /ws.\n'); });
+// Si existe el cliente compilado (apps/client/dist), el mismo server lo sirve: una sola URL para jugar.
+const CLIENT_DIST = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'client', 'dist');
+const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webp': 'image/webp', '.png': 'image/png', '.txt': 'text/plain; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
+const http = createServer((req, res) => {
+    const path = decodeURIComponent((req.url ?? '/').split('?')[0]);
+    const file = normalize(join(CLIENT_DIST, path === '/' ? 'index.html' : path));
+    if (file.startsWith(CLIENT_DIST) && existsSync(file) && statSync(file).isFile()) {
+        res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream', 'cache-control': file.includes('assets') && !file.endsWith('meta.json') ? 'public, max-age=3600' : 'no-cache' });
+        res.end(readFileSync(file)); return;
+    }
+    res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' }); res.end('Frontera de Naciones: server en marcha. Conectate por WebSocket a /ws.\n');
+});
 const wss = new WebSocketServer({ server: http, path: '/ws', maxPayload: MAX_INCOMING_BYTES });
 
 wss.on('connection', (ws, req) => {

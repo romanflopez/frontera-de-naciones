@@ -13,7 +13,10 @@ export function serverUrl(): string {
     const env = import.meta.env.VITE_SERVER_URL as string | undefined;
     if (env) return env;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    return `${proto}://${location.hostname || 'localhost'}:1337/ws`;
+    const host = location.hostname || 'localhost';
+    // En local el server está en el puerto 1337; publicado (mismo host sirve cliente y WebSocket) va por el puerto de la página.
+    const local = host === 'localhost' || host === '127.0.0.1' || /^\d+\.\d+\.\d+\.\d+$/.test(host);
+    return local ? `${proto}://${host}:1337/ws` : `${proto}://${location.host}/ws`;
 }
 
 export class Net {

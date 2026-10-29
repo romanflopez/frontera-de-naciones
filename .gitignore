@@ -11,3 +11,4 @@ apps/server/data/chars/
 reference/flare-game/
 reference/flare-game
 apps/server/data/maps/*.amd
+.claude/
