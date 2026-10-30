@@ -508,6 +508,7 @@ message ServerMessage {
     // Casa de subastas (ver docs/SUBASTAS.md). Rango propio de tags desde 300; el resultado de cada acción va en EconResult.
     AuctionSearchResult auction_search_result = 300;
     AuctionMyState auction_my_state = 301;
+    AuctionHistory auction_history = 302;
   }
 }
 
@@ -1339,7 +1340,7 @@ message AuctionQuery {
 }
 /**
  * Pedido al Subastador (npc_id: el NPC con el que se habla; el server valida la distancia).
- * action = open | search | post | cancel | buy | claim. post usa uid + price; cancel y buy, listing_id; claim, mail_id (0 = todo).
+ * action = open | search | post | cancel | buy | claim | history (pide el historial propio). post usa uid + price; cancel y buy, listing_id; claim, mail_id (0 = todo).
  */
 message AuctionRequest {
   string npc_id = 1;
@@ -1381,4 +1382,24 @@ message AuctionMyState {
   repeated AuctionListing listings = 1;
   repeated AuctionMail mail = 2;
   int32 max_listings = 3;
+}
+/**
+ * Una transacción del historial propio. kind = post | buy | sell | cancel | expire | claim.
+ * amount: oro que entró (+) o salió (-) en esa transacción (0 si fue solo un item); price: precio de la publicación;
+ * fee: tasa o comisión cobrada; other: la otra parte (comprador o vendedor), si hay.
+ */
+message AuctionHistoryEntry {
+  int32 id = 1;
+  string kind = 2;
+  InvItem item = 3;
+  double amount = 4;
+  double price = 5;
+  double fee = 6;
+  string other = 7;
+  /** Milisegundos desde que pasó (el cliente calcula la fecha con su reloj). */
+  double age_ms = 8;
+}
+/** Historial de transacciones del que recibe el mensaje, del más nuevo al más viejo (máximo 200). */
+message AuctionHistory {
+  repeated AuctionHistoryEntry entries = 1;
 }

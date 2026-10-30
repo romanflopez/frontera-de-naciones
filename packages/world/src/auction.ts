@@ -19,6 +19,15 @@ export const AH_PRICE_MAX = 1_000_000;
 export const AH_PAGE_SIZE = 20;
 /** Con el buzón así de lleno no se puede publicar más (retirá primero). Las ventas y vencimientos siempre entran. */
 export const AH_MAIL_SOFT_MAX = 40;
+/** Entradas del historial de transacciones que se guardan por cuenta (las más viejas se descartan). */
+export const AH_HISTORY_MAX = 200;
+/**
+ * Tipos de entrada del historial: publicar (paga la tasa), comprar, vender (el neto va al buzón), retirar una
+ * publicación, vencimiento y retiro del buzón (oro o item).
+ */
+export type AhHistKind = 'post' | 'buy' | 'sell' | 'cancel' | 'expire' | 'claim';
+export const AH_HIST_KINDS: AhHistKind[] = ['post', 'buy', 'sell', 'cancel', 'expire', 'claim'];
+export const AH_HIST_LABEL: Record<AhHistKind, string> = { post: 'Publicación', buy: 'Compra', sell: 'Venta', cancel: 'Retirada', expire: 'Vencida', claim: 'Retiro del buzón' };
 export type AhSort = 'price_asc' | 'price_desc' | 'time_asc' | 'time_desc';
 export const AH_SORTS: AhSort[] = ['price_asc', 'price_desc', 'time_asc', 'time_desc'];
 

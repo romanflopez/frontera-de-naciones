@@ -229,3 +229,99 @@ test('red: valida distancia al Subastador y manda resultado + estado', () => {
     ah.handle(p, ctx, req({ npcId: npcs.find((n) => roleOf(n) === 'armero')!.id, action: 'open' }));
     assert.match(sent[0].value!.text!, /lejos del Subastador/); // otro NPC no sirve
 });
+
+// ---------- historial ----------
+const kinds = (ah: AuctionHouse, key: string) => ah.history(key).map((h) => h.kind);
+
+test('historial: registra publicar, comprar, vender, retirar, vencer y retirar del buzón con sus montos', () => {
+    const { ah, mk, now } = setup(); const s = mk('aa', 'Vendedor'), b = mk('bb', 'Comprador', 5000);
+    ah.post(s, give(s.econ, 'Espada larga'), 1000);            // post: -20
+    ah.post(s, give(s.econ, 'Maza'), 300);                     // post: -6
+    ah.post(s, give(s.econ, 'Espada corta'), 50);                      // post: -1
+    const [l1, l2, l3] = ah.listings.map((l) => l.id);
+    assert.equal(ah.buy(b, l1).ok, true);                      // buy -1000 (comprador) / sell +950 (vendedor)
+    assert.equal(ah.cancel(s, l2).ok, true);                   // cancel 0
+    now.t += AH_DURATION_MS + 1; assert.equal(ah.sweep(), 1); void l3; // expire 0
+    assert.equal(ah.claim(s, 0).ok, true);                     // claim: oro 950 + 2 items
+    const hs = ah.history('aa');
+    assert.deepEqual(hs.map((h) => h.kind), ['claim', 'claim', 'claim', 'expire', 'cancel', 'sell', 'post', 'post', 'post']);
+    const sell = hs.find((h) => h.kind === 'sell')!;
+    assert.equal(sell.amount, 950); assert.equal(sell.price, 1000); assert.equal(sell.fee, 50); assert.equal(sell.other, 'Comprador'); assert.equal(sell.item!.n, 'Espada larga');
+    assert.deepEqual(hs.filter((h) => h.kind === 'post').map((h) => h.amount), [-1, -6, -20]);
+    assert.equal(hs.find((h) => h.kind === 'cancel')!.item!.n, 'Maza');
+    assert.equal(hs.find((h) => h.kind === 'expire')!.item!.n, 'Espada corta');
+    const claims = hs.filter((h) => h.kind === 'claim');
+    assert.equal(claims.reduce((t, h) => t + h.amount, 0), 950);
+    assert.deepEqual(claims.filter((h) => h.item).map((h) => h.item!.n).sort(), ['Espada corta', 'Maza']);
+    // el comprador solo tiene su compra
+    assert.deepEqual(kinds(ah, 'bb'), ['buy']);
+    const buy = ah.history('bb')[0]; assert.equal(buy.amount, -1000); assert.equal(buy.other, 'Vendedor');
+    // del más nuevo al más viejo
+    assert.ok(hs.every((h, i) => !i || hs[i - 1].id > h.id));
+});
+
+test('historial: las acciones rechazadas no dejan entradas', () => {
+    const { ah, mk } = setup(); const s = mk('aa', 'Vendedor', 0), b = mk('bb', 'Comprador', 0);
+    assert.equal(ah.post(s, give(s.econ), 1000).ok, false); // sin oro para la tasa
+    s.econ.gold = 100; ah.post(s, give(s.econ), 1000);
+    assert.equal(ah.buy(b, ah.listings[0].id).ok, false);    // sin oro
+    assert.equal(ah.cancel(b, ah.listings[0].id).ok, false); // no es suya
+    assert.equal(ah.claim(b, 0).ok, false);                  // buzón vacío
+    assert.deepEqual(kinds(ah, 'aa'), ['post']);
+    assert.deepEqual(kinds(ah, 'bb'), []);
+});
+
+test('historial: tope de entradas por cuenta (se descartan las más viejas)', async () => {
+    const { AH_HISTORY_MAX } = await import('@fdn/world');
+    const { ah, mk } = setup(); const s = mk('aa', 'Vendedor', 1_000_000);
+    for (let i = 0; i < 70; i++) { // 3 entradas por vuelta: 210
+        assert.equal(ah.post(s, s.econ.bag[0]?.u ?? give(s.econ), 100 + i).ok, true);
+        assert.equal(ah.cancel(s, ah.listings[0].id).ok, true);
+        assert.equal(ah.claim(s, 0).ok, true);
+    }
+    const hs = ah.history('aa');
+    assert.equal(hs.length, AH_HISTORY_MAX);
+    assert.equal(hs[0].kind, 'claim'); assert.equal(hs[hs.length - 1].kind, 'cancel'); // se fueron las 10 primeras (post, cancel, claim...)
+    assert.equal(hs.filter((h) => h.kind === 'post').at(-1)!.price, 100 + 4); // la publicación más vieja que quedó es la 5.ª
+});
+
+test('historial: persiste con la casa y una casa vieja sin historial carga igual', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fdn-ahh-'));
+    const st1 = new FileStorage(dir, 10_000);
+    const mkAcc = (key: string, gold: number) => { const econ = newEcon('guerrero', 'solmar'); econ.gold = gold; econ.bag = []; st1.put(key, { name: key, salt: '', hash: '', created: 0, lastLogin: 0, econ }); return { key, name: key.toUpperCase(), econ }; };
+    const s = mkAcc('aa', 500), b = mkAcc('bb', 500);
+    const ah1 = new AuctionHouse(st1); ah1.log = () => {};
+    assert.equal(ah1.post(s, give(s.econ), 200).ok, true);
+    assert.equal(ah1.buy(b, ah1.listings[0].id).ok, true);
+    const ah2 = new AuctionHouse(new FileStorage(dir)); ah2.log = () => {};
+    assert.deepEqual(kinds(ah2, 'aa'), ['sell', 'post']);
+    assert.deepEqual(kinds(ah2, 'bb'), ['buy']);
+    assert.equal(ah2.history('bb')[0].item!.n, 'Espada larga');
+    // los ids siguen sin repetirse después de recargar
+    const s2 = { ...s, econ: new FileStorage(dir).get('aa')!.econ! };
+    assert.equal(ah2.post(s2, give(s2.econ), 10).ok, true);
+    const ids = ah2.history('aa').map((h) => h.id); assert.equal(new Set(ids).size, ids.length);
+    // casa guardada antes del historial (sin `history`)
+    const st3 = new MemStorage(); st3.put(AH_STORAGE_KEY, { name: '(casa)', salt: '', hash: '', created: 0, lastLogin: 0, auction: { v: 1, nextId: 5, nextMail: 1, listings: [], mail: {} } } as AccountRecord);
+    const ah3 = new AuctionHouse(st3); ah3.log = () => {};
+    assert.deepEqual(ah3.history('aa'), []);
+    const x = { key: 'aa', name: 'X', econ: newEcon('guerrero', 'solmar') }; x.econ.gold = 100; x.econ.bag = [];
+    assert.equal(ah3.post(x, give(x.econ), 10).ok, true); assert.deepEqual(kinds(ah3, 'aa'), ['post']);
+});
+
+test('red: el historial se manda al abrir, al pedirlo y después de cada transacción', () => {
+    const { ah, mk } = setup(); const s = mk('aa', 'Vendedor');
+    const npcs = buildSolmar().npcs, sub = npcs.find((n) => roleOf(n) === 'subastador')!;
+    const sent: { $case?: string; value?: { entries?: { kind: string; amount: number }[] } }[] = [];
+    const p = { econ: s.econ, accountKey: 'aa', characterName: 'Vendedor', disconnected: false, isDead: false, posX: sub.x, posY: sub.y, send: (m: { payload?: unknown }) => sent.push(m.payload as never) } as unknown as Player;
+    const ctx = { npcs, restat: () => {}, ground: {} } as unknown as EconCtx;
+    const req = (o: object) => ({ npcId: sub.id, action: 'open', query: undefined, uid: 0, price: 0, listingId: 0, mailId: 0, ...o });
+    const hist = () => sent.filter((m) => m.$case === 'auctionHistory').at(-1)?.value?.entries;
+    ah.handle(p, ctx, req({})); assert.deepEqual(hist(), []);
+    sent.length = 0; ah.handle(p, ctx, req({ action: 'post', uid: give(s.econ), price: 500 }));
+    assert.deepEqual(hist()!.map((e) => [e.kind, e.amount]), [['post', -10]]);
+    sent.length = 0; ah.handle(p, ctx, req({ action: 'history' }));
+    assert.deepEqual(sent.map((m) => m.$case), ['auctionHistory']);
+    sent.length = 0; ah.handle(p, ctx, req({ action: 'buy', listingId: 999 })); // falla: no manda historial
+    assert.equal(hist(), undefined);
+});

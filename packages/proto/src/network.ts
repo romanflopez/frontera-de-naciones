@@ -544,6 +544,7 @@ export interface ServerMessage {
     /** Casa de subastas (ver docs/SUBASTAS.md). Rango propio de tags desde 300; el resultado de cada acción va en EconResult. */
     { $case: "auctionSearchResult"; value: AuctionSearchResult }
     | { $case: "auctionMyState"; value: AuctionMyState }
+    | { $case: "auctionHistory"; value: AuctionHistory }
     | undefined;
 }
 
@@ -1524,7 +1525,7 @@ export interface AuctionQuery {
 
 /**
  * Pedido al Subastador (npc_id: el NPC con el que se habla; el server valida la distancia).
- * action = open | search | post | cancel | buy | claim. post usa uid + price; cancel y buy, listing_id; claim, mail_id (0 = todo).
+ * action = open | search | post | cancel | buy | claim | history (pide el historial propio). post usa uid + price; cancel y buy, listing_id; claim, mail_id (0 = todo).
  */
 export interface AuctionRequest {
   npcId: string;
@@ -1570,6 +1571,28 @@ export interface AuctionMyState {
   listings: AuctionListing[];
   mail: AuctionMail[];
   maxListings: number;
+}
+
+/**
+ * Una transacción del historial propio. kind = post | buy | sell | cancel | expire | claim.
+ * amount: oro que entró (+) o salió (-) en esa transacción (0 si fue solo un item); price: precio de la publicación;
+ * fee: tasa o comisión cobrada; other: la otra parte (comprador o vendedor), si hay.
+ */
+export interface AuctionHistoryEntry {
+  id: number;
+  kind: string;
+  item: InvItem | undefined;
+  amount: number;
+  price: number;
+  fee: number;
+  other: string;
+  /** Milisegundos desde que pasó (el cliente calcula la fecha con su reloj). */
+  ageMs: number;
+}
+
+/** Historial de transacciones del que recibe el mensaje, del más nuevo al más viejo (máximo 200). */
+export interface AuctionHistory {
+  entries: AuctionHistoryEntry[];
 }
 
 function createBaseClientMessage(): ClientMessage {
@@ -7085,6 +7108,9 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "auctionMyState":
         AuctionMyState.encode(message.payload.value, writer.uint32(2410).fork()).join();
         break;
+      case "auctionHistory":
+        AuctionHistory.encode(message.payload.value, writer.uint32(2418).fork()).join();
+        break;
     }
     return writer;
   },
@@ -7861,6 +7887,14 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "auctionMyState", value: AuctionMyState.decode(reader, reader.uint32()) };
             continue;
           }
+          case 302: {
+            if (tag !== 2418) {
+              break;
+            }
+
+            message.payload = { $case: "auctionHistory", value: AuctionHistory.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -8467,6 +8501,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "auctionMyState": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "auctionMyState", value: AuctionMyState.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "auctionHistory": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "auctionHistory", value: AuctionHistory.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -20656,6 +20696,200 @@ export const AuctionMyState: MessageFns<AuctionMyState> = {
     message.listings = object.listings?.map((e) => AuctionListing.fromPartial(e)) || [];
     message.mail = object.mail?.map((e) => AuctionMail.fromPartial(e)) || [];
     message.maxListings = object.maxListings ?? 0;
+    return message;
+  },
+};
+
+function createBaseAuctionHistoryEntry(): AuctionHistoryEntry {
+  return { id: 0, kind: "", item: undefined, amount: 0, price: 0, fee: 0, other: "", ageMs: 0 };
+}
+
+export const AuctionHistoryEntry: MessageFns<AuctionHistoryEntry> = {
+  encode(message: AuctionHistoryEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== 0) {
+      writer.uint32(8).int32(message.id);
+    }
+    if (message.kind !== "") {
+      writer.uint32(18).string(message.kind);
+    }
+    if (message.item !== undefined) {
+      InvItem.encode(message.item, writer.uint32(26).fork()).join();
+    }
+    if (message.amount !== 0) {
+      writer.uint32(33).double(message.amount);
+    }
+    if (message.price !== 0) {
+      writer.uint32(41).double(message.price);
+    }
+    if (message.fee !== 0) {
+      writer.uint32(49).double(message.fee);
+    }
+    if (message.other !== "") {
+      writer.uint32(58).string(message.other);
+    }
+    if (message.ageMs !== 0) {
+      writer.uint32(65).double(message.ageMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionHistoryEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseAuctionHistoryEntry();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.id = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.kind = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.item = InvItem.decode(reader, reader.uint32());
+            continue;
+          }
+          case 4: {
+            if (tag !== 33) {
+              break;
+            }
+
+            message.amount = reader.double();
+            continue;
+          }
+          case 5: {
+            if (tag !== 41) {
+              break;
+            }
+
+            message.price = reader.double();
+            continue;
+          }
+          case 6: {
+            if (tag !== 49) {
+              break;
+            }
+
+            message.fee = reader.double();
+            continue;
+          }
+          case 7: {
+            if (tag !== 58) {
+              break;
+            }
+
+            message.other = reader.string();
+            continue;
+          }
+          case 8: {
+            if (tag !== 65) {
+              break;
+            }
+
+            message.ageMs = reader.double();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<AuctionHistoryEntry>, I>>(base?: I): AuctionHistoryEntry {
+    return AuctionHistoryEntry.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionHistoryEntry>, I>>(object: I): AuctionHistoryEntry {
+    const message = createBaseAuctionHistoryEntry();
+    message.id = object.id ?? 0;
+    message.kind = object.kind ?? "";
+    message.item = (object.item !== undefined && object.item !== null) ? InvItem.fromPartial(object.item) : undefined;
+    message.amount = object.amount ?? 0;
+    message.price = object.price ?? 0;
+    message.fee = object.fee ?? 0;
+    message.other = object.other ?? "";
+    message.ageMs = object.ageMs ?? 0;
+    return message;
+  },
+};
+
+function createBaseAuctionHistory(): AuctionHistory {
+  return { entries: [] };
+}
+
+export const AuctionHistory: MessageFns<AuctionHistory> = {
+  encode(message: AuctionHistory, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.entries) {
+      AuctionHistoryEntry.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionHistory {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseAuctionHistory();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.entries.push(AuctionHistoryEntry.decode(reader, reader.uint32()));
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<AuctionHistory>, I>>(base?: I): AuctionHistory {
+    return AuctionHistory.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionHistory>, I>>(object: I): AuctionHistory {
+    const message = createBaseAuctionHistory();
+    message.entries = object.entries?.map((e) => AuctionHistoryEntry.fromPartial(e)) || [];
     return message;
   },
 };

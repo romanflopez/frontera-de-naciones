@@ -10,13 +10,16 @@
  * Todo corre síncrono dentro del event loop: cada acción valida y aplica de una vez, así que dos compras "a la vez"
  * de la misma publicación se resuelven en orden y la segunda ya no la encuentra. Nunca se confía en el cliente.
  *
- * Persistencia: las publicaciones y los buzones van en un registro propio (`_subastas`) del mismo Storage que las
+ * Historial: cada cuenta guarda sus últimas AH_HISTORY_MAX transacciones (publicar, comprar, vender, retirar, vencer,
+ * retirar del buzón) en el mismo registro, y se escriben en el mismo `save` que la transacción.
+ *
+ * Persistencia: las publicaciones, los buzones y los historiales van en un registro propio (`_subastas`) del mismo Storage que las
  * cuentas (archivo JSON o fila jsonb en Postgres). Después de cada transacción se fuerza el guardado de la cuenta
  * tocada y de la casa juntos (`flush`), para que un reinicio no duplique ni pierda items.
  */
-import { BAG_MAX, BASE_BY_NAME, AH_DURATION_MS, AH_MAIL_SOFT_MAX, AH_MAX_LISTINGS, AH_PAGE_SIZE, AH_PRICE_MAX, AH_PRICE_MIN, AH_SORTS,
-    ahCommission, ahListingFee, ahNorm, ahSellerNet, itemLevel, roleOf, SHOP_SERVER_RANGE, SLOTS, type AhSort, type AttrId, type Npc, type Slot } from '@fdn/world';
-import { ServerMessage, type AuctionMyState, type AuctionQuery, type AuctionRequest, type AuctionSearchResult, type DeepPartial } from '@fdn/proto';
+import { BAG_MAX, BASE_BY_NAME, AH_DURATION_MS, AH_HISTORY_MAX, AH_MAIL_SOFT_MAX, AH_MAX_LISTINGS, AH_PAGE_SIZE, AH_PRICE_MAX, AH_PRICE_MIN, AH_SORTS,
+    ahCommission, ahListingFee, ahNorm, ahSellerNet, itemLevel, roleOf, SHOP_SERVER_RANGE, SLOTS, type AhHistKind, type AhSort, type AttrId, type Npc, type Slot } from '@fdn/world';
+import { ServerMessage, type AuctionHistory, type AuctionMyState, type AuctionQuery, type AuctionRequest, type AuctionSearchResult, type DeepPartial } from '@fdn/proto';
 import { MAX_GOLD, toInvItem, type Econ, type EconCtx, type SItem } from './economy.ts';
 import * as M from './messages.ts';
 import type { Player } from './player.ts';
@@ -36,7 +39,14 @@ export interface Listing {
     created: number; expires: number;
 }
 export interface MailEntry { id: number; item?: SItem; gold?: number; text: string; at: number }
-export interface AuctionBook { v: 1; nextId: number; nextMail: number; listings: Listing[]; mail: Record<string, MailEntry[]> }
+/**
+ * Una transacción del historial de una cuenta. amount: oro que entró (+) o salió (-); price: precio de la publicación;
+ * fee: tasa (post) o comisión (sell); other: nombre de la otra parte.
+ */
+export interface HistEntry { id: number; kind: AhHistKind; item?: SItem; amount: number; price?: number; fee?: number; other?: string; at: number }
+export interface AuctionBook { v: 1; nextId: number; nextMail: number; listings: Listing[]; mail: Record<string, MailEntry[]>;
+    /** Historial por cuenta, del más viejo al más nuevo (opcional: las casas guardadas antes no lo tienen). */
+    history?: Record<string, HistEntry[]>; nextHist?: number }
 type BookRecord = AccountRecord & { auction?: AuctionBook };
 
 /** Quién hace la acción: la cuenta y su estado económico (el del server). */
@@ -78,6 +88,14 @@ export class AuctionHouse {
         this.storage.flush(); // cuenta(s) y casa se escriben juntas
     }
 
+    /** Anota una transacción en el historial de la cuenta (se guarda con el próximo `save`). Tope: AH_HISTORY_MAX. */
+    private record(key: string, e: Omit<HistEntry, 'id' | 'at'>): void {
+        const h = ((this.book.history ??= {})[key] ??= []);
+        this.book.nextHist ??= 1;
+        h.push({ ...e, item: e.item ? cloneItem(e.item) : undefined, id: this.book.nextHist++, at: this.now() });
+        if (h.length > AH_HISTORY_MAX) h.splice(0, h.length - AH_HISTORY_MAX);
+    }
+
     private mailTo(key: string, e: Omit<MailEntry, 'id' | 'at'>): void {
         (this.book.mail[key] ??= []).push({ ...e, id: this.book.nextMail++, at: this.now() });
     }
@@ -86,6 +104,8 @@ export class AuctionHouse {
     get listings(): readonly Listing[] { return this.book.listings; }
     mine(key: string): Listing[] { return this.book.listings.filter((l) => l.seller === key).sort((a, b) => a.expires - b.expires); }
     mailbox(key: string): MailEntry[] { return this.book.mail[key] ?? []; }
+    /** Historial de la cuenta, del más nuevo al más viejo. */
+    history(key: string): HistEntry[] { return [...(this.book.history?.[key] ?? [])].reverse(); }
 
     search(q: SearchQuery): SearchPage {
         const t = this.now();
@@ -129,6 +149,7 @@ export class AuctionHouse {
         st.gold = Math.max(0, st.gold - fee);
         const t = this.now(), l: Listing = { id: this.book.nextId++, seller: a.key, sellerName: a.name, item: cloneItem(it), price: rawPrice, fee, created: t, expires: t + AH_DURATION_MS };
         this.book.listings.push(l);
+        this.record(a.key, { kind: 'post', item: it, amount: -fee, price: rawPrice, fee });
         this.save(a);
         this.log(`publicación #${l.id}: ${a.name} publica ${it.n} (r${it.r}) a ${rawPrice} de oro; tasa ${fee}.`);
         return ok(`Publicaste ${it.n} por ${fmt(rawPrice)} de oro (tasa: ${fmt(fee)} de oro). Vence en 48 h.`, 'posted');
@@ -141,6 +162,7 @@ export class AuctionHouse {
         if (l.seller !== a.key) return fail('not_owner', 'Esa publicación no es tuya.');
         this.book.listings.splice(i, 1);
         this.mailTo(l.seller, { item: l.item, text: `Retiraste ${l.item.n} de la subasta.` });
+        this.record(l.seller, { kind: 'cancel', item: l.item, amount: 0, price: l.price });
         this.save(a);
         this.log(`cancelada #${l.id}: ${a.name} retira ${l.item.n}; el item va a su buzón.`);
         return ok(`Retiraste ${l.item.n}: lo tenés en el buzón del Subastador.`, 'cancelled');
@@ -160,9 +182,11 @@ export class AuctionHouse {
         st.bag.push({ ...cloneItem(l.item), u: st.nextUid++ });
         const fee = ahCommission(l.price), net = ahSellerNet(l.price);
         this.mailTo(l.seller, { gold: net, text: `Vendiste ${l.item.n} a ${a.name} por ${fmt(l.price)} de oro (comisión ${fmt(fee)}).` });
+        this.record(a.key, { kind: 'buy', item: l.item, amount: -l.price, price: l.price, other: l.sellerName });
+        this.record(l.seller, { kind: 'sell', item: l.item, amount: net, price: l.price, fee, other: a.name });
         this.save(a);
         this.log(`venta #${l.id}: ${a.name} compra ${l.item.n} a ${l.sellerName} por ${l.price}; comisión ${fee}, neto al buzón ${net}.`);
-        this.notify(l.seller, M.econResult(true, 'ah_sold', `Se vendió tu ${l.item.n} por ${fmt(l.price)} de oro: retirá ${fmt(net)} en el Subastador.`), this.myState(l.seller));
+        this.notify(l.seller, M.econResult(true, 'ah_sold', `Se vendió tu ${l.item.n} por ${fmt(l.price)} de oro: retirá ${fmt(net)} en el Subastador.`), this.myState(l.seller), this.historyMsg(l.seller));
         return ok(`Compraste ${l.item.n} por ${fmt(l.price)} de oro.`, 'bought');
     }
 
@@ -176,7 +200,8 @@ export class AuctionHouse {
             if (e.item) {
                 if (st.bag.length >= BAG_MAX) { left++; continue; }
                 st.bag.push({ ...cloneItem(e.item), u: st.nextUid++ }); items++;
-            } else gold += e.gold ?? 0;
+                this.record(a.key, { kind: 'claim', item: e.item, amount: 0 });
+            } else { gold += e.gold ?? 0; this.record(a.key, { kind: 'claim', amount: e.gold ?? 0 }); }
             box.splice(box.indexOf(e), 1);
         }
         if (gold) st.gold = Math.min(MAX_GOLD, st.gold + gold);
@@ -195,8 +220,9 @@ export class AuctionHouse {
         this.book.listings = this.book.listings.filter((l) => l.expires > t);
         for (const l of out) {
             this.mailTo(l.seller, { item: l.item, text: `Venció tu publicación de ${l.item.n}.` });
+            this.record(l.seller, { kind: 'expire', item: l.item, amount: 0, price: l.price });
             this.log(`vencida #${l.id}: ${l.item.n} de ${l.sellerName} vuelve a su buzón.`);
-            this.notify(l.seller, M.econResult(true, 'ah_expired', `Venció tu publicación de ${l.item.n}: está en el buzón del Subastador.`), this.myState(l.seller));
+            this.notify(l.seller, M.econResult(true, 'ah_expired', `Venció tu publicación de ${l.item.n}: está en el buzón del Subastador.`), this.myState(l.seller), this.historyMsg(l.seller));
         }
         this.save();
         return out.length;
@@ -229,6 +255,11 @@ export class AuctionHouse {
         });
     }
 
+    historyMsg(key: string): ServerMessage {
+        const t = this.now();
+        return auctionHistoryMsg({ entries: this.history(key).map((e) => ({ id: e.id, kind: e.kind, item: e.item ? toInvItem(e.item) : undefined, amount: e.amount, price: e.price ?? 0, fee: e.fee ?? 0, other: e.other ?? '', ageMs: Math.max(0, t - e.at) })) });
+    }
+
     searchMessage(key: string, q: AuctionQuery | SearchQuery | undefined): ServerMessage {
         const r = this.search(q ?? {});
         return auctionSearchMsg({ listings: r.listings.map((l) => this.toListing(l, key)), page: r.page, pages: r.pages, total: r.total });
@@ -248,6 +279,7 @@ export class AuctionHouse {
             switch (req.action) {
                 case 'open': this.sweep(); break;
                 case 'search': p.send(this.searchMessage(a.key, req.query)); return;
+                case 'history': p.send(this.historyMsg(a.key)); return;
                 case 'post': r = this.post(a, req.uid, req.price); break;
                 case 'cancel': r = this.cancel(a, req.listingId); break;
                 case 'buy': r = this.buy(a, req.listingId); break;
@@ -258,11 +290,14 @@ export class AuctionHouse {
         if (r) say(r);
         if (r?.ok) p.send(M.inventoryState(st));
         p.send(this.myState(a.key));
+        // el historial cambia con cada transacción que salió bien (y se manda al abrir)
+        if (req.action === 'open' || r?.ok) p.send(this.historyMsg(a.key));
         if (req.action === 'open' || req.action === 'buy' || req.action === 'cancel' || req.action === 'post') p.send(this.searchMessage(a.key, req.query));
     }
 }
 
 const auctionMyStateMsg = (value: DeepPartial<AuctionMyState>): ServerMessage => ServerMessage.fromPartial({ payload: { $case: 'auctionMyState', value } });
+const auctionHistoryMsg = (value: DeepPartial<AuctionHistory>): ServerMessage => ServerMessage.fromPartial({ payload: { $case: 'auctionHistory', value } });
 const auctionSearchMsg = (value: DeepPartial<AuctionSearchResult>): ServerMessage => ServerMessage.fromPartial({ payload: { $case: 'auctionSearchResult', value } });
 
 // Una sola casa para todo el server (todos los mundos): la crea index.ts y la usan los mundos.
