@@ -103,6 +103,7 @@ message ClientMessage {
     SaveCharacterRequest save_character_request = 80;
     MobHitRequest mob_hit_request = 120;
     PveStatusRequest pve_status_request = 121;
+    WaypointRequest waypoint_request = 122;
   }
 }
 
@@ -179,6 +180,11 @@ message SpellCastRequest {
   int32 y = 2;
   optional int64 player_id = 3;
   optional int64 monster_id = 4;
+}
+
+// Viaje por el menú de waypoints: id = 'city' (volver a la ciudad de tu facción) o el id de una zona de entrenamiento.
+message WaypointRequest {
+  string id = 1;
 }
 
 message PlayerTeleportRequested {

@@ -1,7 +1,7 @@
 /**
- * Portales de entrenamiento: cada ciudad tiene una hilera de portales (uno por zona de entrenamiento, en el orden
- * de la cadena de misiones del Capitán). El primero está abierto de entrada; cada uno de los demás se abre al
- * entregar la misión anterior o al llegar a un nivel mínimo. Los datos y la regla viven acá para que el cliente
+ * Portales de entrenamiento: cada ciudad tiene UN portal grande (menú con las zonas de entrenamiento en el orden
+ * de la cadena de misiones del Capitán) y cada zona un waypoint chico en su entrada para volver. La primera zona está
+ * abierta de entrada; cada una de las demás se abre al entregar la misión anterior o al llegar a un nivel mínimo. Los datos y la regla viven acá para que el cliente
  * (los dibuja, avisa y bloquea) y el server (valida el teletransporte, no confía en el cliente) usen lo mismo.
  */
 import type { WorldMap, Portal } from './index';
@@ -35,11 +35,21 @@ export const TRAINING: TrainingStep[] = [
 ];
 export const TRAINING_IDS = TRAINING.map((t) => t.id);
 
-/** Celdas de los portales de cada ciudad, en el orden de TRAINING (de oeste a este por el muro norte). */
-export const TRAINING_PADS: Record<string, readonly (readonly [number, number])[]> = {
-    solmar: [[1, 5], [1, 3], [2, 1], [4, 1], [6, 1], [8, 1], [13, 1], [13, 3], [13, 5], [12, 6]],
-    vhar: [[67, 4], [69, 4], [71, 4], [73, 4], [76, 4], [78, 4], [80, 4], [83, 4], [85, 4], [87, 4]],
-};
+/** Waypoint (estilo Diablo): el portal grande de la plaza de cada ciudad y uno chico en la entrada de cada zona de entrenamiento. */
+export interface Waypoint {
+    id: string;
+    /** Celda del waypoint (pararse o hacer click abre el menú). */
+    x: number; y: number;
+    kind: 'city' | 'zone';
+    name: string;
+    /** Ciudad (facción) o paso de TRAINING a la que pertenece. */
+    faction?: string;
+    step?: number;
+}
+/** Distancia máxima (en celdas) a un waypoint para abrir el menú y para que el server acepte el teletransporte. */
+export const WAYPOINT_RANGE = 3;
+/** Celda del portal grande de cada ciudad respecto del punto de aparición (HUBS). */
+export const CITY_PORTAL_OFFSET = { x: 3, y: 0 };
 
 /** ¿Está abierto el portal del paso `step` para alguien que entregó `qi` misiones y tiene nivel `lvl`? */
 export const trainingUnlocked = (step: number, qi: number, lvl: number): boolean => { const t = TRAINING[step]; return !!t && (qi >= step || lvl >= t.lvl); };
@@ -74,6 +84,13 @@ function arrivalFor(w: WorldMap, reach: boolean[][], zoneName: string): { x: num
     return best;
 }
 
+/** Destino de un waypoint del menú: 'city' = punto de aparición de la facción, o el id de una zona de entrenamiento. Null si no existe. */
+export function waypointDest(w: WorldMap, id: string, faction: string): { x: number; y: number; step?: number } | null {
+    if (id === 'city') { const h = HUBS[faction]; return h ? { x: h.x, y: h.y } : null; }
+    const t = TRAINING.find((q) => q.id === id), a = w.waypointArrivals?.[id];
+    return t && a ? { x: a.x, y: a.y, step: t.step } : null;
+}
+
 export function extendTraining(w: WorldMap): WorldMap {
     // celdas alcanzables a pie desde el campamento
     const reach: boolean[][] = Array.from({ length: w.size }, () => new Array<boolean>(w.size).fill(false));
@@ -87,14 +104,22 @@ export function extendTraining(w: WorldMap): WorldMap {
         }
     }
     const arrivals = TRAINING.map((t) => arrivalFor(w, reach, t.zone));
-    const portals: Portal[] = [];
-    for (const [city, pads] of Object.entries(TRAINING_PADS)) {
-        pads.forEach(([x, y], i) => {
-            if (w.blocked[y][x]) throw new Error(`el portal de ${city} #${i} cae en una celda bloqueada (${x}, ${y})`);
-            const t = TRAINING[i], a = arrivals[i];
-            portals.push({ x, y, tx: a.x, ty: a.y, msg: `Cruzás el portal: ${t.zone}.`, train: t });
-        });
+    const wps: Waypoint[] = [], arr: Record<string, { x: number; y: number }> = {};
+    // portal grande de cada ciudad: celda HUB+(3,0), con 3x3 despejado alrededor
+    for (const [city, h] of Object.entries(HUBS)) {
+        const x = h.x + CITY_PORTAL_OFFSET.x, y = h.y + CITY_PORTAL_OFFSET.y;
+        // el 3x3 despejado lo reserva el layout de la ciudad (cities.ts); acá solo exigimos que la celda central sea caminable
+        if (w.blocked[y][x]) throw new Error(`el portal de ${city} cae en una celda bloqueada (${x}, ${y}); el layout de la ciudad tiene que dejar libre HUB+(3,0)`);
+        wps.push({ id: `city:${city}`, x, y, kind: 'city', name: 'Portal de Frontera', faction: city });
     }
-    w.portals = [...(w.portals ?? []), ...portals];
+    // waypoint chico pegado a la celda de llegada de cada zona (no sobre ella, para que no se abra solo al llegar)
+    TRAINING.forEach((t, i) => {
+        const a = arrivals[i]; arr[t.id] = a;
+        const c = ([[1, 0], [0, 1], [-1, 0], [0, -1]] as const).map(([dx, dy]) => ({ x: a.x + dx, y: a.y + dy })).find((q) => !w.blocked[q.y][q.x]);
+        if (!c) throw new Error(`sin celda para el waypoint de ${t.zone}`);
+        wps.push({ id: `zone:${t.id}`, x: c.x, y: c.y, kind: 'zone', name: t.zone, step: t.step });
+    });
+    w.waypoints = [...(w.waypoints ?? []), ...wps];
+    w.waypointArrivals = arr;
     return w;
 }

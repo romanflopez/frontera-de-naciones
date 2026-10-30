@@ -5,7 +5,7 @@
  * quién ve a quién y el chat. Lo que todavía corre solo en este navegador, como en el prototipo:
  * mobs, combate, hechizos, loot y experiencia (pasan al server en la fase 1b).
  */
-import { buildSolmar, HUBS, cityAt, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type Portal, type TrainingStep } from '@fdn/world';
+import { buildSolmar, HUBS, cityAt, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, WAYPOINT_RANGE } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import { spellIcon } from './icons.ts';
 import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
@@ -795,6 +795,7 @@ cv.addEventListener('pointerdown', (e) => {
     talkNpc = null; P.foe = null;
     const npc = !m && !P.ready ? pickNpc(sx, sy) : null;
     if (npc) { talkTo(npc); return; }
+    if (!m && !P.ready) { const wp = pickWaypoint(sx, sy); if (wp) { talkWp(wp); return; } }
     if (P.ready) {
         const s = SPELLS[P.ready.i];
         if (m) { release(m); return; }
@@ -974,64 +975,54 @@ function nameTag(name: string, x: number, y: number, col: string, alpha = 1, siz
     ctx.globalAlpha = alpha; ctx.textAlign = 'center'; ctx.font = `600 ${size}px 'Alegreya Sans', system-ui, sans-serif`;
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.strokeText(name, x, y); ctx.fillStyle = col; ctx.fillText(name, x, y); ctx.globalAlpha = 1;
 }
-// ---------- portales de entrenamiento: pad rúnico en el piso, arco de piedra y cartel (todo dibujado acá) ----------
-const TRAIN_PORTALS: Portal[] = (MAP.portals ?? []).filter((q) => !!q.train);
-const ell = (x: number, y: number, rx: number, ry: number) => { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); };
-function drawPortalPad(q: Portal, T: number) {
-    const t = q.train!, open = trainOpen(t), c = iso(q.x + 0.5, q.y + 0.5), pulse = 0.5 + 0.5 * Math.sin(T * 2.2 + q.x * 0.7);
-    ctx.save();
-    ctx.fillStyle = open ? 'rgba(14,16,24,.6)' : 'rgba(22,24,30,.7)'; ell(c.x, c.y, 36, 18); ctx.fill();
-    ctx.strokeStyle = open ? t.col : '#555d68'; ctx.lineWidth = 3; ctx.globalAlpha = open ? 0.9 : 0.8; ell(c.x, c.y, 36, 18); ctx.stroke(); ctx.globalAlpha = 1;
-    // runas en el borde: giran si está abierto
-    for (let j = 0; j < 10; j++) {
-        const a = (j / 10) * Math.PI * 2 + (open && !reduce ? T * 0.5 : 0), cx = Math.cos(a), cy = Math.sin(a);
-        ctx.strokeStyle = open ? t.col : '#454c56'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(c.x + cx * 29, c.y + cy * 14.5); ctx.lineTo(c.x + cx * 34, c.y + cy * 17); ctx.stroke();
+// ---------- Portal de Frontera (waypoint estilo Diablo): pad rúnico, arco de piedra y cartel (todo dibujado acá) ----------
+const WAYPOINTS: Waypoint[] = MAP.waypoints ?? [];
+const MY_WPS = () => WAYPOINTS.filter((q) => q.kind === 'zone' || q.faction === selectedFaction);
+const wpCol = (q: Waypoint) => (q.kind === 'city' ? '#e2b04a' : TRAINING[q.step!].col);
+const wpScale = (q: Waypoint) => (q.kind === 'city' ? 2.7 : 0.62);
+const ell = (x: number, y: number, rx: number, ry: number) => { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.stroke(); };
+const ellF = (x: number, y: number, rx: number, ry: number) => { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); };
+function drawPortalPad(q: Waypoint, T: number) {
+    const col = wpCol(q), k = wpScale(q), c0 = iso(q.x + 0.5, q.y + 0.5), pulse = 0.5 + 0.5 * Math.sin(T * 2.2 + q.x * 0.7), lw = 1 / Math.sqrt(k);
+    ctx.save(); ctx.translate(c0.x, c0.y); ctx.scale(k, k);
+    ctx.fillStyle = 'rgba(14,16,24,.62)'; ellF(0, 0, 36, 18);
+    ctx.strokeStyle = col; ctx.lineWidth = 3 * lw; ctx.globalAlpha = 0.9; ell(0, 0, 36, 18); ctx.globalAlpha = 1;
+    // runas en el borde: giran
+    for (let j = 0; j < 12; j++) {
+        const a = (j / 12) * Math.PI * 2 + (reduce ? 0 : T * 0.5), cx = Math.cos(a), cy = Math.sin(a);
+        ctx.strokeStyle = col; ctx.lineWidth = 2 * lw; ctx.beginPath(); ctx.moveTo(cx * 29, cy * 14.5); ctx.lineTo(cx * 34, cy * 17); ctx.stroke();
     }
-    if (open) {
-        ctx.globalCompositeOperation = 'lighter';
-        const g = ctx.createRadialGradient(c.x, c.y, 2, c.x, c.y, 36); g.addColorStop(0, t.col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.35 + pulse * 0.25; ctx.fillStyle = g; ell(c.x, c.y, 34, 17); ctx.fill();
-        ctx.globalAlpha = 0.8; ctx.strokeStyle = t.col; ctx.lineWidth = 1.5; ctx.setLineDash([7, 6]); ctx.lineDashOffset = -T * 18; ell(c.x, c.y, 22, 11); ctx.stroke(); ctx.setLineDash([]);
-        const bg = ctx.createLinearGradient(0, c.y, 0, c.y - 78); bg.addColorStop(0, t.col); bg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.16 + pulse * 0.1; ctx.fillStyle = bg;
-        ctx.beginPath(); ctx.moveTo(c.x - 26, c.y); ctx.lineTo(c.x - 20, c.y - 78); ctx.lineTo(c.x + 20, c.y - 78); ctx.lineTo(c.x + 26, c.y); ctx.closePath(); ctx.fill();
-        if (!reduce) for (let j = 0; j < 5; j++) { const k = (T * 0.45 + j * 0.2) % 1; ctx.globalAlpha = (1 - k) * 0.9; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(c.x + Math.sin(j * 5.1 + T) * 16, c.y - 4 - k * 60, 1.6, 0, Math.PI * 2); ctx.fill(); }
-    } else {
-        // sellado: cadenas cruzadas sobre el pad
-        ctx.strokeStyle = '#30353d'; ctx.lineWidth = 3; ctx.setLineDash([5, 3]);
-        ctx.beginPath(); ctx.moveTo(c.x - 26, c.y - 8); ctx.lineTo(c.x + 26, c.y + 8); ctx.moveTo(c.x + 26, c.y - 8); ctx.lineTo(c.x - 26, c.y + 8); ctx.stroke(); ctx.setLineDash([]);
-    }
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(0, 0, 2, 0, 0, 36); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.35 + pulse * 0.25; ctx.fillStyle = g; ellF(0, 0, 34, 17);
+    ctx.globalAlpha = 0.8; ctx.strokeStyle = col; ctx.lineWidth = 1.5 * lw; ctx.setLineDash([7, 6]); ctx.lineDashOffset = -T * 18; ell(0, 0, 22, 11);
+    ctx.setLineDash([]);
+    if (q.kind === 'city') { ell(0, 0, 12, 6); ctx.beginPath(); for (let j = 0; j < 6; j++) { const a = (j / 6) * Math.PI * 2 + T * 0.3; ctx.lineTo(Math.cos(a) * 17, Math.sin(a) * 8.5); } ctx.closePath(); ctx.stroke(); }
+    const bg = ctx.createLinearGradient(0, 0, 0, -78); bg.addColorStop(0, col); bg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.16 + pulse * 0.1; ctx.fillStyle = bg;
+    ctx.beginPath(); ctx.moveTo(-26, 0); ctx.lineTo(-20, -78); ctx.lineTo(20, -78); ctx.lineTo(26, 0); ctx.closePath(); ctx.fill();
+    if (!reduce) for (let j = 0; j < 6; j++) { const t = (T * 0.45 + j * 0.17) % 1; ctx.globalAlpha = (1 - t) * 0.9; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(Math.sin(j * 5.1 + T) * 16, -4 - t * 60, 1.6 * lw, 0, Math.PI * 2); ctx.fill(); }
     ctx.restore();
 }
-function drawPortalArch(q: Portal, T: number) {
-    const t = q.train!, open = trainOpen(t), c = iso(q.x + 0.5, q.y + 0.5);
-    ctx.save();
+function drawPortalArch(q: Waypoint, T: number) {
+    const col = wpCol(q), k = wpScale(q), c0 = iso(q.x + 0.5, q.y + 0.5);
+    ctx.save(); ctx.translate(c0.x, c0.y); ctx.scale(k, k);
     for (const sx of [-1, 1]) { // dos pilares de piedra con una gema rúnica arriba
-        const px = c.x + sx * 31, py = c.y - 2;
+        const px = sx * 31, py = -2;
         ctx.fillStyle = '#5d626b'; ctx.fillRect(px - 5, py - 46, 10, 46); ctx.fillStyle = sx < 0 ? '#7a808a' : '#464b53'; ctx.fillRect(px - (sx < 0 ? 5 : 0), py - 46, 5, 46);
         ctx.fillStyle = '#6f7580'; ctx.fillRect(px - 7, py - 50, 14, 5); ctx.fillRect(px - 7, py - 2, 14, 4);
-        ctx.fillStyle = open ? t.col : '#3b4048'; ctx.beginPath(); ctx.moveTo(px, py - 62); ctx.lineTo(px + 5, py - 55); ctx.lineTo(px, py - 49); ctx.lineTo(px - 5, py - 55); ctx.closePath(); ctx.fill();
-        if (open) { ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(px, py - 55, 0, px, py - 55, 14); g.addColorStop(0, t.col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.5 + 0.3 * Math.sin(T * 3 + sx); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px, py - 55, 14, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
+        ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(px, py - 62); ctx.lineTo(px + 5, py - 55); ctx.lineTo(px, py - 49); ctx.lineTo(px - 5, py - 55); ctx.closePath(); ctx.fill();
+        ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(px, py - 55, 0, px, py - 55, 14); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.5 + 0.3 * Math.sin(T * 3 + sx); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px, py - 55, 14, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     }
-    ctx.strokeStyle = '#6a707a'; ctx.lineWidth = 6; ctx.beginPath(); ctx.ellipse(c.x, c.y - 48, 31, 11, 0, Math.PI, Math.PI * 2); ctx.stroke();
-    if (open) { ctx.strokeStyle = t.col; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.ellipse(c.x, c.y - 48, 31, 11, 0, Math.PI, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
-    else { // candado dorado colgando del arco
-        const lx = c.x, ly = c.y - 52;
-        ctx.strokeStyle = '#c9a54a'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(lx, ly - 4, 5, Math.PI, 0); ctx.stroke();
-        ctx.fillStyle = '#b8902f'; ctx.fillRect(lx - 7, ly - 4, 14, 11); ctx.fillStyle = '#2a1a00'; ctx.beginPath(); ctx.arc(lx, ly, 1.8, 0, Math.PI * 2); ctx.fill(); ctx.fillRect(lx - 0.8, ly, 1.6, 4);
-    }
+    ctx.strokeStyle = '#6a707a'; ctx.lineWidth = 6; ctx.beginPath(); ctx.ellipse(0, -48, 31, 11, 0, Math.PI, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.ellipse(0, -48, 31, 11, 0, Math.PI, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+    if (q.kind === 'city') { ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, -66); ctx.lineTo(5, -58); ctx.lineTo(0, -51); ctx.lineTo(-5, -58); ctx.closePath(); ctx.fill(); }
     ctx.restore();
 }
-/** Cartel de cada portal: nombre de la zona siempre; requisito y nivel recomendado del portal más cercano. */
+/** Cartel de cada portal: "Portal de Frontera" en la plaza; los chicos de las zonas dicen "Portal de regreso" cerca. */
 function drawPortalLabels() {
-    let near: Portal | null = null, nd = 5;
-    for (const q of TRAIN_PORTALS) { const d = Math.hypot(q.x + 0.5 - P.x, q.y + 0.5 - P.y); if (d < nd) { nd = d; near = q; } }
-    for (const q of TRAIN_PORTALS) {
-        const d = Math.hypot(q.x + 0.5 - P.x, q.y + 0.5 - P.y); if (d > 16) continue;
-        const t = q.train!, open = trainOpen(t), c = iso(q.x + 0.5, q.y + 0.5);
-        nameTag(t.zone, c.x, c.y - 74, open ? t.col : '#a3abb6', 1, 10);
-        if (q !== near) continue;
-        const qq = QUESTS[t.step], lv = qq ? questLevel(qq) : '';
-        if (open) nameTag(`Abierto · ${lv} · pisá el portal`, c.x, c.y - 87, '#d6efc4', 1, 10);
-        else { nameTag(`Bloqueado: entregá «${t.after}»`, c.x, c.y - 98, '#ffb27a', 1, 10); nameTag(`o llegá al nivel ${t.lvl} (${lv})`, c.x, c.y - 86, '#ffb27a', 1, 10); }
+    for (const q of WAYPOINTS) {
+        const d = Math.hypot(q.x + 0.5 - P.x, q.y + 0.5 - P.y), c = iso(q.x + 0.5, q.y + 0.5);
+        if (q.kind === 'city') { if (d > 18) continue; nameTag('Portal de Frontera', c.x, c.y - 185, wpCol(q), 1, 14); if (d < 7) nameTag('Tocá el portal para viajar', c.x, c.y - 168, '#d9d2b8', 1, 10); }
+        else if (d < 9) { nameTag('Portal de regreso', c.x, c.y - 52, wpCol(q), 1, 10); if (d < 4) nameTag(q.name, c.x, c.y - 40, '#d9d2b8', 1, 9); }
     }
 }
 function render() {
@@ -1044,7 +1035,7 @@ function render() {
     const minY = Math.max(0, Math.floor(Math.min(c0.y, c1.y, c2.y, c3.y)) - 2), maxY = Math.min(N - 1, Math.ceil(Math.max(c0.y, c1.y, c2.y, c3.y)) + 2);
     for (let y = minY; y <= maxY; y++) for (let x = minX; x <= maxX; x++) { const p = iso(x + 0.5, y + 0.5); drawWorld(tiles[y][x], p.x, p.y); }
     for (const d of decals) { const p = iso(d.x, d.y); drawWorld(d.id, p.x, p.y); }
-    for (const q of TRAIN_PORTALS) if (q.x >= minX - 1 && q.x <= maxX + 1 && q.y >= minY - 1 && q.y <= maxY + 1) drawPortalPad(q, T);
+    for (const q of WAYPOINTS) if (q.x >= minX - 3 && q.x <= maxX + 3 && q.y >= minY - 3 && q.y <= maxY + 3) drawPortalPad(q, T);
     for (const f of fx) if (f.k === 'click') { const p = iso(f.x, f.y); ctx.globalAlpha = 1 - f.t / 0.6; ctx.strokeStyle = '#d6a445'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(p.x, p.y, 10 + f.t * 30, (10 + f.t * 30) / 2, 0, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
     for (const sc of scorch.slice()) { const age = T - sc.t; if (age > 5) { scorch.splice(scorch.indexOf(sc), 1); continue; } const p = iso(sc.x, sc.y); ctx.globalAlpha = Math.min(1, (5 - age) / 2) * 0.55; const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, sc.r * TW * 0.45); g.addColorStop(0, '#120a05'); g.addColorStop(0.7, 'rgba(30,15,5,.6)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(p.x, p.y, sc.r * TW * 0.45, sc.r * TW * 0.225, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
     if (P.casting) {
@@ -1067,7 +1058,7 @@ function render() {
     // objetos por profundidad
     const objs: { d: number; f: () => void }[] = [];
     for (const o of props) if (o.x > minX - 3 && o.x < maxX + 3 && o.y > minY - 3 && o.y < maxY + 3) objs.push({ d: o.d ?? o.x + o.y, f: () => { const p = iso(o.x, o.y); drawWorld(o.id, p.x, p.y); } });
-    for (const q of TRAIN_PORTALS) if (q.x >= minX - 1 && q.x <= maxX + 1 && q.y >= minY - 1 && q.y <= maxY + 1) objs.push({ d: q.x + q.y + 0.5, f: () => drawPortalArch(q, T) });
+    for (const q of WAYPOINTS) if (q.x >= minX - 3 && q.x <= maxX + 3 && q.y >= minY - 3 && q.y <= maxY + 3) objs.push({ d: q.x + q.y + 0.5, f: () => drawPortalArch(q, T) });
     for (const b of MAP.buildings) objs.push({ d: b.x + b.y + (b.w + b.h) / 2, f: () => drawBuilding(b) });
     for (const n of MAP.npcs) objs.push({ d: n.x + n.y + 1, f: () => drawNpc(n, T) });
     for (const d of drops) objs.push({ d: d.x + d.y - 0.2, f: () => drawDrop(d, T) });
@@ -1364,7 +1355,7 @@ function refreshUnlocks(announce: boolean) {
     let fresh = false;
     for (const t of TRAINING) if (!UNLOCKED.has(t.id) && trainingUnlocked(t.step, Q.i, P.lvl)) {
         UNLOCKED.add(t.id); fresh = true;
-        if (announce) { log(`Portal desbloqueado: <b>${t.zone}</b>. Lo tenés en la hilera de portales de tu ciudad.`, true); toast(`Portal desbloqueado: ${t.zone}`); }
+        if (announce) { log(`Portal desbloqueado: <b>${t.zone}</b>. Ya podés viajar ahí desde el Portal de Frontera de tu ciudad.`, true); toast(`Portal desbloqueado: ${t.zone}`); }
     }
     if (fresh && announce) later(0.1, () => saver.tick(true));
 }
@@ -1389,7 +1380,7 @@ function openQuestDlg(n: Npc) {
     else if (Q.st === 'new') { body = `<b>${q.name}</b> <small>${q.zone} · ${questLevel(q)}</small><br>${q.say}<br><small>Recompensa: ${q.xp} exp · ${q.gold} oro${q.shard ? ' · ' + KEYDEFS[q.shard].shard : ''}</small>`; btn = 'Aceptar'; }
     else if (Q.st === 'active') body = `<b>${q.name}</b><br>Todavía te faltan ${q.n - Q.prog} en ${q.zone}.`;
     else { body = `<b>${q.name}</b><br>Buen trabajo. Tomá tu paga.<br><small>${q.xp} exp · ${q.gold} oro${q.shard ? ' · ' + KEYDEFS[q.shard].shard : ''}</small>`; btn = 'Entregar'; }
-    if (q && Q.st !== 'ready') body += `<br><small>Portal de entrenamiento: «${q.zone}» (hilera de portales de la ciudad${trainOpen(TRAINING[Q.i]) ? '' : ', todavía bloqueado'}).</small>`;
+    if (q && Q.st !== 'ready') body += `<br><small>Portal de entrenamiento: «${q.zone}» (Portal de Frontera de la ciudad${trainOpen(TRAINING[Q.i]) ? '' : ', todavía bloqueado'}).</small>`;
     body += `<br><small>Forja: ${SHARDS_PER_KEY} esquirlas (las sueltan los bosses) + oro = 1 llave.</small>`;
     const fg = $('qdForges'); fg.innerHTML = '';
     for (const k of KEY_IDS) {
@@ -1469,6 +1460,69 @@ function checkPortals() {
     net.send({ $case: 'playerTeleportRequested', value: { x: p.tx, y: p.ty } });
     log(p.msg, true);
 }
+// ---------- menú del Portal de Frontera: zonas de entrenamiento en orden de progresión; el server valida el viaje ----------
+let wpOpen: Waypoint | null = null, talkWpTarget: Waypoint | null = null, wpInside = '';
+const WP_OPEN_DIST = 2.2, WP_CLOSE_DIST = WAYPOINT_RANGE - 0.3;
+const wpDist = (q: Waypoint) => Math.hypot(q.x + 0.5 - P.x, q.y + 0.5 - P.y);
+function pickWaypoint(sx: number, sy: number): Waypoint | null {
+    const g = toGrid(sx, sy); let best: Waypoint | null = null, bd = Infinity;
+    for (const q of MY_WPS()) { const d = Math.hypot(q.x + 0.5 - g.x, q.y + 0.5 - g.y); if (d <= (q.kind === 'city' ? 2 : 1.1) && d < bd) { bd = d; best = q; } }
+    return best;
+}
+function talkWp(q: Waypoint) {
+    cancelCast(); P.target = null; P.engage = false; P.pickup = null; P.queued = null;
+    if (wpDist(q) <= WP_OPEN_DIST) { openWp(q); return; }
+    if (moveTo(q.x + 0.5, q.y + 0.5)) talkWpTarget = q; else toast('No llegás hasta ahí.');
+}
+/** Paso de la zona de entrenamiento donde estás parado (o cerca), para resaltarla en el menú; -1 si ninguna. */
+function currentTrainStep(): number {
+    let best = -1, bd = Infinity;
+    for (const t of TRAINING) { const z = ZONES.find((q) => q.name === t.zone); if (!z) continue; const d = Math.hypot(P.x - z.x, P.y - z.y); if (d <= z.r + 8 && d < bd) { bd = d; best = t.step; } }
+    return best;
+}
+const LOCK_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4.5 7V5a3.5 3.5 0 017 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="7" width="10" height="7" rx="1.4" fill="currentColor"/></svg>';
+const lockMsg = (t: TrainingStep) => `Portal bloqueado (${t.zone}): ${t.after ? `entregá «${t.after}» al Capitán` : 'todavía no'} o llegá al nivel ${t.lvl}.`;
+function renderWp() {
+    if (!wpOpen) return;
+    const city = MAP.cities?.find((c) => c.faction === selectedFaction), inCity = !!cityAt(P.cell.x, P.cell.y), cur = inCity ? -1 : currentTrainStep();
+    $('wpTitle').textContent = wpOpen.kind === 'city' ? 'Portal de Frontera' : 'Portal de regreso';
+    $('wpSub').textContent = wpOpen.kind === 'city' ? `${city?.name ?? 'Tu ciudad'} · zonas de entrenamiento` : `${wpOpen.name} · volvé a tu ciudad o viajá a otra zona`;
+    const rows = [`<button type="button" class="wprow home${inCity ? ' cur' : ''}" data-wp="city"${inCity ? ' disabled' : ''}><i class="wpn">&#8962;</i><span class="wpt"><b>${inCity ? 'Estás en ' : 'Volver a '}${esc(city?.name ?? 'la ciudad')}</b><small>${inCity ? 'Zona segura' : 'Zona segura · tu facción'}</small></span>${inCity ? '<em class="wptag">Estás aquí</em>' : ''}</button>`];
+    for (const t of TRAINING) {
+        const open = trainOpen(t), here = t.step === cur, qq = QUESTS[t.step], lv = qq ? questLevel(qq) : '';
+        const sub = open ? `<small>Nivel recomendado ${lv.replace('Nv ', '')}</small>` : `<small class="req">${LOCK_SVG} Misión «${esc(t.after ?? '')}» o nivel ${t.lvl}</small>`;
+        rows.push(`<button type="button" class="wprow${open ? '' : ' locked'}${here ? ' cur' : ''}" data-wp="${t.id}" style="--zc:${t.col}"><i class="wpn">${t.step + 1}</i><span class="wpt"><b>${esc(t.zone)}</b>${sub}</span>${here ? '<em class="wptag">Estás aquí</em>' : `<em class="wplv">${lv}</em>`}</button>`);
+    }
+    $('wpList').innerHTML = rows.join('');
+    document.querySelectorAll<HTMLElement>('[data-wp]').forEach((b) => (b.onclick = () => wpGo(b.dataset.wp!)));
+}
+function openWp(q: Waypoint) { talkWpTarget = null; closeShop(); wpOpen = q; $('wpmenu').hidden = false; renderWp(); }
+function closeWp() { wpOpen = null; talkWpTarget = null; $('wpmenu').hidden = true; }
+function wpGo(id: string) {
+    if (!wpOpen || !connected || P.dead) return;
+    let dest = 'la ciudad';
+    if (id === 'city') { if (cityAt(P.cell.x, P.cell.y)) return; }
+    else {
+        const t = TRAINING.find((q) => q.id === id); if (!t) return;
+        if (!trainOpen(t)) { toast(`Portal bloqueado: ${t.zone}`); log(lockMsg(t), true); return; }
+        dest = t.zone;
+    }
+    portalLock = now() + 1.5; P.path = []; P.target = null; P.engage = false; P.pickup = null;
+    net.send({ $case: 'waypointRequest', value: { id } });
+    log(`Cruzás el portal: ${dest}.`, true);
+    closeWp();
+}
+/** Abre el menú al llegar (click) o al pisar el waypoint, y lo cierra si te alejás. */
+function wpTick() {
+    if (talkWpTarget && !P.step && wpDist(talkWpTarget) <= WP_OPEN_DIST) openWp(talkWpTarget);
+    else if (talkWpTarget && !P.step && !P.path.length) talkWpTarget = null;
+    if (wpOpen && (wpDist(wpOpen) > WP_CLOSE_DIST || P.dead || !connected)) closeWp();
+    const on = connected && !P.dead ? MY_WPS().find((q) => q.x === P.cell.x && q.y === P.cell.y) : undefined;
+    if (!on) wpInside = '';
+    else if (wpInside !== on.id && !P.step && now() >= portalLock) { wpInside = on.id; if (!wpOpen) openWp(on); }
+}
+$('wpClose').addEventListener('click', closeWp);
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && wpOpen) closeWp(); });
 const inDungeon = (gx: number, gy: number) => [MAP.dungeon, ...(MAP.dungeons ?? [])].some((d) => !!d && gx >= d.x0 && gx < d.x1 + 1 && gy >= d.y0 && gy < d.y1 + 1);
 
 // ---------- loop ----------
@@ -1477,7 +1531,7 @@ let last = now(), lastCam = now();
 function frame() {
     const T = now(); let dt = Math.min(0.05, T - last); last = T;
     if (hitstop > 0) { hitstop -= dt; dt = 0; }
-    update(dt); checkPortals(); npcTick(); updateCam(Math.min(0.05, T - lastCam)); lastCam = T;
+    update(dt); checkPortals(); wpTick(); npcTick(); updateCam(Math.min(0.05, T - lastCam)); lastCam = T;
     updateHover(); render(); hud(); requestAnimationFrame(frame);
 }
 
@@ -1566,7 +1620,7 @@ function enterWorld(name: string) {
     const hub = HUBS[selectedFaction], here = cityAt(P.cell.x, P.cell.y);
     if (hub && (!welcomeBack || (here && here.faction !== selectedFaction))) net.send({ $case: 'playerTeleportRequested', value: { x: hub.x, y: hub.y } });
     log(selectedFaction === 'vhar' ? 'Bienvenido a la Ciudad de Vhar. La puerta del sur lleva a las tierras de Solmar.' : 'Bienvenido a la Ciudad de Solmar.', true);
-    log('Al norte de la ciudad hay una hilera de portales de entrenamiento, uno por zona. El primero ya está abierto; los demás se abren al entregar las misiones del Capitán (o subiendo de nivel).', true);
+    log('En la plaza está el Portal de Frontera: un menú con las zonas de entrenamiento. La primera ya está abierta; las demás se abren al entregar las misiones del Capitán (o subiendo de nivel). En cada zona hay un portal de regreso.', true);
     log('Tocá un mob para atacarlo. Apretá un hechizo (1–4), esperá que cargue y hacé clic en el objetivo. Enter para chatear.');
 }
 
@@ -1593,7 +1647,7 @@ async function boot() {
     refreshLook();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, openShop, toScreen, give: (n: number) => { for (let i = 0; i < n; i++) P.bag.push(rollItem(1 + i)); renderBag(); } });
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, TRAIN_PORTALS, trainOpen, refreshUnlocks, levelUp, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5) });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, levelUp, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();
     requestAnimationFrame(frame);

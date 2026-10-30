@@ -119,6 +119,7 @@ export interface ClientMessage {
     | { $case: "saveCharacterRequest"; value: SaveCharacterRequest }
     | { $case: "mobHitRequest"; value: MobHitRequest }
     | { $case: "pveStatusRequest"; value: PveStatusRequest }
+    | { $case: "waypointRequest"; value: WaypointRequest }
     | undefined;
 }
 
@@ -195,6 +196,11 @@ export interface SpellCastRequest {
   y: number;
   playerId?: bigint | undefined;
   monsterId?: bigint | undefined;
+}
+
+/** Viaje por el menú de waypoints: id = 'city' (volver a la ciudad de tu facción) o el id de una zona de entrenamiento. */
+export interface WaypointRequest {
+  id: string;
 }
 
 export interface PlayerTeleportRequested {
@@ -1443,6 +1449,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "pveStatusRequest":
         PveStatusRequest.encode(message.payload.value, writer.uint32(970).fork()).join();
         break;
+      case "waypointRequest":
+        WaypointRequest.encode(message.payload.value, writer.uint32(978).fork()).join();
+        break;
     }
     return writer;
   },
@@ -1982,6 +1991,14 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "pveStatusRequest", value: PveStatusRequest.decode(reader, reader.uint32()) };
             continue;
           }
+          case 122: {
+            if (tag !== 978) {
+              break;
+            }
+
+            message.payload = { $case: "waypointRequest", value: WaypointRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -2417,6 +2434,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "pveStatusRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "pveStatusRequest", value: PveStatusRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "waypointRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "waypointRequest", value: WaypointRequest.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -3411,6 +3434,61 @@ export const SpellCastRequest: MessageFns<SpellCastRequest> = {
     message.monsterId = (object.monsterId !== undefined && object.monsterId !== null)
       ? BigInt(object.monsterId)
       : undefined;
+    return message;
+  },
+};
+
+function createBaseWaypointRequest(): WaypointRequest {
+  return { id: "" };
+}
+
+export const WaypointRequest: MessageFns<WaypointRequest> = {
+  encode(message: WaypointRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): WaypointRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseWaypointRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.id = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<WaypointRequest>, I>>(base?: I): WaypointRequest {
+    return WaypointRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<WaypointRequest>, I>>(object: I): WaypointRequest {
+    const message = createBaseWaypointRequest();
+    message.id = object.id ?? "";
     return message;
   },
 };

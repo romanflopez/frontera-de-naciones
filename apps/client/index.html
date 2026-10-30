@@ -138,6 +138,27 @@ button:hover{border-color:var(--brass)} button:focus-visible{outline:2px solid v
 #shop h2{margin:0;font-family:var(--f-display);font-size:15px;color:var(--brass);letter-spacing:.04em;display:flex;align-items:center;gap:8px}
 #shop h2 small{font-family:var(--f-body);color:var(--text);font-variant-numeric:tabular-nums;margin-left:auto}
 #shop h2 button{padding:0 8px;line-height:22px;font-size:16px}
+#wpmenu{top:calc(56px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(400px,calc(100vw - 24px));padding:0;display:grid;max-height:calc(100% - 56px - var(--hud-h) - 28px);overflow:hidden;background:linear-gradient(180deg,rgba(26,22,14,.96),rgba(12,14,12,.96));border:1px solid #8a6a2a;box-shadow:0 0 0 1px #000,0 6px 28px rgba(0,0,0,.65),inset 0 0 28px rgba(214,164,69,.08)}
+#wpmenu header{padding:11px 12px 8px;border-bottom:1px solid #4a3a1a;background:radial-gradient(120% 140% at 50% -40%,rgba(226,176,74,.22),transparent 70%)}
+#wpmenu h2{margin:0;font-family:var(--f-cinzel);font-weight:700;font-size:17px;letter-spacing:.09em;text-transform:uppercase;color:var(--brass);display:flex;align-items:center;gap:8px;text-shadow:0 0 10px rgba(214,164,69,.45)}
+#wpmenu h2 button{margin-left:auto;padding:0 8px;line-height:22px;font-size:16px}
+#wpSub{font-family:var(--f-inter);font-size:11.5px;color:var(--muted);margin-top:2px}
+#wpList{display:grid;gap:3px;padding:8px;overflow:auto;font-family:var(--f-inter)}
+.wprow{display:flex;align-items:center;gap:10px;padding:7px 9px;text-align:left;background:#15181a;border:1px solid #2b312c;border-left:3px solid var(--zc,#d6a445);border-radius:3px;color:var(--text);cursor:pointer;font-family:var(--f-inter)}
+.wprow:hover:not(:disabled):not(.locked){background:#201d14;border-color:#8a6a2a;border-left-color:var(--zc,#d6a445)}
+.wprow .wpn{flex:none;width:24px;height:24px;display:grid;place-items:center;font-style:normal;font-family:var(--f-cinzel);font-weight:700;font-size:13px;color:var(--zc,var(--brass));border:1px solid currentColor;border-radius:50%;background:rgba(0,0,0,.35)}
+.wprow .wpt{flex:1;min-width:0;display:grid;gap:1px}
+.wprow b{font-family:var(--f-cinzel);font-weight:600;font-size:13px;letter-spacing:.02em}
+.wprow small{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px}
+.wprow .wplv{flex:none;font-style:normal;font-size:11px;color:#cdbf94;font-variant-numeric:tabular-nums}
+.wprow .wptag{flex:none;font-style:normal;font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:#1a1204;background:var(--brass);padding:2px 6px;border-radius:2px;font-weight:700}
+.wprow.home{border-left-color:var(--brass);background:linear-gradient(90deg,rgba(214,164,69,.18),#15181a 70%);margin-bottom:4px}
+.wprow.home .wpn{color:var(--brass);font-size:15px}
+.wprow.cur{outline:1px solid var(--brass);background:linear-gradient(90deg,rgba(214,164,69,.22),#1a1710 80%);box-shadow:0 0 12px rgba(214,164,69,.25)}
+.wprow:disabled{cursor:default;color:var(--text)}
+.wprow.locked{opacity:.62;border-left-color:#4a4f55}
+.wprow.locked .wpn{color:#7d848c}
+.wprow.locked .req{color:#e0a070}
 #qdlg{top:calc(84px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(340px,calc(100vw - 24px));padding:12px;display:grid;gap:10px}
 #qdlg h2{margin:0;font-family:var(--f-display);font-size:15px;color:var(--brass);display:flex;align-items:center;gap:8px} #qdlg h2 button{margin-left:auto;padding:0 8px;line-height:22px}
 #qdForges{display:grid;gap:6px} #qdBody{line-height:1.35} #qdBody small{color:var(--muted)}
@@ -222,6 +243,11 @@ canvas:focus{outline:none}
     <h2><span id="shopName">Mercader</span> <small id="shopGold"></small><button id="shopClose" type="button" aria-label="Cerrar">×</button></h2>
     <div class="label">Tu bolsa · tocá un item para venderlo</div>
     <div id="shopList"></div>
+  </div>
+
+  <div id="wpmenu" class="hud box" hidden role="dialog" aria-label="Portal de Frontera">
+    <header><h2><span id="wpTitle">Portal de Frontera</span><button id="wpClose" type="button" aria-label="Cerrar">×</button></h2><div id="wpSub"></div></header>
+    <div id="wpList"></div>
   </div>
 
   <div id="qdlg" class="hud box" hidden>

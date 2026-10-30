@@ -12,7 +12,7 @@ import { extendAshlands } from './ashlands';
 import { extendCities } from './cities';
 import { extendTraining, type TrainingStep } from './training';
 export { CITIES, HUBS, cityAt, type City } from './cities';
-export { TRAINING, TRAINING_IDS, TRAINING_PADS, trainingUnlocked, portalGate, type TrainingStep, type PortalProgress } from './training';
+export { TRAINING, TRAINING_IDS, WAYPOINT_RANGE, CITY_PORTAL_OFFSET, waypointDest, trainingUnlocked, portalGate, type TrainingStep, type PortalProgress, type Waypoint } from './training';
 import type { MobType } from './mobs';
 export * from './mobs';
 
@@ -52,6 +52,10 @@ export interface WorldMap {
     fire: { x: number; y: number };
     /** Escaleras entre zonas del mismo mapa: al terminar de pisar (x, y) se pasa a (tx, ty). */
     portals?: Portal[];
+    /** Waypoints del menú de viaje (portal grande de cada ciudad + uno por zona de entrenamiento). Ver training.ts. */
+    waypoints?: import('./training').Waypoint[];
+    /** Celda de llegada de cada zona de entrenamiento (por id de TRAINING). */
+    waypointArrivals?: Record<string, { x: number; y: number }>;
     /** Rectángulo de la cripta (el cliente la oscurece). */
     dungeon?: { x0: number; y0: number; x1: number; y1: number };
     /** Otras mazmorras (Cámara del foso): el cliente las oscurece igual. */
