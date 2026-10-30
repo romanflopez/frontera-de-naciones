@@ -837,6 +837,7 @@ window.addEventListener('keydown', (e) => {
     const hk = SPELLS.findIndex((x) => SPECIAL_KEY[x.id ?? ''] === e.key.toLowerCase()) >= 0 ? SPELLS.findIndex((x) => SPECIAL_KEY[x.id ?? ''] === e.key.toLowerCase()) : KEYS.indexOf(e.key), dm = /^(?:Digit|Numpad)([0-9])$/.exec(e.code), k = hk >= 0 ? hk : dm ? KEYS.indexOf(dm[1]) : null;
     if (k != null && k < SPELLS.length && !e.repeat) { e.preventDefault(); cast(k); }
     if (e.key === 'i' || e.key === 'I') toggleBag();
+    if (e.key === 'c' || e.key === 'C') toggleChar();
     if (e.key === 'Escape') { if (P.casting || P.ready) cancelCast('Hechizo cancelado.'); else P.target = null; }
 });
 
@@ -1228,7 +1229,7 @@ function hud() {
         if (m.poison > T) ch.push(`<span class="chip ven">Envenenado</span>`);
         $('tChips').innerHTML = ch.join('');
     }
-    $('gold').textContent = P.gold + ' oro';
+    $('gold').textContent = P.gold.toLocaleString('es-AR');
     const netEl = $('net');
     netEl.textContent = connected ? `En línea · ${playersOnline || 1} ${playersOnline === 1 ? 'jugador' : 'jugadores'}` : 'Sin conexión';
     netEl.classList.toggle('off', !connected);
@@ -1238,13 +1239,123 @@ function hud() {
 function layoutHud() {
     const root = $('hudroot'), sc = clamp(Math.min(innerWidth / 1360, innerHeight / 900), 0.4, 1);
     const st = document.documentElement.style; st.setProperty('--hud-scale', sc.toFixed(3)); st.setProperty('--hud-h', Math.round((root.offsetHeight + 8) * sc) + 'px');
+    { const hh = (root.offsetHeight + 8) * sc, ws = clamp(Math.min((innerWidth - 24) / 696, (innerHeight - hh - 96) / 516), 0.45, 1.3); st.setProperty('--win-scale', ws.toFixed(3)); renderTipPos(); }
 }
 addEventListener('resize', layoutHud); layoutHud();
+function renderTipPos() { if (typeof renderTip === 'function' && !$('itip').hidden) renderTip(); }
 
 // ---------- bolsa ----------
 let sel: { it: Item; from: 'bag' | 'eq' } | null = null;
-function toggleBag() { $('bag').hidden = !$('bag').hidden; renderBag(); }
+/** Selección de algo que no es equipo (poción o material): se muestra en el tooltip. */
+let selX: { k: 'pot'; id: 'hp' | 'mp' } | { k: 'mat'; id: string } | null = null;
+let invTab: 'all' | 'gear' | 'cons' | 'mat' = 'all';
+const BAG_MAX = 18;
+const bagOpen = () => !$('bag').hidden, charOpen = () => !$('char').hidden;
+/** I: abre Personaje + Inventario juntos (o cierra ambos). */
+function toggleBag() { const open = bagOpen(); $('bag').hidden = open; $('char').hidden = open; renderBag(); }
+/** C: solo la ventana de Personaje. */
+function toggleChar() { $('char').hidden = !charOpen(); renderBag(); }
+function closeWins() { $('bag').hidden = true; $('char').hidden = true; $('itip').hidden = true; }
 $('openBag').addEventListener('click', toggleBag);
+$('openChar').addEventListener('click', toggleChar);
+$('bagClose').addEventListener('click', () => { $('bag').hidden = true; renderBag(); });
+$('charClose').addEventListener('click', () => { $('char').hidden = true; renderBag(); });
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && (bagOpen() || charOpen()) && !(e.target instanceof HTMLInputElement)) closeWins(); });
+document.querySelectorAll<HTMLElement>('#invTabs [data-tab]').forEach((b) => b.addEventListener('click', () => { invTab = b.dataset.tab as typeof invTab; renderBag(); }));
+$('sortBtn').addEventListener('click', () => {
+    P.bag.sort((a, b) => SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot) || b.rar.k - a.rar.k || a.name.localeCompare(b.name, 'es'));
+    later(0.1, () => saver.tick(true)); renderBag(); renderShop();
+});
+$('dropBtn').addEventListener('click', () => {
+    if (!sel || sel.from !== 'bag') return; const it = sel.it, i = P.bag.indexOf(it); if (i < 0) return;
+    P.bag.splice(i, 1); sel = null; renderBag(); renderShop();
+});
+/** Borde de rareza (los comunes en bronce para que no destaquen). */
+const rarCol = (it: Item) => (it.rar.k ? it.rar.c : '#6b5a3c');
+const GLY: Record<string, string> = { cabeza: 'g-cabeza', armadura: 'g-armadura', arma: 'g-arma', botas: 'g-botas', amuleto: 'g-amuleto', escudo: 'g-escudo', anillo: 'g-anillo', guantes: 'g-guantes' };
+const EQ_L: [string, string, Slot | null][] = [['cabeza', 'Casco', 'cabeza'], ['armadura', 'Armadura', 'armadura'], ['arma', 'Arma', 'arma'], ['botas', 'Botas', null]];
+const EQ_R: [string, string, Slot | null][] = [['amuleto', 'Amuleto', null], ['escudo', 'Escudo', null], ['anillo', 'Anillo', 'anillo'], ['guantes', 'Guantes', null]];
+function slotBtn([g, label, slot]: [string, string, Slot | null]) {
+    const gl = `<svg class="gl" aria-hidden="true"><use href="#${GLY[g]}"/></svg>`;
+    if (!slot) return `<button type="button" class="sl dis" disabled aria-label="${label} (no disponible todavía)" title="${label}: no disponible todavía">${gl}</button>`;
+    const it = P.eq[slot];
+    return `<button type="button" class="sl${sel && it && sel.it === it ? ' sel' : ''}" data-eq="${slot}" aria-label="${label}: ${it ? esc(it.name) : 'vacío'}" style="${it ? `border-color:${rarCol(it)}` : ''}">${it ? ico(it) : gl}</button>`;
+}
+const STAT_ICON = (id: string, v: string, label: string) => `<div class="stat"><svg aria-hidden="true"><use href="#s-${id}"/></svg><span>${label}</span><b>${v}</b></div>`;
+function renderChar() {
+    const tt = totals(), wd: [number, number] = tt.wdmg[1] > 0 ? tt.wdmg : CLS.melee, need = expNeed();
+    $('lvN').textContent = `Lv. ${P.lvl}`; ($('lvI') as HTMLElement).style.width = clamp(P.exp / need, 0, 1) * 100 + '%';
+    $('lvT').textContent = `${Math.floor(P.exp).toLocaleString('es-AR')} / ${need.toLocaleString('es-AR')}`;
+    $('lvBar').setAttribute('aria-valuenow', String(Math.floor(clamp(P.exp / need, 0, 1) * 100))); $('lvBar').setAttribute('aria-valuemin', '0'); $('lvBar').setAttribute('aria-valuemax', '100');
+    const st = [
+        STAT_ICON('atk', `${wd[0]}–${wd[1]}`, 'Ataque'), STAT_ICON('def', String(tt.def), 'Defensa'), STAT_ICON('mag', String(tt.mag), 'Daño mágico'), STAT_ICON('hp', String(maxHp()), 'Vida máx.'),
+        STAT_ICON('mp', String(maxMp()), 'Maná máx.'), STAT_ICON('crit', tt.crit + '%', 'Crítico'), STAT_ICON('aspd', tt.aspd + '%', 'Vel. ataque'), STAT_ICON('leech', tt.leech + '%', 'Robo de vida'),
+        STAT_ICON('fire', tt.fres + '%', 'Res. fuego'), STAT_ICON('ice', tt.ires + '%', 'Res. hielo'), STAT_ICON('par', tt.rpar + '%', 'Res. parálisis'), STAT_ICON('poi', tt.poison + '%', 'Veneno'),
+    ].join('');
+    if ($('stats').dataset.h !== st) { $('stats').dataset.h = st; $('stats').innerHTML = st; }
+}
+/** Muñeco real del personaje (idle) en el retrato. */
+function drawPortrait(T: number) {
+    const c = $('heroCv') as HTMLCanvasElement, g = c.getContext('2d')!, M = SPR.hero, A = M?.anims.stance, im = IMG.hero;
+    g.clearRect(0, 0, c.width, c.height); if (!A || !im) return;
+    const i = frameIndex(A, T), k = 2; g.imageSmoothingEnabled = false;
+    g.drawImage(im, i * M.cw, (A.row + 5) * M.ch, M.cw, M.ch, c.width / 2 - M.ax * k, c.height - 40 - M.ay * k, M.cw * k, M.ch * k);
+}
+let winT = 0;
+function winTick(T: number) {
+    if (charOpen()) { drawPortrait(T); if (T - winT > 0.4) { winT = T; renderChar(); } }
+}
+interface InvEnt { html: string; key: string }
+function renderBag() {
+    if (!bagOpen() && !charOpen()) { $('itip').hidden = true; return; }
+    $('gold').textContent = P.gold.toLocaleString('es-AR');
+    $('eqL').innerHTML = EQ_L.map(slotBtn).join(''); $('eqR').innerHTML = EQ_R.map(slotBtn).join('');
+    $('eqRings').innerHTML = ['Anillo 2', 'Anillo 3'].map((l) => `<button type="button" class="sl dis" disabled aria-label="${l} (no disponible todavía)" title="${l}: no disponible todavía"><svg class="gl" aria-hidden="true"><use href="#g-anillo"/></svg></button>`).join('');
+    renderChar();
+    document.querySelectorAll<HTMLElement>('#char [data-eq]').forEach((b) => (b.onclick = () => { const it = P.eq[b.dataset.eq as Slot]; sel = it ? { it, from: 'eq' } : null; selX = null; renderBag(); }));
+    // celdas del inventario según la pestaña
+    const gear: InvEnt[] = P.bag.map((it, i) => ({ key: 'g' + i, html: `<button type="button" class="cl${sel && sel.it === it ? ' sel' : ''}" data-bag="${i}" data-r="${it.rar.k}" aria-label="${esc(it.name)}, ${it.rar.n}" title="${esc(it.name)}" style="--rc:${rarCol(it)}">${ico(it)}</button>` }));
+    const cons: InvEnt[] = (['hp', 'mp'] as const).filter((k) => pots[k] > 0).map((k) => ({ key: 'p' + k, html: `<button type="button" class="cl${selX && selX.id === k ? ' sel' : ''}" data-pot="${k}" aria-label="${POTS[k].name}, ${pots[k]}" title="${POTS[k].name}" style="--rc:${k === 'hp' ? '#8a3a34' : '#345a8a'}"><img class="iimg" alt="" src="assets/spells/${POT_ART[k]}.png"><span class="q">${pots[k]}</span></button>` }));
+    const mats: InvEnt[] = [];
+    for (const kid of ['cripta', 'foso'] as KeyId[]) {
+        const kd = KEYDEFS[kid];
+        if (Q.shards[kid] > 0) mats.push({ key: 's' + kid, html: `<button type="button" class="cl${selX && selX.id === 's' + kid ? ' sel' : ''}" data-mat="s${kid}" aria-label="${kd.shard}, ${Q.shards[kid]}" title="${kd.shard}" style="--rc:#6a4aa0"><svg class="iimg" viewBox="0 0 20 20" aria-hidden="true"><use href="#gemS"/></svg><span class="q">${Q.shards[kid]}</span></button>` });
+        if (Q.keys[kid] > 0) mats.push({ key: 'k' + kid, html: `<button type="button" class="cl${selX && selX.id === 'k' + kid ? ' sel' : ''}" data-mat="k${kid}" aria-label="${kd.name}, ${Q.keys[kid]}" title="${kd.name}" style="--rc:#c9a227"><img class="iimg" alt="" src="assets/spells/sello-arcano.png"><span class="q">${Q.keys[kid]}</span></button>` });
+    }
+    const list = invTab === 'gear' ? gear : invTab === 'cons' ? cons : invTab === 'mat' ? mats : [...gear, ...cons, ...mats];
+    const total = Math.max(25, Math.ceil(list.length / 5) * 5), cells = list.map((e) => e.html);
+    while (cells.length < total) cells.push(`<div class="cl e" aria-hidden="true"></div>`);
+    $('inv').innerHTML = cells.join('');
+    $('cap').textContent = `Bolsa de equipo ${P.bag.length} / ${BAG_MAX}`;
+    document.querySelectorAll<HTMLElement>('#invTabs [data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === invTab)));
+    ($('dropBtn') as HTMLButtonElement).disabled = !(sel && sel.from === 'bag');
+    document.querySelectorAll<HTMLElement>('#inv [data-bag]').forEach((b) => (b.onclick = () => { sel = { it: P.bag[+b.dataset.bag!], from: 'bag' }; selX = null; renderBag(); }));
+    document.querySelectorAll<HTMLElement>('#inv [data-pot]').forEach((b) => (b.onclick = () => { selX = { k: 'pot', id: b.dataset.pot as 'hp' | 'mp' }; sel = null; renderBag(); }));
+    document.querySelectorAll<HTMLElement>('#inv [data-mat]').forEach((b) => (b.onclick = () => { selX = { k: 'mat', id: b.dataset.mat! }; sel = null; renderBag(); }));
+    renderTip();
+}
+/** Tooltip flotante a la izquierda de las ventanas abiertas. */
+function renderTip() {
+    const d = $('itip');
+    if (sel && !(sel.from === 'eq' ? P.eq[sel.it.slot] === sel.it : P.bag.includes(sel.it))) sel = null;
+    if (!sel && !selX) { d.hidden = true; return; }
+    const wsc = parseFloat(document.documentElement.style.getPropertyValue('--win-scale')) || 1, n = (bagOpen() ? 1 : 0) + (charOpen() ? 1 : 0);
+    d.style.right = `calc(max(12px, env(safe-area-inset-right, 0px)) + ${(n * 356 * wsc).toFixed(1)}px)`; d.hidden = false;
+    if (selX) {
+        if (selX.k === 'pot') { const k = selX.id; d.innerHTML = `<div><div class="iname" style="color:${POTS[k].col}">${POTS[k].name}</div><div class="sub">Consumible · ×${pots[k]}</div><div>${k === 'hp' ? 'Recupera 40% de la vida máxima.' : 'Recupera 50% del maná máximo.'}</div><div class="row"><button type="button" id="usePot">Usar (${POTS[k].key})</button></div></div>`; $('usePot').onclick = () => { usePotion(k); renderBag(); }; }
+        else { const id = selX.id, kid = id.slice(1) as KeyId, kd = KEYDEFS[kid], shard = id[0] === 's'; d.innerHTML = `<div><div class="iname" style="color:${shard ? '#b99cff' : '#ffd24a'}">${shard ? kd.shard : kd.name}</div><div class="sub">Material · ×${shard ? Q.shards[kid] : Q.keys[kid]}</div><div>${shard ? `Con ${SHARDS_PER_KEY} esquirlas y ${kd.gold} de oro el Capitán forja la ${kd.name}.` : 'Abre la escalera sellada del portal correspondiente.'}</div></div>`; }
+        return;
+    }
+    const it = sel!.it, base: string[] = [];
+    if (it.dmg) base.push(`Daño ${it.dmg[0]}–${it.dmg[1]}`); if (it.def) base.push(`Defensa ${it.def}`); if (it.mag) base.push(`+${it.mag} daño mágico`);
+    d.innerHTML = `<div style="border-color:${rarCol(it)}"><div class="iname" style="color:${it.rar.c}">${esc(it.name)}</div><div class="sub">${it.rar.n} · ${it.slot}</div>
+    ${base.length ? `<div>${base.join(' · ')}</div>` : ''}
+    ${it.attrs.length ? `<ul>${it.attrs.map((a) => `<li style="color:#8fb6f0">${attrText(a)}</li>`).join('')}</ul>` : `<div class="sub">Sin atributos extra</div>`}
+    <div class="row">${sel!.from === 'bag' ? `<button type="button" id="eqBtn">Equipar</button>` : `<button type="button" id="uneqBtn">Sacar</button>`}</div></div>`;
+    const eqBtn = document.getElementById('eqBtn'), uneqBtn = document.getElementById('uneqBtn');
+    if (eqBtn) eqBtn.onclick = () => { P.bag.splice(P.bag.indexOf(it), 1); const prev = P.eq[it.slot]; if (prev) P.bag.push(prev); P.eq[it.slot] = it; refreshLook(); sel = { it, from: 'eq' }; P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); later(0.1, () => saver.tick(true)); renderBag(); };
+    if (uneqBtn) uneqBtn.onclick = () => { if (P.bag.length >= BAG_MAX) { log('La bolsa está llena.'); return; } P.eq[it.slot] = null; refreshLook(); P.bag.push(it); sel = { it, from: 'bag' }; P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); later(0.1, () => saver.tick(true)); renderBag(); };
+}
 /** Salir: en zona segura es inmediato; en zona insegura hay que aguantar quieto unos segundos (se cancela si te movés o te pegan). */
 let logout: { at: number; cell: Cell; hp: number; asked: boolean } | null = null;
 function cancelLogout(why: string) { if (!logout) return; logout = null; net.send({ $case: 'logoutCancelledRequest', value: {} }); toast(why); }
@@ -1260,27 +1371,6 @@ function tickLogout() {
 }
 let leaving = false;
 $('exitBtn').addEventListener('click', () => { if (!connected || logout) return; logout = { at: 0, cell: { ...P.cell }, hp: P.hp, asked: false }; net.send({ $case: 'logoutRequest', value: {} }); });
-function renderBag() {
-    if ($('bag').hidden) return;
-    $('equip').innerHTML = SLOTS.map((s) => { const it = P.eq[s]; return `<button type="button" class="cell${sel && it && sel.it === it ? ' sel' : ''}" data-eq="${s}" style="${it ? `color:${it.rar.c}` : ''}"><span>${s}</span>${it ? ico(it) : '—'}</button>`; }).join('');
-    const cells: string[] = []; for (let i = 0; i < 18; i++) { const it = P.bag[i]; cells.push(it ? `<button type="button" class="cell${sel && sel.it === it ? ' sel' : ''}" data-bag="${i}" title="${esc(it.name)}" style="color:${it.rar.c};border-color:${it.rar.k ? it.rar.c + '66' : '#2b312c'}">${ico(it)}</button>` : `<div class="cell empty">·</div>`); }
-    $('inv').innerHTML = cells.join('');
-    document.querySelectorAll<HTMLElement>('[data-bag]').forEach((b) => (b.onclick = () => { sel = { it: P.bag[+b.dataset.bag!], from: 'bag' }; renderBag(); }));
-    document.querySelectorAll<HTMLElement>('[data-eq]').forEach((b) => (b.onclick = () => { const it = P.eq[b.dataset.eq as Slot]; sel = it ? { it, from: 'eq' } : null; renderBag(); }));
-    const d = $('detail');
-    if (!sel || !sel.it) { d.innerHTML = `<span class="label">Tocá un item para ver sus atributos</span>`; return; }
-    const it = sel.it, base: string[] = [];
-    if (it.dmg) base.push(`Daño ${it.dmg[0]}–${it.dmg[1]}`); if (it.def) base.push(`Defensa ${it.def}`); if (it.mag) base.push(`+${it.mag} daño mágico`);
-    d.innerHTML = `<div class="iname" style="color:${it.rar.c}">${it.name}</div><div class="label">${it.rar.n} · ${it.slot}</div>
-    ${base.length ? `<div>${base.join(' · ')}</div>` : ''}
-    ${it.attrs.length ? `<ul>${it.attrs.map((a) => `<li style="color:#8fb6f0">${attrText(a)}</li>`).join('')}</ul>` : `<div class="label">Sin atributos extra</div>`}
-    <div class="row">${sel.from === 'bag' ? `<button type="button" id="eqBtn">Equipar</button><button type="button" id="dropBtn">Tirar</button>` : `<button type="button" id="uneqBtn">Sacar</button>`}</div>`;
-    const eqBtn = document.getElementById('eqBtn'), dropBtn = document.getElementById('dropBtn'), uneqBtn = document.getElementById('uneqBtn');
-    if (eqBtn) eqBtn.onclick = () => { P.bag.splice(P.bag.indexOf(it), 1); const prev = P.eq[it.slot]; if (prev) P.bag.push(prev); P.eq[it.slot] = it; refreshLook(); sel = { it, from: 'eq' }; P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); later(0.1, () => saver.tick(true)); renderBag(); };
-    if (dropBtn) dropBtn.onclick = () => { P.bag.splice(P.bag.indexOf(it), 1); sel = null; renderBag(); };
-    if (uneqBtn) uneqBtn.onclick = () => { if (P.bag.length >= 18) { log('La bolsa está llena.'); return; } P.eq[it.slot] = null; refreshLook(); P.bag.push(it); sel = { it, from: 'bag' }; P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); later(0.1, () => saver.tick(true)); renderBag(); };
-}
-
 // ---------- edificios y NPCs ----------
 interface BuildMeta { w: number; h: number; ax: number; ay: number; fw: number; fh: number }
 let BUILD: Record<string, BuildMeta> = {};
@@ -1532,7 +1622,7 @@ function frame() {
     const T = now(); let dt = Math.min(0.05, T - last); last = T;
     if (hitstop > 0) { hitstop -= dt; dt = 0; }
     update(dt); checkPortals(); wpTick(); npcTick(); updateCam(Math.min(0.05, T - lastCam)); lastCam = T;
-    updateHover(); render(); hud(); requestAnimationFrame(frame);
+    updateHover(); render(); hud(); winTick(T); requestAnimationFrame(frame);
 }
 
 // ---------- entrada ----------

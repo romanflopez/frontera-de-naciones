@@ -119,9 +119,6 @@ button:hover{border-color:var(--brass)} button:focus-visible{outline:2px solid v
 #log{bottom:calc(var(--hud-h) + 50px);left:max(12px,env(safe-area-inset-left,0px));width:min(360px,70vw);font-size:12.5px;line-height:1.35;color:var(--muted);text-shadow:0 1px 2px #000;pointer-events:none}
 #log p{margin:0}
 #log p.hi{color:var(--text)}
-#bag{z-index:4;top:calc(56px + env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));width:min(300px,calc(100vw - 24px));padding:12px;display:grid;gap:10px;max-height:calc(100% - var(--hud-h) - 80px);overflow:auto}
-#bag h2{margin:0;font-family:var(--f-display);font-size:15px;color:var(--brass);letter-spacing:.04em;display:flex;justify-content:space-between}
-#bag h2 small{font-family:var(--f-body);color:var(--text);font-variant-numeric:tabular-nums}
 .label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .equip{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
@@ -134,6 +131,76 @@ button:hover{border-color:var(--brass)} button:focus-visible{outline:2px solid v
 .cell.empty{color:#3e453f}
 .equip .cell{aspect-ratio:auto;height:50px;display:grid;gap:2px}
 .equip .cell span{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+/* ===== ventanas Personaje / Inventario (marco de metal oscuro con filigrana dorada) ===== */
+.fw{--W:340px;--H:516px;z-index:4;top:calc(80px + env(safe-area-inset-top,0px));width:var(--W);height:var(--H);box-sizing:border-box;padding:46px 14px 22px;transform-origin:top right;transform:scale(var(--win-scale));font-family:var(--f-inter);color:#d9ccaa;
+  background:radial-gradient(ellipse at 50% 0,#1e1813 0,#0e0b09 60%,#070605 100%);border:3px solid #3b2d1b;border-radius:6px;display:flex;flex-direction:column;
+  box-shadow:0 0 0 1px #050302,0 0 0 3px #1c140c,0 0 0 4px #8a6a36,0 0 0 6px #120c06,inset 0 0 0 1px #a58144aa,inset 0 0 60px #000,0 14px 44px #000c}
+#bag{right:max(12px,env(safe-area-inset-right,0px))}
+#char{right:calc(max(12px,env(safe-area-inset-right,0px)) + (var(--W) + 16px) * var(--win-scale))}
+.fw-crest{position:absolute;left:50%;top:-26px;width:196px;height:46px;margin-left:-98px;pointer-events:none;z-index:2;filter:drop-shadow(0 2px 3px #000)}
+.fw-gem{position:absolute;left:50%;bottom:-11px;width:44px;height:22px;margin-left:-22px;pointer-events:none;z-index:2;filter:drop-shadow(0 2px 2px #000)}
+.fw-c{position:absolute;width:44px;height:44px;pointer-events:none;z-index:2;filter:drop-shadow(0 1px 1px #000)}
+.fw-c.tl{left:-6px;top:-6px}.fw-c.tr{right:-6px;top:-6px;transform:scaleX(-1)}.fw-c.bl{left:-6px;bottom:-6px;transform:scaleY(-1)}.fw-c.br{right:-6px;bottom:-6px;transform:scale(-1,-1)}
+.fw-head{position:absolute;left:30px;right:30px;top:10px;height:34px;display:flex;align-items:center;justify-content:center;background:linear-gradient(#8a1a28,#4c0c16 55%,#2e060c);border:2px solid #7a5c2c;border-radius:3px;box-shadow:inset 0 0 0 1px #000,inset 0 2px 6px #d0505088,0 2px 6px #000a}
+.fw-head h2{margin:0;font:700 19px/1 var(--f-cinzel);letter-spacing:.16em;color:#ecd39a;text-shadow:0 1px 0 #000,0 0 8px #c9954a66}
+.fw-x{position:absolute;right:-24px;top:-3px;width:32px;height:34px;padding:0;display:grid;place-items:center;font:700 24px/1 var(--f-inter);color:#ffe9e2;background:linear-gradient(#d02a2a,#7a0c10);border:2px solid #b08a48;border-radius:3px;box-shadow:inset 0 0 0 1px #000,0 2px 5px #000a;z-index:3}
+.fw-x:hover{filter:brightness(1.25);border-color:#f0cf86}
+.fw-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px}
+.fw button:focus-visible{outline:2px solid #ffd986;outline-offset:2px}
+/* ranuras */
+.sl{position:relative;width:54px;height:54px;padding:0;display:grid;place-items:center;box-sizing:border-box;background:linear-gradient(145deg,#15110d,#0a0807);border:2px solid #5d4725;border-radius:3px;color:#7a6840;box-shadow:inset 0 0 0 1px #000,inset 0 0 12px #000,0 0 0 1px #000;overflow:hidden}
+.sl svg.gl{width:60%;height:60%;opacity:.4}
+.sl .iico{width:100%;height:100%;max-height:none;border-radius:2px}
+.sl.dis{cursor:default;border-color:#3b2f1b}.sl.dis svg.gl{opacity:.16}
+.sl.dis:hover{border-color:#3b2f1b}
+button.sl:not(.dis):hover,.cl:hover{border-color:#e0b765;filter:brightness(1.15)}
+.sl.sel,.cl.sel{outline:2px solid #ffd986;outline-offset:-2px;animation:selpulse 1.6s ease-in-out infinite}
+.sl .q{position:absolute;right:3px;bottom:1px;font:700 12px/1 var(--f-inter);color:#fff;text-shadow:0 0 3px #000,0 1px 2px #000,1px 0 2px #000}
+.sl .tag{position:absolute;left:3px;top:2px;font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:#8d7a52;text-shadow:0 1px 1px #000}
+/* personaje */
+.paper{position:relative;display:grid;grid-template-columns:54px 1fr 54px;gap:6px;padding:8px;background:radial-gradient(ellipse at 50% 55%,#2a2119 0,#120e0b 70%);border:1px solid #4d3b20;border-radius:3px;box-shadow:inset 0 0 24px #000}
+.eqcol{display:flex;flex-direction:column;gap:8px}
+.stage{position:relative;display:grid;place-items:center;overflow:hidden}
+.stage::before{content:"";position:absolute;inset:14% 6%;border-radius:50%;border:1px solid #6b4a2433;box-shadow:0 0 0 8px #0000,inset 0 0 40px #5a1a2a33,0 0 0 1px #00000066}
+#heroCv{width:100%;max-width:190px;height:auto;image-rendering:pixelated;filter:drop-shadow(0 6px 6px #000)}
+.rings{position:absolute;inset:0;pointer-events:none}
+.rings .sl{position:absolute;width:34px;height:34px;pointer-events:auto}
+.rings .sl:nth-child(1){left:2px;top:62px}.rings .sl:nth-child(2){right:2px;top:150px}
+.lvl{display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;background:linear-gradient(#1b1510,#0b0908);border:1px solid #6a5028;border-radius:15px;box-shadow:inset 0 0 8px #000}
+.lvl b{font:700 17px/1 var(--f-cinzel);color:#ecd39a;white-space:nowrap}
+.lvbar{position:relative;flex:1;height:9px;background:#050403;border:1px solid #5a4424;border-radius:5px;overflow:hidden}
+.lvbar i{position:absolute;inset:0 auto 0 0;background:linear-gradient(#ffcf6a,#d27a1a 60%,#8a4a0c);box-shadow:0 0 6px #e8a03a}
+.lvl span{font-size:11px;color:#bfae86;font-variant-numeric:tabular-nums;white-space:nowrap}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:0 14px;padding:6px 12px;background:linear-gradient(#14100c,#0a0807);border:1px solid #4d3b20;border-radius:3px;box-shadow:inset 0 0 14px #000;flex:1;align-content:space-evenly}
+.stat{display:flex;align-items:center;gap:7px;height:24px;border-bottom:1px solid #2d2418;font-size:12.5px}
+.stat svg{width:15px;height:15px;color:#c9a35a;flex:none}
+.stat span{flex:1;color:#cdbf9c;white-space:nowrap}
+.stat b{font-weight:600;color:#f1e6c8;font-variant-numeric:tabular-nums}
+/* inventario */
+.tabs{display:grid;grid-template-columns:repeat(4,auto);gap:4px}
+.tabs button{padding:0 2px;height:30px;font:600 11.5px/1 var(--f-cinzel);letter-spacing:.02em;color:#a99872;background:linear-gradient(#181310,#0b0908);border:1px solid #4a3a20;border-radius:3px;box-shadow:inset 0 0 0 1px #000}
+.tabs button[aria-selected=true]{color:#f3dfae;background:linear-gradient(#7a1622,#3c0810);border-color:#a98340;box-shadow:inset 0 0 0 1px #000,inset 0 1px 4px #d0505077}
+.igrid{flex:1;min-height:0;overflow:auto;display:grid;grid-template-columns:repeat(5,1fr);grid-auto-rows:min-content;gap:5px;padding:6px;align-content:start;background:#0a0807;border:1px solid #3a2d19;border-radius:3px;box-shadow:inset 0 0 18px #000;scrollbar-width:thin;scrollbar-color:#5d4725 #0a0807}
+.cl{position:relative;aspect-ratio:1;padding:0;display:grid;place-items:center;box-sizing:border-box;background:linear-gradient(145deg,#171210,#0b0908);border:2px solid var(--rc,#4a3a22);border-radius:3px;box-shadow:inset 0 0 0 1px #000,inset 0 0 10px #000;overflow:hidden}
+.cl.e{border-color:#2a2014;opacity:.8;background:#0d0a08}
+.cl .iico{width:100%;height:100%;max-height:none;border-radius:2px}
+.cl .iimg{width:84%;height:84%;object-fit:contain;filter:drop-shadow(0 2px 2px #000)}
+.cl .q{position:absolute;right:3px;bottom:1px;font:700 12px/1 var(--f-inter);color:#fff;text-shadow:0 0 3px #000,0 1px 2px #000,1px 0 2px #000}
+.cl[data-r="1"]{box-shadow:inset 0 0 0 1px #000,inset 0 0 10px #3a6ec455}.cl[data-r="2"]{box-shadow:inset 0 0 0 1px #000,inset 0 0 10px #d0a52e55}.cl[data-r="3"]{box-shadow:inset 0 0 0 1px #000,inset 0 0 12px #a050f066}
+.ifoot{display:flex;align-items:center;gap:6px}
+.fb{display:flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 10px;font:600 12px/1 var(--f-cinzel);color:#d9c79a;background:linear-gradient(#1c1612,#0b0908);border:1px solid #6a5028;border-radius:3px;box-shadow:inset 0 0 0 1px #000}
+.fb:disabled{opacity:.4;cursor:default}.fb:disabled:hover{border-color:#6a5028}
+.gold{margin-left:auto;display:flex;align-items:center;gap:6px;height:32px;padding:0 10px;background:#070605;border:1px solid #4d3b20;border-radius:3px;box-shadow:inset 0 0 8px #000;font:600 13px/1 var(--f-inter);color:#f0dca4;font-variant-numeric:tabular-nums}
+.cap{font-size:11px;color:#8d7a52;text-align:center;letter-spacing:.04em}
+/* tooltip del ítem seleccionado */
+#itip{z-index:5;top:calc(80px + env(safe-area-inset-top,0px));width:220px;transform-origin:top right;transform:scale(var(--win-scale))}
+#itip>div{display:grid;gap:5px;padding:10px 12px;font-size:12.5px;color:#d9ccaa;background:linear-gradient(#1b1510,#0c0a08);border:2px solid #6a5028;border-radius:4px;box-shadow:0 0 0 1px #000,0 8px 24px #000c}
+#itip .iname{font:700 15px/1.2 var(--f-cinzel)}
+#itip .sub{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:#9c9170}
+#itip ul{margin:0;padding-left:16px}
+#itip .row{display:flex;gap:6px;margin-top:4px}
+#itip .row button{flex:1;padding:6px 8px;height:auto;font:600 12px/1 var(--f-cinzel);color:#e6d4a6;background:linear-gradient(#3c0c14,#220509);border:1px solid #a98340;border-radius:3px}
+#itip .row button:hover{filter:brightness(1.3)}
 #shop{top:calc(84px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(330px,calc(100vw - 24px));padding:12px;display:grid;gap:8px;max-height:calc(100% - 220px);overflow:auto}
 #shop h2{margin:0;font-family:var(--f-display);font-size:15px;color:var(--brass);letter-spacing:.04em;display:flex;align-items:center;gap:8px}
 #shop h2 small{font-family:var(--f-body);color:var(--text);font-variant-numeric:tabular-nums;margin-left:auto}
@@ -173,11 +240,6 @@ button:hover{border-color:var(--brass)} button:focus-visible{outline:2px solid v
 .srow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 8px;text-align:left;background:#181c19;border-color:#2b312c}
 .srow span{display:grid;line-height:1.15} .srow small{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .srow em{font-style:normal;color:var(--brass);font-variant-numeric:tabular-nums;white-space:nowrap}
-#detail{display:grid;gap:4px;font-size:13px}
-#detail .iname{font-family:var(--f-display);font-size:15px}
-#detail ul{margin:0;padding-left:16px}
-#detail .row{display:flex;gap:6px;margin-top:4px}
-#detail .row button{padding:5px 10px;flex:1}
 #toast{bottom:calc(var(--hud-h) + 56px);left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--brass);color:var(--text);padding:6px 12px;border-radius:4px;font-size:13px;white-space:nowrap;max-width:calc(100vw - 32px);overflow:hidden;text-overflow:ellipsis}
 .sw.fired{animation:fired .35s ease-out}
 @keyframes fired{from{border-color:var(--brass);box-shadow:0 0 14px var(--brass)}to{box-shadow:none}}
@@ -213,7 +275,7 @@ canvas:focus{outline:none}
 #log p.chat{color:#e9dfc0}
 #log p.chat b{color:var(--brass);font-weight:600}
 #log p.sys{color:#8fb6f0}
-#net{top:calc(10px + env(safe-area-inset-top,0px));right:calc(max(12px,env(safe-area-inset-right,0px)) + 190px);font-size:12px;color:var(--muted);padding:9px 10px;pointer-events:none}
+#net{top:calc(10px + env(safe-area-inset-top,0px));right:calc(max(12px,env(safe-area-inset-right,0px)) + 330px);font-size:12px;color:var(--muted);padding:9px 10px;pointer-events:none}
 #net.off{color:#ff8a6b}
 </style>
 </head>
@@ -228,16 +290,43 @@ canvas:focus{outline:none}
     <div class="chips" id="tChips"></div>
   </div>
 
-  <div id="bagBtn" class="hud"><button id="openBag" type="button">Bolsa (I)</button> <button id="exitBtn" type="button">Salir</button></div>
+  <div id="bagBtn" class="hud"><button id="openChar" type="button">Personaje (C)</button> <button id="openBag" type="button">Bolsa (I)</button> <button id="exitBtn" type="button">Salir</button></div>
 
-  <div id="bag" class="hud box" hidden>
-    <h2>Equipo <small id="gold">0 oro</small></h2>
-    <div class="label">Puesto</div>
-    <div class="equip" id="equip"></div>
-    <div class="label">Bolsa</div>
-    <div class="grid" id="inv"></div>
-    <div id="detail"></div>
+  <div id="char" class="hud fw" role="dialog" aria-label="Personaje" hidden>
+    <svg class="fw-crest" aria-hidden="true"><use href="#fwcrest"/></svg>
+    <svg class="fw-c tl" aria-hidden="true"><use href="#fwc"/></svg><svg class="fw-c tr" aria-hidden="true"><use href="#fwc"/></svg><svg class="fw-c bl" aria-hidden="true"><use href="#fwc"/></svg><svg class="fw-c br" aria-hidden="true"><use href="#fwc"/></svg>
+    <header class="fw-head"><h2>PERSONAJE</h2><button class="fw-x" id="charClose" type="button" aria-label="Cerrar Personaje">&times;</button></header>
+    <div class="fw-body">
+      <div class="paper">
+        <div class="eqcol" id="eqL"></div>
+        <div class="stage"><canvas id="heroCv" width="190" height="250" aria-label="Tu personaje"></canvas><div id="eqRings" class="rings"></div></div>
+        <div class="eqcol" id="eqR"></div>
+      </div>
+      <div class="lvl"><b id="lvN">Lv. 1</b><div class="lvbar" role="progressbar" aria-label="Experiencia" id="lvBar"><i id="lvI"></i></div><span id="lvT">0 / 0</span></div>
+      <div class="stats" id="stats"></div>
+    </div>
+    <svg class="fw-gem" aria-hidden="true"><use href="#fwgem"/></svg>
   </div>
+
+  <div id="bag" class="hud fw" role="dialog" aria-label="Inventario" hidden>
+    <svg class="fw-crest" aria-hidden="true"><use href="#fwcrest"/></svg>
+    <svg class="fw-c tl" aria-hidden="true"><use href="#fwc"/></svg><svg class="fw-c tr" aria-hidden="true"><use href="#fwc"/></svg><svg class="fw-c bl" aria-hidden="true"><use href="#fwc"/></svg><svg class="fw-c br" aria-hidden="true"><use href="#fwc"/></svg>
+    <header class="fw-head"><h2>INVENTARIO</h2><button class="fw-x" id="bagClose" type="button" aria-label="Cerrar Inventario">&times;</button></header>
+    <div class="fw-body">
+      <div class="tabs" role="tablist" aria-label="Filtro de inventario" id="invTabs">
+        <button type="button" role="tab" data-tab="all" aria-selected="true">Todo</button><button type="button" role="tab" data-tab="gear" aria-selected="false">Equipo</button><button type="button" role="tab" data-tab="cons" aria-selected="false">Consumibles</button><button type="button" role="tab" data-tab="mat" aria-selected="false">Materiales</button>
+      </div>
+      <div class="igrid" id="inv"></div>
+      <div class="ifoot">
+        <button type="button" class="fb" id="sortBtn" aria-label="Ordenar bolsa por tipo y rareza"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M7 2L12 10H2Z" fill="currentColor"/></svg>Ordenar</button>
+        <button type="button" class="fb" id="dropBtn" aria-label="Descartar el ítem seleccionado" disabled><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 3.5H12M5 3.5V2H9V3.5M3.5 3.5L4 12H10L10.5 3.5M6 5.5V10M8 5.5V10" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>Descartar</button>
+        <div class="gold" role="img" aria-label="Oro"><svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="url(#gold)" stroke="#2b1710" stroke-width="1.4"/><circle cx="10" cy="10" r="5.4" fill="none" stroke="#6a3f16" stroke-width="1.2"/><path d="M10 6.5V13.5M8 8.2C8 7 12 7 12 8.4C12 10 8 9.8 8 11.6C8 13 12 13 12 11.7" fill="none" stroke="#6a3f16" stroke-width="1.1"/></svg><span id="gold">0</span></div>
+      </div>
+      <div class="cap" id="cap"></div>
+    </div>
+    <svg class="fw-gem" aria-hidden="true"><use href="#fwgem"/></svg>
+  </div>
+  <div id="itip" class="hud" hidden></div>
 
   <div id="shop" class="hud box" hidden>
     <h2><span id="shopName">Mercader</span> <small id="shopGold"></small><button id="shopClose" type="button" aria-label="Cerrar">×</button></h2>
@@ -264,6 +353,29 @@ canvas:focus{outline:none}
 <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f8de94"/><stop offset=".5" stop-color="#c9954a"/><stop offset="1" stop-color="#6a3f16"/></linearGradient>
 <radialGradient id="gem" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#fff4c0"/><stop offset=".45" stop-color="#ffa81f"/><stop offset="1" stop-color="#8a2a08"/></radialGradient>
 <filter id="nz" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".8" numOctaves="2" seed="4"/><feColorMatrix type="saturate" values="0"/></filter>
+<symbol id="fwc" viewBox="0 0 64 64"><g fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 61V20C3 9 10 3 21 3H61" stroke="#1a0f06" stroke-width="5"/><path d="M3 61V20C3 9 10 3 21 3H61" stroke="url(#gold)" stroke-width="2.4"/><path d="M12 52V26C12 18 17 12 26 12H52" stroke="#7a5a2a" stroke-width="1.2"/><path d="M14 14C22 14 27 19 25 26C23 31 17 30 18 25C19 22 23 22 23 24" stroke="url(#gold)" stroke-width="2"/><path d="M14 14C14 22 19 27 26 25" stroke="url(#gold)" stroke-width="1.4"/></g><circle cx="11" cy="11" r="3.4" fill="url(#gold)" stroke="#1a0f06" stroke-width="1.2"/></symbol>
+<symbol id="fwcrest" viewBox="0 0 240 56"><g fill="none" stroke-linecap="round" stroke-linejoin="round"><g stroke="#1a0f06" stroke-width="6"><path d="M104 40C84 40 76 22 52 22C32 22 24 34 8 34"/><path d="M136 40C156 40 164 22 188 22C208 22 216 34 232 34"/></g><g stroke="url(#gold)" stroke-width="2.6"><path d="M104 40C84 40 76 22 52 22C32 22 24 34 8 34"/><path d="M136 40C156 40 164 22 188 22C208 22 216 34 232 34"/><path d="M70 28C64 20 54 18 50 24" stroke-width="1.6"/><path d="M170 28C176 20 186 18 190 24" stroke-width="1.6"/></g></g><path d="M120 2L136 24L120 48L104 24Z" fill="url(#gold)" stroke="#1a0f06" stroke-width="2.4" stroke-linejoin="round"/><path d="M120 10L130 24L120 40L110 24Z" fill="#b01020" stroke="#40060c" stroke-width="1.4"/><path d="M120 12L126 24L120 24Z" fill="#ff6a5a" opacity=".7"/></symbol>
+<symbol id="fwgem" viewBox="0 0 40 20"><path d="M2 10H12M28 10H38" stroke="url(#gold)" stroke-width="2.4" stroke-linecap="round"/><path d="M20 1L28 10L20 19L12 10Z" fill="url(#gold)" stroke="#1a0f06" stroke-width="1.6" stroke-linejoin="round"/><path d="M20 5L25 10L20 15L15 10Z" fill="#b01020" stroke="#40060c" stroke-width="1"/></symbol>
+<symbol id="g-cabeza" viewBox="0 0 48 48"><path d="M10 40V24C10 12 16 6 24 6C32 6 38 12 38 24V40H31V30H17V40Z" fill="currentColor"/></symbol>
+<symbol id="g-armadura" viewBox="0 0 48 48"><path d="M14 6L24 10L34 6L44 14L38 24L34 21V42H14V21L10 24L4 14Z" fill="currentColor"/></symbol>
+<symbol id="g-arma" viewBox="0 0 48 48"><path d="M38 4L44 4L44 10L22 32L16 26ZM12 28L20 36L16 40L8 32ZM10 34L14 38L6 44L4 42Z" fill="currentColor"/></symbol>
+<symbol id="g-botas" viewBox="0 0 48 48"><path d="M12 6H24V26L40 32V42H8V30Z" fill="currentColor"/></symbol>
+<symbol id="g-amuleto" viewBox="0 0 48 48"><path d="M8 4L24 28L40 4" fill="none" stroke="currentColor" stroke-width="3"/><path d="M24 24L33 35L24 46L15 35Z" fill="currentColor"/></symbol>
+<symbol id="g-escudo" viewBox="0 0 48 48"><path d="M24 4L40 9V26C40 35 33 41 24 45C15 41 8 35 8 26V9Z" fill="currentColor"/></symbol>
+<symbol id="g-anillo" viewBox="0 0 48 48"><circle cx="24" cy="29" r="12" fill="none" stroke="currentColor" stroke-width="5"/><path d="M24 4L31 12L24 20L17 12Z" fill="currentColor"/></symbol>
+<symbol id="g-guantes" viewBox="0 0 48 48"><path d="M12 44V28L8 18L12 16L16 22V8H20V20V6H24V20V8H28V20V12H32V26L38 22L40 26L32 38V44Z" fill="currentColor"/></symbol>
+<symbol id="s-atk" viewBox="0 0 24 24"><path d="M19 3H21V5L10 16L8 14ZM6 15L9 18L7 20L4 19L3 16Z" fill="currentColor"/></symbol>
+<symbol id="s-def" viewBox="0 0 24 24"><path d="M12 2L20 5V12C20 17 16 20 12 22C8 20 4 17 4 12V5Z" fill="currentColor"/></symbol>
+<symbol id="s-mag" viewBox="0 0 24 24"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5Z" fill="currentColor"/></symbol>
+<symbol id="s-hp" viewBox="0 0 24 24"><path d="M12 21C4 15 2 11 2 8C2 5 4.5 3 7 3C9 3 11 4 12 6C13 4 15 3 17 3C19.5 3 22 5 22 8C22 11 20 15 12 21Z" fill="currentColor"/></symbol>
+<symbol id="s-mp" viewBox="0 0 24 24"><path d="M12 2C16 8 19 11 19 15C19 19 16 22 12 22C8 22 5 19 5 15C5 11 8 8 12 2Z" fill="currentColor"/></symbol>
+<symbol id="s-crit" viewBox="0 0 24 24"><path d="M12 1L14 9L22 6L16 12L23 15L15 16L16 23L12 17L8 23L9 16L1 15L8 12L2 6L10 9Z" fill="currentColor"/></symbol>
+<symbol id="s-aspd" viewBox="0 0 24 24"><path d="M14 2L5 14H11L9 22L19 9H13Z" fill="currentColor"/></symbol>
+<symbol id="s-leech" viewBox="0 0 24 24"><path d="M12 2C16 8 19 11 19 15C19 19 16 22 12 22C8 22 5 19 5 15C5 11 8 8 12 2Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 10V18M8 14H16" stroke="currentColor" stroke-width="2"/></symbol>
+<symbol id="s-fire" viewBox="0 0 24 24"><path d="M12 2C13 7 19 9 19 15C19 19 16 22 12 22C8 22 5 19 5 15C5 12 7 10 8 8C9 10 10 10 10 10C10 7 11 4 12 2Z" fill="currentColor"/></symbol>
+<symbol id="s-ice" viewBox="0 0 24 24"><path d="M12 2V22M3 7L21 17M21 7L3 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+<symbol id="s-par" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M13 5L8 13H12L11 19L16 11H12Z" fill="currentColor"/></symbol>
+<symbol id="s-poi" viewBox="0 0 24 24"><path d="M12 3C7 3 4 7 4 11C4 14 6 16 8 17V20H16V17C18 16 20 14 20 11C20 7 17 3 12 3ZM9 11A2 2 0 1 1 9 15A2 2 0 0 1 9 11ZM15 11A2 2 0 1 1 15 15A2 2 0 0 1 15 11Z" fill="currentColor"/></symbol>
 <g id="rr"><path d="M100 6L105 25H95Z"/></g>
 <path id="scr" d="M0 38C34 38 56 12 94 12C124 12 134 34 114 38C100 40 94 26 106 24"/>
 <path id="scr2" d="M94 12C140 12 160 30 214 30C246 30 266 22 300 24"/>
