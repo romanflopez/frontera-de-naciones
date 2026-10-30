@@ -12,11 +12,13 @@
   },
   "dependencies": {
     "@fdn/proto": "workspace:*",
-    "ws": "^8.18.0",
-    "@fdn/world": "workspace:*"
+    "@fdn/world": "workspace:*",
+    "pg": "^8.23.1",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/pg": "^8.23.1",
     "@types/ws": "^8.5.13",
     "tsx": "^4.21.0",
     "typescript": "~5.7.2"

@@ -15,7 +15,7 @@
     "cameraRadiusY": 9
   },
   "timings": {
-    "disconnectTime": 20,
+    "disconnectTime": 60,
     "arrowSpeed": 1000,
     "blizzardSpellDamageDelayMs": 200,
     "playerPickupAnimationTime": 400,
@@ -25,9 +25,9 @@
     "antiHackTimingLagFactor": 0.05
   },
   "ping": {
-    "timeout": 5000,
+    "timeout": 45000,
     "interval": 1000,
-    "allowedVariance": 500,
+    "allowedVariance": 30000,
     "varianceSampleSize": 20
   },
   "monsterDefaults": {

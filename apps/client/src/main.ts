@@ -816,11 +816,12 @@ function advanceStep(e: Ent & { step: Step | null }, T: number, dt: number) {
 }
 /** Margen sobre la velocidad del server para que la latencia no haga parecer que vamos rápido de más. */
 const STEP_MARGIN = 0.015;
-let regenT = 0, pingT = 0, pingSeq = 0, pveT = 0, pveSent = { dead: false, lvl: 0 };
+let regenT = 0, pingSeq = 0, pveT = 0, pveSent = { dead: false, lvl: 0 };
+/** El ping va por un timer propio (no por el bucle de dibujo, que el navegador frena en pestañas ocultas) para que no te desconecten. */
+setInterval(() => { if (connected) net.send({ $case: 'pingRequest', value: { sequence: ++pingSeq } }); }, 1000);
 function update(dt: number) {
     const T = now(), tot = totals();
     for (const p of pending.slice()) if (T >= p.t) { pending.splice(pending.indexOf(p), 1); p.fn(); }
-    pingT -= dt; if (pingT <= 0 && connected) { pingT = 1; net.send({ $case: 'pingRequest', value: { sequence: ++pingSeq } }); }
     if (holding && !P.dead && !P.target && !P.casting && mouse.x >= 0) { holdT -= dt; if (holdT <= 0) { holdT = 0.18; const g = toGrid(mouse.x, mouse.y); if (Math.hypot(g.x - P.x, g.y - P.y) > 0.7) moveTo(g.x, g.y); } }
     // el server necesita saber si estoy muerto (los mobs me ignoran) y mi nivel (tope de daño por golpe)
     pveT -= dt;
@@ -1369,7 +1370,16 @@ $('loginForm').addEventListener('submit', async (e) => {
     try { localStorage.setItem('fdn:lastName', name); } catch { /* sin almacenamiento */ }
     pendingSave = null; welcomeBack = false;
     net.onMessage = (m) => { if (m.$case === 'characterLoaded') { pendingSave = m.value.exists ? parseSave(m.value.data) : null; if (pendingSave) { selectedClass = pendingSave.cls; selectedFaction = pendingSave.faction; welcomeBack = true; } return; } onServer(m); if (m.$case === 'initialGameWorldState' && !connected) enterWorld(name); };
-    net.onClose = (reason) => { const was = connected; saver.stop(); others.clear(); showLogin(was ? `Se cortó la conexión: ${reason}` : reason); btn.disabled = false; };
+    let tries = 0;
+    net.onClose = (reason) => {
+        const was = connected; saver.stop(); others.clear();
+        // si se cortó sin querer, reintenta solo unos segundos (el server te guarda el lugar 60 s)
+        if (was && tries < 6 && !/ya está conectado|autentic|contraseña|incorrect/i.test(reason)) {
+            tries++; connected = false; $('login').hidden = false; $('loginErr').textContent = `Se cortó la conexión. Reconectando (${tries}/6)…`;
+            setTimeout(() => { if (!connected) void ($('loginForm') as HTMLFormElement).requestSubmit(); }, 1500); return;
+        }
+        showLogin(was ? `Se cortó la conexión: ${reason}` : reason); btn.disabled = false;
+    };
     try { await net.connect(serverUrl(), storedId(name), name, password); }
     catch (err) { $('loginErr').textContent = `${(err as Error).message} ¿Está corriendo el server (pnpm dev)?`; btn.disabled = false; }
 });
@@ -1404,7 +1414,7 @@ async function boot() {
     refreshLook();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, openShop, toScreen, give: (n: number) => { for (let i = 0; i < n; i++) P.bag.push(rollItem(1 + i)); renderBag(); } });
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { Q, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5) });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();
     requestAnimationFrame(frame);

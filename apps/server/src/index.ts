@@ -17,7 +17,7 @@ import * as M from './messages.ts';
 import type { PersistedPlayer } from './player.ts';
 import { GameWorld } from './world.ts';
 import { authenticate, sanitizeCharacter } from './accounts.ts';
-import { FileStorage } from './storage.ts';
+import { FileStorage, PgStorage, type Storage } from './storage.ts';
 
 const MAX_INCOMING_BYTES = 24576;
 
@@ -56,7 +56,8 @@ function saveChar(networkId: string, state: PersistedPlayer | undefined): void {
 }
 
 // ---------- cuentas y progreso (ver docs/PERSISTENCIA.md) ----------
-const storage = new FileStorage(SAVE_DIR);
+// con DATABASE_URL las cuentas van a Postgres (sobreviven a los redeploys); sin ella, archivos JSON
+const storage: Storage & { close?: () => Promise<void> } = process.env.DATABASE_URL ? await PgStorage.create(process.env.DATABASE_URL) : new FileStorage(SAVE_DIR);
 const clientIp = (req: { headers: Record<string, string | string[] | undefined>; socket: { remoteAddress?: string } }) => {
     const xf = req.headers['x-forwarded-for'];
     const first = (Array.isArray(xf) ? xf[0] : xf)?.split(',')[0]?.trim();
@@ -231,11 +232,11 @@ function handleChat(sender: Session, raw: string, reply: (m: ServerMessage) => v
     for (const s of sessionsByNetworkId.values()) if (s.socket?.readyState === s.socket?.OPEN) s.socket?.send(data);
 }
 
-function shutdown(): void {
+async function shutdown(): Promise<void> {
     console.log('[Server] Cerrando: guardando personajes…');
     for (const s of sessionsByNetworkId.values()) saveChar(s.networkId, worlds.get(s.worldId)?.snapshot(s.sessionId));
     for (const w of worlds.values()) w.dispose();
-    storage.flush();
+    try { if (storage.close) await storage.close(); else storage.flush(); } catch (e) { console.error('[Storage] Error al cerrar:', (e as Error).message); }
     process.exit(0);
 }
 process.on('SIGINT', shutdown);

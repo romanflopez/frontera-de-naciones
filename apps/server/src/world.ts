@@ -66,9 +66,7 @@ export class GameWorld {
             for (const t of due) this.safe('temporizador', t.fn);
         }
         for (const pl of this.players.values()) {
-            const inv = pl.status.isInvisible, det = pl.status.hasDetectInvisible;
-            updateStatus(pl.status, now);
-            if (inv !== pl.status.isInvisible || det !== pl.status.hasDetectInvisible) this.announceStatus(pl);
+            this.changeStatus(pl, () => updateStatus(pl.status, now));
         }
         if (this.mobSim) this.safe('mobs', () => this.mobSim!.update());
         this.checkPingTimeouts(now);
@@ -98,13 +96,35 @@ export class GameWorld {
     private sendTo(p: Player, m: ServerMessage): void { if (!p.disconnected) p.send(m); }
 
     private broadcastNear(p: Player, m: ServerMessage): void {
-        for (const other of this.nearbyPlayers(p.posX, p.posY, p.sessionId)) other.send(m);
+        for (const other of this.nearbyPlayers(p.posX, p.posY, p.sessionId)) if (!this.hiddenFrom(other, p)) other.send(m);
     }
 
-    /** Avisa a los cercanos (y a uno mismo) si estoy invisible y si veo invisibles. */
-    private announceStatus(p: Player): void {
-        const m = M.statusUpdate(p.playerId, p.status.isInvisible, p.status.hasDetectInvisible);
-        p.send(m); this.broadcastNear(p, m);
+    private factionOf(p: Player): string { return p.profile.split(';')[0]; }
+    /** `target` es invisible para `viewer`: de otra facción y sin Detectar invisible. Los aliados se ven siempre. */
+    private hiddenFrom(viewer: Player, target: Player): boolean {
+        return target.status.isInvisible && !viewer.status.hasDetectInvisible && this.factionOf(viewer) !== this.factionOf(target);
+    }
+
+    /** Aplica un cambio de estado y avisa lo justo: a los que dejan de ver (o empiezan a ver) a `p` y a los que ven distinto por Detectar. */
+    private changeStatus(p: Player, mutate: () => void): void {
+        const inv = p.status.isInvisible, det = p.status.hasDetectInvisible;
+        const seenBefore = new Map<string, boolean>(); const near = this.nearbyPlayers(p.posX, p.posY, p.sessionId);
+        for (const o of near) seenBefore.set(o.sessionId, !this.hiddenFrom(o, p));
+        const hiddenOthersBefore = new Set(near.filter((o) => this.hiddenFrom(p, o)).map((o) => o.sessionId));
+        mutate();
+        if (inv === p.status.isInvisible && det === p.status.hasDetectInvisible) return;
+        p.send(M.statusUpdate(p.playerId, p.status.isInvisible, p.status.hasDetectInvisible));
+        for (const o of near) {
+            if (o.disconnected) continue;
+            const sees = !this.hiddenFrom(o, p);
+            if (sees && !seenBefore.get(o.sessionId)) o.send(M.playersEnteredRange([p]));
+            if (!sees && seenBefore.get(o.sessionId)) o.send(M.playersLeftRange([p.playerId]));
+            if (sees) o.send(M.statusUpdate(p.playerId, p.status.isInvisible, p.status.hasDetectInvisible));
+            // lo que yo veo de los demás cambió por Detectar
+            const hiddenNow = this.hiddenFrom(p, o);
+            if (hiddenOthersBefore.has(o.sessionId) && !hiddenNow) { p.send(M.playersEnteredRange([o])); p.send(M.statusUpdate(o.playerId, o.status.isInvisible, o.status.hasDetectInvisible)); }
+            if (!hiddenOthersBefore.has(o.sessionId) && hiddenNow) p.send(M.playersLeftRange([o.playerId]));
+        }
     }
 
     private spawnLocation(prefX?: number, prefY?: number): { x: number; y: number } {
@@ -164,9 +184,10 @@ export class GameWorld {
     }
 
     private sendSnapshots(recipient: Player, sources: Iterable<Player>): void {
-        const list = [...sources];
+        const list = [...sources].filter((s) => !this.hiddenFrom(recipient, s));
         if (!list.length) return;
         recipient.send(M.playersEnteredRange(list));
+        for (const s of list) if (s.status.isInvisible) recipient.send(M.statusUpdate(s.playerId, true, s.status.hasDetectInvisible));
         for (const s of list) if (s.disconnected) recipient.send(M.playerDisconnected(s.playerId));
     }
 
@@ -270,7 +291,7 @@ export class GameWorld {
                     const fx = /^[a-z]{0,16}$/.test(v.fx) ? v.fx : '';
                     const now = Date.now(); if (now - p.lastPvpMs < 40) break; p.lastPvpMs = now;
                     const secs = num(v.secs, 0, 6);
-                    if ((v.dmg > 0 || secs > 0) && breakInvisibility(p.status)) this.announceStatus(p);
+                    if (v.dmg > 0 || secs > 0) this.changeStatus(p, () => breakInvisibility(p.status));
                     if (secs > 0 && v.targetId) {
                         const tgt = this.playersById.get(v.targetId);
                         if (!tgt || tgt === p) break;
@@ -279,15 +300,15 @@ export class GameWorld {
                     this.broadcastNear(p, M.pvpHit(p.playerId, { fx, x: num(v.x, 0, 200), y: num(v.y, 0, 200), targetId: v.targetId, dmg: Math.round(num(v.dmg, 0, 600)), secs, r: num(v.r, 0, 6) }));
                     break;
                 }
-                case 'invisibilityRequest': { castInvisibility(p.status, Date.now()); this.announceStatus(p); break; }
-                case 'detectInvisibleRequest': { castDetectInvisible(p.status, Date.now()); this.announceStatus(p); break; }
+                case 'invisibilityRequest': { this.changeStatus(p, () => castInvisibility(p.status, Date.now())); break; }
+                case 'detectInvisibleRequest': { this.changeStatus(p, () => castDetectInvisible(p.status, Date.now())); break; }
                 case 'removerRequest': {
                     if (!castRemover(p.status, Date.now())) break;
                     const m = M.pvpHit(p.playerId, { fx: 'sphere', x: p.posX, y: p.posY, targetId: p.playerId, dmg: 0, secs: -1, r: 0 });
                     p.send(m); this.broadcastNear(p, m);
                     break;
                 }
-                case 'mobHitRequest': if (breakInvisibility(p.status)) this.announceStatus(p); this.mobSim?.hit(p, payload.value); break;
+                case 'mobHitRequest': this.changeStatus(p, () => breakInvisibility(p.status)); this.mobSim?.hit(p, payload.value); break;
                 case 'pveStatusRequest': this.mobSim?.status(p, payload.value); break;
                 case 'changePlayerProfileRequest': {
                     const v = String(payload.value.profile ?? '').slice(0, 240);
@@ -390,7 +411,7 @@ export class GameWorld {
         const movedMsg = M.playerMoved(moved.playerId, curX, curY, destX, destY, moved.movementSpeedMs, moved.runningMode, dashAttack, teleport);
         for (const id of before) {
             const other = now.get(id);
-            if (other && !other.disconnected) other.send(movedMsg);
+            if (other && !other.disconnected && !this.hiddenFrom(other, moved)) other.send(movedMsg);
         }
 
         const newcomers = [...now.values()].filter((o) => !before.has(o.playerId));
@@ -399,7 +420,7 @@ export class GameWorld {
             const entered = M.playersEnteredRange([moved]);
             for (const o of newcomers) {
                 if (o.disconnected) continue;
-                o.send(entered);
+                if (!this.hiddenFrom(o, moved)) o.send(entered);
                 o.playersInRange.add(moved.playerId);
             }
         }

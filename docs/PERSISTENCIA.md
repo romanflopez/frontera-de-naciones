@@ -13,4 +13,6 @@
 ## Ojo con Render free
 El disco de Render free es **efímero**: cada redeploy (o cada vez que el servicio se duerme y se recrea) **borra las cuentas**. Para que el progreso sobreviva:
 1. **Render Disk** (pago): montalo, por ejemplo, en `/var/data` y poné `DATA_DIR=/var/data`.
-2. **Postgres gratis** (Neon o Supabase): implementá un adaptador de `Storage` (`apps/server/src/storage.ts`, son 3 métodos: `get`, `put`, `flush`) que use `DATABASE_URL`, y cambialo en `index.ts`. La interfaz ya está pensada para eso.
+2. **Postgres gratis (Neon o Supabase)** — ya implementado (`PgStorage`). Creás una base, copiás la cadena de conexión y la ponés en Render como variable de entorno `DATABASE_URL` (Environment → Add). Al arrancar el server crea la tabla `accounts` solo y carga las cuentas; sin `DATABASE_URL` sigue usando archivos. `DATABASE_SSL=off` solo para un Postgres local sin TLS.
+
+La posición del personaje (`chars/`) sigue en disco: si el disco se borra volvés al campamento, pero nivel, items, oro y misiones quedan en la base.
