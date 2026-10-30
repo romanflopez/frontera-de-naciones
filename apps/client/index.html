@@ -250,24 +250,6 @@ canvas:focus{outline:none}
 @media (max-width:620px){#target{top:calc(60px + env(safe-area-inset-top,0px))} #help{display:none}}
 @media (prefers-reduced-motion:reduce){.bar i{transition:none}}
 
-#login{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(ellipse at center,rgba(13,16,14,.55),rgba(13,16,14,.95));z-index:5}
-#login form{display:grid;gap:12px;padding:22px 24px;width:min(360px,calc(100vw - 32px))}
-#login h1{margin:0;font-family:var(--f-display);font-size:24px;color:var(--brass);letter-spacing:.03em;text-align:center}
-#login p{margin:0;color:var(--muted);font-size:13px;text-align:center}
-#login input{font:inherit;color:var(--text);background:#151916;border:1px solid var(--line);border-radius:4px;padding:9px 10px}
-#login input:focus{outline:2px solid var(--brass);outline-offset:1px}
-#login button{padding:9px 12px;font-family:var(--f-display);font-size:15px}
-#factions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-#factions .fac{display:grid;gap:2px;text-align:left;padding:8px 10px;background:#151916;border:1px solid var(--line);border-radius:4px;color:var(--text);cursor:pointer;font:inherit}
-#factions .fac b{font-family:var(--f-display);color:var(--c);font-size:15px}
-#factions .fac small{color:var(--muted);font-size:12px}
-#factions .fac.on{outline:2px solid var(--c);background:#1d231e}
-#classes{display:grid;gap:6px}
-#classes .cls{display:grid;gap:2px;text-align:left;padding:8px 10px;background:#151916;border:1px solid var(--line);border-radius:4px;color:var(--text);cursor:pointer;font:inherit}
-#classes .cls b{font-family:var(--f-display);color:var(--brass);font-size:15px}
-#classes .cls small{color:var(--muted);font-size:12px}
-#classes .cls.on{outline:2px solid var(--brass);background:#1d231e}
-#login .err{color:#ff8a6b;min-height:1.2em}
 #chat{bottom:calc(var(--hud-h) + 12px);left:max(12px,env(safe-area-inset-left,0px));width:min(320px,70vw)}
 #chat input{width:100%;box-sizing:border-box;font:inherit;font-size:13px;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:6px 8px}
 #chat input:focus{outline:1px solid var(--brass)}
@@ -463,17 +445,54 @@ canvas:focus{outline:none}
   <div id="net" class="hud" aria-live="polite"></div>
   <div id="help" class="hud"><span id="helpKeys"></span><br>Arte: <a href="https://github.com/flareteam/flare-game" target="_blank" rel="noopener">Flare</a> (CC-BY-SA 3.0) · Efectos: TOMAS de Miradin (CC-BY-SA)</div>
   <div id="loading">Cargando el mundo…</div>
-  <div id="login" hidden>
-    <form id="loginForm" class="box">
-      <h1>Frontera de Naciones</h1>
-      <p>Elegí tu bando, tu clase y el nombre</p>
-      <div id="factions"></div>
-      <div id="classes"></div>
-      <input id="nameIn" maxlength="16" required autocomplete="nickname" placeholder="Nombre" aria-label="Nombre del personaje">
-      <input id="passIn" type="password" minlength="4" maxlength="64" required autocomplete="current-password" placeholder="Contraseña (si el nombre es nuevo, queda como tu clave)" aria-label="Contraseña">
-      <button type="submit">Entrar al mundo</button>
-      <div class="err" id="loginErr" role="alert"></div>
-    </form>
+  <div id="login" hidden data-screen="login">
+    <div class="lbg" aria-hidden="true"><div id="lbgScene"></div><canvas id="lbgFx"></canvas><div class="fog f1"></div><div class="fog f2"></div><div class="vig"></div><div class="aura"></div></div>
+    <div class="stage" id="lstage">
+      <header class="brand">
+        <div class="emblem" id="lEmblem" aria-hidden="true"></div>
+        <h1 class="gname">FRONTERA DE NACIONES</h1>
+        <div class="tagl" id="lTagl"><p>Un nuevo mundo te espera</p><p class="s2">Crea tu leyenda</p></div>
+      </header>
+
+      <section class="scr" id="scrLogin" aria-label="Iniciar sesión">
+        <form id="loginForm" class="lcard">
+          <div class="field"><label for="nameIn" class="sr">Usuario o personaje</label><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><input id="nameIn" maxlength="16" required autocomplete="username" placeholder="Usuario o personaje"></div>
+          <div class="field"><label for="passIn" class="sr">Contraseña</label><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><input id="passIn" type="password" minlength="4" maxlength="64" required autocomplete="current-password" placeholder="Contraseña"></div>
+          <div class="field" id="pass2Row" hidden><label for="pass2In" class="sr">Repetir contraseña</label><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><input id="pass2In" type="password" minlength="4" maxlength="64" autocomplete="new-password" placeholder="Repetir contraseña"></div>
+          <button type="submit" id="loginBtn" class="lbtn pri">INICIAR SESIÓN</button>
+          <div class="err" id="loginErr" role="alert"></div>
+          <p class="alt"><span id="altTxt">¿No tenés una cuenta?</span> <button type="button" id="altBtn" class="lnk">Crear cuenta</button></p>
+          <p class="hint" id="regHint" hidden>La cuenta se crea con ese nombre y contraseña. Después elegís clase y facción.</p>
+        </form>
+      </section>
+
+      <section class="scr" id="scrSelect" aria-labelledby="hSel" hidden>
+        <h2 id="hSel" class="stitle">SELECCIONA UN PERSONAJE</h2>
+        <ul class="slots" id="slots"></ul>
+        <div class="selart" id="selArt" aria-hidden="true"></div>
+        <aside class="sdetail" id="selDetail" aria-live="polite"></aside>
+        <div class="acts"><button type="button" class="lbtn ghost" id="selBack">VOLVER</button><button type="button" class="lbtn pri" id="selPlay">JUGAR</button></div>
+      </section>
+
+      <section class="scr" id="scrClass" aria-labelledby="hCls" hidden>
+        <h2 id="hCls" class="stitle">ELIGE TU CLASE</h2>
+        <div class="cards" id="clsCards" role="radiogroup" aria-labelledby="hCls"></div>
+        <div class="acts"><button type="button" class="lbtn ghost" id="clsBack">VOLVER</button><button type="button" class="lbtn pri" id="clsOk">SELECCIONAR</button></div>
+      </section>
+
+      <section class="scr" id="scrFaction" aria-labelledby="hFac" hidden>
+        <h2 id="hFac" class="stitle">ELIGE TU FACCIÓN</h2>
+        <div class="cards" id="facCards" role="radiogroup" aria-labelledby="hFac"></div>
+        <div class="acts"><button type="button" class="lbtn ghost" id="facBack">VOLVER</button><button type="button" class="lbtn pri" id="facOk">SELECCIONAR</button></div>
+      </section>
+
+      <section class="scr" id="scrCreate" aria-labelledby="hCre" hidden>
+        <h2 id="hCre" class="stitle sr">CREA TU PERSONAJE</h2>
+        <div class="crart" id="crArt" aria-hidden="true"></div>
+        <div class="crbody" id="crBody"></div>
+        <div class="acts"><button type="button" class="lbtn ghost" id="crBack">VOLVER</button><button type="button" class="lbtn pri" id="crOk">CONFIRMAR</button></div>
+      </section>
+    </div>
   </div>
 </div>
 
