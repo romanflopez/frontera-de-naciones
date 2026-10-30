@@ -178,7 +178,7 @@ export const lootRoll = (mobId: number, rarity: number, baseSeed: number, attrs:
     msg({ $case: 'lootRoll', value: { mobId, rarity, baseSeed, attrs } });
 export const statusUpdate = (playerId: bigint, invisible: boolean, detect: boolean, fury = false): ServerMessage =>
     msg({ $case: 'statusUpdate', value: { playerId, invisible, detect, fury } });
-export const vitals = (hp: number, maxHp: number, dead: boolean): ServerMessage => msg({ $case: 'vitals', value: { hp, maxHp, dead } });
+export const vitals = (hp: number, maxHp: number, dead: boolean, mp: number, maxMp: number): ServerMessage => msg({ $case: 'vitals', value: { hp, maxHp, dead, mp, maxMp } });
 export const playerVitals = (playerId: bigint, hp: number, maxHp: number): ServerMessage => msg({ $case: 'playerVitals', value: { playerId, hp, maxHp } });
 export const pvpKill = (playerId: bigint, killerId: bigint, victimName: string, killerName: string): ServerMessage =>
     msg({ $case: 'pvpKill', value: { playerId, killerId, victimName, killerName } });

@@ -511,10 +511,17 @@ message LootAttr { string key = 1; int32 value = 2; }
 message LootRoll { int32 mob_id = 1; int32 rarity = 2; int32 base_seed = 3; repeated LootAttr attrs = 4; }
 message StatusUpdate { int64 player_id = 1; bool invisible = 2; bool detect = 3; bool fury = 4; }
 /** El cliente informa su vida (curas, pociones, regeneración); el server solo acepta subas razonables. */
-message HpReport { int32 hp = 1; }
+message HpReport {
+  int32 hp = 1;
+  // Maná: lo gastado desde el último reporte en hechizos que el server no cobra por su cuenta (curas, hechizos a mobs),
+  // el maná que el cliente cree tener (solo se acepta una suba por poción, con tope) y si está meditando.
+  int32 mp_spent = 2;
+  int32 mp = 3;
+  bool meditating = 4;
+}
 message RespawnRequest {}
 /** Mi vida según el server (la autoridad): después de cada golpe, curación o al revivir. */
-message Vitals { int32 hp = 1; int32 max_hp = 2; bool dead = 3; }
+message Vitals { int32 hp = 1; int32 max_hp = 2; bool dead = 3; int32 mp = 4; int32 max_mp = 5; }
 /** Vida de otro jugador cercano (para su barra). */
 message PlayerVitals { int64 player_id = 1; int32 hp = 2; int32 max_hp = 3; }
 message PvpKill { int64 player_id = 1; int64 killer_id = 2; string victim_name = 3; string killer_name = 4; }

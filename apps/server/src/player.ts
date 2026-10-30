@@ -59,6 +59,13 @@ export class Player {
     lastDamager: { id: bigint; name: string; t: number } | null = null;
     lastVitalsAt = 0;
     lastHpReportAt = 0;
+    /** Maná que lleva el server, regeneración, tope de subas por pociones y meditación (solo vale quieto y sin recibir daño). */
+    mp = 0;
+    nextMpRegenAt = 0;
+    lastMpReportAt = 0;
+    potionBudget = 0;
+    meditating = false;
+    medX = 0; medY = 0;
     maxHp = 1000;
     gender = 0;
     skinColor = 0;

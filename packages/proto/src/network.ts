@@ -559,6 +559,13 @@ export interface StatusUpdate {
 /** El cliente informa su vida (curas, pociones, regeneración); el server solo acepta subas razonables. */
 export interface HpReport {
   hp: number;
+  /**
+   * Maná: lo gastado desde el último reporte en hechizos que el server no cobra por su cuenta (curas, hechizos a mobs),
+   * el maná que el cliente cree tener (solo se acepta una suba por poción, con tope) y si está meditando.
+   */
+  mpSpent: number;
+  mp: number;
+  meditating: boolean;
 }
 
 export interface RespawnRequest {
@@ -569,6 +576,8 @@ export interface Vitals {
   hp: number;
   maxHp: number;
   dead: boolean;
+  mp: number;
+  maxMp: number;
 }
 
 /** Vida de otro jugador cercano (para su barra). */
@@ -8346,13 +8355,22 @@ export const StatusUpdate: MessageFns<StatusUpdate> = {
 };
 
 function createBaseHpReport(): HpReport {
-  return { hp: 0 };
+  return { hp: 0, mpSpent: 0, mp: 0, meditating: false };
 }
 
 export const HpReport: MessageFns<HpReport> = {
   encode(message: HpReport, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.hp !== 0) {
       writer.uint32(8).int32(message.hp);
+    }
+    if (message.mpSpent !== 0) {
+      writer.uint32(16).int32(message.mpSpent);
+    }
+    if (message.mp !== 0) {
+      writer.uint32(24).int32(message.mp);
+    }
+    if (message.meditating !== false) {
+      writer.uint32(32).bool(message.meditating);
     }
     return writer;
   },
@@ -8378,6 +8396,30 @@ export const HpReport: MessageFns<HpReport> = {
             message.hp = reader.int32();
             continue;
           }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.mpSpent = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.mp = reader.int32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.meditating = reader.bool();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -8396,6 +8438,9 @@ export const HpReport: MessageFns<HpReport> = {
   fromPartial<I extends Exact<DeepPartial<HpReport>, I>>(object: I): HpReport {
     const message = createBaseHpReport();
     message.hp = object.hp ?? 0;
+    message.mpSpent = object.mpSpent ?? 0;
+    message.mp = object.mp ?? 0;
+    message.meditating = object.meditating ?? false;
     return message;
   },
 };
@@ -8444,7 +8489,7 @@ export const RespawnRequest: MessageFns<RespawnRequest> = {
 };
 
 function createBaseVitals(): Vitals {
-  return { hp: 0, maxHp: 0, dead: false };
+  return { hp: 0, maxHp: 0, dead: false, mp: 0, maxMp: 0 };
 }
 
 export const Vitals: MessageFns<Vitals> = {
@@ -8457,6 +8502,12 @@ export const Vitals: MessageFns<Vitals> = {
     }
     if (message.dead !== false) {
       writer.uint32(24).bool(message.dead);
+    }
+    if (message.mp !== 0) {
+      writer.uint32(32).int32(message.mp);
+    }
+    if (message.maxMp !== 0) {
+      writer.uint32(40).int32(message.maxMp);
     }
     return writer;
   },
@@ -8498,6 +8549,22 @@ export const Vitals: MessageFns<Vitals> = {
             message.dead = reader.bool();
             continue;
           }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.mp = reader.int32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.maxMp = reader.int32();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -8518,6 +8585,8 @@ export const Vitals: MessageFns<Vitals> = {
     message.hp = object.hp ?? 0;
     message.maxHp = object.maxHp ?? 0;
     message.dead = object.dead ?? false;
+    message.mp = object.mp ?? 0;
+    message.maxMp = object.maxMp ?? 0;
     return message;
   },
 };

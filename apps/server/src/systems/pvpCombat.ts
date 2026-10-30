@@ -8,31 +8,38 @@ export interface PvpSpell {
     dmg?: [number, number]; lvlK?: number; stat?: Stat;
     /** Paralización (s) sobre el objetivo; solo se aplica si el cliente la pide (último tick) y no más seguido que `cd`. */
     secs?: number;
+    /** Costo de maná (igual al del cliente); se cobra una vez por ráfaga. */
+    mp: number;
     range: number; cd: number; ticks?: number; every?: number; aoe?: number; melee?: boolean;
     /** Elemento para las resistencias (fuego: eruption/cataclysm; hielo: blizz/tidal). */
     kind?: string;
 }
 export const PVP_SPELLS: Record<string, PvpSpell> = {
-    ataque: { dmg: [0, 0], lvlK: 1, stat: 'melee', range: 2.6, cd: 0.3, melee: true },
-    proyectil: { dmg: [12, 18], lvlK: 2, stat: 'mag', range: 9.5, cd: 0.35 },
-    paralisis: { secs: 3, range: 7.5, cd: 4 },
-    aturdir: { secs: 2.5, range: 2.8, cd: 5 },
-    hoja: { dmg: [13, 19], lvlK: 2, stat: 'mag', range: 8.5, cd: 1.4 },
-    lanza: { dmg: [30, 42], lvlK: 3, stat: 'mag', range: 8.5, cd: 4.5 },
-    golpe: { dmg: [14, 20], lvlK: 2, stat: 'wdmg', range: 2.8, cd: 0.9, melee: true },
-    tajo: { dmg: [22, 30], lvlK: 3, stat: 'wdmg', range: 2.8, cd: 0.9, melee: true },
-    bola: { kind: 'eruption', dmg: [18, 26], lvlK: 2, stat: 'mag', range: 9, cd: 3.6, aoe: 1.9 },
-    lluvia: { kind: 'cataclysm', dmg: [11, 16], lvlK: 2, stat: 'mag', range: 9, cd: 8.5, ticks: 4, every: 0.5, aoe: 2.4 },
-    ventisca: { kind: 'blizz', dmg: [9, 14], lvlK: 2, stat: 'mag', range: 9, cd: 9.5, ticks: 6, every: 0.4, aoe: 2.7, secs: 1.5 },
-    marejada: { kind: 'tidal', dmg: [12, 17], lvlK: 2, stat: 'mag', range: 9, cd: 7.5, ticks: 3, every: 0.6, aoe: 2.2, secs: 1.2 },
-    sismo: { dmg: [12, 18], lvlK: 2, stat: 'wdmg', range: 2.5, cd: 5.5, aoe: 2.4 },
-    luz: { dmg: [14, 20], lvlK: 2, stat: 'mag', range: 9, cd: 6.5, ticks: 2, every: 0.7, aoe: 1.9 },
+    ataque: { mp: 0, dmg: [0, 0], lvlK: 1, stat: 'melee', range: 2.6, cd: 0.3, melee: true },
+    proyectil: { mp: 8, dmg: [12, 18], lvlK: 2, stat: 'mag', range: 9.5, cd: 0.35 },
+    paralisis: { mp: 20, secs: 3, range: 7.5, cd: 4 },
+    aturdir: { mp: 18, secs: 2.5, range: 2.8, cd: 5 },
+    hoja: { mp: 14, dmg: [13, 19], lvlK: 2, stat: 'mag', range: 8.5, cd: 1.4 },
+    lanza: { mp: 30, dmg: [30, 42], lvlK: 3, stat: 'mag', range: 8.5, cd: 4.5 },
+    golpe: { mp: 10, dmg: [14, 20], lvlK: 2, stat: 'wdmg', range: 2.8, cd: 0.9, melee: true },
+    tajo: { mp: 12, dmg: [22, 30], lvlK: 3, stat: 'wdmg', range: 2.8, cd: 0.9, melee: true },
+    bola: { mp: 25, kind: 'eruption', dmg: [18, 26], lvlK: 2, stat: 'mag', range: 9, cd: 3.6, aoe: 1.9 },
+    lluvia: { mp: 45, kind: 'cataclysm', dmg: [11, 16], lvlK: 2, stat: 'mag', range: 9, cd: 8.5, ticks: 4, every: 0.5, aoe: 2.4 },
+    ventisca: { mp: 50, kind: 'blizz', dmg: [9, 14], lvlK: 2, stat: 'mag', range: 9, cd: 9.5, ticks: 6, every: 0.4, aoe: 2.7, secs: 1.5 },
+    marejada: { mp: 40, kind: 'tidal', dmg: [12, 17], lvlK: 2, stat: 'mag', range: 9, cd: 7.5, ticks: 3, every: 0.6, aoe: 2.2, secs: 1.2 },
+    sismo: { mp: 25, dmg: [12, 18], lvlK: 2, stat: 'wdmg', range: 2.5, cd: 5.5, aoe: 2.4 },
+    luz: { mp: 35, dmg: [14, 20], lvlK: 2, stat: 'mag', range: 9, cd: 6.5, ticks: 2, every: 0.7, aoe: 1.9 },
 };
 export const FURY_MS = 10000, FURY_CD_MS = 18000;
+/** Costos de maná de los hechizos de utilidad que cobra el server (iguales a los del cliente). */
+export const UTIL_MP = { furia: 15, invisibilidad: 40, detectar: 30, remover: 20 } as const;
+/** Maná por clase (base, por nivel) y poción: mismas cuentas que el cliente. */
+const CLASS_MP: Record<string, [number, number]> = { guerrero: [40, 4], mago: [90, 12] };
+export const potionMp = (maxMp: number) => Math.max(40, Math.round(maxMp * 0.5));
 
-export interface CombatStats { lvl: number; cls: string; mag: number; wdmg: [number, number]; maxHp: number; def: number; fres: number; ires: number; savedHp: number }
+export interface CombatStats { lvl: number; cls: string; mag: number; wdmg: [number, number]; maxHp: number; def: number; fres: number; ires: number; savedHp: number; maxMp: number; savedMp: number }
 const CLASS_HP: Record<string, [number, number]> = { guerrero: [140, 18], mago: [90, 10] };
-export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, fres: 0, ires: 0, savedHp: 140 };
+export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, fres: 0, ires: 0, savedHp: 140, maxMp: 40, savedMp: 40 };
 
 /** Bases de items (mismas que el cliente): arma con daño, y bonos de magia. */
 const BASE: Record<string, { dmg?: [number, number]; mag?: number; def?: number; slot: string }> = {
@@ -49,18 +56,21 @@ const MELEE: Record<string, [number, number]> = { guerrero: [5, 9], mago: [2, 4]
 export function statsFromCharacter(json: string | undefined): CombatStats {
     if (!json) return { ...DEFAULT_STATS };
     try {
-        const o = JSON.parse(json) as { lvl?: number; cls?: string; hp?: number; eq?: Record<string, { n: string; a?: { id: string; v: number }[] } | null> };
+        const o = JSON.parse(json) as { lvl?: number; cls?: string; hp?: number; mp?: number; eq?: Record<string, { n: string; a?: { id: string; v: number }[] } | null> };
         const cls = o.cls === 'mago' ? 'mago' : 'guerrero', lvl = Math.max(1, Math.min(60, Number(o.lvl) || 1));
-        const s: CombatStats = { lvl, cls, mag: 0, wdmg: [0, 0], maxHp: 0, def: 0, fres: 0, ires: 0, savedHp: 1 };
-        let bonusHp = 0;
+        const s: CombatStats = { lvl, cls, mag: 0, wdmg: [0, 0], maxHp: 0, def: 0, fres: 0, ires: 0, savedHp: 1, maxMp: 0, savedMp: 0 };
+        let bonusHp = 0, bonusMp = 0;
         for (const [slot, it] of Object.entries(o.eq ?? {})) {
             if (!it) continue;
             const b = BASE[it.n];
             if (b && b.slot === slot) { if (b.dmg) s.wdmg = b.dmg; if (b.mag) s.mag += b.mag; if (b.def) s.def += b.def; }
-            for (const a of it.a ?? []) { if (a.id === 'mag') s.mag += a.v; else if (a.id === 'hp') bonusHp += a.v; else if (a.id === 'fres') s.fres += a.v; else if (a.id === 'ires') s.ires += a.v; }
+            for (const a of it.a ?? []) { if (a.id === 'mag') s.mag += a.v; else if (a.id === 'hp') bonusHp += a.v; else if (a.id === 'mp') bonusMp += a.v; else if (a.id === 'fres') s.fres += a.v; else if (a.id === 'ires') s.ires += a.v; }
         }
         const [hp0, hpL] = CLASS_HP[cls];
         s.maxHp = hp0 + (lvl - 1) * hpL + bonusHp;
+        const [mp0, mpL] = CLASS_MP[cls];
+        s.maxMp = mp0 + (lvl - 1) * mpL + bonusMp;
+        s.savedMp = Math.max(0, Math.min(s.maxMp, Math.round(Number(o.mp) || 0)));
         s.savedHp = Math.max(1, Math.min(s.maxHp, Math.round(Number(o.hp) || s.maxHp)));
         return s;
     } catch { return { ...DEFAULT_STATS }; }
@@ -90,18 +100,21 @@ export function rollSpellDamage(id: string, s: CombatStats, fury: boolean): numb
 export class PvpLimiter {
     private bursts = new Map<string, { start: number; end: number }>();
     private lastHit = new Map<string, number>();
+    private castAt = new Map<string, number>();
     furyUntil = 0; furyCdUntil = 0;
 
     /** ¿Puede pegar ahora con `id` sobre `targetId`? Registra el golpe si sí. */
-    allow(id: string, targetId: bigint, now: number): boolean {
+    allow(id: string, targetId: bigint, now: number, pay?: (cost: number) => boolean): boolean {
         const sp = PVP_SPELLS[id]; if (!sp) return false;
         const win = sp.ticks ? sp.ticks * (sp.every ?? 0.5) + 0.7 : 0.6, b = this.bursts.get(id);
-        if (!b || now > b.end) {
-            if (b && now - b.start < sp.cd * 900) return false; // todavía en recarga
-            this.bursts.set(id, { start: now, end: now + win * 1000 });
-        }
+        const fresh = !b || now > b.end;
+        if (fresh && b && now - b.start < sp.cd * 900) return false; // todavía en recarga
         const key = `${id}|${targetId}`, gap = (sp.ticks ? (sp.every ?? 0.5) * 0.8 : sp.cd * 0.9) * 1000;
         if (now - (this.lastHit.get(key) ?? 0) < gap) return false;
+        // un lanzamiento nuevo cuesta maná (los golpes de un mismo lanzamiento, sobre varios objetivos o en varios ticks, no)
+        const newCast = now - (this.castAt.get(id) ?? -1e12) >= sp.cd * 900;
+        if (newCast) { if (pay && sp.mp > 0 && !pay(sp.mp)) return false; this.castAt.set(id, now); }
+        if (fresh) this.bursts.set(id, { start: now, end: now + win * 1000 });
         this.lastHit.set(key, now);
         return true;
     }
