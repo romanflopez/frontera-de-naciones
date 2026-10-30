@@ -7,7 +7,7 @@
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
 import { damageAfterDefense, FURY_MS, potionMp, progressFromCharacter, PVP_SPELLS, rollSpellDamage, statsFromCharacter, UTIL_MP } from './systems/pvpCombat.ts';
-import { HUBS, portalGate } from '@fdn/world';
+import { HUBS, TRAINING, WAYPOINT_RANGE, portalGate, trainingUnlocked, waypointDest } from '@fdn/world';
 import { applyParalysis, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import type { Catalogs, GameWorldConfig, Settings } from './config.ts';
@@ -368,6 +368,9 @@ export class GameWorld {
                 case 'playerTeleportRequested':
                     this.handleTeleport(p, payload.value.x, payload.value.y);
                     break;
+                case 'waypointRequest':
+                    this.handleWaypoint(p, payload.value.id);
+                    break;
                 case 'changePlayerAttackStunDurationRequest': p.attackStunDurationMs = clampInt(payload.value.attackStunDurationMs, 100, 2000); break;
                 case 'changePlayerAttackSpeedRequest': p.attackSpeedMs = clampInt(payload.value.attackSpeedMs, 100, 2000); break;
                 case 'changePlayerCastSpeedRequest': p.castSpeedMs = clampInt(payload.value.castSpeedMs, 200, 2000); break;
@@ -460,6 +463,29 @@ export class GameWorld {
         } else if (!this.occupancy.isFree(x, y)) return;
         this.moveTo(p, p.posX, p.posY, x, y, false, true);
         p.send(M.playerTeleported(x, y));
+    }
+
+    /**
+     * Viaje por el menú de waypoints (portal grande de la ciudad / waypoint de cada zona). Se acepta solo si el jugador está
+     * a WAYPOINT_RANGE celdas o menos de algún waypoint y la zona pedida está abierta según el último guardado (misión/nivel/`u`).
+     * `id` = 'city' (punto de aparición de su facción) o el id de una zona de entrenamiento.
+     */
+    private handleWaypoint(p: Player, id: string): void {
+        if (p.isDead || !this.map) return;
+        if (!this.map.waypoints?.some((q) => distance(p.posX, p.posY, q.x, q.y) <= WAYPOINT_RANGE)) { p.send(M.sendMessage('Tenés que estar junto a un portal.')); return; }
+        const dest = waypointDest(this.map, id, this.factionOf(p));
+        if (!dest) return;
+        if (dest.step !== undefined) {
+            const t = TRAINING[dest.step];
+            if (!p.prog.unlocked.includes(t.id) && !trainingUnlocked(t.step, p.prog.qi, p.prog.lvl)) {
+                p.send(M.sendMessage(`Portal bloqueado (${t.zone}): ${t.after ? `entregá «${t.after}» al Capitán` : 'todavía no'} o llegá al nivel ${t.lvl}.`));
+                return;
+            }
+        }
+        const free = findNearestFreeLocation((cx, cy) => this.occupancy.isFree(cx, cy), dest.x, dest.y, 3);
+        if (!free || (free.x === p.posX && free.y === p.posY)) return;
+        this.moveTo(p, p.posX, p.posY, free.x, free.y, false, true);
+        p.send(M.playerTeleported(free.x, free.y));
     }
 
     /** Stats de combate del jugador a partir del personaje guardado (ya validado). */
