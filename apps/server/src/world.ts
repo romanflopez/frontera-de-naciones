@@ -18,6 +18,7 @@ import { MobSim } from './mobs.ts';
 import type { WorldMap } from '@fdn/world';
 import { Player, type PersistedPlayer, type Send } from './player.ts';
 import type { Economy, EconCtx } from './economy.ts';
+import { auctionHouse } from './auction.ts';
 import { canPickup, GroundLoot, type GroundApi } from './ground.ts';
 
 interface Timer { at: number; fn: () => void }
@@ -484,6 +485,7 @@ export class GameWorld {
                 case 'econSortRequest': this.econ?.sort(p, this.ctx); break;
                 case 'pickupRequest': this.econ?.pickup(p, this.ctx, payload.value.id); break;
                 case 'econQuestRequest': this.econ?.quest(p, this.ctx, payload.value.npcId, payload.value.action, payload.value.key); break;
+                case 'auctionRequest': auctionHouse()?.handle(p, this.ctx, payload.value); break; // casa de subastas (docs/SUBASTAS.md)
                 case 'respawnRequest': this.respawn(p); break;
                 case 'invisibilityRequest': { if (p.isDead || !this.payMp(p, UTIL_MP.invisibilidad)) break; this.changeStatus(p, () => castInvisibility(p.status, Date.now())); break; }
                 case 'detectInvisibleRequest': { if (p.isDead || !this.payMp(p, UTIL_MP.detectar)) break; this.changeStatus(p, () => castDetectInvisible(p.status, Date.now())); break; }

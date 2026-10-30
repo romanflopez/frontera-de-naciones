@@ -19,6 +19,7 @@ import { WorldRegistry } from './registry.ts';
 import { authenticate } from './accounts.ts';
 import { Economy, toCharSave } from './economy.ts';
 import { FileStorage, PgStorage, type Storage } from './storage.ts';
+import { AuctionHouse, setAuctionHouse } from './auction.ts';
 
 const MAX_INCOMING_BYTES = 24576;
 
@@ -37,6 +38,9 @@ registry.ensure(settings.initialMap); // el mapa de entrada ya listo; los demás
 registry.start();
 const worldConfigs: GameWorldConfig[] = Object.values(MAPS).map((d) => ({ id: d.id, name: d.name, map: d.id, spawn: d.spawn }));
 console.log(`[Server] ${worldConfigs.length} mapas registrados (${worldConfigs.map((w) => w.id).join(', ')}); mundo inicial '${settings.initialMap}'.`);
+// casa de subastas compartida por todos los mundos (docs/SUBASTAS.md): mismo Storage; avisa a los vendedores conectados
+const auction = new AuctionHouse(storage); setAuctionHouse(auction); auction.start();
+auction.notify = (key, ...msgs) => { const s = sessionsByNetworkId.get(`acc:${key}`)?.socket; if (s?.readyState === s?.OPEN) for (const m of msgs) s?.send(encode(m)); };
 
 const worldsListMessage = M.worldsList(worldConfigs);
 const monstersListMessage = M.monstersList(catalogs);
@@ -246,6 +250,7 @@ async function shutdown(): Promise<void> {
     registry.flushAllPending();
     for (const s of sessionsByNetworkId.values()) { worldOf(s)?.persistVitals(s.sessionId); saveChar(s.networkId, worldOf(s)?.snapshot(s.sessionId)); }
     registry.dispose();
+    auction.stop();
     try { if (storage.close) await storage.close(); else storage.flush(); } catch (e) { console.error('[Storage] Error al cerrar:', (e as Error).message); }
     process.exit(0);
 }
