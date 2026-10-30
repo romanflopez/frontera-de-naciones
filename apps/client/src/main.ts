@@ -465,14 +465,25 @@ function die() {
     later(2.2, () => ask(0));
 }
 /** Mi vida según el server: es la que vale. */
-function onVitals(v: { hp: number; maxHp: number; dead: boolean }) {
+function onVitals(v: { hp: number; maxHp: number; dead: boolean; mp: number; maxMp: number }) {
     if (v.dead) { if (!P.dead) die(); P.hp = 0; return; }
-    if (P.dead) { P.dead = false; P.one = null; P.mp = maxMp(); log('Revivís en tu ciudad.', true); }
+    if (P.dead) { P.dead = false; P.one = null; P.mp = maxMp(); mpLocalAt = 0; log('Revivís en tu ciudad.', true); }
     P.hp = Math.min(maxHp(), v.hp);
+    // el maná también es del server; si recién gasté/tomé algo local (el aviso todavía viaja), no me pisa para arriba
+    const smp = Math.min(maxMp(), v.mp);
+    P.mp = now() - mpLocalAt < 0.5 ? Math.min(P.mp, smp) : smp;
 }
-let lastHpSent = -1;
-/** Le cuento al server mi vida (curas, pociones, regeneración): él solo acepta subas razonables. */
-function syncHp() { const h = Math.round(P.hp); if (h === lastHpSent || P.dead || !connected) return; lastHpSent = h; net.send({ $case: 'hpReport', value: { hp: h } }); }
+let lastReportKey = '', mpSpent = 0, mpLocalAt = 0;
+/** Maná gastado en un hechizo: lo declaro al server solo si él no lo cobra por su cuenta (curas, hechizos a mobs). */
+function spendMp(cost: number, serverCharges: boolean) { P.mp -= cost; mpLocalAt = now(); if (!serverCharges) mpSpent += cost; }
+/** Le cuento al server mi vida y maná (curas, pociones, regeneración, meditar): él solo acepta subas razonables. */
+function syncHp() {
+    const h = Math.round(P.hp); if (P.dead || !connected) return;
+    const mp = Math.max(0, Math.round(P.mp)), med = P.med, key = `${h}|${mp}|${med}|${mpSpent}`;
+    if (key === lastReportKey) return; lastReportKey = key;
+    const spent = Math.round(mpSpent); mpSpent -= spent;
+    net.send({ $case: 'hpReport', value: { hp: h, mpSpent: spent, mp, meditating: med } });
+}
 
 // ---------- hechizos ----------
 type Target = Mob | { x: number; y: number; ground: true } | { x: number; y: number; pvp: Other };
@@ -510,7 +521,7 @@ const LIB: Record<string, SpellDef> = {
         cast(m) { if (!m) return false; zone(m.x, m.y, 2.2, 3, 0.6, () => rint(12, 17) + P.lvl * 2 + totals().mag, 'tidal', 1.2, 'marejada'); } },
     curar2: { name: 'Curación mayor', mp: 35, cd: 6, col: '#7ee08a', range: 0, target: false,
         cast() { heal(70 + P.lvl * 5, 'godsbreath'); } },
-    sismo: { name: 'Sismo', mp: 25, cd: 6, col: '#d9a45a', range: 0, target: false,
+    sismo: { name: 'Sismo', mp: 25, cd: 6, col: '#d9a45a', range: 0, target: false, aoe: 2.4,
         cast() { fx.push({ k: 'boom', x: P.x, y: P.y, t: 0, r: 2.4, c: '#d9a45a' }); const w = totals().wdmg; zone(P.x, P.y, 2.4, 1, 0, () => rint(12, 18) + P.lvl * 2 + rint(w[0], w[1]), 'cataclysm', 0, 'sismo'); } },
     remover: { name: 'Remover', mp: 20, cd: 10, col: '#9fe8ff', range: 0, target: false,
         cast() { if (P.frozenUntil <= now()) { toast('No estás paralizado.'); return false; } net.send({ $case: 'removerRequest', value: {} }); } },
@@ -562,17 +573,17 @@ function usePotion(k: 'hp' | 'mp') {
     if (k === 'hp' ? P.hp >= maxHp() : P.mp >= maxMp()) { toast(k === 'hp' ? 'Ya tenés la vida llena.' : 'Ya tenés el maná lleno.'); return; }
     pots[k]--; pots.cd = now() + 1.2;
     if (k === 'hp') { const h = Math.max(50, Math.round(maxHp() * 0.4)); P.hp = Math.min(maxHp(), P.hp + h); float(P.x, P.y - 0.2, '+' + h, '#7ee08a'); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#e0524a' }); }
-    else { const m = Math.max(40, Math.round(maxMp() * 0.5)); P.mp = Math.min(maxMp(), P.mp + m); float(P.x, P.y - 0.2, '+' + m + ' maná', '#7fb7ff'); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#4a8fe0' }); }
+    else { const m = Math.max(40, Math.round(maxMp() * 0.5)); P.mp = Math.min(maxMp(), P.mp + m); mpLocalAt = now(); float(P.x, P.y - 0.2, '+' + m + ' maná', '#7fb7ff'); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#4a8fe0' }); }
     syncHp(); efx('sphere', P.x, P.y); renderPots();
 }
 function renderPots() { for (const k of ['hp', 'mp'] as const) { const el = $('pot' + k); el.title = `${POTS[k].name} (${POTS[k].key})`; el.innerHTML = `<kbd>${POTS[k].key}</kbd><b>${POTS[k].name.replace('Poción de ', '')}</b><em>${pots[k]}</em>`; } }
 // ---------- /meditar: quieto, el maná sube rápido; se corta si te movés, casteás o te pegan ----------
-function stopMeditating(msg?: string) { if (!P.med) return; P.med = false; if (msg) log(msg, true); }
+function stopMeditating(msg?: string) { if (!P.med) return; P.med = false; if (msg) log(msg, true); syncHp(); }
 function toggleMeditate() {
     if (P.med) { stopMeditating('Dejaste de meditar.'); return; }
     if (P.dead || P.casting || P.step || P.path.length) { log('Tenés que estar quieto para meditar.', true); return; }
     if (P.mp >= maxMp()) { log('Ya tenés el maná lleno.', true); return; }
-    P.med = true; P.medHp = P.hp; log('Meditás… el maná sube rápido mientras estés quieto. (/meditar de nuevo para cortar)', true);
+    P.med = true; P.medHp = P.hp; syncHp(); log('Meditás… el maná sube rápido mientras estés quieto. (/meditar de nuevo para cortar)', true);
 }
 function nearestEnemy(range: number) { let b: Other | null = null, bd = range; for (const o of others.values()) { if (!isEnemy(o)) continue; const d = dist(P, o); if (d <= bd) { bd = d; b = o; } } return b; }
 function pickEnemy(sx: number, sy: number) { for (const o of others.values()) { if (!isEnemy(o)) continue; const p = toScreen(o.x, o.y); if (Math.abs(sx - p.x) < 24 * Z && sy > p.y - 76 * Z && sy < p.y + 12 * Z) return o; } return null; }
@@ -607,7 +618,9 @@ function release(target: Mob | { x: number; y: number; pvp?: Other }) {
 function fire(i: number, m: Target | null) {
     const s = SPELLS[i];
     if (m && 'pvp' in m && !s.aoe) { if (!pvpCast(s.id, (m as { pvp: Other }).pvp)) return; } else if (s.cast(m) === false) return;
-    P.mp -= s.mp; cds[i] = now() + s.cd;
+    const srvMp = ['furia', 'invisibilidad', 'detectar', 'remover'].includes(s.id ?? '') || (m && 'pvp' in m && !s.aoe)
+        || (!!s.aoe && enemiesNear(m ? m.x : P.x, m ? m.y : P.y, s.aoe + 0.5).length > 0); // si pega a un jugador, el server cobra
+    spendMp(s.mp, srvMp); syncHp(); cds[i] = now() + s.cd;
     P.one = { anim: 'cast', t: now() - 0.3, until: now() + 0.12 };
     fx.push({ k: 'burst', x: P.x, y: P.y, t: 0, c: s.col });
     const b = $('sp' + i); b.classList.remove('fired'); void b.offsetWidth; b.classList.add('fired');
@@ -889,7 +902,7 @@ function update(dt: number) {
             else if (d.item && P.bag.length < 18) { P.bag.push(d.item); drops.splice(drops.indexOf(d), 1); log(`Agarraste <span style="color:${d.item.rar.c}">${d.item.name}</span>.`); renderBag(); }
             else log('La bolsa está llena.');
         }
-        regenT += dt; if (regenT >= 1) { regenT = 0; const inCity = isSafe(P.x, P.y); P.hp = Math.min(maxHp(), P.hp + (inCity ? 8 : 1)); syncHp(); P.mp = Math.min(maxMp(), P.mp + (P.med ? Math.max(6, Math.round(maxMp() * 0.08)) : inCity ? 8 : 2)); if (P.med && P.mp >= maxMp()) stopMeditating('Terminaste de meditar: maná lleno.'); }
+        regenT += dt; if (regenT >= 1) { regenT = 0; const inCity = isSafe(P.x, P.y); P.hp = Math.min(maxHp(), P.hp + (inCity ? 8 : 1)); P.mp = Math.min(maxMp(), P.mp + (P.med ? Math.max(6, Math.round(maxMp() * 0.08)) : inCity ? 8 : 2)); if (P.med && P.mp >= maxMp()) stopMeditating('Terminaste de meditar: maná lleno.'); syncHp(); }
         if (P.med && (P.step || P.path.length || P.casting || P.hp < P.medHp || P.dead)) stopMeditating(P.hp < P.medHp ? 'Te sacaron de la meditación.' : 'Dejaste de meditar.');
         if (P.med) P.medHp = P.hp;
     }

@@ -6,7 +6,7 @@
  * tick (cada 50 ms) solo dispara los temporizadores. Más adelante, si hace falta escalar,
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
-import { damageAfterDefense, FURY_MS, progressFromCharacter, PVP_SPELLS, rollSpellDamage, statsFromCharacter } from './systems/pvpCombat.ts';
+import { damageAfterDefense, FURY_MS, potionMp, progressFromCharacter, PVP_SPELLS, rollSpellDamage, statsFromCharacter, UTIL_MP } from './systems/pvpCombat.ts';
 import { HUBS, portalGate } from '@fdn/world';
 import { applyParalysis, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
@@ -71,6 +71,7 @@ export class GameWorld {
         }
         for (const pl of this.players.values()) {
             this.changeStatus(pl, () => updateStatus(pl.status, now));
+            this.regenMana(pl, now);
         }
         if (this.mobSim) this.safe('mobs', () => this.mobSim!.update());
         this.checkPingTimeouts(now);
@@ -299,7 +300,7 @@ export class GameWorld {
                     const x = num(v.x, 0, 200), y = num(v.y, 0, 200), r = num(v.r, 0, 6);
                     // Furia: la lleva el server
                     if (spell === 'furia') {
-                        if (p.pvp.castFury(now)) {
+                        if (!p.isDead && now >= p.pvp.furyCdUntil && this.payMp(p, UTIL_MP.furia) && p.pvp.castFury(now)) {
                             this.broadcastNear(p, M.pvpHit(p.playerId, { fx: fx || 'flamme', x: p.posX, y: p.posY, targetId: 0n, dmg: 0, secs: 0, r: 0 }));
                             const fury = (on: boolean) => { const m = M.statusUpdate(p.playerId, p.status.isInvisible, p.status.hasDetectInvisible, on); p.send(m); this.broadcastNear(p, m); };
                             fury(true); this.setTimeout(FURY_MS, () => fury(false));
@@ -314,7 +315,7 @@ export class GameWorld {
                         const dTgt = Math.hypot(tgt.posX - p.posX, tgt.posY - p.posY);
                         if (dTgt > sp.range + 2.5) break;                                  // muy lejos del que lanza
                         if (sp.aoe && Math.hypot(tgt.posX - x, tgt.posY - y) > sp.aoe + 2) break; // fuera del área
-                        if (!p.pvp.allow(spell, tgt.playerId, now)) break;                // recarga o ritmo
+                        if (p.isDead || !p.pvp.allow(spell, tgt.playerId, now, (c) => this.payMp(p, c))) break; // recarga, ritmo o sin maná
                         dmg = rollSpellDamage(spell, p.combat, p.pvp.fury(now));
                         if (v.secs > 0 && p.pvp.allowSecs(spell, tgt.playerId, now)) secs = sp.secs ?? 0;
                         this.changeStatus(p, () => breakInvisibility(p.status));
@@ -326,12 +327,13 @@ export class GameWorld {
                     this.broadcastNear(p, M.pvpHit(p.playerId, { fx, x, y, targetId: v.targetId, dmg, secs, r }));
                     break;
                 }
-                case 'hpReport': this.acceptHpReport(p, payload.value.hp); break;
+                case 'hpReport': this.acceptHpReport(p, payload.value.hp, payload.value); break;
                 case 'respawnRequest': this.respawn(p); break;
-                case 'invisibilityRequest': { this.changeStatus(p, () => castInvisibility(p.status, Date.now())); break; }
-                case 'detectInvisibleRequest': { this.changeStatus(p, () => castDetectInvisible(p.status, Date.now())); break; }
+                case 'invisibilityRequest': { if (p.isDead || !this.payMp(p, UTIL_MP.invisibilidad)) break; this.changeStatus(p, () => castInvisibility(p.status, Date.now())); break; }
+                case 'detectInvisibleRequest': { if (p.isDead || !this.payMp(p, UTIL_MP.detectar)) break; this.changeStatus(p, () => castDetectInvisible(p.status, Date.now())); break; }
                 case 'removerRequest': {
-                    if (!castRemover(p.status, Date.now())) break;
+                    if (p.mp < UTIL_MP.remover || !castRemover(p.status, Date.now())) break;
+                    this.payMp(p, UTIL_MP.remover);
                     const m = M.pvpHit(p.playerId, { fx: 'sphere', x: p.posX, y: p.posY, targetId: p.playerId, dmg: 0, secs: -1, r: 0 });
                     p.send(m); this.broadcastNear(p, m);
                     break;
@@ -459,16 +461,16 @@ export class GameWorld {
         const prevMax = p.combat.maxHp, prevLvl = p.combat.lvl;
         p.combat = statsFromCharacter(characterJson);
         p.prog = progressFromCharacter(characterJson);
-        if (login) p.hp = p.combat.savedHp;
-        else if (p.combat.lvl > prevLvl) p.hp = p.combat.maxHp;
-        else if (p.hp > p.combat.maxHp) p.hp = p.combat.maxHp;
+        if (login) { p.hp = p.combat.savedHp; p.mp = p.combat.savedMp; p.potionBudget = potionMp(p.combat.maxMp); }
+        else if (p.combat.lvl > prevLvl) { p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; }
+        else { if (p.hp > p.combat.maxHp) p.hp = p.combat.maxHp; if (p.mp > p.combat.maxMp) p.mp = p.combat.maxMp; }
         void prevMax;
         this.sendVitals(p, true);
     }
 
     // ---------- vida, muerte y revivir (la vida la lleva el server) ----------
     private sendVitals(p: Player, announce: boolean): void {
-        p.send(M.vitals(Math.max(0, Math.round(p.hp)), p.combat.maxHp, p.isDead));
+        p.send(M.vitals(Math.max(0, Math.round(p.hp)), p.combat.maxHp, p.isDead, Math.max(0, Math.round(p.mp)), p.combat.maxMp));
         if (announce) this.announceVitals(p);
     }
     /** Avisa la vida a los cercanos (para la barra), a lo sumo cada 200 ms por jugador. */
@@ -487,7 +489,7 @@ export class GameWorld {
     private damagePlayer(p: Player, raw: number, fx: string, killer: Player | null, source = ''): number {
         if (p.isDead || p.spawnProtection || raw <= 0) return 0;
         const dmg = damageAfterDefense(raw, p.combat, fx);
-        p.hp = Math.max(0, p.hp - dmg);
+        p.hp = Math.max(0, p.hp - dmg); p.meditating = false;
         if (killer) p.lastDamager = { id: killer.playerId, name: killer.characterName, t: Date.now() };
         else if (source) p.lastDamager = { id: 0n, name: source, t: Date.now() };
         this.sendVitals(p, true);
@@ -506,7 +508,7 @@ export class GameWorld {
     }
     private respawn(p: Player): void {
         if (!p.isDead || Date.now() - p.deadAt < 1800) return;
-        p.hp = p.combat.maxHp; p.lastDamager = null;
+        p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; p.meditating = false; p.lastDamager = null;
         const hub = HUBS[this.factionOf(p)] ?? this.config.spawn ?? { x: 6, y: 7 };
         let x = hub.x, y = hub.y;
         for (let r = 0; r < 6 && !this.occupancy.isFree(x, y); r++) { x = hub.x + ((r * 3) % 5) - 2; y = hub.y + 1 + (r % 3); }
@@ -515,14 +517,57 @@ export class GameWorld {
         this.announceVitals(p, true);
     }
     /** El cliente informa su vida (curas, pociones, regeneración): solo se acepta una suba razonable (hasta ~50 % de la vida máxima por segundo). */
-    private acceptHpReport(p: Player, reported: number): void {
+    private acceptHpReport(p: Player, reported: number, r?: { mpSpent?: number; mp?: number; meditating?: boolean }): void {
         if (p.isDead) return;
+        if (r) this.acceptMpReport(p, r);
         const now = Date.now(), dt = Math.min(5, Math.max(0.05, (now - p.lastHpReportAt) / 1000)); p.lastHpReportAt = now;
         const max = p.combat.maxHp, want = Math.min(max, Math.max(0, Math.round(reported)));
         if (want > p.hp) p.hp = Math.min(want, p.hp + Math.ceil(max * 0.5 * dt) + 2);
         this.announceVitals(p);
     }
 
+
+    // ---------- maná (lo lleva el server) ----------
+    /** Cobra maná si alcanza; si no, no hace nada. Cualquier lanzamiento corta la meditación. */
+    private payMp(p: Player, cost: number): boolean {
+        if (p.isDead || p.mp < cost) return false;
+        if (cost > 0) { p.mp -= cost; p.meditating = false; this.sendVitals(p, false); }
+        return true;
+    }
+    /** Regeneración con las reglas del server: ciudad 8/s, meditando quieto 8 % de la máxima por s (mín. 6), afuera 2/s. */
+    private regenMana(p: Player, now: number): void {
+        if (now < p.nextMpRegenAt) return;
+        p.nextMpRegenAt = now + 1000;
+        if (p.disconnected) return;
+        if (p.meditating && (p.isDead || p.posX !== p.medX || p.posY !== p.medY)) p.meditating = false;
+        const max = p.combat.maxMp; if (p.isDead || p.mp >= max) return;
+        const inCity = !!this.map?.safe[Math.floor(p.posY)]?.[Math.floor(p.posX)];
+        const add = p.meditating ? Math.max(6, Math.round(max * 0.08)) : inCity ? 8 : 2;
+        p.mp = Math.min(max, p.mp + add);
+        this.sendVitals(p, false);
+    }
+    /**
+     * Reporte de maná del cliente: lo gastado en hechizos que el server no cobra (curas, hechizos a mobs) solo resta;
+     * una suba (poción) se acepta con un tope: una poción cada ~3 s como mucho. Meditar solo vale quieto.
+     */
+    private acceptMpReport(p: Player, r: { mpSpent?: number; mp?: number; meditating?: boolean }): void {
+        const now = Date.now(), max = p.combat.maxMp, pot = potionMp(max);
+        let changed = false;
+        const spent = Math.min(max, Math.max(0, Math.round(Number(r.mpSpent) || 0)));
+        if (spent > 0) { p.mp = Math.max(0, p.mp - spent); changed = true; }
+        // el tope de pociones se recarga con el tiempo (una poción cada 3 s, sin reserva extra)
+        const dt = Math.min(10, Math.max(0, (now - (p.lastMpReportAt || now)) / 1000)); p.lastMpReportAt = now;
+        p.potionBudget = Math.min(pot, p.potionBudget + (pot / 3) * dt);
+        const want = Math.min(max, Math.max(0, Math.round(Number(r.mp) || 0)));
+        if (want > p.mp && p.potionBudget >= 1) {
+            const up = Math.min(want - p.mp, Math.floor(p.potionBudget));
+            p.mp += up; p.potionBudget -= up; changed = true;
+        }
+        const med = !!r.meditating && !p.isDead && p.mp < max;
+        if (med && !p.meditating) { p.medX = p.posX; p.medY = p.posY; }
+        p.meditating = med;
+        if (changed) this.sendVitals(p, false);
+    }
 
     /** Port de Movement.SyncPlayerVisibilityAfterMovement. */
     private syncVisibilityAfterMovement(moved: Player, curX: number, curY: number, destX: number, destY: number, dashAttack: boolean, teleport: boolean): void {
