@@ -15,6 +15,7 @@ import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
 import { coinIcon, itemIcon, keyIcon, potionIcon, shardIcon } from './itemicons.ts';
 import { initLoginUI } from './loginui.ts';
 import { createMinimap, type Minimap } from './minimap.ts';
+import { createAuctionUI } from './auction.ts';
 const ico = (it: { look?: string; slot: string; rar: { c: string; k: number } }) => `<img class="iico" alt="" src="${itemIcon(it.look, it.slot, it.rar.c, it.rar.k)}">`;
 
 // ---------- utilidades ----------
@@ -276,6 +277,7 @@ function onServer(m: ServerPayload) {
             break;
         }
         case 'groundItemRemoved': { const i = drops.findIndex((d) => d.gid === m.value.id); if (i >= 0) { if (P.pickup === drops[i]) P.pickup = null; drops.splice(i, 1); } break; }
+        case 'auctionSearchResult': case 'auctionMyState': auction.onMessage(m); break;
         case 'econResult': if (m.value.ok) log(esc(m.value.text)); else { toast(m.value.text); log(esc(m.value.text)); } break;
         case 'killReward': onKillReward(m.value); break;
         case 'statusUpdate': onStatusUpdate(m.value); break;
@@ -1481,6 +1483,8 @@ const NPC_LOOKS: Record<string, string[]> = {
     capitan_v: ['plate_boots', 'plate_greaves', 'plate_gauntlets', 'plate_cuirass', 'head_short', 'plate_helm', 'longsword'],
     guardia_s: ['chain_boots', 'chain_greaves', 'chain_gloves', 'chain_cuirass', 'head_short', 'plate_helm', 'longsword', 'kite_shield'],
     guardia_v: ['plate_boots', 'chain_greaves', 'plate_gauntlets', 'chain_cuirass', 'head_bald', 'chain_coif', 'battle_axe'],
+    subastador_s: ['mage_boots', 'cloth_pants', 'cloth_gloves', 'mage_vest', 'head_short'],
+    subastador_v: ['leather_boots', 'leather_pants', 'cloth_gloves', 'mage_vest', 'head_bald', 'mage_hood'],
 };
 const lookOfNpc = (n: { id: string }) => NPC_LOOKS[n.id] ?? NPC_LOOKS[n.id.replace(/\d+$/, '')];
 function refreshNpcLook() {
@@ -1574,8 +1578,11 @@ function stockInfo(st: Stock): string {
     for (const a of st.attrs ?? []) bits.push(attrText({ id: a[0], v: a[1] }));
     return `${bits.join(' · ') || b.slot} · Nv ${st.lvl}`;
 }
+/** Casa de subastas (ventana propia en auction.ts; el server valida todo). */
+const auction = createAuctionUI({ send: (p) => net.send(p), bag: () => P.bag, gold: () => P.gold, fromInv: itemFromInv, icon: ico, attrText, esc, fmt: fmtNum, toast });
 function openShop(n: Npc = MAP.npcs[0]) {
     const role = roleOf(n);
+    if (role === 'subastador') { closeShop(); shopNpc = n; talkNpc = null; auction.open(n); return; }
     if (role === 'capitan') { openQuestDlg(n); return; }
     if (role === 'guardia') { openTalk(n); return; }
     const def = SHOPS[role]; if (!def) return;
@@ -1589,7 +1596,7 @@ function openTalk(n: Npc) {
     $('qdName').textContent = n.name; $('qdlg').hidden = false; $('qdForges').innerHTML = ''; $('qdBtn').hidden = true;
     $('qdBody').innerHTML = `<small>${SHOPS.guardia.label}</small><br>${lines[Math.floor(R() * lines.length)]}`;
 }
-function closeShop() { shopNpc = null; $('shop').hidden = true; $('qdlg').hidden = true; }
+function closeShop() { shopNpc = null; $('shop').hidden = true; $('qdlg').hidden = true; auction.close(); }
 function renderShop() {
     if ($('shop').hidden || !shopNpc) return;
     const def = SHOPS[roleOf(shopNpc)];
@@ -1891,7 +1898,7 @@ function applyInventory(v: InventoryState) {
     if (prevSel >= 0) { const inBag = P.bag.find((x) => x.id === prevSel); const inEq = SLOTS.map((sl) => P.eq[sl]).find((x) => x && x.id === prevSel); sel = inBag ? { it: inBag, from: 'bag' } : inEq ? { it: inEq!, from: 'eq' } : null; }
     if (invApplied && v.lvl > lvlBefore) onLevelUp(); else { P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); }
     invApplied = true;
-    refreshLook(); renderBag(); renderQuest(); renderPots(); renderShop(); sendProfile();
+    refreshLook(); renderBag(); renderQuest(); renderPots(); renderShop(); auction.refresh(); sendProfile();
     if (!$('qdlg').hidden && shopNpc && roleOf(shopNpc) === 'capitan') openQuestDlg(shopNpc);
 }
 const saver = new Saver(buildSave, (data) => net.send({ $case: 'saveCharacterRequest', value: { data } }));

@@ -68,7 +68,7 @@ Hoy no existe el sistema de grupos (invitaciones, lista de miembros, UI). El bot
 - Variables de depuración: `FDN_DEBUG_WARP=1` (teletransporte libre), `FDN_DEBUG_GOLD=<n>` (oro inicial de personajes nuevos), `FDN_DEBUG_TRUST_SAVE=1`. Nunca en producción.
 
 ## Pendientes
-- Casa de subastas (tablas Postgres con identidad por item, escrow de oro/items, comisión).
+- ~~Casa de subastas~~: hecha (compra directa, custodia de items, buzón, tasa y comisión), ver `docs/SUBASTAS.md`. Faltan pujas.
 - Crafteo (recetas en `packages/world`, validación y consumo atómico en el server).
 - Banco/almacén por cuenta.
 - Sistema de grupos y el reparto de exp/botín/oro descripto arriba; persistir el suelo entre reinicios.
