@@ -277,7 +277,7 @@ function onServer(m: ServerPayload) {
             break;
         }
         case 'groundItemRemoved': { const i = drops.findIndex((d) => d.gid === m.value.id); if (i >= 0) { if (P.pickup === drops[i]) P.pickup = null; drops.splice(i, 1); } break; }
-        case 'auctionSearchResult': case 'auctionMyState': auction.onMessage(m); break;
+        case 'auctionSearchResult': case 'auctionMyState': case 'auctionHistory': auction.onMessage(m); break;
         case 'econResult': if (m.value.ok) log(esc(m.value.text)); else { toast(m.value.text); log(esc(m.value.text)); } break;
         case 'killReward': onKillReward(m.value); break;
         case 'statusUpdate': onStatusUpdate(m.value); break;
