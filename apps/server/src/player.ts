@@ -7,11 +7,14 @@ import { createDefaultStatus } from './systems/statusSystem.ts';
 import type { ServerMessage } from '@fdn/proto';
 import type { Settings } from './config.ts';
 import type { Econ } from './economy.ts';
+import type { GameWorld } from './world.ts';
 
 export type Send = (message: ServerMessage) => void;
 
 /** Lo que guardamos de un personaje entre sesiones. */
 export interface PersistedPlayer {
+    /** Mapa donde estaba (id de MapDef). `worldId` queda igual por compatibilidad con guardados viejos, que solo lo tienen a él. */
+    mapId?: string;
     worldId: string;
     x: number;
     y: number;
@@ -26,6 +29,9 @@ export interface PersistedPlayer {
 }
 
 let nextPlayerId = 1n;
+
+/** Temporizador que sigue al jugador (no al mundo): sobrevive a un cambio de mapa y corre en el mundo donde esté en ese momento. */
+export interface PlayerTimer { at: number; fn: (world: GameWorld) => void }
 
 /** Límite deslizante: cuántas infracciones se perdonan dentro de la ventana. */
 class SlidingWindow {
@@ -58,6 +64,10 @@ export class Player {
     /** Ya se mandó la foto del inventario en esta sesión. */
     econSynced = false;
     joinedAt = Date.now();
+    /** Mundo donde está ahora (null mientras cruza de un mapa a otro). */
+    world: GameWorld | null = null;
+    /** Temporizadores atados al jugador (pociones en el tiempo, avisos, protección al aparecer). */
+    timers: PlayerTimer[] = [];
     pvp = new PvpLimiter();
     status = createDefaultStatus();
     disconnected = false;
@@ -201,9 +211,9 @@ export class Player {
     }
 
     // ---------- persistencia ----------
-    toPersisted(worldId: string): PersistedPlayer {
+    toPersisted(mapId: string, at?: { x: number; y: number }): PersistedPlayer {
         return {
-            worldId, x: this.posX, y: this.posY, direction: this.facingDirection,
+            mapId, worldId: mapId, x: at?.x ?? this.posX, y: at?.y ?? this.posY, direction: this.facingDirection,
             gender: this.gender, skinColor: this.skinColor, hairStyleIndex: this.hairStyleIndex, underwearColorIndex: this.underwearColorIndex,
             movementSpeedMs: this.baseMovementSpeedMs, runningMode: this.runningMode, attackMode: this.attackMode,
         };

@@ -10,7 +10,7 @@
  */
 import {
     ATTR_RANGES, BAG_MAX, BASE_BY_NAME, BASES, KEY_IDS, KEYDEFS, POT_MAX, POTS, QUESTS, roleOf, SHARDS_PER_KEY, SHOP_SERVER_RANGE,
-    SHOPS, SLOTS, SRV_ATTR, TRAINING, buildSolmar, expToLevel, mobDef, sellPrice, trainingUnlocked,
+    MAPS, SHOPS, SLOTS, SRV_ATTR, TRAINING, buildMap, expToLevel, mobDef, sellPrice, trainingUnlocked,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
 } from '@fdn/world';
 import { RARITY_INDEX, rollMobDrop, type GeneratedItem } from './loot/itemGenerator.ts';
@@ -57,10 +57,10 @@ const emptyEq = (): Record<Slot, SItem | null> => ({ arma: null, armadura: null,
 
 // ---------- rangos válidos de atributos (los mismos que usa el generador de botín) ----------
 let lootLvl = 0;
-/** Nivel más alto de mob del juego (los bosses dan botín a nivel+2 en el cálculo viejo del cliente). */
+/** Nivel más alto de mob del juego, en todos los mapas (los bosses dan botín a nivel+2 en el cálculo viejo del cliente). */
 function maxLootLvl(): number {
     if (lootLvl) return lootLvl;
-    let l = 1; for (const z of buildSolmar().zones) l = Math.max(l, mobDef(z.type, z).lvl);
+    let l = 1; for (const id of Object.keys(MAPS)) for (const z of buildMap(id).zones) l = Math.max(l, mobDef(z.type, z).lvl);
     return (lootLvl = l);
 }
 /** Valor máximo que el generador puede dar a un atributo (cualquiera de las dos fórmulas: la del server y la vieja del cliente). */
@@ -196,7 +196,7 @@ export interface EconCtx {
     /** Botín en el suelo del mundo del jugador. */
     ground: GroundApi;
 }
-export interface KillInfo { mobId: number; type: MobType; def: MobDef; zoneName: string; x: number; y: number }
+export interface KillInfo { mobId: number; type: MobType; def: MobDef; zoneName: string; x: number; y: number; /** esquirla que suelta el boss de la zona (Zone.drops); si falta, se decide por el nombre */ shard?: KeyId }
 
 const fail = (code: string, text: string) => ({ ok: false as const, code, text });
 type Outcome = { ok: true; code: string; text: string; stats?: boolean } | { ok: false; code: string; text: string };
@@ -442,7 +442,7 @@ export class Economy {
             else { bagFull = true; ctx.ground.add(item, Math.floor(p.posX) + 0.5, Math.floor(p.posY) + 0.5, [p.accountKey], LOOT_FREE_MS); } // nada se destruye: cae junto al jugador
         }
         if (Math.random() < 0.14) { const kind: PotKind = Math.random() < 0.6 ? 'hp' : 'mp'; if (st.pots[kind] < POT_MAX) { st.pots[kind]++; potion = kind; } }
-        if (boss) { const kid: KeyId = k.zoneName === 'Cripta olvidada' ? 'foso' : 'cripta'; st.q.shards[kid] = Math.min(99, st.q.shards[kid] + 1); shard = kid; }
+        if (boss) { const kid: KeyId = k.shard ?? (k.zoneName === 'Cripta olvidada' ? 'foso' : 'cripta'); st.q.shards[kid] = Math.min(99, st.q.shards[kid] + 1); shard = kid; }
         let questReady = false, questProg = 0;
         const q = QUESTS[st.q.i];
         if (q && st.q.st === 'active' && q.type === k.type) {

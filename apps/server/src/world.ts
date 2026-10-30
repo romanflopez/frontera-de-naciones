@@ -7,7 +7,7 @@
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
 import { damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionMp, POTION_GCD_MS, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, progressFromEcon, PVP_SPELLS, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
-import { HUBS, TRAINING, WAYPOINT_RANGE, portalGate, trainingUnlocked, waypointDest } from '@fdn/world';
+import { HUBS, QUESTS, TRAINING, WAYPOINT_RANGE, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointDest, type Link, type MapDef } from '@fdn/world';
 import { applyParalysis, applySlow, applyWarcry, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, hasWarcry, isSlowed, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import type { Catalogs, GameWorldConfig, Settings } from './config.ts';
@@ -32,8 +32,11 @@ export class GameWorld {
     private readonly players = new Map<string, Player>();
     private readonly playersById = new Map<bigint, Player>();
     private timers: Timer[] = [];
-    private readonly tickHandle: NodeJS.Timeout;
     private mobSim?: MobSim;
+    /** Dormido: sin jugadores, el registro dejó de llamar a tick(). Al despertar los mobs vuelven a empezar. */
+    private hibernated = false;
+    /** Lo setea el registro de mundos: saca al jugador de este mundo y lo manda a otro mapa (portal, respawn). */
+    transferHook?: (sessionId: string, dest: { map: string; x: number; y: number }, why: 'respawn') => void;
     /** Botín en el suelo de este mundo (solo en memoria). */
     private readonly loot = new GroundLoot();
     private lastGroundSync = 0;
@@ -45,7 +48,14 @@ export class GameWorld {
         private readonly occupancy: Occupancy,
         private readonly map?: WorldMap,
         private readonly econ?: Economy,
+        /** Datos del mapa (PvP, respawn, vínculos); sin él el mundo se comporta como un mapa suelto. */
+        private readonly def?: MapDef,
     ) {
+        this.initMobs();
+    }
+
+    private initMobs(): void {
+        const map = this.map;
         if (map) {
             this.mobSim = new MobSim(map, {
                 players: () => this.players.values(),
@@ -57,14 +67,27 @@ export class GameWorld {
                 reward: (p, info) => { if (this.econ) this.econ.reward(p, this.econCtx, info); },
             });
         }
-        this.tickHandle = setInterval(() => this.tick(), settings.tickInterval);
-        this.tickHandle.unref();
     }
 
+    /** Clave del mundo: el id del mapa, más `#instancia` si es una instancia privada. */
     get id(): string { return this.config.id; }
+    get mapId(): string { return this.config.map; }
     get playerCount(): number { return this.players.size; }
+    get isHibernated(): boolean { return this.hibernated; }
+    get mobCount(): number { return this.mobSim?.count ?? 0; }
+    playerOf(sessionId: string): Player | undefined { return this.players.get(sessionId); }
 
-    dispose(): void { clearInterval(this.tickHandle); }
+    /** Duerme el mundo vacío: se tiran los temporizadores y los mobs (al despertar nacen de nuevo con la vida llena). */
+    hibernate(): void {
+        if (this.hibernated) return;
+        this.hibernated = true; this.timers = []; this.mobSim = undefined;
+    }
+    wake(): void {
+        if (!this.hibernated) return;
+        this.hibernated = false; this.initMobs();
+    }
+
+    dispose(): void { this.timers = []; this.mobSim = undefined; }
 
     /** Lo que la economía necesita del mundo: los NPC (para validar distancia) y recalcular stats. */
     private readonly groundApi: GroundApi = {
@@ -97,8 +120,12 @@ export class GameWorld {
 
     // ---------- temporizadores ----------
     private setTimeout(ms: number, fn: () => void): void { this.timers.push({ at: Date.now() + ms, fn }); }
+    /** Temporizador del jugador: lo corre el mundo donde esté cuando venza (no el que lo creó), así no queda nada fantasma tras cambiar de mapa. */
+    private playerTimer(p: Player, ms: number, fn: (w: GameWorld) => void): void { p.timers.push({ at: Date.now() + ms, fn }); }
 
-    private tick(): void {
+    /** Un paso de simulación: lo llama el registro de mundos (un solo reloj para todos los mundos despiertos). */
+    tick(): void {
+        if (this.hibernated) return;
         const now = Date.now();
         if (this.timers.length) {
             const due = this.timers.filter((t) => t.at <= now);
@@ -106,6 +133,11 @@ export class GameWorld {
             for (const t of due) this.safe('temporizador', t.fn);
         }
         for (const pl of this.players.values()) {
+            if (pl.timers.length) {
+                const due = pl.timers.filter((t) => t.at <= now);
+                pl.timers = pl.timers.filter((t) => t.at > now);
+                for (const t of due) this.safe('temporizador del jugador', () => t.fn(this));
+            }
             this.changeStatus(pl, () => updateStatus(pl.status, now));
             expireTimed(pl.status, now);
             if (pl.status.dirty) { pl.status.dirty = false; this.announceStatus(pl); }
@@ -210,7 +242,7 @@ export class GameWorld {
 
     // ---------- entrada y salida ----------
     playerConnected(sessionId: string, characterName: string, send: Send, requestDisconnect: (r: string) => void, persisted?: PersistedPlayer): void {
-        const usePersisted = persisted && persisted.worldId === this.id;
+        const usePersisted = persisted && (persisted.mapId ?? persisted.worldId) === this.mapId;
         const spawn = this.spawnLocation(usePersisted ? persisted.x : this.config.spawn?.x, usePersisted ? persisted.y : this.config.spawn?.y);
         const p = new Player(sessionId, send, requestDisconnect, this.settings);
         p.characterName = characterName;
@@ -219,16 +251,57 @@ export class GameWorld {
         this.occupancy.setOccupied(spawn.x, spawn.y);
         this.players.set(sessionId, p);
         this.playersById.set(p.playerId, p);
+        p.world = this;
         console.log(`[Mundo:${this.id}] Entró ${characterName} (#${p.playerId}) en (${spawn.x}, ${spawn.y}). Jugadores: ${this.players.size}`);
         this.completeJoin(p, true);
     }
 
+    /**
+     * Segunda fase de un cruce de mapa: mete en este mundo a un jugador que `detachPlayer` sacó de otro. Conserva todo su estado
+     * (economía, vida, maná, estado, temporizadores); el cliente ya armó el mapa y manda el mundo nuevo, los vecinos, los mobs y el suelo.
+     */
+    attachPlayer(p: Player, x: number, y: number, direction?: number): { x: number; y: number } {
+        const spawn = this.spawnLocation(x, y);
+        if (direction !== undefined) p.facingDirection = direction;
+        p.setPosition(spawn.x, spawn.y);
+        this.occupancy.setOccupied(spawn.x, spawn.y);
+        this.players.set(p.sessionId, p);
+        this.playersById.set(p.playerId, p);
+        p.world = this;
+        p.resetConnectionState(); // el cliente se trabó armando el mapa: los pings y la cadencia de pasos empiezan de cero
+        p.lastDamager = null;
+        console.log(`[Mundo:${this.id}] Llegó ${p.characterName} (#${p.playerId}) a (${spawn.x}, ${spawn.y}). Jugadores: ${this.players.size}`);
+        this.completeJoin(p, false, false);
+        if (p.econ) this.sendVitals(p, false);
+        return spawn;
+    }
+
+    /**
+     * Primera fase de un cruce: saca al jugador de este mundo sin borrar su estado. Libera la celda, avisa a quienes lo veían y
+     * le limpia lo que dependía de este mundo (a la vista, suelo visto). Queda fuera de todo mundo hasta `attachPlayer`.
+     */
+    detachPlayer(sessionId: string): Player | undefined {
+        const p = this.players.get(sessionId);
+        if (!p) return undefined;
+        this.players.delete(sessionId);
+        this.playersById.delete(p.playerId);
+        this.occupancy.setFree(p.posX, p.posY);
+        const left = M.playersLeftRange([p.playerId]);
+        for (const o of this.players.values()) {
+            if (!o.playersInRange.delete(p.playerId)) continue;
+            this.sendTo(o, left);
+        }
+        p.playersInRange.clear(); p.groundSeen.clear(); p.world = null; p.lastDamager = null;
+        console.log(`[Mundo:${this.id}] Se fue ${p.characterName} (cruza de mapa). Jugadores: ${this.players.size}`);
+        return p;
+    }
+
     /** Port de Spawn.CompletePlayerJoin: estado inicial, protección al aparecer y visibilidad. */
-    private completeJoin(p: Player, includeSpells: boolean): void {
+    private completeJoin(p: Player, includeSpells: boolean, sendInitialState = true): void {
         const t = this.settings.timings;
         p.pingGraceUntil = Date.now() + PING_JOIN_GRACE_MS;
         p.groundSeen.clear(); // un socket nuevo no vio nada del suelo: se le manda de nuevo
-        p.send(M.initialState(p, this.catalogs, {
+        if (sendInitialState) p.send(M.initialState(p, this.catalogs, {
             includeSpells, pingIntervalMs: this.settings.ping.interval, arrowSpeed: t.arrowSpeed,
             pickupMs: t.playerPickupAnimationTime, bowMs: t.playerBowAnimationTime,
         }));
@@ -236,11 +309,7 @@ export class GameWorld {
 
         if (t.spawnProtectionTime > 0) {
             p.spawnProtection = true;
-            const sessionId = p.sessionId;
-            this.setTimeout(t.spawnProtectionTime * 1000, () => {
-                const again = this.players.get(sessionId);
-                if (again?.spawnProtection) this.disableSpawnProtection(again);
-            });
+            this.playerTimer(p, t.spawnProtectionTime * 1000, (w) => { if (p.spawnProtection && w.players.get(p.sessionId) === p) w.disableSpawnProtection(p); });
         }
 
         const nearby = this.nearbyById(p.posX, p.posY, p.sessionId);
@@ -308,8 +377,9 @@ export class GameWorld {
     removePlayer(sessionId: string): PersistedPlayer | undefined {
         const p = this.players.get(sessionId);
         if (!p) return undefined;
-        const saved = p.toPersisted(this.id);
+        const saved = p.toPersisted(this.mapId);
         this.players.delete(sessionId);
+        p.world = null;
         this.playersById.delete(p.playerId);
         this.occupancy.setFree(p.posX, p.posY);
         const left = M.playersLeftRange([p.playerId]);
@@ -324,7 +394,7 @@ export class GameWorld {
     }
 
     snapshot(sessionId: string): PersistedPlayer | undefined {
-        return this.players.get(sessionId)?.toPersisted(this.id);
+        return this.players.get(sessionId)?.toPersisted(this.mapId);
     }
 
     // ---------- paquetes del cliente ----------
@@ -377,7 +447,7 @@ export class GameWorld {
                     if (spell === 'furia') {
                         if (!p.isDead && now >= p.pvp.furyCdUntil && this.payMp(p, UTIL_MP.furia) && p.pvp.castFury(now)) {
                             this.broadcastNear(p, M.pvpHit(p.playerId, { fx: fx || 'flamme', x: p.posX, y: p.posY, targetId: 0n, dmg: 0, secs: 0, r: 0 }));
-                            this.announceStatus(p); this.setTimeout(FURY_MS + 30, () => this.announceStatus(p));
+                            this.announceStatus(p); this.playerTimer(p, FURY_MS + 30, (w) => w.announceStatus(p));
                         }
                         break;
                     }
@@ -519,7 +589,7 @@ export class GameWorld {
     // ---------- habilidades de clase ----------
     private cellWalkable(x: number, y: number): boolean { return !!this.map && x >= 0 && y >= 0 && x < this.map.size && y < this.map.size && !this.map.blocked[y][x]; }
     private cellSafe(x: number, y: number): boolean { return !!this.map?.safe[y]?.[x]; }
-    private isPortalCell(x: number, y: number): boolean { return !!this.map?.portals?.some((q) => q.x === x && q.y === y); }
+    private isPortalCell(x: number, y: number): boolean { return !!this.map?.portals?.some((q) => q.x === x && q.y === y) || !!this.def?.links.some((l) => l.x === x && l.y === y); }
     /** Rechazo de una habilidad de clase: el que la pidió se entera (y su cliente devuelve la recarga). */
     private skillDenied(p: Player, skill: string, why: string): void {
         p.send(M.skillEffect(p.playerId, skill, p.posX, p.posY, p.posX, p.posY, false));
@@ -681,7 +751,7 @@ export class GameWorld {
                 const why = portalGate(portal, p.prog);
                 if (why) { p.send(M.sendMessage(why)); return; }
             } else {
-                const hub = HUBS[this.factionOf(p)];
+                const hub = this.map?.hubs ? HUBS[this.factionOf(p)] : undefined; // los HUBS son coordenadas del mapa original: en otro mapa no valen
                 const toHub = !!hub && reqX === hub.x && reqY === hub.y && Date.now() - p.joinedAt < 30000;
                 if (!toHub) { console.log(`[Mundo:${this.id}] ${p.characterName} pidió un teletransporte sin portal a (${reqX}, ${reqY}); lo ignoro`); return; }
             }
@@ -693,6 +763,25 @@ export class GameWorld {
         } else if (!this.occupancy.isFree(x, y)) return;
         this.moveTo(p, p.posX, p.posY, x, y, false, true);
         p.send(M.playerTeleported(x, y));
+    }
+
+    /**
+     * Valida un pedido de cruzar un vínculo entre mapas. Todo se decide acá: el cliente solo manda el id. Devuelve el vínculo si el
+     * jugador puede cruzar ahora; si no, `why` es el aviso para mostrarle (o null si el pedido es basura y se ignora sin ruido).
+     */
+    checkLink(p: Player, portalId: string): { link: Link } | { why: string | null } {
+        if (p.isDead || p.disconnected) return { why: null };
+        const link = this.def ? findLink(this.def.id, portalId) : undefined;
+        if (!link) { console.log(`[Mundo:${this.id}] ${p.characterName} pidió el portal '${portalId.slice(0, 40)}' que no existe en este mapa; lo ignoro`); return { why: null }; }
+        if (distance(p.posX, p.posY, link.x, link.y) > 1) return { why: null }; // lejos del portal (o un pedido viejo)
+        const why = linkGateReason(link, p.prog, (i) => QUESTS[i]?.name);
+        if (why) return { why };
+        return { link };
+    }
+    /** Descuenta la llave del requisito al cruzar (igual que las escaleras con llave del mapa original). */
+    consumeLinkKey(p: Player, link: Link): void {
+        const k = link.gate?.key; if (!k) return;
+        p.prog.keys[k] = Math.max(0, (p.prog.keys[k] ?? 0) - 1); this.econ?.consumeKey(p, k);
     }
 
     /**
@@ -743,7 +832,10 @@ export class GameWorld {
         if (a === b || a.disconnected || b.disconnected) return false;
         const safe = (p: Player) => !!this.map?.safe[Math.floor(p.posY)]?.[Math.floor(p.posX)];
         if (safe(a) || safe(b)) return false;
-        const arena = (p: Player) => p.posX >= 46 && p.posX < 61 && p.posY >= 26 && p.posY < 39;
+        const mode = this.def?.pvp ?? 'faction';
+        if (mode === 'off') return false; // ciudades, mazmorras y bosses: sin PvP (docs/MUNDO.md 5.0)
+        if (mode === 'ffa') return true;
+        const ffa = this.def?.ffaRect, arena = (p: Player) => !!ffa && inMapRect(ffa, p.posX, p.posY);
         return this.factionOf(a) !== this.factionOf(b) || (arena(a) && arena(b));
     }
     /** Le saca vida a un jugador: DF (físico) o RM (mágico) del server, daño × 100/(100+X); si llega a 0 muere. Devuelve el daño aplicado. */
@@ -770,9 +862,14 @@ export class GameWorld {
     private respawn(p: Player): void {
         if (!p.isDead || Date.now() - p.deadAt < 1800) return;
         p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; p.meditating = false; p.lastDamager = null; p.potionEpoch++;
-        const hub = HUBS[this.factionOf(p)] ?? this.config.spawn ?? { x: 6, y: 7 };
+        // cada mapa define dónde reaparecés (MapDef.respawn): el hogar de tu facción, la entrada de la mazmorra, la posta del claro...
+        const fallback = this.config.spawn ?? { x: 6, y: 7 };
+        const target = this.def ? respawnTarget(this.def, this.factionOf(p)) : { map: this.mapId, ...(HUBS[this.factionOf(p)] ?? fallback) };
+        if (target.map !== this.mapId) { this.sendVitals(p, true); this.transferHook?.(p.sessionId, target, 'respawn'); return; }
+        const hub = target;
         let x = hub.x, y = hub.y;
         for (let r = 0; r < 6 && !this.occupancy.isFree(x, y); r++) { x = hub.x + ((r * 3) % 5) - 2; y = hub.y + 1 + (r % 3); }
+        if (!this.occupancy.isFree(x, y)) { const f = findNearestFreeLocation((cx, cy) => this.occupancy.isFree(cx, cy), hub.x, hub.y, 6); if (f) { x = f.x; y = f.y; } }
         if (this.occupancy.isFree(x, y) && (x !== p.posX || y !== p.posY)) { this.moveTo(p, p.posX, p.posY, x, y, false, true); p.send(M.playerTeleported(x, y)); }
         this.sendVitals(p, true);
         this.announceVitals(p, true);
@@ -818,9 +915,10 @@ export class GameWorld {
         this.econ?.snapshot(p);
         if (kind === 1) { p.mp = Math.min(max, p.mp + potionMp(max)); this.sendVitals(p, false); return; }
         const [first, ...ticks] = potionHpSplit(potionHp(max)), epoch = p.potionEpoch;
-        const heal = (n: number) => { p.hp = Math.min(p.combat.maxHp, p.hp + n); this.sendVitals(p, false); this.announceVitals(p); };
-        heal(first);
-        ticks.forEach((n, i) => this.setTimeout((i + 1) * POTION_HOT_EVERY_MS, () => { if (!p.disconnected && !p.isDead && p.potionEpoch === epoch) heal(n); }));
+        const heal = (w: GameWorld, n: number) => { p.hp = Math.min(p.combat.maxHp, p.hp + n); w.sendVitals(p, false); w.announceVitals(p); };
+        heal(this, first);
+        // la curación en el tiempo sigue al jugador: si cruza de mapa, la termina el mundo donde esté
+        ticks.forEach((n, i) => this.playerTimer(p, (i + 1) * POTION_HOT_EVERY_MS, (w) => { if (!p.disconnected && !p.isDead && p.potionEpoch === epoch) heal(w, n); }));
     }
 
 

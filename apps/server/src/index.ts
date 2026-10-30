@@ -10,12 +10,12 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { ClientMessage, ServerMessage } from '@fdn/proto';
-import { DATA_DIR, loadCatalogs, loadSettings, loadWorlds } from './config.ts';
-import { getMapDef } from '@fdn/world';
-import { loadOccupancy, occupancyFromGrid } from './map.ts';
+import { DATA_DIR, loadCatalogs, loadSettings, type GameWorldConfig } from './config.ts';
+import { MAPS, getMapDef } from '@fdn/world';
+import { resolveSaved, restPosition } from './persist.ts';
 import * as M from './messages.ts';
 import type { PersistedPlayer } from './player.ts';
-import { GameWorld } from './world.ts';
+import { WorldRegistry } from './registry.ts';
 import { authenticate } from './accounts.ts';
 import { Economy, toCharSave } from './economy.ts';
 import { FileStorage, PgStorage, type Storage } from './storage.ts';
@@ -24,23 +24,19 @@ const MAX_INCOMING_BYTES = 24576;
 
 const settings = loadSettings();
 const catalogs = loadCatalogs();
-const worldConfigs = loadWorlds();
-const worlds = new Map<string, GameWorld>();
 // el estado económico (oro, bolsa, equipo, nivel) es del server; se guarda en la cuenta por el mismo Storage
 /** Dónde se guardan cuentas y personajes: DATA_DIR (env) o, por defecto, la carpeta data del server. */
 const SAVE_DIR = process.env.DATA_DIR || DATA_DIR;
 // con DATABASE_URL las cuentas van a Postgres (sobreviven a los redeploys); sin ella, archivos JSON
 const storage: Storage & { close?: () => Promise<void> } = process.env.DATABASE_URL ? await PgStorage.create(process.env.DATABASE_URL) : new FileStorage(SAVE_DIR);
 const economy = new Economy(storage);
-for (const wc of worldConfigs) {
-    const teleportCells = (wc.teleportLocs ?? []).flatMap((t) => t.locs);
-    // Mapas generados por código (iguales en cliente y server) o, si no, un .amd en data/maps
-    const wmap = getMapDef(wc.map)?.build();
-    const occ = wmap ? occupancyFromGrid(wmap.blocked, teleportCells) : loadOccupancy(wc.map, teleportCells);
-    worlds.set(wc.id, new GameWorld(wc, settings, catalogs, occ, wmap, economy));
-    console.log(`[Server] Mundo '${wc.id}' (${wc.name}): mapa ${wc.map}, ${occ.sizeX}x${occ.sizeY}, ${occ.occupiedCount} celdas bloqueadas`);
-}
-if (!worlds.has(settings.initialMap)) throw new Error(`initialMap '${settings.initialMap}' no está en worlds.json`);
+// Los mundos se crean a pedido desde el registro de mapas de @fdn/world (un GameWorld por mapa), con un solo reloj; ver registry.ts.
+if (!getMapDef(settings.initialMap)) throw new Error(`initialMap '${settings.initialMap}' no es un mapa conocido (ver packages/world/src/maps.ts)`);
+const registry = new WorldRegistry({ settings, catalogs, economy });
+registry.ensure(settings.initialMap); // el mapa de entrada ya listo; los demás se crean la primera vez que alguien llega
+registry.start();
+const worldConfigs: GameWorldConfig[] = Object.values(MAPS).map((d) => ({ id: d.id, name: d.name, map: d.id, spawn: d.spawn }));
+console.log(`[Server] ${worldConfigs.length} mapas registrados (${worldConfigs.map((w) => w.id).join(', ')}); mundo inicial '${settings.initialMap}'.`);
 
 const worldsListMessage = M.worldsList(worldConfigs);
 const monstersListMessage = M.monstersList(catalogs);
@@ -55,7 +51,7 @@ function loadChar(networkId: string): PersistedPlayer | undefined {
     try { return JSON.parse(readFileSync(f, 'utf8')) as PersistedPlayer; } catch { return undefined; }
 }
 function saveChar(networkId: string, state: PersistedPlayer | undefined): void {
-    const s = restPosition(state);
+    const s = restPosition(state, (id) => registry.mapOf(id));
     if (s) writeFileSync(charFile(networkId), JSON.stringify(s, null, 2));
 }
 
@@ -65,16 +61,6 @@ const clientIp = (req: { headers: Record<string, string | string[] | undefined>;
     const first = (Array.isArray(xf) ? xf[0] : xf)?.split(',')[0]?.trim();
     return first || req.socket.remoteAddress || 'desconocida';
 };
-/** Las zonas temporales (arena, mazmorras) no se guardan como posición: se vuelve al campamento. */
-const home = getMapDef(settings.initialMap)?.build() ?? null;
-const inRect = (r: { x0: number; y0: number; x1: number; y1: number }, x: number, y: number) => x >= r.x0 && x <= r.x1 + 1 && y >= r.y0 && y <= r.y1 + 1;
-function restPosition(state: PersistedPlayer | undefined): PersistedPlayer | undefined {
-    if (!state || !home) return state;
-    const arena = { x0: 46, y0: 26, x1: 60, y1: 38 };
-    const temp = [arena, ...(home.dungeon ? [home.dungeon] : []), ...(home.dungeons ?? [])].some((r) => inRect(r, state.x, state.y));
-    return temp ? { ...state, x: home.spawn.x, y: home.spawn.y } : state;
-}
-
 // ---------- sesiones ----------
 interface Session {
     networkId: string;
@@ -87,6 +73,11 @@ interface Session {
     logoutAllowedAt: number | null;
 }
 const sessionsByNetworkId = new Map<string, Session>();
+const sessionsById = new Map<string, Session>();
+const worldOf = (s: Session) => registry.get(s.worldId);
+const saveOf = (s: Session) => (state: PersistedPlayer) => saveChar(s.networkId, state);
+// respawn con punto de reaparición en otro mapa: el mundo le pide al registro el cruce
+registry.sessionHook = (sessionId) => { const s = sessionsById.get(sessionId); return s ? { session: s, save: saveOf(s) } : undefined; };
 
 function encode(m: ServerMessage): Uint8Array { return ServerMessage.encode(m).finish(); }
 
@@ -95,11 +86,11 @@ setInterval(() => {
     const now = Date.now();
     for (const s of sessionsByNetworkId.values()) {
         if (s.socket || s.disconnectDeadline === null || s.disconnectDeadline > now) continue;
-        const world = worlds.get(s.worldId);
+        const world = worldOf(s);
         world?.persistVitals(s.sessionId);
         saveChar(s.networkId, world?.removePlayer(s.sessionId));
         storage.flush();
-        sessionsByNetworkId.delete(s.networkId);
+        sessionsByNetworkId.delete(s.networkId); sessionsById.delete(s.sessionId);
     }
 }, 1000).unref();
 
@@ -166,19 +157,19 @@ wss.on('connection', (ws, req) => {
                 existing.disconnectDeadline = null;
                 existing.characterName = characterName;
                 session = existing;
-                worlds.get(session.worldId)?.playerReconnected(session.sessionId, characterName, send, disconnect);
-                worlds.get(session.worldId)?.resendEconomy(session.sessionId); // el cliente nuevo necesita la foto del estado
+                worldOf(session)?.playerReconnected(session.sessionId, characterName, send, disconnect);
+                worldOf(session)?.resendEconomy(session.sessionId); // el cliente nuevo necesita la foto del estado
                 return;
             }
 
-            // un personaje guardado en un mundo que ya no existe arranca de cero
+            // un personaje guardado sin mapa (guardado viejo: 'solmar' vale como el mapa original) o en un mapa que ya no existe arranca en el mapa por defecto
             const saved = loadChar(networkId);
-            const persisted = saved && worlds.has(saved.worldId) ? saved : undefined;
-            const worldId = persisted ? persisted.worldId : settings.initialMap;
-            session = { networkId, sessionId: randomUUID(), worldId, characterName, socket: ws, disconnectDeadline: null, logoutAllowedAt: null };
-            sessionsByNetworkId.set(networkId, session);
-            worlds.get(worldId)!.playerConnected(session.sessionId, characterName, send, disconnect, persisted);
-            worlds.get(worldId)!.bindAccount(session.sessionId, auth.key);
+            const { persisted, mapId } = resolveSaved(saved, settings.initialMap);
+            const world = registry.ensure(mapId);
+            session = { networkId, sessionId: randomUUID(), worldId: world.id, characterName, socket: ws, disconnectDeadline: null, logoutAllowedAt: null };
+            sessionsByNetworkId.set(networkId, session); sessionsById.set(session.sessionId, session);
+            world.playerConnected(session.sessionId, characterName, send, disconnect, persisted);
+            world.bindAccount(session.sessionId, auth.key);
             return;
         }
 
@@ -187,7 +178,7 @@ wss.on('connection', (ws, req) => {
                 disconnect('La autenticación se manda una sola vez por conexión.');
                 return;
             case 'logoutRequest': {
-                const wait = worlds.get(session.worldId)?.logoutWait(session.sessionId) ?? settings.logoutTime;
+                const wait = worldOf(session)?.logoutWait(session.sessionId) ?? settings.logoutTime;
                 session.logoutAllowedAt = wait > 0 ? Date.now() + wait * 1000 - 500 : Date.now();
                 send(M.logoutResponse(wait));
                 return;
@@ -202,11 +193,20 @@ wss.on('connection', (ws, req) => {
                 // el guardado del cliente ya NO define oro, items ni nivel: solo sirve para crear el personaje de una cuenta nueva (clase y bando)
                 const t = Date.now(); if (t - lastSaveAt < 800) return; lastSaveAt = t;
                 if (payload.value.data.length > 20000) return;
-                worlds.get(session.worldId)?.onClientSave(session.sessionId, payload.value.data);
+                worldOf(session)?.onClientSave(session.sessionId, payload.value.data);
+                return;
+            }
+            case 'portalRequest': {
+                // cruce de mapa: el server valida distancia, requisitos y estado; el cliente solo manda el id del vínculo
+                registry.handlePortal(session, payload.value.portalId.slice(0, 64), saveOf(session));
+                return;
+            }
+            case 'mapReady': {
+                registry.completeTransfer(session.sessionId, payload.value.mapId.slice(0, 64), payload.value.mapHash.slice(0, 16));
                 return;
             }
             default:
-                worlds.get(session.worldId)?.handleClientPacket(session.sessionId, message);
+                worldOf(session)?.handleClientPacket(session.sessionId, message);
         }
     });
 
@@ -220,12 +220,13 @@ wss.on('connection', (ws, req) => {
         session.disconnectDeadline = graceful ? now : now + settings.timings.disconnectTime * 1000;
         session.logoutAllowedAt = null;
         const remainsActive = session.disconnectDeadline > now;
-        const world = worlds.get(session.worldId);
+        registry.flushPending(session.sessionId); // si cortó entre MapTransfer y MapReady, queda en el mundo nuevo (ya guardado ahí)
+        const world = worldOf(session);
         world?.persistVitals(session.sessionId);
         saveChar(session.networkId, world?.snapshot(session.sessionId));
         storage.flush(); // la economía se guarda ya al desconectar
         world?.playerDisconnected(session.sessionId, remainsActive);
-        if (!remainsActive) sessionsByNetworkId.delete(session.networkId);
+        if (!remainsActive) { sessionsByNetworkId.delete(session.networkId); sessionsById.delete(session.sessionId); }
     });
 
     ws.on('error', (err) => console.error(`[Server] Error de WebSocket (${remote}):`, err.message));
@@ -242,8 +243,9 @@ function handleChat(sender: Session, raw: string, reply: (m: ServerMessage) => v
 
 async function shutdown(): Promise<void> {
     console.log('[Server] Cerrando: guardando personajes…');
-    for (const s of sessionsByNetworkId.values()) { worlds.get(s.worldId)?.persistVitals(s.sessionId); saveChar(s.networkId, worlds.get(s.worldId)?.snapshot(s.sessionId)); }
-    for (const w of worlds.values()) w.dispose();
+    registry.flushAllPending();
+    for (const s of sessionsByNetworkId.values()) { worldOf(s)?.persistVitals(s.sessionId); saveChar(s.networkId, worldOf(s)?.snapshot(s.sessionId)); }
+    registry.dispose();
     try { if (storage.close) await storage.close(); else storage.flush(); } catch (e) { console.error('[Storage] Error al cerrar:', (e as Error).message); }
     process.exit(0);
 }

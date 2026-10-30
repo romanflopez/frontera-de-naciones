@@ -94,6 +94,10 @@ export function initialGameWorldState(world: GameWorldConfig, p: Player): Server
     });
 }
 
+export function mapTransfer(o: { mapId: string; name: string; x: number; y: number; direction: number; hash: string; music: string; gameWorldId: string; lvl: [number, number] | null }): ServerMessage {
+    return msg({ $case: 'mapTransfer', value: { mapId: o.mapId, name: o.name, x: o.x, y: o.y, direction: o.direction, mapHash: o.hash, musicFile: o.music, gameWorldId: o.gameWorldId, lvlMin: o.lvl?.[0] ?? 0, lvlMax: o.lvl?.[1] ?? 0 } });
+}
+
 export function playerSnapshot(p: Player): PlayerEnteredRange {
     return {
         playerId: p.playerId,
