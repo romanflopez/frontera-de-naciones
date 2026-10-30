@@ -30,8 +30,14 @@ export const mobRespawnSecs = (t: MobType): number => MOBS[t].boss?.respawn ?? (
 /** Curvas de referencia por nivel (mob común): vida, daño promedio por golpe y exp por kill. Los tipos base ya las siguen; sirven para reescalar un tipo a otro nivel. */
 export const mobHpCurve = (l: number): number => 29 + 10.5 * l + 2.75 * l * l;
 export const mobDmgCurve = (l: number): number => 2.5 * l + 3;
-/** Exp que pide subir del nivel `l` al siguiente (misma fórmula que el cliente): un mob común da ~1/11 de eso a su propio nivel. */
-export const expToLevel = (l: number): number => Math.round(60 * Math.pow(l, 1.5));
+/** Exp por kill de un mob común de nivel `l` (curva de referencia para reescalar tipos; los MOBS base ya la siguen: ~60·l^1,5 / 11). */
+export const mobExpCurve = (l: number): number => (60 * Math.pow(l, 1.5)) / 11;
+/** Kills de un mob común del propio nivel que hacen falta para subir del nivel `l` (grindeo estilo HB: 40 en Nv1, 400 en Nv10). */
+export const killsToLevel = (l: number): number => 40 * l;
+/** Exp real de un mob común de nivel `l`: la del tipo base de ese nivel si existe (los de nivel bajo dan algo más que la curva), si no la curva. */
+const refExp = (l: number): number => Math.max(mobExpCurve(l), ...Object.values(MOBS).filter((m) => !m.boss && m.lvl === l && m.exp < 3 * mobExpCurve(l)).map((m) => m.exp));
+/** Exp que pide subir del nivel `l` al siguiente (cliente y server usan esta misma función). */
+export const expToLevel = (l: number): number => Math.round(refExp(l) * killsToLevel(l));
 
 const scaled = new Map<string, MobDef>();
 /**
@@ -44,7 +50,7 @@ export function mobDef(type: MobType, zone?: { lvl?: number }): MobDef {
     const key = type + ':' + L;
     let d = scaled.get(key);
     if (!d) {
-        const kh = mobHpCurve(L) / mobHpCurve(base.lvl), kd = mobDmgCurve(L) / mobDmgCurve(base.lvl), ke = expToLevel(L) / expToLevel(base.lvl);
+        const kh = mobHpCurve(L) / mobHpCurve(base.lvl), kd = mobDmgCurve(L) / mobDmgCurve(base.lvl), ke = mobExpCurve(L) / mobExpCurve(base.lvl);
         d = { ...base, lvl: L, hp: Math.round(base.hp * kh), dmg: [Math.round(base.dmg[0] * kd), Math.round(base.dmg[1] * kd)], exp: Math.round(base.exp * ke) };
         scaled.set(key, d);
     }

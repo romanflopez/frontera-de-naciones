@@ -8,7 +8,10 @@ El server y el cliente comparten las definiciones: `mobDef(tipo, zona)` devuelve
 - Cada tipo tiene un nivel base. Una zona puede fijar `lvl`; entonces vida, daño y exp se reescalan sobre las curvas del mob común (mismo sprite, misma IA):
   - vida = `29 + 10,5·L + 2,75·L²`
   - daño promedio por golpe = `2,5·L + 3`
-  - exp por kill = `expToLevel(L) / 11` (~11 kills del propio nivel para subir; `expToLevel(L) = 60·L^1,5`, igual que el cliente)
+  - exp por kill = `mobExpCurve(L) = 60·L^1,5 / 11` (los tipos base de nivel bajo dan un poco más: goblin 14, élite 22)
+  - **Grindeo estilo HB:** subir del nivel L pide `40·L` kills de un mob común del propio nivel (`killsToLevel`): 40 en Nv1, 200 en Nv5, 400 en Nv10. `expToLevel(L) = exp real del mob común de nivel L × 40·L` (Nv1 560, Nv5 12.400, Nv10 68.995). Cliente y server usan la misma función de `mobs.ts`.
+  - Misiones y jefes casi no aportan exp (decisión del usuario: "solo grindear"): la misión 1 es ~12 % del Nv1 y las del final menos del 1 % de un nivel; sirven por oro, esquirlas y llaves.
+  - Morir quita el 5 % de la exp del nivel (en Nv10 equivale a ~20 kills).
 - Los bosses y mini-bosses no se reescalan (`lvl` se ignora): su nivel es el del tipo. Vida de boss ~3-3,5x la del común, exp ~3-5x.
 - El botín del server (`rollMobDrop`) usa el nivel real del mob de la zona.
 
