@@ -66,7 +66,12 @@ export class Player {
     mp = 0;
     nextMpRegenAt = 0;
     lastMpReportAt = 0;
-    potionBudget = 0;
+    /** Pociones: último consumo (delay global), consumos de los últimos segundos (tope por ventana) y época (corta la curación en el tiempo al morir/revivir). */
+    lastPotionAt = 0;
+    potionLog: number[] = [];
+    potionEpoch = 0;
+    /** Subas de vida aceptadas por reporte del cliente (curas, regeneración) en la ventana reciente: [hora, cantidad]. */
+    healLog: [number, number][] = [];
     meditating = false;
     medX = 0; medY = 0;
     maxHp = 1000;

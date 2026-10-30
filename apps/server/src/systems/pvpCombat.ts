@@ -11,9 +11,13 @@ export interface PvpSpell {
     /** Costo de maná (igual al del cliente); se cobra una vez por ráfaga. */
     mp: number;
     range: number; cd: number; ticks?: number; every?: number; aoe?: number; melee?: boolean;
-    /** Elemento para las resistencias (fuego: eruption/cataclysm; hielo: blizz/tidal). */
+    /** Elemento del efecto visual (fuego: eruption/cataclysm; hielo: blizz/tidal). Ya no cambia el daño: solo existen DF y RM. */
     kind?: string;
 }
+/** Tipo de daño: el físico lo mitiga la defensa (DF) y el mágico la resistencia mágica (RM). */
+export type DmgKind = 'phys' | 'magic';
+/** Físico = ataque cuerpo a cuerpo, golpe, tajo, sismo (todo lo que escala con el arma); mágico = el resto de los hechizos. */
+export const spellDmgKind = (id: string): DmgKind => { const sp = PVP_SPELLS[id]; return sp && (sp.stat === 'melee' || sp.stat === 'wdmg' || sp.melee) ? 'phys' : 'magic'; };
 export const PVP_SPELLS: Record<string, PvpSpell> = {
     ataque: { mp: 0, dmg: [0, 0], lvlK: 1, stat: 'melee', range: 2.6, cd: 0.3, melee: true },
     proyectil: { mp: 8, dmg: [12, 18], lvlK: 2, stat: 'mag', range: 9.5, cd: 0.35 },
@@ -37,18 +41,20 @@ export const UTIL_MP = { furia: 15, invisibilidad: 40, detectar: 30, remover: 20
 const CLASS_MP: Record<string, [number, number]> = { guerrero: [40, 4], mago: [90, 12] };
 export const potionMp = (maxMp: number) => Math.max(40, Math.round(maxMp * 0.5));
 
-export interface CombatStats { lvl: number; cls: string; mag: number; wdmg: [number, number]; maxHp: number; def: number; fres: number; ires: number; savedHp: number; maxMp: number; savedMp: number }
+export interface CombatStats { lvl: number; cls: string; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; savedHp: number; maxMp: number; savedMp: number }
 const CLASS_HP: Record<string, [number, number]> = { guerrero: [140, 18], mago: [90, 10] };
-export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, fres: 0, ires: 0, savedHp: 140, maxMp: 40, savedMp: 40 };
+export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, rm: 0, rpar: 0, savedHp: 140, maxMp: 40, savedMp: 40 };
 
 /** Bases de items (mismas que el cliente): arma con daño, y bonos de magia. */
-const BASE: Record<string, { dmg?: [number, number]; mag?: number; def?: number; slot: string }> = {
+const BASE: Record<string, { dmg?: [number, number]; mag?: number; def?: number; rm?: number; slot: string }> = {
     'Espada corta': { dmg: [4, 8], slot: 'arma' }, 'Hacha de leñador': { dmg: [6, 11], slot: 'arma' }, 'Báculo de fresno': { dmg: [2, 4], mag: 5, slot: 'arma' },
     'Espada larga': { dmg: [7, 12], slot: 'arma' }, 'Hacha de guerra': { dmg: [9, 15], slot: 'arma' }, 'Maza': { dmg: [6, 11], slot: 'arma' },
     'Martillo pesado': { dmg: [10, 16], slot: 'arma' }, 'Mandoble': { dmg: [12, 18], slot: 'arma' }, 'Varita': { dmg: [1, 3], mag: 8, slot: 'arma' },
-    'Túnica de mago': { mag: 4, def: 1, slot: 'armadura' }, 'Capucha de mago': { mag: 3, slot: 'cabeza' },
-    'Coraza de cuero': { def: 3, slot: 'armadura' }, 'Cota de malla': { def: 6, slot: 'armadura' }, 'Armadura de placas': { def: 9, slot: 'armadura' }, 'Ropas de tela': { def: 1, slot: 'armadura' },
-    'Capucha de cuero': { def: 1, slot: 'cabeza' }, 'Cofia de malla': { def: 2, slot: 'cabeza' }, 'Yelmo de hierro': { def: 3, slot: 'cabeza' },
+    // DF = defensa física, RM = resistencia mágica (ver docs/COMBATE.md): mitigación = X / (100 + X)
+    'Túnica de mago': { mag: 4, def: 4, rm: 24, slot: 'armadura' }, 'Capucha de mago': { mag: 3, def: 2, rm: 10, slot: 'cabeza' },
+    'Coraza de cuero': { def: 12, rm: 4, slot: 'armadura' }, 'Cota de malla': { def: 22, rm: 8, slot: 'armadura' }, 'Armadura de placas': { def: 34, rm: 12, slot: 'armadura' }, 'Ropas de tela': { def: 4, rm: 6, slot: 'armadura' },
+    'Capucha de cuero': { def: 4, rm: 2, slot: 'cabeza' }, 'Cofia de malla': { def: 8, rm: 3, slot: 'cabeza' }, 'Yelmo de hierro': { def: 12, rm: 4, slot: 'cabeza' },
+    'Anillo opaco': { rm: 8, slot: 'anillo' },
 };
 const MELEE: Record<string, [number, number]> = { guerrero: [5, 9], mago: [2, 4] };
 
@@ -58,13 +64,13 @@ export function statsFromCharacter(json: string | undefined): CombatStats {
     try {
         const o = JSON.parse(json) as { lvl?: number; cls?: string; hp?: number; mp?: number; eq?: Record<string, { n: string; a?: { id: string; v: number }[] } | null> };
         const cls = o.cls === 'mago' ? 'mago' : 'guerrero', lvl = Math.max(1, Math.min(60, Number(o.lvl) || 1));
-        const s: CombatStats = { lvl, cls, mag: 0, wdmg: [0, 0], maxHp: 0, def: 0, fres: 0, ires: 0, savedHp: 1, maxMp: 0, savedMp: 0 };
+        const s: CombatStats = { lvl, cls, mag: 0, wdmg: [0, 0], maxHp: 0, def: 0, rm: 0, rpar: 0, savedHp: 1, maxMp: 0, savedMp: 0 };
         let bonusHp = 0, bonusMp = 0;
         for (const [slot, it] of Object.entries(o.eq ?? {})) {
             if (!it) continue;
             const b = BASE[it.n];
-            if (b && b.slot === slot) { if (b.dmg) s.wdmg = b.dmg; if (b.mag) s.mag += b.mag; if (b.def) s.def += b.def; }
-            for (const a of it.a ?? []) { if (a.id === 'mag') s.mag += a.v; else if (a.id === 'hp') bonusHp += a.v; else if (a.id === 'mp') bonusMp += a.v; else if (a.id === 'fres') s.fres += a.v; else if (a.id === 'ires') s.ires += a.v; }
+            if (b && b.slot === slot) { if (b.dmg) s.wdmg = b.dmg; if (b.mag) s.mag += b.mag; if (b.def) s.def += b.def; if (b.rm) s.rm += b.rm; }
+            for (const a of it.a ?? []) { if (a.id === 'mag') s.mag += a.v; else if (a.id === 'hp') bonusHp += a.v; else if (a.id === 'mp') bonusMp += a.v; else if (a.id === 'df') s.def += a.v; else if (a.id === 'rm' || a.id === 'fres' || a.id === 'ires') s.rm += a.v; /* fres/ires: atributos viejos, ahora valen RM 1:1 */ else if (a.id === 'rpar') s.rpar += a.v; }
         }
         const [hp0, hpL] = CLASS_HP[cls];
         s.maxHp = hp0 + (lvl - 1) * hpL + bonusHp;
@@ -89,12 +95,32 @@ export function progressFromCharacter(json: string | undefined): { qi: number; l
     return out;
 }
 
-/** Daño que realmente recibe un jugador: resistencia a fuego/hielo (hasta 75 %) y después la defensa; mínimo 1. */
-export function damageAfterDefense(raw: number, s: CombatStats, fx: string): number {
-    const fire = ['sphere', 'eruption', 'cataclysm', 'flamme'], ice = ['blizz', 'tidal'];
-    const res = fire.includes(fx) ? s.fres : ice.includes(fx) ? s.ires : 0;
-    const d = res > 0 ? Math.round(raw * (1 - Math.min(75, res) / 100)) : raw;
-    return Math.max(1, d - s.def);
+/** Mitigación con rendimiento decreciente: daño × 100 / (100 + X), con X = DF (físico) o RM (mágico). Mínimo 1. */
+export const mitigate = (raw: number, x: number): number => Math.max(1, Math.round((raw * 100) / (100 + Math.max(0, x))));
+/** Daño que realmente recibe un jugador según su DF o RM. */
+export function damageAfterDefense(raw: number, s: CombatStats, kind: DmgKind): number {
+    return mitigate(raw, kind === 'magic' ? s.rm : s.def);
+}
+/** Segundos de parálisis que le quedan a quien resiste: base × 100/(100+RM), menos el % de resistencia a parálisis (tope 75 %); mínimo 0,4 s. */
+export const MIN_PARALYSIS_S = 0.4;
+export function paralysisSecs(base: number, s: CombatStats): number {
+    if (base <= 0) return 0;
+    const t = (base * 100) / (100 + Math.max(0, s.rm)) * (1 - Math.min(75, Math.max(0, s.rpar)) / 100);
+    return Math.max(MIN_PARALYSIS_S, Math.round(t * 100) / 100);
+}
+
+// ---------- pociones ----------
+/** Delay global entre pociones (vida o maná), independiente de los hechizos. */
+export const POTION_GCD_MS = 1750;
+/** Tolerancia por jitter de red: el server acepta una poción si pasaron al menos GCD - esto. */
+export const POTION_GCD_SLACK_MS = 100;
+/** Vida: parte instantánea y el resto en `POTION_HOT_TICKS` ticks cada `POTION_HOT_EVERY_MS` (2 s en total). */
+export const POTION_INSTANT = 0.2, POTION_HOT_TICKS = 4, POTION_HOT_EVERY_MS = 500;
+export const potionHp = (maxHp: number) => Math.max(50, Math.round(maxHp * 0.4));
+/** Reparto de una poción de vida: [instantáneo, ...ticks]; la suma da exactamente `total`. */
+export function potionHpSplit(total: number): number[] {
+    const first = Math.round(total * POTION_INSTANT), rest = total - first, tick = Math.floor(rest / POTION_HOT_TICKS);
+    return [first, ...Array.from({ length: POTION_HOT_TICKS }, (_, i) => (i === POTION_HOT_TICKS - 1 ? rest - tick * (POTION_HOT_TICKS - 1) : tick))];
 }
 
 const rint = (a: number, b: number) => Math.floor(a + Math.random() * (b - a + 1));

@@ -100,6 +100,7 @@ message ClientMessage {
     DetectInvisibleRequest detect_invisible_request = 46;
     HpReport hp_report = 47;
     RespawnRequest respawn_request = 48;
+    PotionRequest potion_request = 49;
     SaveCharacterRequest save_character_request = 80;
     MobHitRequest mob_hit_request = 120;
     PveStatusRequest pve_status_request = 121;
@@ -526,6 +527,8 @@ message HpReport {
   bool meditating = 4;
 }
 message RespawnRequest {}
+/** Tomar una poción (kind: 0 = vida, 1 = maná). El server valida el delay global (GCD) y cura: 20 % al instante y el resto en 2 s (vida). */
+message PotionRequest { int32 kind = 1; }
 /** Mi vida según el server (la autoridad): después de cada golpe, curación o al revivir. */
 message Vitals { int32 hp = 1; int32 max_hp = 2; bool dead = 3; int32 mp = 4; int32 max_mp = 5; }
 /** Vida de otro jugador cercano (para su barra). */
