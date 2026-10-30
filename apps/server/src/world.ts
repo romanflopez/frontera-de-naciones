@@ -6,6 +6,7 @@
  * tick (cada 50 ms) solo dispara los temporizadores. Más adelante, si hace falta escalar,
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
+import { applyParalysis, castRemover, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import type { Catalogs, GameWorldConfig, Settings } from './config.ts';
 import { adjacentCellsAt45, distance, findNearestFreeLocation, nextGridDirection } from './location.ts';
@@ -64,6 +65,7 @@ export class GameWorld {
             this.timers = this.timers.filter((t) => t.at > now);
             for (const t of due) this.safe('temporizador', t.fn);
         }
+        for (const pl of this.players.values()) updateStatus(pl.status, now);
         if (this.mobSim) this.safe('mobs', () => this.mobSim!.update());
         this.checkPingTimeouts(now);
     }
@@ -257,7 +259,19 @@ export class GameWorld {
                     const v = payload.value, num = (n: number, lo: number, hi: number) => (Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : lo);
                     const fx = /^[a-z]{0,16}$/.test(v.fx) ? v.fx : '';
                     const now = Date.now(); if (now - p.lastPvpMs < 40) break; p.lastPvpMs = now;
-                    this.broadcastNear(p, M.pvpHit(p.playerId, { fx, x: num(v.x, 0, 200), y: num(v.y, 0, 200), targetId: v.targetId, dmg: Math.round(num(v.dmg, 0, 600)), secs: num(v.secs, 0, 6), r: num(v.r, 0, 6) }));
+                    const secs = num(v.secs, 0, 6);
+                    if (secs > 0 && v.targetId) {
+                        const tgt = this.playersById.get(v.targetId);
+                        if (!tgt || tgt === p) break;
+                        if (!applyParalysis(tgt.status, now, secs * 1000)) { p.send(M.pvpHit(tgt.playerId, { fx: 'resist', x: tgt.posX, y: tgt.posY, targetId: 0n, dmg: 0, secs: 0, r: 0 })); break; }
+                    }
+                    this.broadcastNear(p, M.pvpHit(p.playerId, { fx, x: num(v.x, 0, 200), y: num(v.y, 0, 200), targetId: v.targetId, dmg: Math.round(num(v.dmg, 0, 600)), secs, r: num(v.r, 0, 6) }));
+                    break;
+                }
+                case 'removerRequest': {
+                    if (!castRemover(p.status, Date.now())) break;
+                    const m = M.pvpHit(p.playerId, { fx: 'sphere', x: p.posX, y: p.posY, targetId: p.playerId, dmg: 0, secs: -1, r: 0 });
+                    p.send(m); this.broadcastNear(p, m);
                     break;
                 }
                 case 'mobHitRequest': this.mobSim?.hit(p, payload.value); break;

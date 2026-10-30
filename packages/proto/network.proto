@@ -95,6 +95,7 @@ message ClientMessage {
     KillAllNpcsRequest kill_all_npcs_request = 41;
     ChangePlayerProfileRequest change_player_profile_request = 42;
     PvpHitRequest pvp_hit_request = 43;
+    RemoverRequest remover_request = 44;
     SaveCharacterRequest save_character_request = 80;
     MobHitRequest mob_hit_request = 120;
     PveStatusRequest pve_status_request = 121;
@@ -493,6 +494,7 @@ message SpellCastFailed {
 
 /** El cliente avisa su bando, clase y equipo visible: "bando;clase;pieza,pieza,...". */
 /** PvP entre jugadores: el cliente que lanza avisa un efecto y, si hay target_id, daño/parálisis para ese jugador. */
+message RemoverRequest {}
 message PvpHitRequest {
   string fx = 1;
   double x = 2;

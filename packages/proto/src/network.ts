@@ -111,6 +111,7 @@ export interface ClientMessage {
     | { $case: "killAllNpcsRequest"; value: KillAllNpcsRequest }
     | { $case: "changePlayerProfileRequest"; value: ChangePlayerProfileRequest }
     | { $case: "pvpHitRequest"; value: PvpHitRequest }
+    | { $case: "removerRequest"; value: RemoverRequest }
     | { $case: "saveCharacterRequest"; value: SaveCharacterRequest }
     | { $case: "mobHitRequest"; value: MobHitRequest }
     | { $case: "pveStatusRequest"; value: PveStatusRequest }
@@ -517,6 +518,9 @@ export interface SpellCastFailed {
 }
 
 /** PvP entre jugadores: el cliente que lanza avisa un efecto y, si hay target_id, daño/parálisis para ese jugador. */
+export interface RemoverRequest {
+}
+
 export interface PvpHitRequest {
   fx: string;
   x: number;
@@ -1340,6 +1344,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "pvpHitRequest":
         PvpHitRequest.encode(message.payload.value, writer.uint32(346).fork()).join();
         break;
+      case "removerRequest":
+        RemoverRequest.encode(message.payload.value, writer.uint32(354).fork()).join();
+        break;
       case "saveCharacterRequest":
         SaveCharacterRequest.encode(message.payload.value, writer.uint32(642).fork()).join();
         break;
@@ -1815,6 +1822,14 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "pvpHitRequest", value: PvpHitRequest.decode(reader, reader.uint32()) };
             continue;
           }
+          case 44: {
+            if (tag !== 354) {
+              break;
+            }
+
+            message.payload = { $case: "removerRequest", value: RemoverRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
           case 80: {
             if (tag !== 642) {
               break;
@@ -2220,6 +2235,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "pvpHitRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "pvpHitRequest", value: PvpHitRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "removerRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "removerRequest", value: RemoverRequest.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -7708,6 +7729,49 @@ export const SpellCastFailed: MessageFns<SpellCastFailed> = {
   },
   fromPartial<I extends Exact<DeepPartial<SpellCastFailed>, I>>(_: I): SpellCastFailed {
     const message = createBaseSpellCastFailed();
+    return message;
+  },
+};
+
+function createBaseRemoverRequest(): RemoverRequest {
+  return {};
+}
+
+export const RemoverRequest: MessageFns<RemoverRequest> = {
+  encode(_: RemoverRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): RemoverRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseRemoverRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<RemoverRequest>, I>>(base?: I): RemoverRequest {
+    return RemoverRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<RemoverRequest>, I>>(_: I): RemoverRequest {
+    const message = createBaseRemoverRequest();
     return message;
   },
 };

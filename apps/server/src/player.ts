@@ -2,6 +2,7 @@
  * Estado de un jugador dentro de un mundo. Port recortado de GameWorldPlayer.cs:
  * posición, apariencia, velocidad, controles anti-trampa de movimiento y ping.
  */
+import { createDefaultStatus } from './systems/statusSystem.ts';
 import type { ServerMessage } from '@fdn/proto';
 import type { Settings } from './config.ts';
 
@@ -45,6 +46,7 @@ export class Player {
     /** Bando;clase;piezas visibles, lo manda el cliente (solo se retransmite a los demás). */
     profile = '';
     lastPvpMs = 0;
+    status = createDefaultStatus();
     disconnected = false;
 
     hp = 1000;
@@ -139,7 +141,7 @@ export class Player {
         this.violations = new SlidingWindow(v.limit, v.window * 1000);
     }
 
-    isParalyzed(now: number): boolean { return now < this.paralysisUntil; }
+    isParalyzed(now: number): boolean { return now < this.paralysisUntil || this.status.isParalyzed; }
 
     // ---------- ping ----------
     recordPing(now: number): void {
