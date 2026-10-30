@@ -175,7 +175,7 @@ const P = {
     x: MAP.spawn.x + 0.5, y: MAP.spawn.y + 0.5, dir: 6, ang: undefined as number | undefined, moving: false, phase: 0, ref: 3.4, one: null as OneShot | null, t0: 0, flash: 0,
     name: '', cell: { x: MAP.spawn.x, y: MAP.spawn.y }, path: [] as Cell[], step: null as Step | null, stepMs: 270, frozenUntil: 0, foe: null as Other | null, med: false, medHp: 0,
     target: null as Mob | null, engage: false, pickup: null as Drop | null, repath: 0, queued: null as number | null,
-    lvl: 1, exp: 0, hp: 100, mp: 60, fury: 0, inv: false, det: false, invEnd: 0, detEnd: 0, immEnd: 0, gold: 0, nextAtk: 0, dead: false, deadT: 0,
+    lvl: 1, exp: 0, hp: 100, mp: 60, fury: 0, wcEnd: 0, slowEnd: 0, inv: false, det: false, invEnd: 0, detEnd: 0, immEnd: 0, gold: 0, nextAtk: 0, dead: false, deadT: 0,
     bag: [] as Item[], eq: { arma: null, armadura: null, cabeza: null, anillo: null } as Record<Slot, Item | null>,
     casting: null as Casting | null, ready: null as { i: number; t: number } | null, sentDir: -1,
 };
@@ -232,8 +232,8 @@ function totals() {
 // ---------- clases ----------
 interface ClassDef { id: string; name: string; hidden?: boolean; desc: string; head: string; armor?: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; spells: string[] }
 const CLASSES: ClassDef[] = [
-    { id: 'guerrero', name: 'Guerrero', desc: 'Resistente, pega cuerpo a cuerpo y frena enemigos.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'tajo', 'aturdir', 'vendar', 'torbellino', 'sismo', 'furia', 'remover'] },
-    { id: 'mago', name: 'Mago', desc: 'Frágil pero con hechizos a distancia, parálisis y cura.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'paralisis', 'curar', 'bola', 'hoja', 'lanza', 'lluvia', 'ventisca', 'marejada', 'luz', 'curar2', 'furia', 'remover', 'invisibilidad', 'detectar'] },
+    { id: 'guerrero', name: 'Guerrero', desc: 'Resistente, pega cuerpo a cuerpo y frena enemigos.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'tajo', 'aturdir', 'vendar', 'torbellino', 'sismo', 'furia', 'remover', 'carga', 'giro', 'grito'] },
+    { id: 'mago', name: 'Mago', desc: 'Frágil pero con hechizos a distancia, parálisis y cura.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'paralisis', 'curar', 'bola', 'hoja', 'lanza', 'lluvia', 'ventisca', 'marejada', 'luz', 'curar2', 'furia', 'remover', 'invisibilidad', 'detectar', 'blink'] },
 ];
 let CLS: ClassDef = CLASSES[0];
 const maxHp = () => CLS.hp + (P.lvl - 1) * CLS.hpL + totals().hp;
@@ -317,6 +317,7 @@ function onServer(m: ServerPayload) {
         case 'mobDied': onMobDied(m.value); break;
         case 'lootRoll': lootRolls.set(m.value.mobId, { rarity: m.value.rarity, baseSeed: m.value.baseSeed, attrs: m.value.attrs }); break;
         case 'statusUpdate': onStatusUpdate(m.value); break;
+        case 'skillEffect': onSkillEffect(m.value); break;
         case 'vitals': onVitals(m.value); break;
         case 'logoutResponse': if (logout) { logout.at = now() + m.value.wait; logout.asked = true; if (m.value.wait <= 0) { logout.at = now(); } } break;
         case 'playerVitals': { const o = others.get(m.value.playerId); if (o) { o.hp = m.value.hp; o.maxHp = m.value.maxHp; } break; }
@@ -399,8 +400,26 @@ function levelUp() {
 }
 /** El server avisó que un mob murió: lo saca del espejo, deja el cadáver y, si el golpe final fue mío, cobro el botín. */
 /** El server avisa quién está invisible y si yo veo invisibles. */
-function onStatusUpdate(v: { playerId: bigint; invisible: boolean; detect: boolean; fury: boolean }) {
+/** Lo que se ve de una habilidad de clase (el server confirma): origen y destino del Blink, la embestida, el giro y el grito. Si la rechazó, devuelvo recarga y maná. */
+function onSkillEffect(v: { casterId: bigint; skill: string; fromX: number; fromY: number; toX: number; toY: number; ok: boolean }) {
+    if (!v.ok) {
+        if (v.casterId !== myId) return;
+        const i = SPELLS.findIndex((x) => x.id === v.skill); if (i >= 0) { cds[i] = 0; P.mp = Math.min(maxMp(), P.mp + SPELLS[i].mp); }
+        return;
+    }
+    const fx0 = v.fromX + 0.5, fy0 = v.fromY + 0.5, tx = v.toX + 0.5, ty = v.toY + 0.5;
+    switch (v.skill) {
+        case 'blink': efxLocal('spread', fx0, fy0); fx.push({ k: 'ring', x: fx0, y: fy0, t: 0, c: '#b9a3ff' }); efxLocal('sphere', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#b9a3ff' }); fx.push({ k: 'burst', x: tx, y: ty, t: 0, c: '#b9a3ff' }); break;
+        case 'carga': efxLocal('crosswind', fx0, fy0, 6); fx.push({ k: 'burst', x: fx0, y: fy0, t: 0, c: '#ff9a4a' }); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 1.2, c: '#ff9a4a' }); if (!reduce && v.casterId === myId) shake = Math.max(shake, 0.2); break;
+        case 'giro': efxLocal('cyclone', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 1.9, c: '#ffd0a0' }); break;
+        case 'grito': efxLocal('godsbreath', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#c78bff' }); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffe27a' }); break;
+    }
+    if (v.skill === 'blink' && v.casterId === myId) { const pt = iso(P.x, P.y); if (Math.hypot(pt.x - cam.x, pt.y - cam.y) > 500) { cam.x = pt.x; cam.y = pt.y; } }
+}
+function onStatusUpdate(v: { playerId: bigint; invisible: boolean; detect: boolean; fury: boolean; warcry: boolean; slow: boolean }) {
     if (v.playerId === myId) {
+        if (v.warcry !== P.wcEnd > now()) { P.wcEnd = v.warcry ? now() + 10 : 0; if (v.warcry) log('Grito de guerra: +15 de defensa por 10 s.', true); }
+        if (v.slow !== P.slowEnd > now()) { P.slowEnd = v.slow ? now() + 1.5 : 0; if (v.slow) toast('¡Te ralentizaron!'); }
         if (P.inv !== v.invisible) log(v.invisible ? 'Te volviste invisible (15 s o hasta que ataques).' : 'Ya no sos invisible.', true);
         if (P.det !== v.detect) log(v.detect ? 'Ves a los invisibles por 10 s.' : 'Se acabó Detectar invisible.', true);
         if (v.invisible && !P.inv) P.invEnd = now() + 15; if (v.detect && !P.det) P.detEnd = now() + 10; P.inv = v.invisible; P.det = v.detect; return;
@@ -503,9 +522,23 @@ function syncHp() {
 
 // ---------- hechizos ----------
 type Target = Mob | { x: number; y: number; ground: true } | { x: number; y: number; pvp: Other };
-interface Spell { id?: string; ctrl?: boolean; fury?: boolean; key: string; name: string; mp: number; cd: number; col: string; range: number; target: boolean; aoe?: number; cast: (m: Target | null) => false | void }
+interface Spell { id?: string; instant?: boolean; ctrl?: boolean; fury?: boolean; key: string; name: string; mp: number; cd: number; col: string; range: number; target: boolean; aoe?: number; cast: (m: Target | null) => false | void }
 const isMob = (t: Target | null): t is Mob => !!t && 'hp' in t;
 interface SpellDef extends Omit<Spell, 'key'> { ctrl?: boolean }
+/** Mago, Blink: celda de destino hacia el cursor (o hacia donde mira), a lo sumo 4 celdas, caminable y sin nadie encima. Prueba más cerca si la ideal no sirve. */
+function blinkDest(): Cell | null {
+    const from = P.cell; let dx: number, dy: number;
+    if (mouse.x >= 0) { const g = toGrid(mouse.x, mouse.y); dx = Math.floor(g.x) - from.x; dy = Math.floor(g.y) - from.y; }
+    else { const a = P.ang ?? 0, sx = Math.cos(a), sy = Math.sin(a) * 2, v = GRID_VEC[gridDir((sx + sy) / 2, (sy - sx) / 2)]; dx = v[0] * 4; dy = v[1] * 4; }
+    const len = Math.hypot(dx, dy); if (len < 0.5) return null;
+    for (let r = Math.min(4, len); r >= 2; r -= 0.5) {
+        const x = from.x + Math.round((dx / len) * r), y = from.y + Math.round((dy / len) * r);
+        if (Math.hypot(x - from.x, y - from.y) > 4.25 || !freeForMe(x, y) || mobs.some((m) => Math.hypot(m.x - x - 0.5, m.y - y - 0.5) < 0.75)) continue;
+        return { x, y };
+    }
+    return null;
+}
+const skillSend = (skill: string, targetId = 0n, mobId = 0) => net.send({ $case: 'skillRequest', value: { skill, targetId, mobId } });
 const LIB: Record<string, SpellDef> = {
     proyectil: { name: 'Proyectil arcano', mp: 8, cd: 0.4, col: '#b9a3ff', range: 8, target: true,
         cast(m) { if (!isMob(m)) return false; const t = totals(), dmg = rint(12, 18) + P.lvl * 2 + t.mag; projs.push({ x: P.x, y: P.y, m, spd: 11, dmg, col: '#b9a3ff' }); } },
@@ -547,11 +580,19 @@ const LIB: Record<string, SpellDef> = {
         cast() { efx('splash', P.x, P.y); net.send({ $case: 'invisibilityRequest', value: {} }); } },
     detectar: { name: 'Detectar invisible', mp: 30, cd: 12, col: '#ffe9a0', range: 0, target: false,
         cast() { efx('spread', P.x, P.y); net.send({ $case: 'detectInvisibleRequest', value: {} }); } },
+    blink: { name: 'Blink', mp: 35, cd: 12, col: '#b9a3ff', range: 0, target: false, instant: true,
+        cast() { const d = blinkDest(); if (!d) { toast('No hay lugar para el Blink hacia ahí.'); return false; } net.send({ $case: 'blinkRequest', value: { x: d.x, y: d.y } }); } },
+    carga: { name: 'Embestida', mp: 15, cd: 10, col: '#ff9a4a', range: 6, target: true, instant: true,
+        cast(m) { if (!isMob(m)) return false; skillSend('carga', 0n, m.id); } },
+    giro: { name: 'Tajo giratorio', mp: 8, cd: 4, col: '#ffd0a0', range: 0, target: false, aoe: 1.9, instant: true,
+        cast() { skillSend('giro'); } },
+    grito: { name: 'Grito de guerra', mp: 20, cd: 25, col: '#c78bff', range: 0, target: false, instant: true,
+        cast() { skillSend('grito'); } },
     furia: { name: 'Furia', mp: 15, cd: 20, col: '#ff3b2f', range: 0, target: false,
         cast() { efxLocal('flamme', P.x, P.y); pvpSend('flamme', P.x, P.y, 0n, 'furia'); P.fury = now() + 10; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log('Furia: +30% de daño físico y +20% de daño en hechizos por 10 s, sin castigo.', true); } },
 };
 let SPELLS: Spell[] = [];
-const SPECIAL_KEY: Record<string, string | undefined> = { remover: 'r', invisibilidad: 'f', detectar: 'g' };
+const SPECIAL_KEY: Record<string, string | undefined> = { remover: 'r', invisibilidad: 'f', detectar: 'g', blink: 'b', carga: 'z', giro: 'x', grito: 'v' };
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
 /** Hechizo de área estilo Blizzard: varios golpes sobre las celdas cercanas al punto elegido. */
 function zone(x: number, y: number, r: number, ticks: number, every: number, dmg: () => number, effect: string, slow = 0, sid = '') {
@@ -626,11 +667,24 @@ function cast(i: number) {
     if (P.dead) return; const s = SPELLS[i];
     if (P.ready && P.ready.i === i && s.target) { const m = autoTarget(s.range), e = m ? null : nearestEnemy(s.range); if (m) release(m); else if (e) release({ x: e.x, y: e.y, pvp: e }); else toast('Hacé clic en el objetivo.'); return; }
     if (s.fury && P.fury <= now()) { toast(`${s.name} solo se puede usar con Furia.`); return; }
-    if (P.casting) { toast('Ya estás casteando.'); return; }
+    if (P.casting && !s.instant) { toast('Ya estás casteando.'); return; }
     if (cds[i] > now()) { toast(`${s.name} se está recargando.`); return; }
     if (P.mp < s.mp) { toast('No te alcanza el maná.'); return; }
+    if (s.instant) { instantCast(i); return; }
     P.ready = null; P.engage = false; P.queued = null; P.path = []; holding = false;
     const T = now(); P.casting = { i, start: T, end: T + CAST_T, len: CAST_T };
+}
+/** Habilidades de clase sin casteo: salen al instante (las de objetivo toman el seleccionado, el del cursor o el enemigo más cercano). */
+function instantCast(i: number) {
+    const s = SPELLS[i];
+    if (P.frozenUntil > now()) { toast('Estás paralizado.'); return; }
+    cancelCast(); P.queued = null;
+    if (!s.target) { fire(i, null); return; }
+    const m = autoTarget(s.range), e = m ? null : P.foe && isEnemy(P.foe) ? P.foe : nearestEnemy(s.range), t = m ?? e;
+    if (!t) { toast('Elegí un objetivo: click en un mob o enemigo cerca.'); return; }
+    if (dist(P, t) > s.range) { toast('Está muy lejos. Acercate más.'); return; }
+    turnTo(P, t.x - P.x, t.y - P.y, 0, true); sendFacing();
+    fire(i, m ?? { x: e!.x, y: e!.y, pvp: e! });
 }
 function finishCast() {
     const c = P.casting!, s = SPELLS[c.i]; P.casting = null;
@@ -652,7 +706,7 @@ function release(target: Mob | { x: number; y: number; pvp?: Other }) {
 function fire(i: number, m: Target | null) {
     const s = SPELLS[i];
     if (m && 'pvp' in m && !s.aoe) { if (!pvpCast(s.id, (m as { pvp: Other }).pvp)) return; } else if (s.cast(m) === false) return;
-    const srvMp = ['furia', 'invisibilidad', 'detectar', 'remover'].includes(s.id ?? '') || (m && 'pvp' in m && !s.aoe)
+    const srvMp = ['furia', 'invisibilidad', 'detectar', 'remover', 'blink', 'carga', 'giro', 'grito'].includes(s.id ?? '') || (m && 'pvp' in m && !s.aoe)
         || (!!s.aoe && enemiesNear(m ? m.x : P.x, m ? m.y : P.y, s.aoe + 0.5).length > 0); // si pega a un jugador, el server cobra
     spendMp(s.mp, srvMp); syncHp(); cds[i] = now() + s.cd;
     P.one = { anim: 'cast', t: now() - 0.3, until: now() + 0.12 };
@@ -698,6 +752,7 @@ function pvpCast(id: string | undefined, o: Other): boolean {
         case 'lanza': pvpDamage(o, 'lanza', 'rocklance'); return true;
         case 'golpe': pvpDamage(o, 'golpe', 'crosswind'); return true;
         case 'tajo': pvpDamage(o, 'tajo', 'crosswind'); return true;
+        case 'carga': skillSend('carga', o.id); return true;
         default: return false;
     }
 }
@@ -926,7 +981,7 @@ function update(dt: number) {
             else {
                 P.path.shift();
                 net.send({ $case: 'requestMovement', value: { curX: P.cell.x, curY: P.cell.y, destX: next.x, destY: next.y, gameWorldId: MAP_WORLD_ID, dashAttack: false } });
-                P.step = { fx: P.cell.x, fy: P.cell.y, tx: next.x, ty: next.y, t0: T, dur: P.stepMs / 1000 + STEP_MARGIN };
+                P.step = { fx: P.cell.x, fy: P.cell.y, tx: next.x, ty: next.y, t0: T, dur: (P.stepMs / 1000) * (P.slowEnd > T ? 1.7 : 1) + STEP_MARGIN };
                 P.cell = { x: next.x, y: next.y };
                 advanceStep(P, T, 0);
             }
@@ -1240,6 +1295,8 @@ function setClass(id: string) {
 /** Cuadraditos de estado con cuenta regresiva (Furia, invisible, detectar, parálisis, inmunidad), como en HB. */
 const BUFFS: { k: string; n: string; c: string; end: () => number; on: () => boolean }[] = [
     { k: 'F', n: 'Furia', c: '#ff5a2a', end: () => P.fury, on: () => P.fury > now() },
+    { k: 'G', n: 'Grito de guerra (+15 defensa)', c: '#c78bff', end: () => P.wcEnd, on: () => P.wcEnd > now() },
+    { k: 'L', n: 'Ralentizado', c: '#8fb4d9', end: () => P.slowEnd, on: () => P.slowEnd > now() },
     { k: 'I', n: 'Invisible', c: '#7fb8ff', end: () => P.invEnd, on: () => P.inv },
     { k: 'D', n: 'Detectar invisible', c: '#9be07a', end: () => P.detEnd, on: () => P.det },
     { k: 'P', n: 'Paralizado', c: '#d9c24a', end: () => P.frozenUntil, on: () => P.frozenUntil > now() },

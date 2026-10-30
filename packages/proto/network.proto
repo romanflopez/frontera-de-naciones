@@ -100,7 +100,9 @@ message ClientMessage {
     DetectInvisibleRequest detect_invisible_request = 46;
     HpReport hp_report = 47;
     RespawnRequest respawn_request = 48;
-    PotionRequest potion_request = 49;
+    BlinkRequest blink_request = 49;
+    SkillRequest skill_request = 50;
+    PotionRequest potion_request = 51;
     SaveCharacterRequest save_character_request = 80;
     MobHitRequest mob_hit_request = 120;
     PveStatusRequest pve_status_request = 121;
@@ -463,6 +465,7 @@ message ServerMessage {
     LogoutCancelled logout_cancelled = 63;
     PlayerProfileChanged player_profile_changed = 64;
     PvpHit pvp_hit = 65;
+    SkillEffect skill_effect = 66;
     CharacterLoaded character_loaded = 80;
     MobsSnapshot mobs_snapshot = 120;
     MobDamaged mob_damaged = 121;
@@ -516,7 +519,13 @@ message DetectInvisibleRequest {}
 message LootAttr { string key = 1; int32 value = 2; }
 /** Botín tirado por el server para quien dio el golpe final. */
 message LootRoll { int32 mob_id = 1; int32 rarity = 2; int32 base_seed = 3; repeated LootAttr attrs = 4; }
-message StatusUpdate { int64 player_id = 1; bool invisible = 2; bool detect = 3; bool fury = 4; }
+message StatusUpdate { int64 player_id = 1; bool invisible = 2; bool detect = 3; bool fury = 4; bool warcry = 5; bool slow = 6; }
+/** Mago: Blink a la celda (x, y) (máx. 4 celdas). El server valida y responde con PlayerTeleported + SkillEffect. */
+message BlinkRequest { int32 x = 1; int32 y = 2; }
+/** Habilidades de clase del Guerrero: skill = carga | giro | grito. carga necesita target_id (jugador) o mob_id. */
+message SkillRequest { string skill = 1; int64 target_id = 2; int32 mob_id = 3; }
+/** Efecto de una habilidad de clase para el que la usó (ok=false si el server la rechazó) y los cercanos. */
+message SkillEffect { int64 caster_id = 1; string skill = 2; int32 from_x = 3; int32 from_y = 4; int32 to_x = 5; int32 to_y = 6; bool ok = 7; }
 /** El cliente informa su vida (curas, pociones, regeneración); el server solo acepta subas razonables. */
 message HpReport {
   int32 hp = 1;

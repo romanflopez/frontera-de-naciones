@@ -116,6 +116,8 @@ export interface ClientMessage {
     | { $case: "detectInvisibleRequest"; value: DetectInvisibleRequest }
     | { $case: "hpReport"; value: HpReport }
     | { $case: "respawnRequest"; value: RespawnRequest }
+    | { $case: "blinkRequest"; value: BlinkRequest }
+    | { $case: "skillRequest"; value: SkillRequest }
     | { $case: "potionRequest"; value: PotionRequest }
     | { $case: "saveCharacterRequest"; value: SaveCharacterRequest }
     | { $case: "mobHitRequest"; value: MobHitRequest }
@@ -488,6 +490,7 @@ export interface ServerMessage {
     | { $case: "logoutCancelled"; value: LogoutCancelled }
     | { $case: "playerProfileChanged"; value: PlayerProfileChanged }
     | { $case: "pvpHit"; value: PvpHit }
+    | { $case: "skillEffect"; value: SkillEffect }
     | { $case: "characterLoaded"; value: CharacterLoaded }
     | { $case: "mobsSnapshot"; value: MobsSnapshot }
     | { $case: "mobDamaged"; value: MobDamaged }
@@ -561,6 +564,32 @@ export interface StatusUpdate {
   invisible: boolean;
   detect: boolean;
   fury: boolean;
+  warcry: boolean;
+  slow: boolean;
+}
+
+/** Mago: Blink a la celda (x, y) (máx. 4 celdas). El server valida y responde con PlayerTeleported + SkillEffect. */
+export interface BlinkRequest {
+  x: number;
+  y: number;
+}
+
+/** Habilidades de clase del Guerrero: skill = carga | giro | grito. carga necesita target_id (jugador) o mob_id. */
+export interface SkillRequest {
+  skill: string;
+  targetId: bigint;
+  mobId: number;
+}
+
+/** Efecto de una habilidad de clase para el que la usó (ok=false si el server la rechazó) y los cercanos. */
+export interface SkillEffect {
+  casterId: bigint;
+  skill: string;
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  ok: boolean;
 }
 
 /** El cliente informa su vida (curas, pociones, regeneración); el server solo acepta subas razonables. */
@@ -1446,8 +1475,14 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "respawnRequest":
         RespawnRequest.encode(message.payload.value, writer.uint32(386).fork()).join();
         break;
+      case "blinkRequest":
+        BlinkRequest.encode(message.payload.value, writer.uint32(394).fork()).join();
+        break;
+      case "skillRequest":
+        SkillRequest.encode(message.payload.value, writer.uint32(402).fork()).join();
+        break;
       case "potionRequest":
-        PotionRequest.encode(message.payload.value, writer.uint32(394).fork()).join();
+        PotionRequest.encode(message.payload.value, writer.uint32(410).fork()).join();
         break;
       case "saveCharacterRequest":
         SaveCharacterRequest.encode(message.payload.value, writer.uint32(642).fork()).join();
@@ -1978,6 +2013,22 @@ export const ClientMessage: MessageFns<ClientMessage> = {
               break;
             }
 
+            message.payload = { $case: "blinkRequest", value: BlinkRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 50: {
+            if (tag !== 402) {
+              break;
+            }
+
+            message.payload = { $case: "skillRequest", value: SkillRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 51: {
+            if (tag !== 410) {
+              break;
+            }
+
             message.payload = { $case: "potionRequest", value: PotionRequest.decode(reader, reader.uint32()) };
             continue;
           }
@@ -2430,6 +2481,18 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "respawnRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "respawnRequest", value: RespawnRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "blinkRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "blinkRequest", value: BlinkRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "skillRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "skillRequest", value: SkillRequest.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -6396,6 +6459,9 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "pvpHit":
         PvpHit.encode(message.payload.value, writer.uint32(522).fork()).join();
         break;
+      case "skillEffect":
+        SkillEffect.encode(message.payload.value, writer.uint32(530).fork()).join();
+        break;
       case "characterLoaded":
         CharacterLoaded.encode(message.payload.value, writer.uint32(642).fork()).join();
         break;
@@ -7037,6 +7103,14 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "pvpHit", value: PvpHit.decode(reader, reader.uint32()) };
             continue;
           }
+          case 66: {
+            if (tag !== 530) {
+              break;
+            }
+
+            message.payload = { $case: "skillEffect", value: SkillEffect.decode(reader, reader.uint32()) };
+            continue;
+          }
           case 80: {
             if (tag !== 642) {
               break;
@@ -7610,6 +7684,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "pvpHit": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "pvpHit", value: PvpHit.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "skillEffect": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "skillEffect", value: SkillEffect.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -8362,7 +8442,7 @@ export const LootRoll: MessageFns<LootRoll> = {
 };
 
 function createBaseStatusUpdate(): StatusUpdate {
-  return { playerId: 0n, invisible: false, detect: false, fury: false };
+  return { playerId: 0n, invisible: false, detect: false, fury: false, warcry: false, slow: false };
 }
 
 export const StatusUpdate: MessageFns<StatusUpdate> = {
@@ -8381,6 +8461,12 @@ export const StatusUpdate: MessageFns<StatusUpdate> = {
     }
     if (message.fury !== false) {
       writer.uint32(32).bool(message.fury);
+    }
+    if (message.warcry !== false) {
+      writer.uint32(40).bool(message.warcry);
+    }
+    if (message.slow !== false) {
+      writer.uint32(48).bool(message.slow);
     }
     return writer;
   },
@@ -8430,6 +8516,22 @@ export const StatusUpdate: MessageFns<StatusUpdate> = {
             message.fury = reader.bool();
             continue;
           }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.warcry = reader.bool();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.slow = reader.bool();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -8451,6 +8553,287 @@ export const StatusUpdate: MessageFns<StatusUpdate> = {
     message.invisible = object.invisible ?? false;
     message.detect = object.detect ?? false;
     message.fury = object.fury ?? false;
+    message.warcry = object.warcry ?? false;
+    message.slow = object.slow ?? false;
+    return message;
+  },
+};
+
+function createBaseBlinkRequest(): BlinkRequest {
+  return { x: 0, y: 0 };
+}
+
+export const BlinkRequest: MessageFns<BlinkRequest> = {
+  encode(message: BlinkRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.x !== 0) {
+      writer.uint32(8).int32(message.x);
+    }
+    if (message.y !== 0) {
+      writer.uint32(16).int32(message.y);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BlinkRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBlinkRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.x = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.y = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<BlinkRequest>, I>>(base?: I): BlinkRequest {
+    return BlinkRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<BlinkRequest>, I>>(object: I): BlinkRequest {
+    const message = createBaseBlinkRequest();
+    message.x = object.x ?? 0;
+    message.y = object.y ?? 0;
+    return message;
+  },
+};
+
+function createBaseSkillRequest(): SkillRequest {
+  return { skill: "", targetId: 0n, mobId: 0 };
+}
+
+export const SkillRequest: MessageFns<SkillRequest> = {
+  encode(message: SkillRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.skill !== "") {
+      writer.uint32(10).string(message.skill);
+    }
+    if (message.targetId !== 0n) {
+      if (BigInt.asIntN(64, message.targetId) !== message.targetId) {
+        throw new globalThis.Error("value provided for field message.targetId of type int64 too large");
+      }
+      writer.uint32(16).int64(message.targetId);
+    }
+    if (message.mobId !== 0) {
+      writer.uint32(24).int32(message.mobId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SkillRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseSkillRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.skill = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.targetId = reader.int64() as bigint;
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.mobId = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<SkillRequest>, I>>(base?: I): SkillRequest {
+    return SkillRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SkillRequest>, I>>(object: I): SkillRequest {
+    const message = createBaseSkillRequest();
+    message.skill = object.skill ?? "";
+    message.targetId = (object.targetId !== undefined && object.targetId !== null) ? BigInt(object.targetId) : 0n;
+    message.mobId = object.mobId ?? 0;
+    return message;
+  },
+};
+
+function createBaseSkillEffect(): SkillEffect {
+  return { casterId: 0n, skill: "", fromX: 0, fromY: 0, toX: 0, toY: 0, ok: false };
+}
+
+export const SkillEffect: MessageFns<SkillEffect> = {
+  encode(message: SkillEffect, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.casterId !== 0n) {
+      if (BigInt.asIntN(64, message.casterId) !== message.casterId) {
+        throw new globalThis.Error("value provided for field message.casterId of type int64 too large");
+      }
+      writer.uint32(8).int64(message.casterId);
+    }
+    if (message.skill !== "") {
+      writer.uint32(18).string(message.skill);
+    }
+    if (message.fromX !== 0) {
+      writer.uint32(24).int32(message.fromX);
+    }
+    if (message.fromY !== 0) {
+      writer.uint32(32).int32(message.fromY);
+    }
+    if (message.toX !== 0) {
+      writer.uint32(40).int32(message.toX);
+    }
+    if (message.toY !== 0) {
+      writer.uint32(48).int32(message.toY);
+    }
+    if (message.ok !== false) {
+      writer.uint32(56).bool(message.ok);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SkillEffect {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseSkillEffect();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.casterId = reader.int64() as bigint;
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.skill = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.fromX = reader.int32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.fromY = reader.int32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.toX = reader.int32();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.toY = reader.int32();
+            continue;
+          }
+          case 7: {
+            if (tag !== 56) {
+              break;
+            }
+
+            message.ok = reader.bool();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<SkillEffect>, I>>(base?: I): SkillEffect {
+    return SkillEffect.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SkillEffect>, I>>(object: I): SkillEffect {
+    const message = createBaseSkillEffect();
+    message.casterId = (object.casterId !== undefined && object.casterId !== null) ? BigInt(object.casterId) : 0n;
+    message.skill = object.skill ?? "";
+    message.fromX = object.fromX ?? 0;
+    message.fromY = object.fromY ?? 0;
+    message.toX = object.toX ?? 0;
+    message.toY = object.toY ?? 0;
+    message.ok = object.ok ?? false;
     return message;
   },
 };

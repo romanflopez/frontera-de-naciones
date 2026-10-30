@@ -176,8 +176,10 @@ export const mobHitPlayer = (mobId: number, dmg: number, stun: number): ServerMe
 export const mobSpecialEvent = (mobId: number, phase: number, x: number, y: number): ServerMessage => msg({ $case: 'mobSpecialEvent', value: { mobId, phase, x, y } });
 export const lootRoll = (mobId: number, rarity: number, baseSeed: number, attrs: { key: string; value: number }[]): ServerMessage =>
     msg({ $case: 'lootRoll', value: { mobId, rarity, baseSeed, attrs } });
-export const statusUpdate = (playerId: bigint, invisible: boolean, detect: boolean, fury = false): ServerMessage =>
-    msg({ $case: 'statusUpdate', value: { playerId, invisible, detect, fury } });
+export const statusUpdate = (playerId: bigint, invisible: boolean, detect: boolean, fury = false, warcry = false, slow = false): ServerMessage =>
+    msg({ $case: 'statusUpdate', value: { playerId, invisible, detect, fury, warcry, slow } });
+export const skillEffect = (casterId: bigint, skill: string, fromX: number, fromY: number, toX: number, toY: number, ok = true): ServerMessage =>
+    msg({ $case: 'skillEffect', value: { casterId, skill, fromX, fromY, toX, toY, ok } });
 export const vitals = (hp: number, maxHp: number, dead: boolean, mp: number, maxMp: number): ServerMessage => msg({ $case: 'vitals', value: { hp, maxHp, dead, mp, maxMp } });
 export const playerVitals = (playerId: bigint, hp: number, maxHp: number): ServerMessage => msg({ $case: 'playerVitals', value: { playerId, hp, maxHp } });
 export const pvpKill = (playerId: bigint, killerId: bigint, victimName: string, killerName: string): ServerMessage =>
