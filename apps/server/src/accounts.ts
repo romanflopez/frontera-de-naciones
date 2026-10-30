@@ -4,6 +4,7 @@
  */
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { AccountRecord, Storage } from './storage.ts';
+import { TRAINING, trainingUnlocked } from '@fdn/world';
 
 const NAME_RE = /^[\p{L}\p{N}_\- ]{2,16}$/u;
 const MAX_FAILS_PER_NAME = 5, MAX_FAILS_PER_IP = 25, WINDOW_MS = 10 * 60 * 1000;
@@ -69,17 +70,22 @@ export function sanitizeCharacter(raw: string): string | null {
     if (!faction || !cls) return null;
     const q = (o.q ?? {}) as Record<string, unknown>, keys = (q.keys ?? {}) as Record<string, unknown>, shards = (q.shards ?? {}) as Record<string, unknown>;
     const pots = (o.pots ?? {}) as Record<string, unknown>, eq = (o.eq ?? {}) as Record<string, unknown>;
+    const qi = num(q.i, 0, 50), lvl = num(o.lvl, 1, 60, 1);
+    // portales de entrenamiento abiertos: solo se guardan los que la misión entregada o el nivel realmente justifican
+    const asked = new Set(Array.isArray(o.u) ? o.u.filter((x): x is string => typeof x === 'string') : []);
+    const u = TRAINING.filter((t) => asked.has(t.id) && trainingUnlocked(t.step, qi, lvl)).map((t) => t.id);
     const out = {
         v: 1, faction, cls,
-        lvl: num(o.lvl, 1, 60, 1), exp: num(o.exp, 0, 1e9), gold: num(o.gold, 0, 1e9),
+        lvl, exp: num(o.exp, 0, 1e9), gold: num(o.gold, 0, 1e9),
         hp: num(o.hp, 1, 100000, 1), mp: num(o.mp, 0, 100000),
         bag: (Array.isArray(o.bag) ? o.bag : []).slice(0, 18).map(cleanItem).filter((x): x is SavedItem => !!x),
         eq: Object.fromEntries(SLOTS.map((s) => [s, cleanItem(eq[s])])),
         q: {
-            i: num(q.i, 0, 50), st: q.st === 'active' || q.st === 'ready' ? q.st : 'new', prog: num(q.prog, 0, 50),
+            i: qi, st: q.st === 'active' || q.st === 'ready' ? q.st : 'new', prog: num(q.prog, 0, 50),
             keys: Object.fromEntries(KEYS.map((k) => [k, num(keys[k], 0, 99)])), shards: Object.fromEntries(KEYS.map((k) => [k, num(shards[k], 0, 99)])),
         },
         pots: { hp: num(pots.hp, 0, 99), mp: num(pots.mp, 0, 99) },
+        u,
     };
     return JSON.stringify(out);
 }

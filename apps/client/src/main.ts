@@ -5,7 +5,7 @@
  * quién ve a quién y el chat. Lo que todavía corre solo en este navegador, como en el prototipo:
  * mobs, combate, hechizos, loot y experiencia (pasan al server en la fase 1b).
  */
-import { buildSolmar, HUBS, cityAt, MOB_TYPES, mobDef, type MobType, type MobDef } from '@fdn/world';
+import { buildSolmar, HUBS, cityAt, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type Portal, type TrainingStep } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import { spellIcon } from './icons.ts';
 import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
@@ -379,6 +379,7 @@ function onMobDamaged(v: { mobId: number; attackerId: bigint; dmg: number; crit:
 }
 function levelUp() {
     while (P.exp >= expNeed()) { P.exp -= expNeed(); P.lvl++; P.hp = maxHp(); P.mp = maxMp(); later(0.1, () => saver.tick(true)); float(P.x, P.y - 0.5, `¡Nivel ${P.lvl}!`, '#ffd24a', true); log(`Subiste a nivel ${P.lvl}.`, true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd24a' }); }
+    refreshUnlocks(true);
 }
 /** El server avisó que un mob murió: lo saca del espejo, deja el cadáver y, si el golpe final fue mío, cobro el botín. */
 /** El server avisa quién está invisible y si yo veo invisibles. */
@@ -956,6 +957,66 @@ function nameTag(name: string, x: number, y: number, col: string, alpha = 1, siz
     ctx.globalAlpha = alpha; ctx.textAlign = 'center'; ctx.font = `600 ${size}px 'Alegreya Sans', system-ui, sans-serif`;
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.strokeText(name, x, y); ctx.fillStyle = col; ctx.fillText(name, x, y); ctx.globalAlpha = 1;
 }
+// ---------- portales de entrenamiento: pad rúnico en el piso, arco de piedra y cartel (todo dibujado acá) ----------
+const TRAIN_PORTALS: Portal[] = (MAP.portals ?? []).filter((q) => !!q.train);
+const ell = (x: number, y: number, rx: number, ry: number) => { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); };
+function drawPortalPad(q: Portal, T: number) {
+    const t = q.train!, open = trainOpen(t), c = iso(q.x + 0.5, q.y + 0.5), pulse = 0.5 + 0.5 * Math.sin(T * 2.2 + q.x * 0.7);
+    ctx.save();
+    ctx.fillStyle = open ? 'rgba(14,16,24,.6)' : 'rgba(22,24,30,.7)'; ell(c.x, c.y, 36, 18); ctx.fill();
+    ctx.strokeStyle = open ? t.col : '#555d68'; ctx.lineWidth = 3; ctx.globalAlpha = open ? 0.9 : 0.8; ell(c.x, c.y, 36, 18); ctx.stroke(); ctx.globalAlpha = 1;
+    // runas en el borde: giran si está abierto
+    for (let j = 0; j < 10; j++) {
+        const a = (j / 10) * Math.PI * 2 + (open && !reduce ? T * 0.5 : 0), cx = Math.cos(a), cy = Math.sin(a);
+        ctx.strokeStyle = open ? t.col : '#454c56'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(c.x + cx * 29, c.y + cy * 14.5); ctx.lineTo(c.x + cx * 34, c.y + cy * 17); ctx.stroke();
+    }
+    if (open) {
+        ctx.globalCompositeOperation = 'lighter';
+        const g = ctx.createRadialGradient(c.x, c.y, 2, c.x, c.y, 36); g.addColorStop(0, t.col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.35 + pulse * 0.25; ctx.fillStyle = g; ell(c.x, c.y, 34, 17); ctx.fill();
+        ctx.globalAlpha = 0.8; ctx.strokeStyle = t.col; ctx.lineWidth = 1.5; ctx.setLineDash([7, 6]); ctx.lineDashOffset = -T * 18; ell(c.x, c.y, 22, 11); ctx.stroke(); ctx.setLineDash([]);
+        const bg = ctx.createLinearGradient(0, c.y, 0, c.y - 78); bg.addColorStop(0, t.col); bg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.16 + pulse * 0.1; ctx.fillStyle = bg;
+        ctx.beginPath(); ctx.moveTo(c.x - 26, c.y); ctx.lineTo(c.x - 20, c.y - 78); ctx.lineTo(c.x + 20, c.y - 78); ctx.lineTo(c.x + 26, c.y); ctx.closePath(); ctx.fill();
+        if (!reduce) for (let j = 0; j < 5; j++) { const k = (T * 0.45 + j * 0.2) % 1; ctx.globalAlpha = (1 - k) * 0.9; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(c.x + Math.sin(j * 5.1 + T) * 16, c.y - 4 - k * 60, 1.6, 0, Math.PI * 2); ctx.fill(); }
+    } else {
+        // sellado: cadenas cruzadas sobre el pad
+        ctx.strokeStyle = '#30353d'; ctx.lineWidth = 3; ctx.setLineDash([5, 3]);
+        ctx.beginPath(); ctx.moveTo(c.x - 26, c.y - 8); ctx.lineTo(c.x + 26, c.y + 8); ctx.moveTo(c.x + 26, c.y - 8); ctx.lineTo(c.x - 26, c.y + 8); ctx.stroke(); ctx.setLineDash([]);
+    }
+    ctx.restore();
+}
+function drawPortalArch(q: Portal, T: number) {
+    const t = q.train!, open = trainOpen(t), c = iso(q.x + 0.5, q.y + 0.5);
+    ctx.save();
+    for (const sx of [-1, 1]) { // dos pilares de piedra con una gema rúnica arriba
+        const px = c.x + sx * 31, py = c.y - 2;
+        ctx.fillStyle = '#5d626b'; ctx.fillRect(px - 5, py - 46, 10, 46); ctx.fillStyle = sx < 0 ? '#7a808a' : '#464b53'; ctx.fillRect(px - (sx < 0 ? 5 : 0), py - 46, 5, 46);
+        ctx.fillStyle = '#6f7580'; ctx.fillRect(px - 7, py - 50, 14, 5); ctx.fillRect(px - 7, py - 2, 14, 4);
+        ctx.fillStyle = open ? t.col : '#3b4048'; ctx.beginPath(); ctx.moveTo(px, py - 62); ctx.lineTo(px + 5, py - 55); ctx.lineTo(px, py - 49); ctx.lineTo(px - 5, py - 55); ctx.closePath(); ctx.fill();
+        if (open) { ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(px, py - 55, 0, px, py - 55, 14); g.addColorStop(0, t.col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.5 + 0.3 * Math.sin(T * 3 + sx); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px, py - 55, 14, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
+    }
+    ctx.strokeStyle = '#6a707a'; ctx.lineWidth = 6; ctx.beginPath(); ctx.ellipse(c.x, c.y - 48, 31, 11, 0, Math.PI, Math.PI * 2); ctx.stroke();
+    if (open) { ctx.strokeStyle = t.col; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.ellipse(c.x, c.y - 48, 31, 11, 0, Math.PI, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
+    else { // candado dorado colgando del arco
+        const lx = c.x, ly = c.y - 52;
+        ctx.strokeStyle = '#c9a54a'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(lx, ly - 4, 5, Math.PI, 0); ctx.stroke();
+        ctx.fillStyle = '#b8902f'; ctx.fillRect(lx - 7, ly - 4, 14, 11); ctx.fillStyle = '#2a1a00'; ctx.beginPath(); ctx.arc(lx, ly, 1.8, 0, Math.PI * 2); ctx.fill(); ctx.fillRect(lx - 0.8, ly, 1.6, 4);
+    }
+    ctx.restore();
+}
+/** Cartel de cada portal: nombre de la zona siempre; requisito y nivel recomendado del portal más cercano. */
+function drawPortalLabels() {
+    let near: Portal | null = null, nd = 5;
+    for (const q of TRAIN_PORTALS) { const d = Math.hypot(q.x + 0.5 - P.x, q.y + 0.5 - P.y); if (d < nd) { nd = d; near = q; } }
+    for (const q of TRAIN_PORTALS) {
+        const d = Math.hypot(q.x + 0.5 - P.x, q.y + 0.5 - P.y); if (d > 16) continue;
+        const t = q.train!, open = trainOpen(t), c = iso(q.x + 0.5, q.y + 0.5);
+        nameTag(t.zone, c.x, c.y - 74, open ? t.col : '#a3abb6', 1, 10);
+        if (q !== near) continue;
+        const qq = QUESTS[t.step], lv = qq ? questLevel(qq) : '';
+        if (open) nameTag(`Abierto · ${lv} · pisá el portal`, c.x, c.y - 87, '#d6efc4', 1, 10);
+        else { nameTag(`Bloqueado: entregá «${t.after}»`, c.x, c.y - 98, '#ffb27a', 1, 10); nameTag(`o llegá al nivel ${t.lvl} (${lv})`, c.x, c.y - 86, '#ffb27a', 1, 10); }
+    }
+}
 function render() {
     const T = now();
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#0d100e'; ctx.fillRect(0, 0, cv.width, cv.height);
@@ -966,6 +1027,7 @@ function render() {
     const minY = Math.max(0, Math.floor(Math.min(c0.y, c1.y, c2.y, c3.y)) - 2), maxY = Math.min(N - 1, Math.ceil(Math.max(c0.y, c1.y, c2.y, c3.y)) + 2);
     for (let y = minY; y <= maxY; y++) for (let x = minX; x <= maxX; x++) { const p = iso(x + 0.5, y + 0.5); drawWorld(tiles[y][x], p.x, p.y); }
     for (const d of decals) { const p = iso(d.x, d.y); drawWorld(d.id, p.x, p.y); }
+    for (const q of TRAIN_PORTALS) if (q.x >= minX - 1 && q.x <= maxX + 1 && q.y >= minY - 1 && q.y <= maxY + 1) drawPortalPad(q, T);
     for (const f of fx) if (f.k === 'click') { const p = iso(f.x, f.y); ctx.globalAlpha = 1 - f.t / 0.6; ctx.strokeStyle = '#d6a445'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(p.x, p.y, 10 + f.t * 30, (10 + f.t * 30) / 2, 0, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
     for (const sc of scorch.slice()) { const age = T - sc.t; if (age > 5) { scorch.splice(scorch.indexOf(sc), 1); continue; } const p = iso(sc.x, sc.y); ctx.globalAlpha = Math.min(1, (5 - age) / 2) * 0.55; const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, sc.r * TW * 0.45); g.addColorStop(0, '#120a05'); g.addColorStop(0.7, 'rgba(30,15,5,.6)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(p.x, p.y, sc.r * TW * 0.45, sc.r * TW * 0.225, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
     if (P.casting) {
@@ -988,6 +1050,7 @@ function render() {
     // objetos por profundidad
     const objs: { d: number; f: () => void }[] = [];
     for (const o of props) if (o.x > minX - 3 && o.x < maxX + 3 && o.y > minY - 3 && o.y < maxY + 3) objs.push({ d: o.d ?? o.x + o.y, f: () => { const p = iso(o.x, o.y); drawWorld(o.id, p.x, p.y); } });
+    for (const q of TRAIN_PORTALS) if (q.x >= minX - 1 && q.x <= maxX + 1 && q.y >= minY - 1 && q.y <= maxY + 1) objs.push({ d: q.x + q.y + 0.5, f: () => drawPortalArch(q, T) });
     for (const b of MAP.buildings) objs.push({ d: b.x + b.y + (b.w + b.h) / 2, f: () => drawBuilding(b) });
     for (const n of MAP.npcs) objs.push({ d: n.x + n.y + 1, f: () => drawNpc(n, T) });
     for (const d of drops) objs.push({ d: d.x + d.y - 0.2, f: () => drawDrop(d, T) });
@@ -1008,6 +1071,7 @@ function render() {
     // nombres arriba de todo
     for (const o of others.values()) { if (unseen(o)) continue; const p = iso(o.x, o.y); nameTag(o.name, p.x, p.y - 70, factionCol(o.profile.split(';')[0]), o.gone ? 0.5 : 1); if (o.maxHp && o.hp !== undefined && o.hp < o.maxHp) { const f = Math.max(0, o.hp / o.maxHp); ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - 17, p.y - 66, 34, 5); ctx.fillStyle = isEnemy(o) ? '#d9443a' : '#58b85a'; ctx.fillRect(p.x - 16, p.y - 65, 32 * f, 3); } }
     { const p = iso(P.x, P.y); nameTag(P.name, p.x, p.y - 70, factionCol(selectedFaction)); }
+    drawPortalLabels();
     for (const n of MAP.npcs) { const p = iso(n.x + 0.5, n.y + 0.5); nameTag(n.name, p.x, p.y - 70, '#9fd36b'); if (n.id === 'capitan' && questMark()) { ctx.font = "700 22px 'Alegreya SC', Georgia, serif"; ctx.textAlign = 'center'; ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#2a1a00'; ctx.lineWidth = 3; ctx.strokeText(questMark(), p.x, p.y - 90 + Math.sin(now() * 4) * 2); ctx.fillText(questMark(), p.x, p.y - 90 + Math.sin(now() * 4) * 2); } }
     for (const p of projs) {
         const s = iso(p.x, p.y); s.y -= p.arc || 0;
@@ -1224,6 +1288,18 @@ const KEY_IDS = Object.keys(KEYDEFS) as KeyId[];
 const Q = { i: 0, st: 'new' as 'new' | 'active' | 'ready', prog: 0, keys: { cripta: 0, foso: 0 } as Record<KeyId, number>, shards: { cripta: 0, foso: 0 } as Record<KeyId, number> };
 const keyLines = () => KEY_IDS.map((k) => (Q.keys[k] ? `<em>${KEYDEFS[k].name}: ${Q.keys[k]}</em>` : '') + (Q.shards[k] ? `<em>${KEYDEFS[k].shard}: ${Q.shards[k]}/${SHARDS_PER_KEY}</em>` : '')).join('');
 const hasKeyStuff = () => KEY_IDS.some((k) => Q.keys[k] || Q.shards[k]);
+// ---------- portales de entrenamiento: se abren con la cadena de misiones (o con el nivel) y el estado se guarda en el personaje ----------
+const UNLOCKED = new Set<string>();
+const trainOpen = (t: TrainingStep) => UNLOCKED.has(t.id) || trainingUnlocked(t.step, Q.i, P.lvl);
+const portalProgress = () => ({ qi: Q.i, lvl: P.lvl, keys: Q.keys as Record<string, number>, unlocked: [...UNLOCKED] });
+function refreshUnlocks(announce: boolean) {
+    let fresh = false;
+    for (const t of TRAINING) if (!UNLOCKED.has(t.id) && trainingUnlocked(t.step, Q.i, P.lvl)) {
+        UNLOCKED.add(t.id); fresh = true;
+        if (announce) { log(`Portal desbloqueado: <b>${t.zone}</b>. Lo tenés en la hilera de portales de tu ciudad.`, true); toast(`Portal desbloqueado: ${t.zone}`); }
+    }
+    if (fresh && announce) later(0.1, () => saver.tick(true));
+}
 function questKill(t: MobType) {
     const q = QUESTS[Q.i]; if (!q || Q.st !== 'active' || q.type !== t) return;
     Q.prog = Math.min(q.n, Q.prog + 1);
@@ -1245,6 +1321,7 @@ function openQuestDlg(n: Npc) {
     else if (Q.st === 'new') { body = `<b>${q.name}</b> <small>${q.zone} · ${questLevel(q)}</small><br>${q.say}<br><small>Recompensa: ${q.xp} exp · ${q.gold} oro${q.shard ? ' · ' + KEYDEFS[q.shard].shard : ''}</small>`; btn = 'Aceptar'; }
     else if (Q.st === 'active') body = `<b>${q.name}</b><br>Todavía te faltan ${q.n - Q.prog} en ${q.zone}.`;
     else { body = `<b>${q.name}</b><br>Buen trabajo. Tomá tu paga.<br><small>${q.xp} exp · ${q.gold} oro${q.shard ? ' · ' + KEYDEFS[q.shard].shard : ''}</small>`; btn = 'Entregar'; }
+    if (q && Q.st !== 'ready') body += `<br><small>Portal de entrenamiento: «${q.zone}» (hilera de portales de la ciudad${trainOpen(TRAINING[Q.i]) ? '' : ', todavía bloqueado'}).</small>`;
     body += `<br><small>Forja: ${SHARDS_PER_KEY} esquirlas (las sueltan los bosses) + oro = 1 llave.</small>`;
     const fg = $('qdForges'); fg.innerHTML = '';
     for (const k of KEY_IDS) {
@@ -1256,7 +1333,7 @@ function openQuestDlg(n: Npc) {
     $('qdBody').innerHTML = body; const b = $('qdBtn'); b.hidden = !btn; b.textContent = btn;
     b.onclick = () => {
         if (Q.st === 'new') { Q.st = 'active'; Q.prog = 0; log(`Misión aceptada: ${q!.name}.`, true); }
-        else if (Q.st === 'ready') { P.exp += q!.xp; P.gold += q!.gold; if (q!.shard) Q.shards[q!.shard]++; log(`Entregaste «${q!.name}»: +${q!.xp} exp, +${q!.gold} oro${q!.shard ? ' y una ' + KEYDEFS[q!.shard].shard : ''}.`, true); Q.i++; Q.st = 'new'; Q.prog = 0; levelUp(); }
+        else if (Q.st === 'ready') { P.exp += q!.xp; P.gold += q!.gold; if (q!.shard) Q.shards[q!.shard]++; log(`Entregaste «${q!.name}»: +${q!.xp} exp, +${q!.gold} oro${q!.shard ? ' y una ' + KEYDEFS[q!.shard].shard : ''}.`, true); Q.i++; Q.st = 'new'; Q.prog = 0; levelUp(); refreshUnlocks(true); }
         renderQuest(); closeShop(); if (n) openQuestDlg(n);
     };
 }
@@ -1311,6 +1388,10 @@ let portalLock = 0;
 function checkPortals() {
     if (!MAP.portals || !connected || P.dead || P.step || now() < portalLock) return;
     const p = MAP.portals.find((q) => q.x === P.cell.x && q.y === P.cell.y); if (!p) return;
+    if (p.train) {
+        const why = portalGate(p, portalProgress());
+        if (why) { portalLock = now() + 2; toast(`Portal bloqueado: ${p.train.zone}`); log(why, true); return; }
+    }
     if (p.key) {
         const kid = p.key as KeyId, kd = KEYDEFS[kid];
         if (Q.keys[kid] < 1) { portalLock = now() + 2; toast(`La escalera está sellada: necesitás una ${kd.name}.`); log(`La escalera está sellada. Forjá una ${kd.name} con el Capitán: ${SHARDS_PER_KEY} esquirlas (las sueltan los bosses) y ${kd.gold} de oro.`, true); return; }
@@ -1362,7 +1443,7 @@ function buildSave(): CharSave {
     return {
         v: 1, faction: selectedFaction, cls: CLS.id, lvl: P.lvl, exp: Math.floor(P.exp), gold: P.gold, hp: Math.max(1, Math.round(P.hp)), mp: Math.round(P.mp),
         bag: P.bag.map(saveItem), eq: Object.fromEntries((['arma', 'armadura', 'cabeza', 'anillo'] as const).map((sl) => [sl, P.eq[sl] ? saveItem(P.eq[sl]!) : null])),
-        q: { i: Q.i, st: Q.st, prog: Q.prog, keys: { ...Q.keys }, shards: { ...Q.shards } }, pots: { hp: pots.hp, mp: pots.mp },
+        q: { i: Q.i, st: Q.st, prog: Q.prog, keys: { ...Q.keys }, shards: { ...Q.shards } }, pots: { hp: pots.hp, mp: pots.mp }, u: [...UNLOCKED],
     };
 }
 function applySave(sv: CharSave) {
@@ -1372,6 +1453,7 @@ function applySave(sv: CharSave) {
     Q.i = sv.q.i; Q.st = sv.q.st; Q.prog = sv.q.prog;
     for (const k of KEY_IDS) { Q.keys[k] = sv.q.keys?.[k] ?? 0; Q.shards[k] = sv.q.shards?.[k] ?? 0; }
     pots.hp = sv.pots.hp; pots.mp = sv.pots.mp;
+    UNLOCKED.clear(); for (const id of sv.u ?? []) if (TRAINING.some((t) => t.id === id)) UNLOCKED.add(id);
     refreshLook(); P.hp = Math.min(maxHp(), sv.hp); P.mp = Math.min(maxMp(), sv.mp);
     renderBag(); renderQuest(); renderPots();
 }
@@ -1406,7 +1488,7 @@ $('loginForm').addEventListener('submit', async (e) => {
     catch (err) { $('loginErr').textContent = `${(err as Error).message} ¿Está corriendo el server (pnpm dev)?`; btn.disabled = false; }
 });
 function enterWorld(name: string) {
-    setClass(selectedClass); if (pendingSave) applySave(pendingSave); connected = true; P.name = name; lookKey = ''; refreshLook(); sendProfile(); $('meName').textContent = name;
+    setClass(selectedClass); if (pendingSave) applySave(pendingSave); refreshUnlocks(false); connected = true; P.name = name; lookKey = ''; refreshLook(); sendProfile(); $('meName').textContent = name;
     $('login').hidden = true; ($('loginForm').querySelector('button') as HTMLButtonElement).disabled = false;
     cv.focus({ preventScroll: true });
     saver.start();
@@ -1414,7 +1496,8 @@ function enterWorld(name: string) {
     // cada facción arranca en su ciudad (también si el guardado te dejó dentro de la del otro bando)
     const hub = HUBS[selectedFaction], here = cityAt(P.cell.x, P.cell.y);
     if (hub && (!welcomeBack || (here && here.faction !== selectedFaction))) net.send({ $case: 'playerTeleportRequested', value: { x: hub.x, y: hub.y } });
-    log(selectedFaction === 'vhar' ? 'Bienvenido a la Ciudad de Vhar. La puerta del sur lleva a las tierras de Solmar: goblins al sureste, zombis en el pantano, esqueletos en el cementerio.' : 'Bienvenido a la Ciudad de Solmar. Goblins al sureste, zombis en el pantano del este, esqueletos en el cementerio.', true);
+    log(selectedFaction === 'vhar' ? 'Bienvenido a la Ciudad de Vhar. La puerta del sur lleva a las tierras de Solmar.' : 'Bienvenido a la Ciudad de Solmar.', true);
+    log('Al norte de la ciudad hay una hilera de portales de entrenamiento, uno por zona. El primero ya está abierto; los demás se abren al entregar las misiones del Capitán (o subiendo de nivel).', true);
     log('Tocá un mob para atacarlo. Apretá un hechizo (1–4), esperá que cargue y hacé clic en el objetivo. Enter para chatear.');
 }
 
@@ -1439,7 +1522,7 @@ async function boot() {
     refreshLook();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, openShop, toScreen, give: (n: number) => { for (let i = 0; i < n; i++) P.bag.push(rollItem(1 + i)); renderBag(); } });
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5) });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, TRAIN_PORTALS, trainOpen, refreshUnlocks, levelUp, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();
     requestAnimationFrame(frame);

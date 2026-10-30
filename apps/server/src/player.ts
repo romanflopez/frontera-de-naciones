@@ -49,6 +49,9 @@ export class Player {
     lastPvpMs = 0;
     /** Stats de combate sacados del último guardado validado, y límites del PvP. */
     combat: CombatStats = { ...DEFAULT_STATS };
+    /** Progreso del último guardado validado, para decidir si un portal deja pasar (misiones entregadas, nivel, llaves, portales abiertos). */
+    prog: { qi: number; lvl: number; keys: Record<string, number>; unlocked: string[] } = { qi: 0, lvl: 1, keys: {}, unlocked: [] };
+    joinedAt = Date.now();
     pvp = new PvpLimiter();
     status = createDefaultStatus();
     disconnected = false;
