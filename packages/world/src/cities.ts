@@ -73,7 +73,6 @@ export function extendCities(w: WorldMap): WorldMap {
         fenceV(18, 1, 22, [8, 9, 15, 16]); fenceH(1, 17, 22, [7, 8]);
         clearStrip(19, 8, 22, 9); clearStrip(19, 15, 22, 16); clearStrip(7, 23, 8, 26);
         // plaza central
-        w.decals.push({ id: 265, x: 8, y: 8 });
         prop(102, 4, 6); prop(102, 13, 10); prop(102, 4, 11); prop(137, 12, 6);
         // calle norte: dos cabañas y la casa del Capitán; casa del joyero al este
         cabinA(6, 4); cabinA(11, 4);
@@ -121,7 +120,6 @@ export function extendCities(w: WorldMap): WorldMap {
         }
         // muralla de vallas con una puerta al sur (la que conecta con el resto del mundo)
         fenceH(c.x0, c.x1, c.y0); fenceH(c.x0, c.x1, c.y1, [77, 78, 79]); fenceV(c.x0, c.y0 + 1, c.y1 - 1); fenceV(c.x1, c.y0 + 1, c.y1 - 1);
-        w.decals.push({ id: 264, x: 78.5, y: 13 });
         // plaza: braseros
         prop(102, 73, 9); prop(102, 84, 9); prop(102, 73, 16); prop(102, 84, 16); prop(103, 85, 13);
         // barrio oeste: casas, armadurero (toldo) y la forja del armero
