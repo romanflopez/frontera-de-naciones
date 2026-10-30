@@ -5,7 +5,7 @@
  * quién ve a quién y el chat. Lo que todavía corre solo en este navegador, como en el prototipo:
  * mobs, combate, hechizos, loot y experiencia (pasan al server en la fase 1b).
  */
-import { buildSolmar, HUBS, cityAt, MOBS, MOB_TYPES, type MobType, type MobDef } from '@fdn/world';
+import { buildSolmar, HUBS, cityAt, MOB_TYPES, mobDef, type MobType, type MobDef } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import { spellIcon } from './icons.ts';
 import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
@@ -192,7 +192,7 @@ function syncMobs(list: { id: number; type: number; zone: number; x: number; y: 
         let m = mobMap.get(s.id);
         if (!m) {
             const type = MOB_TYPES[s.type], z = ZONES[s.zone]; if (!type || !z) continue;
-            const d = MOBS[type];
+            const d = mobDef(type, z);
             m = { ...d, sprite: type, zone: z, x: s.x, y: s.y, sx: s.x, sy: s.y, buf: [], hpMax: d.hp, hp: s.hp, busy: 0, par: 0, parT: 0, imm: 0, poison: 0, dir: rint(0, 7), moving: false, flash: 0, one: null, t0: R() * 5, id: s.id };
             mobs.push(m); mobMap.set(s.id, m);
         }
@@ -398,7 +398,7 @@ function onMobDied(v: { mobId: number; killerId: bigint; x: number; y: number; t
     if (v.killerId === myId) rewardKill(type, v.x, v.y, z, srv);
 }
 function rewardKill(type: MobType, x: number, y: number, zone: Zone, srv?: SrvLoot) {
-    const m = { ...MOBS[type], sprite: type, x, y, zone };
+    const m = { ...mobDef(type, zone), sprite: type, x, y, zone };
     const t = totals(), gain = Math.round(m.exp * (1 + t.exp / 100));
     P.exp += gain; float(m.x, m.y - 0.3, `+${gain} exp`, '#c9a227');
     if (m.boss) {
@@ -1062,7 +1062,7 @@ function render() {
     g.addColorStop(0, 'rgba(6,8,12,0)'); g.addColorStop(1, 'rgba(6,8,12,.82)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     if (inDungeon(P.x, P.y)) { ctx.fillStyle = 'rgba(12,8,24,.28)'; ctx.fillRect(0, 0, W, H); }
     ctx.textAlign = 'center';
-    const zn = isSafe(P.x, P.y) ? null : ZONES.find((z) => near(P.x, P.y, z, z.r + 2)), zl = zn ? MOBS[zn.type].lvl : 0;
+    const zn = isSafe(P.x, P.y) ? null : ZONES.find((z) => near(P.x, P.y, z, z.r + 2)), zl = zn ? mobDef(zn.type, zn).lvl : 0;
     const zone = isSafe(P.x, P.y) ? `${cityAt(P.x, P.y)?.name ?? 'Zona segura'} · zona segura` : zn ? `${zn.name} · Nv ${Math.max(1, zl - 1)}–${zl + 1}` : '';
     const danger = zl - P.lvl; // verde: tranquila · dorado: a tu nivel · rojo: te pasa por mucho
     if (zone) { ctx.font = "600 13px 'Alegreya SC', Georgia, serif"; ctx.fillStyle = !zn ? 'rgba(214,164,69,.9)' : danger >= 4 ? '#ff6b5a' : danger >= 1 ? '#ffb347' : danger >= -3 ? 'rgba(214,164,69,.9)' : '#8fd18b'; ctx.fillText(zone + (zn && danger >= 4 ? ' · ¡peligrosa!' : ''), W / 2, H - 98); }
@@ -1236,7 +1236,7 @@ function renderQuest() {
     if (!q || Q.st === 'new') { el.innerHTML = `<b>Mazmorras</b>${keyLines()}`; return; }
     el.innerHTML = `<b>${q.name}</b><span>${Q.st === 'ready' ? 'Volvé con el Capitán' : `${q.zone}: ${Q.prog}/${q.n}`}</span>${keyLines()}`;
 }
-function questLevel(q: Quest) { const l = MOBS[q.type].lvl; return `Nv ${Math.max(1, l - 1)}–${l + 1}`; }
+function questLevel(q: Quest) { const l = mobDef(q.type, ZONES.find((z) => z.name === q.zone && z.type === q.type)).lvl; return `Nv ${Math.max(1, l - 1)}–${l + 1}`; }
 function openQuestDlg(n: Npc) {
     const q = QUESTS[Q.i], d = $('qdlg'); shopNpc = n; talkNpc = null;
     $('qdName').textContent = n.name; d.hidden = false;

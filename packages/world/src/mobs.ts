@@ -20,9 +20,33 @@ export const MOBS: Record<MobType, MobDef> = {
     antlion: { name: 'Hormiga león', lvl: 4, hp: 115, dmg: [9, 14], spd: 1.5, ref: 2.0, exp: 45, hitR: 24, head: 40, atk: 1.5 },
     skeleton_mage: { name: 'Esqueleto hechicero', lvl: 5, hp: 130, dmg: [12, 18], spd: 1.3, ref: 2.1, exp: 58, hitR: 22, head: 55, atk: 1.6 },
     fire_ant: { name: 'Hormiga de fuego', lvl: 6, hp: 190, dmg: [13, 20], spd: 1.7, ref: 2.0, exp: 80, hitR: 24, head: 42, atk: 1.3 },
-    wyvern: { name: 'Wyvern', lvl: 7, hp: 300, dmg: [16, 24], spd: 1.6, ref: 2.3, exp: 130, hitR: 32, head: 90, atk: 1.7 },
+    wyvern: { name: 'Wyvern', lvl: 7, hp: 240, dmg: [16, 24], spd: 1.6, ref: 2.3, exp: 101, hitR: 32, head: 90, atk: 1.7 },
     minotaur: { name: 'Minotauro (mini-boss)', lvl: 9, hp: 1200, dmg: [22, 34], spd: 1.4, ref: 2.4, exp: 560, hitR: 40, head: 130, atk: 1.9 },
 };
 
 /** Segundos hasta que reaparece un mob muerto. */
 export const mobRespawnSecs = (t: MobType): number => MOBS[t].boss?.respawn ?? (t === 'minotaur' ? 120 : 22);
+
+/** Curvas de referencia por nivel (mob común): vida, daño promedio por golpe y exp por kill. Los tipos base ya las siguen; sirven para reescalar un tipo a otro nivel. */
+export const mobHpCurve = (l: number): number => 29 + 10.5 * l + 2.75 * l * l;
+export const mobDmgCurve = (l: number): number => 2.5 * l + 3;
+/** Exp que pide subir del nivel `l` al siguiente (misma fórmula que el cliente): un mob común da ~1/11 de eso a su propio nivel. */
+export const expToLevel = (l: number): number => Math.round(60 * Math.pow(l, 1.5));
+
+const scaled = new Map<string, MobDef>();
+/**
+ * Definición del mob en una zona: si la zona fija `lvl`, vida, daño y exp se reescalan sobre las curvas desde el nivel base del tipo
+ * (mismo sprite, mismo comportamiento). Los bosses no se reescalan: su nivel es el del tipo.
+ */
+export function mobDef(type: MobType, zone?: { lvl?: number }): MobDef {
+    const base = MOBS[type], L = zone?.lvl;
+    if (!L || L === base.lvl || base.boss) return base;
+    const key = type + ':' + L;
+    let d = scaled.get(key);
+    if (!d) {
+        const kh = mobHpCurve(L) / mobHpCurve(base.lvl), kd = mobDmgCurve(L) / mobDmgCurve(base.lvl), ke = expToLevel(L) / expToLevel(base.lvl);
+        d = { ...base, lvl: L, hp: Math.round(base.hp * kh), dmg: [Math.round(base.dmg[0] * kd), Math.round(base.dmg[1] * kd)], exp: Math.round(base.exp * ke) };
+        scaled.set(key, d);
+    }
+    return d;
+}

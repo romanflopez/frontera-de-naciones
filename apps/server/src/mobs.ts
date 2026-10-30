@@ -4,7 +4,7 @@
  */
 import { rollMobDrop, RARITY_INDEX } from './loot/itemGenerator.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
-import { MOBS, MOB_TYPES, mobRespawnSecs, type MobType, type WorldMap, type Zone } from '@fdn/world';
+import { MOB_TYPES, mobDef, mobRespawnSecs, type MobDef, type MobType, type WorldMap, type Zone } from '@fdn/world';
 import * as M from './messages.ts';
 import type { Player } from './player.ts';
 
@@ -23,7 +23,7 @@ export interface MobHost {
 }
 
 interface SimMob {
-    id: number; type: MobType; typeIdx: number; zone: Zone; zoneIdx: number;
+    id: number; type: MobType; def: MobDef; typeIdx: number; zone: Zone; zoneIdx: number;
     x: number; y: number; hp: number; hpMax: number;
     state: 'idle' | 'chase' | 'return'; target: bigint | null; lastAttacker: bigint | null;
     wx: number; wy: number; wait: number; nextAtk: number; nextSp: number; busy: number;
@@ -62,9 +62,9 @@ export class MobSim {
         for (let i = 0; i < 40; i++) {
             const x = Math.floor(z.x + (Math.random() * 2 - 1) * z.r), y = Math.floor(z.y + (Math.random() * 2 - 1) * z.r);
             if (!this.walk(x, y) || this.map.safe[y]?.[x]) continue;
-            const d = MOBS[z.type], T = this.now(), id = this.nextId++;
+            const d = mobDef(z.type, z), T = this.now(), id = this.nextId++;
             this.mobs.set(id, {
-                id, type: z.type, typeIdx: MOB_TYPES.indexOf(z.type), zone: z, zoneIdx: zi, x: x + 0.5, y: y + 0.5, hp: d.hp, hpMax: d.hp,
+                id, type: z.type, def: d, typeIdx: MOB_TYPES.indexOf(z.type), zone: z, zoneIdx: zi, x: x + 0.5, y: y + 0.5, hp: d.hp, hpMax: d.hp,
                 state: 'idle', target: null, lastAttacker: null, wx: x + 0.5, wy: y + 0.5, wait: Math.random() * 2, nextAtk: 0, nextSp: T + 4, busy: 0,
                 par: 0, imm: 0, poison: 0, poisonTick: 0, moving: false, dead: false,
             });
@@ -113,7 +113,7 @@ export class MobSim {
                 if (m.hp <= 0) { this.kill(m, killer ?? null); continue; }
             }
             if (m.par > T) continue;
-            const d = MOBS[m.type], home = { x: m.zone.x + 0.5, y: m.zone.y + 0.5 };
+            const d = m.def, home = { x: m.zone.x + 0.5, y: m.zone.y + 0.5 };
             if (m.state === 'idle') {
                 const near = this.nearestPlayer(m, 4.5);
                 if (near) this.aggro(m, near);
@@ -164,7 +164,7 @@ export class MobSim {
 
     /** Habilidad de boss: aviso, 0,8 s de carga y recién ahí pega a quien esté dentro del radio. */
     private special(m: SimMob, T: number) {
-        const sp = MOBS[m.type].boss!.special;
+        const sp = m.def.boss!.special;
         m.nextSp = T + sp.every; m.busy = T + 1.1; m.nextAtk = Math.max(m.nextAtk, T + 1.4);
         this.broadcastNear(m, M.mobSpecialEvent(m.id, 0, m.x, m.y));
         this.host.after(800, () => {
@@ -173,7 +173,7 @@ export class MobSim {
             for (const p of this.host.nearby(m.x, m.y)) {
                 if (!this.eligible(p) || Math.hypot(m.x - (p.posX + 0.5), m.y - (p.posY + 0.5)) > sp.r) continue;
                 const dmg = sp.dmg ? rint(sp.dmg[0], sp.dmg[1]) : 0, stun = sp.stun ? this.host.stun(p, sp.stun) : 0;
-                p.send(M.mobHitPlayer(m.id, dmg, stun)); if (dmg > 0) this.host.hurt(p, dmg, MOBS[m.type].name);
+                p.send(M.mobHitPlayer(m.id, dmg, stun)); if (dmg > 0) this.host.hurt(p, dmg, m.def.name);
             }
         });
     }
@@ -182,7 +182,7 @@ export class MobSim {
 
     private kill(m: SimMob, killer: Player | null) {
         m.dead = true; this.mobs.delete(m.id);
-        if (killer) { const it = rollMobDrop(MOBS[m.type].lvl, MOBS[m.type].boss?.minRar ?? 0); killer.send(M.lootRoll(m.id, RARITY_INDEX[it.rarity], it.baseSeed, it.attributes)); }
+        if (killer) { const it = rollMobDrop(m.def.lvl, m.def.boss?.minRar ?? 0); killer.send(M.lootRoll(m.id, RARITY_INDEX[it.rarity], it.baseSeed, it.attributes)); }
         this.broadcastNear(m, M.mobDied(m.id, killer ? killer.playerId : 0n, m.x, m.y, m.typeIdx, m.zoneIdx));
         this.host.after(mobRespawnSecs(m.type) * 1000, () => this.spawn(m.zone, m.zoneIdx));
     }

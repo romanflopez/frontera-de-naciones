@@ -73,12 +73,15 @@ export function extendAshlands(w: WorldMap): WorldMap {
     for (let y = 55; y <= 64; y++) for (let x = 31; x <= 35; x++) { w.blocked[y][x] = false; w.safe[y][x] = false; if (w.tiles[y][x] === 0) w.tiles[y][x] = sbs(SBS.dry1, [12, 16, 17][(x + y) % 3]); }
     for (let y = 60; y <= 64; y++) for (const x of [30, 36]) { if (w.tiles[y][x] === 0) w.tiles[y][x] = pickTile(ROCKY); prop(pick(ROCKS), x, y, true); }
     // de oeste a este suben el nivel y el peligro
+    // niveles: 6 en la entrada del corredor hasta 11 junto a la escalera del foso (el minotauro es el mini-boss de la región)
     for (const z of [
         { type: 'fire_ant', x: 36, y: 72, r: 5, n: 4, name: 'Camino de brasas' },
+        { type: 'skeleton', x: 24, y: 84, r: 3, n: 3, name: 'Forja apagada', lvl: 6 },
         { type: 'wyvern', x: 52, y: 70, r: 4, n: 3, name: 'Nidal de ceniza' },
-        { type: 'skeleton_mage', x: 62, y: 83, r: 5, n: 4, name: 'Osario ardiente' },
+        { type: 'skeleton_mage', x: 62, y: 83, r: 5, n: 4, name: 'Osario ardiente', lvl: 8 },
         { type: 'minotaur', x: 76, y: 72, r: 3, n: 2, name: 'Cantera del minotauro' },
-        { type: 'golem', x: 22, y: 84, r: 2, n: 1, name: 'Forja apagada' },
+        { type: 'fire_ant', x: 68, y: 88, r: 3, n: 3, name: 'Brasas profundas', lvl: 10 },
+        { type: 'wyvern', x: 80, y: 87, r: 2, n: 2, name: 'Guardia del foso', lvl: 11 },
     ]) w.zones.push(z as Zone);
 
     // escalera sellada a la Cámara del foso, entre dos columnas
@@ -134,8 +137,8 @@ export function extendAshlands(w: WorldMap): WorldMap {
     const exit = { x: 2 + OX, y: 12 + OY }, arriveInFoso = { x: 3 + OX, y: 14 + OY };
     prop(kenney('stairsSpiral', 'S'), exit.x, exit.y, false, exit.x + exit.y + 0.2);
 
-    w.zones.push({ type: 'skeleton_mage', x: 16 + OX, y: 13 + OY, r: 3, n: 4, name: 'Cámara del foso' } as Zone);
-    w.zones.push({ type: 'skeleton_mage', x: 27 + OX, y: 8 + OY, r: 2, n: 2, name: 'Cámara del foso' } as Zone);
+    w.zones.push({ type: 'skeleton_mage', x: 16 + OX, y: 13 + OY, r: 3, n: 4, name: 'Cámara del foso', lvl: 11 } as Zone);
+    w.zones.push({ type: 'skeleton_mage', x: 27 + OX, y: 8 + OY, r: 2, n: 2, name: 'Cámara del foso', lvl: 11 } as Zone);
     w.zones.push({ type: 'demonio', x: 27 + OX, y: 11 + OY, r: 1, n: 1, name: 'Cámara del foso' } as Zone);
 
     w.portals = [

@@ -21,7 +21,8 @@ export interface Prop { id: number; x: number; y: number; /** profundidad al ord
 export interface Building { id: string; x: number; y: number; w: number; h: number }
 /** Personaje no jugador quieto; ocupa su celda. dir: 0 = oeste, en sentido horario (6 = sur). */
 export interface Npc { id: string; name: string; x: number; y: number; dir: number }
-export interface Zone { type: MobType; x: number; y: number; r: number; n: number; name: string }
+/** `lvl` (opcional) fija el nivel de los mobs de la zona; si no está, vale el del tipo. Ver `mobDef`. */
+export interface Zone { type: MobType; x: number; y: number; r: number; n: number; name: string; lvl?: number }
 
 export interface WorldMap {
     size: number;

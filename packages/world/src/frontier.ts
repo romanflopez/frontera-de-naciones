@@ -110,7 +110,7 @@ export function extendSolmar(w: WorldMap): WorldMap {
         }
     }
     // el borde pegado al portón es la frontera vieja del mapa (y = 39): ya está abierta arriba
-    w.zones.push({ type: 'goblin', x: 36, y: 51, r: 6, n: 4, name: 'Páramo reseco' } as Zone);
+    w.zones.push({ type: 'antlion', x: 36, y: 51, r: 6, n: 4, name: 'Páramo reseco', lvl: 5 } as Zone);
 
     // 4) escalera de caracol a la cripta, entre dos columnas
     prop(kenney('stairsSpiral', 'S'), portalIn.x, portalIn.y, false);
@@ -171,9 +171,9 @@ export function extendSolmar(w: WorldMap): WorldMap {
     const exit = { x: 4 + OX, y: 13 + OY }, arriveInCrypt = { x: 5 + OX + 0, y: 16 + OY };
     prop(kenney('stairsSpiral', 'S'), exit.x, exit.y, false, exit.x + exit.y + 0.2);
 
-    w.zones.push({ type: 'skeleton', x: 17 + OX, y: 5 + OY, r: 3, n: 3, name: 'Cripta olvidada' } as Zone);
-    w.zones.push({ type: 'skeleton', x: 6 + OX, y: 5 + OY, r: 2, n: 2, name: 'Cripta olvidada' } as Zone);
-    w.zones.push({ type: 'zombie', x: 17 + OX, y: 15 + OY, r: 2, n: 2, name: 'Cripta olvidada' } as Zone);
+    w.zones.push({ type: 'skeleton', x: 17 + OX, y: 5 + OY, r: 3, n: 3, name: 'Cripta olvidada', lvl: 6 } as Zone);
+    w.zones.push({ type: 'skeleton', x: 6 + OX, y: 5 + OY, r: 2, n: 2, name: 'Cripta olvidada', lvl: 6 } as Zone);
+    w.zones.push({ type: 'zombie', x: 17 + OX, y: 15 + OY, r: 2, n: 2, name: 'Cripta olvidada', lvl: 7 } as Zone);
     // jefe final de la cripta: suelta la esquirla del foso
     w.zones.push({ type: 'barbaro', x: 17 + OX, y: 4 + OY, r: 1, n: 1, name: 'Cripta olvidada' } as Zone);
 
