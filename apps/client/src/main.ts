@@ -10,6 +10,7 @@ import { Net, serverUrl, type ServerPayload } from './net.ts';
 import { spellIcon } from './icons.ts';
 import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
 import { itemIcon } from './itemicons.ts';
+import { initLoginUI } from './loginui.ts';
 const ico = (it: { look?: string; slot: string; rar: { c: string; k: number } }) => `<img class="iico" alt="" src="${itemIcon(it.look, it.slot, it.rar.c, it.rar.k)}">`;
 
 // ---------- utilidades ----------
@@ -1490,16 +1491,18 @@ function storedId(name: string): string {
     return id;
 }
 try { const f = localStorage.getItem('fdn:faction'); if (FACTIONS.some((x) => x.id === f)) selectedFaction = f!; } catch { /* sin almacenamiento */ }
-$('factions').innerHTML = FACTIONS.map((f) => `<button type="button" class="fac" data-id="${f.id}" style="--c:${f.col}"><b>${f.name}</b><small>${f.desc}</small></button>`).join('');
-function markFaction() { $('factions').querySelectorAll<HTMLElement>('.fac').forEach((b) => b.classList.toggle('on', b.dataset.id === selectedFaction)); }
-$('factions').addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest<HTMLElement>('.fac'); if (!b) return; selectedFaction = b.dataset.id!; try { localStorage.setItem('fdn:faction', selectedFaction); } catch { /* sin almacenamiento */ } markFaction(); });
-markFaction();
 let selectedClass = 'guerrero';
 try { const c = localStorage.getItem('fdn:class'); if (CLASSES.some((x) => x.id === c && !x.hidden)) selectedClass = c!; } catch { /* sin almacenamiento */ }
-$('classes').innerHTML = CLASSES.filter((c) => !c.hidden).map((c) => `<button type="button" class="cls" data-id="${c.id}"><b>${c.name}</b><small>${c.desc}</small></button>`).join('');
-function markClass() { $('classes').querySelectorAll<HTMLElement>('.cls').forEach((b) => b.classList.toggle('on', b.dataset.id === selectedClass)); }
-$('classes').addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest<HTMLElement>('.cls'); if (!b) return; selectedClass = b.dataset.id!; try { localStorage.setItem('fdn:class', selectedClass); } catch { /* sin almacenamiento */ } markClass(); });
-markClass();
+// pantallas de login / selección / clase / facción / creación (ver loginui.ts)
+const flow = initLoginUI({
+    classes: CLASSES.filter((c) => !c.hidden), factions: FACTIONS, spellName: (id) => LIB[id]?.name ?? id,
+    cityName: (f) => HUBS[f] ? (cityAt(HUBS[f].x, HUBS[f].y)?.name ?? 'Ciudad de ' + f) : f,
+    get: () => ({ cls: selectedClass, faction: selectedFaction }),
+    set: (p) => {
+        if (p.cls) { selectedClass = p.cls; try { localStorage.setItem('fdn:class', selectedClass); } catch { /* sin almacenamiento */ } }
+        if (p.faction) { selectedFaction = p.faction; try { localStorage.setItem('fdn:faction', selectedFaction); } catch { /* sin almacenamiento */ } }
+    },
+});
 // ---------- guardado en la cuenta (ver persist.ts) ----------
 let pendingSave: CharSave | null = null, welcomeBack = false;
 const saveItem = (it: Item): SavedItem => ({ n: it.name, r: it.rar.k, a: it.attrs.map((a) => ({ id: a.id, v: a.v })) });
@@ -1528,7 +1531,7 @@ function applySave(sv: CharSave) {
 const saver = new Saver(buildSave, (data) => net.send({ $case: 'saveCharacterRequest', value: { data } }));
 function showLogin(error = '') {
     connected = false;
-    $('login').hidden = false; $('loginErr').textContent = error;
+    $('login').hidden = false; $('loginErr').textContent = error; flow.show('login');
     const nameIn = $('nameIn') as HTMLInputElement;
     try { nameIn.value ||= localStorage.getItem('fdn:lastName') ?? ''; } catch { /* sin almacenamiento */ }
     nameIn.focus();
@@ -1537,28 +1540,43 @@ $('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = ($('nameIn') as HTMLInputElement).value.trim(), password = ($('passIn') as HTMLInputElement).value;
     if (!name) return;
-    const btn = $('loginForm').querySelector('button')!;
+    const regErr = flow.checkRegister(); if (regErr) { $('loginErr').textContent = regErr; return; }
+    const btn = $('loginBtn') as HTMLButtonElement, auto = autoEnter; autoEnter = false;
     btn.disabled = true; $('loginErr').textContent = 'Conectando…';
     try { localStorage.setItem('fdn:lastName', name); } catch { /* sin almacenamiento */ }
     pendingSave = null; welcomeBack = false;
-    net.onMessage = (m) => { if (m.$case === 'characterLoaded') { pendingSave = m.value.exists ? parseSave(m.value.data) : null; if (pendingSave) { selectedClass = pendingSave.cls; selectedFaction = pendingSave.faction; welcomeBack = true; } return; } onServer(m); if (m.$case === 'initialGameWorldState' && !connected) enterWorld(name); };
+    net.onMessage = (m) => { if (m.$case === 'characterLoaded') { pendingSave = m.value.exists ? parseSave(m.value.data) : null; if (pendingSave) { selectedClass = pendingSave.cls; selectedFaction = pendingSave.faction; welcomeBack = true; } return; } onServer(m); if (m.$case === 'initialGameWorldState' && !connected && !inFlow) { if (auto) enterWorld(name); else startFlow(name); } };
     let tries = 0;
     net.onClose = (reason) => {
         const was = connected; saver.stop(); others.clear();
+        inFlow = false;
+        if (backToLogin) { backToLogin = false; showLogin(); btn.disabled = false; return; }
         if (leaving) { leaving = false; connected = false; showLogin('Saliste del juego.'); btn.disabled = false; return; }
         // si se cortó sin querer, reintenta solo unos segundos (el server te guarda el lugar 60 s)
         if (was && tries < 6 && !/ya está conectado|autentic|contraseña|incorrect/i.test(reason)) {
-            tries++; connected = false; $('login').hidden = false; $('loginErr').textContent = `Se cortó la conexión. Reconectando (${tries}/6)…`;
-            setTimeout(() => { if (!connected) void ($('loginForm') as HTMLFormElement).requestSubmit(); }, 1500); return;
+            tries++; connected = false; showLogin(`Se cortó la conexión. Reconectando (${tries}/6)…`);
+            setTimeout(() => { if (!connected) autoEnter = true, void ($('loginForm') as HTMLFormElement).requestSubmit(); }, 1500); return;
         }
         showLogin(was ? `Se cortó la conexión: ${reason}` : reason); btn.disabled = false;
     };
     try { await net.connect(serverUrl(), storedId(name), name, password); }
     catch (err) { $('loginErr').textContent = `${(err as Error).message} ¿Está corriendo el server (pnpm dev)?`; btn.disabled = false; }
 });
+let autoEnter = false, inFlow = false, backToLogin = false;
+/** Ya conectado y con el mundo cargado: muestra la selección (cuenta con personaje) o el flujo clase → facción → crear. */
+function startFlow(name: string) {
+    inFlow = true;
+    const here = cityAt(P.cell.x, P.cell.y);
+    flow.start({
+        name, saved: pendingSave ? { cls: pendingSave.cls, faction: pendingSave.faction, lvl: pendingSave.lvl } : null,
+        zone: here?.name ?? ZONES.find((z) => dist(P, z) <= z.r + 2)?.name ?? 'Tierras de la Frontera',
+        onPlay: () => { inFlow = false; enterWorld(name); },
+        onBack: () => { if (net.open) { backToLogin = true; net.close(); } else { inFlow = false; showLogin(); ($('loginBtn') as HTMLButtonElement).disabled = false; } },
+    });
+}
 function enterWorld(name: string) {
     setClass(selectedClass); if (pendingSave) applySave(pendingSave); refreshUnlocks(false); connected = true; P.name = name; lookKey = ''; refreshLook(); sendProfile();
-    $('login').hidden = true; ($('loginForm').querySelector('button') as HTMLButtonElement).disabled = false;
+    $('login').hidden = true; ($('loginBtn') as HTMLButtonElement).disabled = false;
     cv.focus({ preventScroll: true });
     saver.start();
     if (welcomeBack) log(`Bienvenido de vuelta, ${name}. Nivel ${P.lvl}.`, true);
