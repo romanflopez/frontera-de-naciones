@@ -79,7 +79,7 @@ const RAR: Rarity[] = [
     { n: 'Raro', c: '#ffd24a', k: 2, p: 0.07 },
     { n: 'Épico', c: '#c77dff', k: 3, p: 0.01 },
 ];
-type AttrId = 'crit' | 'aspd' | 'leech' | 'hp' | 'mp' | 'mag' | 'exp' | 'poison' | 'rpar';
+type AttrId = 'crit' | 'aspd' | 'leech' | 'hp' | 'mp' | 'mag' | 'exp' | 'poison' | 'rpar' | 'fres' | 'ires';
 const ATTRS: { id: AttrId; r: [number, number]; f: (v: number) => string }[] = [
     { id: 'crit', r: [2, 6], f: (v) => `+${v}% crítico` },
     { id: 'aspd', r: [4, 12], f: (v) => `+${v}% velocidad de ataque` },
@@ -90,6 +90,8 @@ const ATTRS: { id: AttrId; r: [number, number]; f: (v: number) => string }[] = [
     { id: 'exp', r: [3, 10], f: (v) => `+${v}% exp de caza` },
     { id: 'poison', r: [6, 16], f: (v) => `${v}% chance de veneno` },
     { id: 'rpar', r: [5, 15], f: (v) => `+${v}% resistencia a parálisis` },
+    { id: 'fres', r: [5, 15], f: (v) => `+${v}% resistencia al fuego` },
+    { id: 'ires', r: [5, 15], f: (v) => `+${v}% resistencia al hielo` },
 ];
 type Slot = 'arma' | 'armadura' | 'cabeza' | 'anillo';
 interface Base { name: string; slot: Slot; dmg?: [number, number]; def?: number; mag?: number; look?: string; off?: string }
@@ -117,7 +119,16 @@ const BASES: Base[] = [
 const SLOTS: Slot[] = ['arma', 'armadura', 'cabeza', 'anillo'];
 interface Item extends Base { id: number; rar: Rarity; attrs: { id: AttrId; v: number }[] }
 let uid = 1;
-function rollItem(lvl: number, minRar = 0): Item {
+/** Clave del generador del server -> atributo del cliente. */
+const SRV_ATTR: Record<string, AttrId> = { critical_chance: 'crit', attack_speed: 'aspd', life_steal: 'leech', fire_resistance: 'fres', ice_resistance: 'ires', paralysis_resistance: 'rpar', bonus_mana: 'mp', bonus_hp: 'hp' };
+interface SrvLoot { rarity: number; baseSeed: number; attrs: { key: string; value: number }[] }
+const lootRolls = new Map<number, SrvLoot>();
+function rollItem(lvl: number, minRar = 0, srv?: SrvLoot): Item {
+    if (srv) { // el server tiró rareza y atributos (ya escalados al nivel del mob); el cliente solo elige la base
+        const rar = RAR[Math.max(0, Math.min(3, srv.rarity))], base = BASES[srv.baseSeed % BASES.length];
+        const attrs: Item['attrs'] = []; for (const a of srv.attrs) { const id = SRV_ATTR[a.key]; if (id) attrs.push({ id, v: Math.max(1, Math.round(a.value)) }); }
+        return { id: uid++, ...base, rar, attrs };
+    }
     const base = BASES[rint(0, BASES.length - 1)];
     let r = R(), rar = RAR[0]; for (const x of RAR) { if (r < x.p) { rar = x; break; } r -= x.p; }
     if (rar.k < minRar) rar = RAR[minRar]; // bosses: drop garantizado de rareza alta
@@ -148,13 +159,13 @@ const P = {
     x: MAP.spawn.x + 0.5, y: MAP.spawn.y + 0.5, dir: 6, ang: undefined as number | undefined, moving: false, phase: 0, ref: 3.4, one: null as OneShot | null, t0: 0, flash: 0,
     name: '', cell: { x: MAP.spawn.x, y: MAP.spawn.y }, path: [] as Cell[], step: null as Step | null, stepMs: 270, frozenUntil: 0, foe: null as Other | null, med: false, medHp: 0,
     target: null as Mob | null, engage: false, pickup: null as Drop | null, repath: 0, queued: null as number | null,
-    lvl: 1, exp: 0, hp: 100, mp: 60, fury: 0, gold: 0, nextAtk: 0, dead: false, deadT: 0,
+    lvl: 1, exp: 0, hp: 100, mp: 60, fury: 0, inv: false, det: false, gold: 0, nextAtk: 0, dead: false, deadT: 0,
     bag: [] as Item[], eq: { arma: null, armadura: null, cabeza: null, anillo: null } as Record<Slot, Item | null>,
     casting: null as Casting | null, ready: null as { i: number; t: number } | null, sentDir: -1,
 };
 
 /** Otros jugadores, según lo que manda el server. */
-interface Other extends Ent { profile: string; id: bigint; name: string; cell: Cell; queue: Cell[]; step: Step | null; stepMs: number; gone: boolean }
+interface Other extends Ent { inv?: boolean; profile: string; id: bigint; name: string; cell: Cell; queue: Cell[]; step: Step | null; stepMs: number; gone: boolean }
 const others = new Map<bigint, Other>();
 
 interface Drop { x: number; y: number; item?: Item; gold?: number; t: number }
@@ -191,7 +202,7 @@ function syncMobs(list: { id: number; type: number; zone: number; x: number; y: 
 
 // ---------- stats ----------
 function totals() {
-    const t = { crit: 0, aspd: 0, leech: 0, hp: 0, mp: 0, mag: 0, exp: 0, poison: 0, rpar: 0, def: 0, wdmg: [0, 0] as [number, number] };
+    const t = { crit: 0, aspd: 0, leech: 0, hp: 0, mp: 0, mag: 0, exp: 0, poison: 0, rpar: 0, fres: 0, ires: 0, def: 0, wdmg: [0, 0] as [number, number] };
     for (const s of SLOTS) {
         const it = P.eq[s]; if (!it) continue;
         if (it.dmg) t.wdmg = it.dmg; if (it.def) t.def += it.def; if (it.mag) t.mag += it.mag;
@@ -203,7 +214,7 @@ function totals() {
 interface ClassDef { id: string; name: string; hidden?: boolean; desc: string; head: string; armor?: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; spells: string[] }
 const CLASSES: ClassDef[] = [
     { id: 'guerrero', name: 'Guerrero', desc: 'Resistente, pega cuerpo a cuerpo y frena enemigos.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'tajo', 'aturdir', 'vendar', 'torbellino', 'sismo', 'furia', 'remover'] },
-    { id: 'mago', name: 'Mago', desc: 'Frágil pero con hechizos a distancia, parálisis y cura.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'paralisis', 'curar', 'bola', 'hoja', 'lanza', 'lluvia', 'ventisca', 'marejada', 'luz', 'curar2', 'furia', 'remover'] },
+    { id: 'mago', name: 'Mago', desc: 'Frágil pero con hechizos a distancia, parálisis y cura.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'paralisis', 'curar', 'bola', 'hoja', 'lanza', 'lluvia', 'ventisca', 'marejada', 'luz', 'curar2', 'furia', 'remover', 'invisibilidad', 'detectar'] },
 ];
 let CLS: ClassDef = CLASSES[0];
 const maxHp = () => CLS.hp + (P.lvl - 1) * CLS.hpL + totals().hp;
@@ -267,7 +278,7 @@ function onServer(m: ServerPayload) {
             if (v.targetId === myId && !P.dead) {
                 const c = others.get(v.casterId);
                 if (c && isEnemy(c)) {
-                    if (v.dmg > 0) hurtPlayer(v.dmg);
+                    if (v.dmg > 0) hurtPlayer(v.dmg, v.fx);
                     if (v.secs > 0) { P.frozenUntil = now() + v.secs; P.path = []; P.engage = false; P.foe = null; cancelCast(); toast('¡Te paralizaron!'); }
                 }
             }
@@ -283,6 +294,8 @@ function onServer(m: ServerPayload) {
         case 'mobHitPlayer': onMobHitPlayer(m.value); break;
         case 'mobSpecialEvent': onMobSpecial(m.value); break;
         case 'mobDied': onMobDied(m.value); break;
+        case 'lootRoll': lootRolls.set(m.value.mobId, { rarity: m.value.rarity, baseSeed: m.value.baseSeed, attrs: m.value.attrs }); break;
+        case 'statusUpdate': onStatusUpdate(m.value); break;
         case 'playerProfileChanged': { const o = others.get(m.value.playerId); if (o) o.profile = m.value.profile; break; }
         case 'playersLeftRange':
             for (const id of m.value.playerIds) others.delete(id);
@@ -359,22 +372,32 @@ function levelUp() {
     while (P.exp >= expNeed()) { P.exp -= expNeed(); P.lvl++; P.hp = maxHp(); P.mp = maxMp(); float(P.x, P.y - 0.5, `¡Nivel ${P.lvl}!`, '#ffd24a', true); log(`Subiste a nivel ${P.lvl}.`, true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd24a' }); }
 }
 /** El server avisó que un mob murió: lo saca del espejo, deja el cadáver y, si el golpe final fue mío, cobro el botín. */
+/** El server avisa quién está invisible y si yo veo invisibles. */
+function onStatusUpdate(v: { playerId: bigint; invisible: boolean; detect: boolean }) {
+    if (v.playerId === myId) {
+        if (P.inv !== v.invisible) log(v.invisible ? 'Te volviste invisible (15 s o hasta que ataques).' : 'Ya no sos invisible.', true);
+        if (P.det !== v.detect) log(v.detect ? 'Ves a los invisibles por 10 s.' : 'Se acabó Detectar invisible.', true);
+        P.inv = v.invisible; P.det = v.detect; return;
+    }
+    const o = others.get(v.playerId); if (o) o.inv = v.invisible;
+}
 function onMobDied(v: { mobId: number; killerId: bigint; x: number; y: number; type: number; zone: number }) {
     const type = MOB_TYPES[v.type], z = ZONES[v.zone]; if (!type || !z) return;
     const mob = mobMap.get(v.mobId); if (mob) dropMob(mob);
     corpses.push({ sprite: type, x: v.x, y: v.y, dir: mob?.dir ?? 6, t: now() });
-    if (v.killerId === myId) rewardKill(type, v.x, v.y, z);
+    const srv = lootRolls.get(v.mobId); lootRolls.delete(v.mobId);
+    if (v.killerId === myId) rewardKill(type, v.x, v.y, z, srv);
 }
-function rewardKill(type: MobType, x: number, y: number, zone: Zone) {
+function rewardKill(type: MobType, x: number, y: number, zone: Zone, srv?: SrvLoot) {
     const m = { ...MOBS[type], sprite: type, x, y, zone };
     const t = totals(), gain = Math.round(m.exp * (1 + t.exp / 100));
     P.exp += gain; float(m.x, m.y - 0.3, `+${gain} exp`, '#c9a227');
     if (m.boss) {
         // boss: item garantizado de rareza alta (+1 al nivel de botín) y un buen puñado de oro al lado
-        const it = rollItem(m.lvl + 2, m.boss.minRar);
+        const it = rollItem(m.lvl + 2, m.boss.minRar, srv);
         drops.push({ x: m.x, y: m.y, item: it, t: 0 }); drops.push({ x: m.x + 0.6, y: m.y + 0.4, gold: rint(m.boss.gold[0], m.boss.gold[1]), t: 0 });
         log(`¡${m.name} cayó! Soltó un item <span style="color:${it.rar.c}">${it.rar.n.toLowerCase()}</span>.`, true); shake = Math.max(shake, 0.4);
-    } else if (R() < 0.62) { const it = rollItem(m.lvl); drops.push({ x: m.x, y: m.y, item: it, t: 0 }); if (it.rar.k >= 2) log(`¡Cayó un item <span style="color:${it.rar.c}">${it.rar.n.toLowerCase()}</span>!`, true); }
+    } else if (R() < 0.62) { const it = rollItem(m.lvl, 0, srv); drops.push({ x: m.x, y: m.y, item: it, t: 0 }); if (it.rar.k >= 2) log(`¡Cayó un item <span style="color:${it.rar.c}">${it.rar.n.toLowerCase()}</span>!`, true); }
     else drops.push({ x: m.x, y: m.y, gold: rint(3, 8) * m.lvl, t: 0 });
     levelUp(); questKill(m.sprite);
     if (R() < 0.14) { const k = R() < 0.6 ? 'hp' : 'mp'; pots[k]++; log(`Encontraste una ${POTS[k].name.toLowerCase()}.`, true); renderPots(); }
@@ -410,9 +433,12 @@ function explode(p: Proj) {
     for (const m of mobs.slice()) { if (Math.hypot(m.x - p.tx!, m.y - p.ty!) <= p.aoe!) { n++; damageMob(m, Math.round(p.dmg * (0.85 + R() * 0.3)), false, 'spell'); } }
     if (n > 1) log(`Bola de fuego: ${n} enemigos alcanzados.`, true);
 }
-function hurtPlayer(d: number) {
+const FIRE_FX = new Set(['sphere', 'eruption', 'cataclysm', 'flamme']), ICE_FX = new Set(['blizz', 'tidal']);
+function hurtPlayer(d: number, kind = '') {
     if (P.dead) return;
-    const dmg = Math.max(1, d - totals().def); P.hp -= dmg; P.flash = 0.12; float(P.x, P.y, '-' + dmg, '#ff6b55');
+    const tt = totals(), res = FIRE_FX.has(kind) ? tt.fres : ICE_FX.has(kind) ? tt.ires : 0;
+    if (res > 0) d = Math.round(d * (1 - Math.min(75, res) / 100));
+    const dmg = Math.max(1, d - tt.def); P.hp -= dmg; P.flash = 0.12; float(P.x, P.y, '-' + dmg, '#ff6b55');
     if (P.casting) P.casting.end = Math.min(P.casting.end + 0.2, P.casting.start + P.casting.len * 1.6);
     if (!(P.one && P.one.anim !== 'hit' && now() < P.one.until)) oneShot(P, 'hit', 0.15);
     if (P.hp <= 0) {
@@ -468,10 +494,15 @@ const LIB: Record<string, SpellDef> = {
         cast() { if (P.frozenUntil <= now()) { toast('No estás paralizado.'); return false; } net.send({ $case: 'removerRequest', value: {} }); } },
     luz: { name: 'Pilar de luz', mp: 35, cd: 7, col: '#bfe6ff', range: 7, target: true, aoe: 1.9,
         cast(m) { if (!m) return false; const x = m.x, y = m.y; zone(x, y, 1.9, 2, 0.7, () => rint(14, 20) + P.lvl * 2 + totals().mag, 'spread'); later(0.5, () => { if (!P.dead && Math.hypot(P.x - x, P.y - y) <= 1.9) heal(25 + P.lvl * 3); }); } },
+    invisibilidad: { name: 'Invisibilidad', mp: 40, cd: 20, col: '#9fb8ff', range: 0, target: false,
+        cast() { efx('splash', P.x, P.y); net.send({ $case: 'invisibilityRequest', value: {} }); } },
+    detectar: { name: 'Detectar invisible', mp: 30, cd: 12, col: '#ffe9a0', range: 0, target: false,
+        cast() { efx('spread', P.x, P.y); net.send({ $case: 'detectInvisibleRequest', value: {} }); } },
     furia: { name: 'Furia', mp: 15, cd: 20, col: '#ff3b2f', range: 0, target: false,
         cast() { efx('flamme', P.x, P.y); P.fury = now() + 10; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log('Furia: +30% de daño físico y +20% de daño en hechizos por 10 s, sin castigo.', true); } },
 };
 let SPELLS: Spell[] = [];
+const SPECIAL_KEY: Record<string, string | undefined> = { remover: 'r', invisibilidad: 'f', detectar: 'g' };
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
 /** Hechizo de área estilo Blizzard: varios golpes sobre las celdas cercanas al punto elegido. */
 function zone(x: number, y: number, r: number, ticks: number, every: number, dmg: () => number, effect: string, slow = 0) {
@@ -578,7 +609,8 @@ const efx = (n: string, x: number, y: number, dy = 0) => { efxLocal(n, x, y, dy)
 const ARENA = { x0: 46, y0: 26, x1: 61, y1: 39 };
 const inArena = (x: number, y: number) => x >= ARENA.x0 && x < ARENA.x1 && y >= ARENA.y0 && y < ARENA.y1;
 const facOf = (profile: string) => profile.split(';')[0];
-const isEnemy = (o: Other) => !o.gone && !isSafe(o.x, o.y) && !isSafe(P.x, P.y) && (facOf(o.profile) !== selectedFaction || (inArena(P.x, P.y) && inArena(o.x, o.y)));
+const unseen = (o: Other) => !!o.inv && !P.det && facOf(o.profile) !== selectedFaction;
+const isEnemy = (o: Other) => !o.gone && !unseen(o) && !isSafe(o.x, o.y) && !isSafe(P.x, P.y) && (facOf(o.profile) !== selectedFaction || (inArena(P.x, P.y) && inArena(o.x, o.y)));
 const enemiesNear = (x: number, y: number, r: number) => [...others.values()].filter((o) => isEnemy(o) && Math.hypot(o.x - x, o.y - y) <= r);
 function pvpSend(fx: string, x: number, y: number, targetId = 0n, dmg = 0, secs = 0, r = 0) { net.send({ $case: 'pvpHitRequest', value: { fx, x, y, targetId, dmg, secs, r } }); }
 /** Le pega a un jugador enemigo: el cliente de él aplica el daño. */
@@ -766,7 +798,7 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); chatIn.focus(); return; }
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'q' || e.key === 'Q')) { usePotion('hp'); return; }
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'e' || e.key === 'E')) { usePotion('mp'); return; }
-    const hk = e.key === 'r' ? SPELLS.findIndex((x) => x.id === 'remover') : KEYS.indexOf(e.key), dm = /^(?:Digit|Numpad)([0-9])$/.exec(e.code), k = hk >= 0 ? hk : dm ? KEYS.indexOf(dm[1]) : null;
+    const hk = SPELLS.findIndex((x) => SPECIAL_KEY[x.id ?? ''] === e.key.toLowerCase()) >= 0 ? SPELLS.findIndex((x) => SPECIAL_KEY[x.id ?? ''] === e.key.toLowerCase()) : KEYS.indexOf(e.key), dm = /^(?:Digit|Numpad)([0-9])$/.exec(e.code), k = hk >= 0 ? hk : dm ? KEYS.indexOf(dm[1]) : null;
     if (k != null && k < SPELLS.length && !e.repeat) { e.preventDefault(); cast(k); }
     if (e.key === 'i' || e.key === 'I') toggleBag();
     if (e.key === 'Escape') { if (P.casting || P.ready) cancelCast('Hechizo cancelado.'); else P.target = null; }
@@ -938,7 +970,7 @@ function render() {
     for (const d of drops) objs.push({ d: d.x + d.y - 0.2, f: () => drawDrop(d, T) });
     for (const c of corpses) objs.push({ d: c.x + c.y - 0.3, f: () => { const p = iso(c.x, c.y), age = T - c.t; drawSprite(c.sprite, 'die', age, c.dir, p.x, p.y, null, age > 2 ? 3 - age : 1); } });
     for (const m of mobs) objs.push({ d: m.x + m.y, f: () => drawMob(m, T) });
-    for (const o of others.values()) objs.push({ d: o.x + o.y, f: () => { const p = iso(o.x, o.y), [a, t] = animFor(o, T); drawSprite(otherSprite(o), a, t, o.dir, p.x, p.y, null, o.gone ? 0.45 : 1); } });
+    for (const o of others.values()) objs.push({ d: o.x + o.y, f: () => { const p = iso(o.x, o.y), [a, t] = animFor(o, T); if (unseen(o)) return; drawSprite(otherSprite(o), a, t, o.dir, p.x, p.y, o.inv ? 'rgba(150,200,255,.25)' : null, o.inv ? 0.35 + 0.1 * Math.sin(T * 5) : o.gone ? 0.45 : 1); } });
     objs.push({ d: P.x + P.y, f: () => { const p = iso(P.x, P.y); if (P.frozenUntil > T && !P.dead) { ctx.strokeStyle = 'rgba(190,235,255,.85)'; ctx.lineWidth = 1.5; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(p.x, p.y - 8 - i * 14, 16, 6, 0, 0, Math.PI * 2); ctx.stroke(); } } if (P.dead) drawSprite('hero', 'die', T - P.deadT, P.dir, p.x, p.y); else {
             const [a, t] = animFor(P, T), bz = P.fury > T;
             if (P.med) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const k = 0.5 + 0.5 * Math.sin(T * 3); ctx.strokeStyle = `rgba(110,170,255,${0.35 + k * 0.4})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 16 + k * 14, (16 + k * 14) / 2, 0, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.ellipse(p.x, p.y - 20 - k * 22, 5, 2.5, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
@@ -947,11 +979,11 @@ function render() {
                 ctx.save(); ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(p.x, p.y, 2, p.x, p.y, 34); g.addColorStop(0, `rgba(255,${120 + k * 80 | 0},40,${warn ? 0.2 : 0.55})`); g.addColorStop(1, 'rgba(255,60,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(p.x, p.y, 34, 17, 0, 0, Math.PI * 2); ctx.fill();
                 ctx.strokeStyle = `rgba(255,${150 + k * 90 | 0},60,.6)`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 20 + k * 6, (20 + k * 6) / 2, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
             }
-            drawSprite('hero', a, t, P.dir, p.x, p.y, P.flash > 0 ? 'rgba(255,70,50,.35)' : bz ? `rgba(255,${90 + (0.5 + 0.5 * Math.sin(T * 9)) * 70 | 0},20,.32)` : null);
+            drawSprite('hero', a, t, P.dir, p.x, p.y, P.flash > 0 ? 'rgba(255,70,50,.35)' : P.inv ? 'rgba(150,200,255,.25)' : bz ? `rgba(255,${90 + (0.5 + 0.5 * Math.sin(T * 9)) * 70 | 0},20,.32)` : null, P.inv ? 0.4 + 0.1 * Math.sin(T * 5) : 1);
         } } });
     objs.sort((a, b) => a.d - b.d).forEach((o) => o.f());
     // nombres arriba de todo
-    for (const o of others.values()) { const p = iso(o.x, o.y); nameTag(o.name, p.x, p.y - 70, factionCol(o.profile.split(';')[0]), o.gone ? 0.5 : 1); }
+    for (const o of others.values()) { if (unseen(o)) continue; const p = iso(o.x, o.y); nameTag(o.name, p.x, p.y - 70, factionCol(o.profile.split(';')[0]), o.gone ? 0.5 : 1); }
     { const p = iso(P.x, P.y); nameTag(P.name, p.x, p.y - 70, factionCol(selectedFaction)); }
     for (const n of MAP.npcs) { const p = iso(n.x + 0.5, n.y + 0.5); nameTag(n.name, p.x, p.y - 70, '#9fd36b'); if (n.id === 'capitan' && questMark()) { ctx.font = "700 22px 'Alegreya SC', Georgia, serif"; ctx.textAlign = 'center'; ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#2a1a00'; ctx.lineWidth = 3; ctx.strokeText(questMark(), p.x, p.y - 90 + Math.sin(now() * 4) * 2); ctx.fillText(questMark(), p.x, p.y - 90 + Math.sin(now() * 4) * 2); } }
     for (const p of projs) {
@@ -1042,7 +1074,7 @@ function drawDrop(d: Drop, T: number) {
 // ---------- HUD ----------
 function setClass(id: string) {
     CLS = CLASSES.find((c) => c.id === id) ?? CLASSES[0];
-    SPELLS = CLS.spells.map((sid, i) => ({ key: sid === 'remover' ? 'r' : KEYS[i], id: sid, ...LIB[sid] }));
+    SPELLS = CLS.spells.map((sid, i) => ({ key: SPECIAL_KEY[sid] ?? KEYS[i], id: sid, ...LIB[sid] }));
     pots.hp = 3; pots.mp = 3; pots.cd = 0; renderPots();
     cds.fill(0); P.fury = 0; P.ready = null; P.casting = null;
     const mk = (n: string): Item => ({ id: uid++, ...BASES.find((b) => b.name === n)!, rar: RAR[0], attrs: [] });

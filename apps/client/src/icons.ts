@@ -35,7 +35,7 @@ const GLYPHS: Record<string, Glyph> = {
 
 const ICON_OF: Record<string, string> = {
     proyectil: 'orb', paralisis: 'ring', aturdir: 'stars', curar: 'cross', curar2: 'cross', vendar: 'bandage', bola: 'fireball', golpe: 'slash', tajo: 'claws', torbellino: 'spiral',
-    hoja: 'crescent', lanza: 'spike', lluvia: 'drops', ventisca: 'flake', marejada: 'wave', luz: 'pillar', sismo: 'cracks', furia: 'rage',
+    hoja: 'crescent', lanza: 'spike', lluvia: 'drops', ventisca: 'flake', marejada: 'wave', luz: 'pillar', sismo: 'cracks', furia: 'rage', invisibilidad: 'stars', detectar: 'ring',
 };
 
 /** Ícono (data URL) del hechizo `id`, del color `col`. */

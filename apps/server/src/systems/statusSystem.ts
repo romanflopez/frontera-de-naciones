@@ -6,6 +6,10 @@ export interface CharacterStatus {
     paralysisEndTime: number;
     immunityEndTime: number;
     removerCooldown: number;
+    isInvisible: boolean;
+    invisibleEndTime: number;
+    hasDetectInvisible: boolean;
+    detectInvisibleEndTime: number;
 }
 
 export const MAX_PARALYSIS_MS = 4000;
@@ -13,7 +17,7 @@ export const IMMUNITY_MS = 8000;
 export const REMOVER_CD_MS = 10000;
 
 export function createDefaultStatus(): CharacterStatus {
-    return { isParalyzed: false, paralysisEndTime: 0, immunityEndTime: 0, removerCooldown: 0 };
+    return { isParalyzed: false, paralysisEndTime: 0, immunityEndTime: 0, removerCooldown: 0, isInvisible: false, invisibleEndTime: 0, hasDetectInvisible: false, detectInvisibleEndTime: 0 };
 }
 
 /** Intenta paralizar. Devuelve false si el objetivo está en su ventana de inmunidad (8 s después de una parálisis). */
@@ -33,10 +37,27 @@ export function castRemover(status: CharacterStatus, now: number): boolean {
     return true;
 }
 
+export const INVISIBLE_MS = 15000;
+export const DETECT_MS = 10000;
+/** Invisibilidad: 15 s o hasta que hagas algo ofensivo. */
+export function castInvisibility(status: CharacterStatus, now: number): boolean {
+    status.isInvisible = true; status.invisibleEndTime = now + INVISIBLE_MS; return true;
+}
+export function breakInvisibility(status: CharacterStatus): boolean {
+    if (!status.isInvisible) return false;
+    status.isInvisible = false; status.invisibleEndTime = 0; return true;
+}
+/** Detectar invisible: 10 s viendo a los ocultos. */
+export function castDetectInvisible(status: CharacterStatus, now: number): boolean {
+    status.hasDetectInvisible = true; status.detectInvisibleEndTime = now + DETECT_MS; return true;
+}
+
 /** Se llama en cada tick: si la parálisis terminó sola, entra la inmunidad. */
 export function updateStatus(status: CharacterStatus, now: number): void {
     if (status.isParalyzed && now >= status.paralysisEndTime) {
         status.isParalyzed = false;
         status.immunityEndTime = now + IMMUNITY_MS;
     }
+    if (status.isInvisible && now >= status.invisibleEndTime) status.isInvisible = false;
+    if (status.hasDetectInvisible && now >= status.detectInvisibleEndTime) status.hasDetectInvisible = false;
 }

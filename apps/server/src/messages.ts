@@ -174,5 +174,9 @@ export const mobDamaged = (mobId: number, attackerId: bigint, dmg: number, crit:
 export const mobAttack = (mobId: number, tx: number, ty: number): ServerMessage => msg({ $case: 'mobAttack', value: { mobId, tx, ty } });
 export const mobHitPlayer = (mobId: number, dmg: number, stun: number): ServerMessage => msg({ $case: 'mobHitPlayer', value: { mobId, dmg, stun } });
 export const mobSpecialEvent = (mobId: number, phase: number, x: number, y: number): ServerMessage => msg({ $case: 'mobSpecialEvent', value: { mobId, phase, x, y } });
+export const lootRoll = (mobId: number, rarity: number, baseSeed: number, attrs: { key: string; value: number }[]): ServerMessage =>
+    msg({ $case: 'lootRoll', value: { mobId, rarity, baseSeed, attrs } });
+export const statusUpdate = (playerId: bigint, invisible: boolean, detect: boolean): ServerMessage =>
+    msg({ $case: 'statusUpdate', value: { playerId, invisible, detect } });
 export const mobDied = (mobId: number, killerId: bigint, x: number, y: number, type: number, zone: number): ServerMessage =>
     msg({ $case: 'mobDied', value: { mobId, killerId, x, y, type, zone } });

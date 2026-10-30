@@ -96,6 +96,8 @@ message ClientMessage {
     ChangePlayerProfileRequest change_player_profile_request = 42;
     PvpHitRequest pvp_hit_request = 43;
     RemoverRequest remover_request = 44;
+    InvisibilityRequest invisibility_request = 45;
+    DetectInvisibleRequest detect_invisible_request = 46;
     SaveCharacterRequest save_character_request = 80;
     MobHitRequest mob_hit_request = 120;
     PveStatusRequest pve_status_request = 121;
@@ -459,6 +461,8 @@ message ServerMessage {
     MobHitPlayer mob_hit_player = 123;
     MobSpecialEvent mob_special_event = 124;
     MobDied mob_died = 125;
+    LootRoll loot_roll = 130;
+    StatusUpdate status_update = 131;
   }
 }
 
@@ -495,6 +499,12 @@ message SpellCastFailed {
 /** El cliente avisa su bando, clase y equipo visible: "bando;clase;pieza,pieza,...". */
 /** PvP entre jugadores: el cliente que lanza avisa un efecto y, si hay target_id, daño/parálisis para ese jugador. */
 message RemoverRequest {}
+message InvisibilityRequest {}
+message DetectInvisibleRequest {}
+message LootAttr { string key = 1; int32 value = 2; }
+/** Botín tirado por el server para quien dio el golpe final. */
+message LootRoll { int32 mob_id = 1; int32 rarity = 2; int32 base_seed = 3; repeated LootAttr attrs = 4; }
+message StatusUpdate { int64 player_id = 1; bool invisible = 2; bool detect = 3; }
 message PvpHitRequest {
   string fx = 1;
   double x = 2;

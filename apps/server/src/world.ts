@@ -6,7 +6,7 @@
  * tick (cada 50 ms) solo dispara los temporizadores. Más adelante, si hace falta escalar,
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
-import { applyParalysis, castRemover, updateStatus } from './systems/statusSystem.ts';
+import { applyParalysis, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import type { Catalogs, GameWorldConfig, Settings } from './config.ts';
 import { adjacentCellsAt45, distance, findNearestFreeLocation, nextGridDirection } from './location.ts';
@@ -65,7 +65,11 @@ export class GameWorld {
             this.timers = this.timers.filter((t) => t.at > now);
             for (const t of due) this.safe('temporizador', t.fn);
         }
-        for (const pl of this.players.values()) updateStatus(pl.status, now);
+        for (const pl of this.players.values()) {
+            const inv = pl.status.isInvisible, det = pl.status.hasDetectInvisible;
+            updateStatus(pl.status, now);
+            if (inv !== pl.status.isInvisible || det !== pl.status.hasDetectInvisible) this.announceStatus(pl);
+        }
         if (this.mobSim) this.safe('mobs', () => this.mobSim!.update());
         this.checkPingTimeouts(now);
     }
@@ -95,6 +99,12 @@ export class GameWorld {
 
     private broadcastNear(p: Player, m: ServerMessage): void {
         for (const other of this.nearbyPlayers(p.posX, p.posY, p.sessionId)) other.send(m);
+    }
+
+    /** Avisa a los cercanos (y a uno mismo) si estoy invisible y si veo invisibles. */
+    private announceStatus(p: Player): void {
+        const m = M.statusUpdate(p.playerId, p.status.isInvisible, p.status.hasDetectInvisible);
+        p.send(m); this.broadcastNear(p, m);
     }
 
     private spawnLocation(prefX?: number, prefY?: number): { x: number; y: number } {
@@ -260,6 +270,7 @@ export class GameWorld {
                     const fx = /^[a-z]{0,16}$/.test(v.fx) ? v.fx : '';
                     const now = Date.now(); if (now - p.lastPvpMs < 40) break; p.lastPvpMs = now;
                     const secs = num(v.secs, 0, 6);
+                    if ((v.dmg > 0 || secs > 0) && breakInvisibility(p.status)) this.announceStatus(p);
                     if (secs > 0 && v.targetId) {
                         const tgt = this.playersById.get(v.targetId);
                         if (!tgt || tgt === p) break;
@@ -268,13 +279,15 @@ export class GameWorld {
                     this.broadcastNear(p, M.pvpHit(p.playerId, { fx, x: num(v.x, 0, 200), y: num(v.y, 0, 200), targetId: v.targetId, dmg: Math.round(num(v.dmg, 0, 600)), secs, r: num(v.r, 0, 6) }));
                     break;
                 }
+                case 'invisibilityRequest': { castInvisibility(p.status, Date.now()); this.announceStatus(p); break; }
+                case 'detectInvisibleRequest': { castDetectInvisible(p.status, Date.now()); this.announceStatus(p); break; }
                 case 'removerRequest': {
                     if (!castRemover(p.status, Date.now())) break;
                     const m = M.pvpHit(p.playerId, { fx: 'sphere', x: p.posX, y: p.posY, targetId: p.playerId, dmg: 0, secs: -1, r: 0 });
                     p.send(m); this.broadcastNear(p, m);
                     break;
                 }
-                case 'mobHitRequest': this.mobSim?.hit(p, payload.value); break;
+                case 'mobHitRequest': if (breakInvisibility(p.status)) this.announceStatus(p); this.mobSim?.hit(p, payload.value); break;
                 case 'pveStatusRequest': this.mobSim?.status(p, payload.value); break;
                 case 'changePlayerProfileRequest': {
                     const v = String(payload.value.profile ?? '').slice(0, 240);

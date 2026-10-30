@@ -2,6 +2,7 @@
  * Mobs del mundo: el server los simula (IA, vida, daño, respawn) y los jugadores solo los ven.
  * Port de la lógica que antes corría en cada navegador (apps/client/src/main.ts): mismos números.
  */
+import { rollMobDrop, RARITY_INDEX } from './loot/itemGenerator.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import { MOBS, MOB_TYPES, mobRespawnSecs, type MobType, type WorldMap, type Zone } from '@fdn/world';
 import * as M from './messages.ts';
@@ -176,6 +177,7 @@ export class MobSim {
 
     private kill(m: SimMob, killer: Player | null) {
         m.dead = true; this.mobs.delete(m.id);
+        if (killer) { const it = rollMobDrop(MOBS[m.type].lvl, MOBS[m.type].boss?.minRar ?? 0); killer.send(M.lootRoll(m.id, RARITY_INDEX[it.rarity], it.baseSeed, it.attributes)); }
         this.broadcastNear(m, M.mobDied(m.id, killer ? killer.playerId : 0n, m.x, m.y, m.typeIdx, m.zoneIdx));
         this.host.after(mobRespawnSecs(m.type) * 1000, () => this.spawn(m.zone, m.zoneIdx));
     }
