@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { ClientMessage, ServerMessage } from '@fdn/proto';
 import { DATA_DIR, loadCatalogs, loadSettings, loadWorlds } from './config.ts';
-import { MAPS } from '@fdn/world';
+import { getMapDef } from '@fdn/world';
 import { loadOccupancy, occupancyFromGrid } from './map.ts';
 import * as M from './messages.ts';
 import type { PersistedPlayer } from './player.ts';
@@ -35,8 +35,7 @@ const economy = new Economy(storage);
 for (const wc of worldConfigs) {
     const teleportCells = (wc.teleportLocs ?? []).flatMap((t) => t.locs);
     // Mapas generados por código (iguales en cliente y server) o, si no, un .amd en data/maps
-    const generated = MAPS[wc.map];
-    const wmap = generated?.();
+    const wmap = getMapDef(wc.map)?.build();
     const occ = wmap ? occupancyFromGrid(wmap.blocked, teleportCells) : loadOccupancy(wc.map, teleportCells);
     worlds.set(wc.id, new GameWorld(wc, settings, catalogs, occ, wmap, economy));
     console.log(`[Server] Mundo '${wc.id}' (${wc.name}): mapa ${wc.map}, ${occ.sizeX}x${occ.sizeY}, ${occ.occupiedCount} celdas bloqueadas`);
@@ -67,7 +66,7 @@ const clientIp = (req: { headers: Record<string, string | string[] | undefined>;
     return first || req.socket.remoteAddress || 'desconocida';
 };
 /** Las zonas temporales (arena, mazmorras) no se guardan como posición: se vuelve al campamento. */
-const home = MAPS[settings.initialMap] ? MAPS[settings.initialMap]() : null;
+const home = getMapDef(settings.initialMap)?.build() ?? null;
 const inRect = (r: { x0: number; y0: number; x1: number; y1: number }, x: number, y: number) => x >= r.x0 && x <= r.x1 + 1 && y >= r.y0 && y <= r.y1 + 1;
 function restPosition(state: PersistedPlayer | undefined): PersistedPlayer | undefined {
     if (!state || !home) return state;
