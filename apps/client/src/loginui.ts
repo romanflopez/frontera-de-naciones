@@ -1,6 +1,6 @@
 /**
  * Pantallas de entrada: login, selección de personaje, clase, facción y creación.
- * Todo el arte (emblema, castillo, luna, brasas, siluetas, escudos) se dibuja por código.
+ * El fondo es assets/background-login.webp; el resto del arte (emblema, brasas, siluetas, escudos) se dibuja por código.
  * Este módulo es solo vista y flujo; la conexión, el guardado y enterWorld siguen en main.ts.
  */
 import './login.css';
@@ -57,48 +57,6 @@ function emblem(): string {
   <path d="M120 14 L120 110 M92 62 H148" stroke="#fff" stroke-opacity=".35" stroke-width="1"/>
   <path d="M104 40 L112 28" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".85"/>
   <path d="M120 6 L124 14 H116Z M120 118 L124 110 H116Z" fill="url(#emGold)" stroke="#2b1710" stroke-width=".8"/>
-</svg>`;
-}
-
-/** Fondo: cielo rojizo, luna roja, montañas y castillo en silueta. */
-function sceneSvg(): string {
-    let seed = 7;
-    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-    const ridge = (base: number, amp: number, step: number, from = 0, to = 1600) => {
-        let d = `M${from} 900 L${from} ${base}`;
-        let y = base;
-        for (let x = from; x <= to; x += step) { y = base - rnd() * amp + (Math.sin(x / 190) * amp) / 3; d += ` L${x} ${y.toFixed(0)}`; }
-        return d + ` L${to} 900Z`;
-    };
-    // castillo: cuerpo bajo + torres con techos en punta + almenas
-    let castle = '';
-    const tower = (x: number, w: number, h: number, spire: number) => {
-        castle += `<rect x="${x}" y="${690 - h}" width="${w}" height="${h + 20}"/><path d="M${x - 5} ${690 - h} L${x + w / 2} ${690 - h - spire} L${x + w + 5} ${690 - h}Z"/>`;
-        // almenas
-        for (let i = 0; i < w; i += 9) castle += `<rect x="${x + i - 1}" y="${690 - h - 7}" width="5" height="8"/>`;
-    };
-    castle += '<rect x="40" y="610" width="620" height="120"/>';
-    for (let i = 0; i < 70; i++) castle += `<rect x="${44 + i * 9}" y="604" width="5" height="8"/>`;
-    [[70, 34, 170, 70], [140, 24, 230, 90], [210, 40, 150, 60], [290, 28, 260, 120], [355, 46, 190, 80], [440, 26, 300, 150], [505, 36, 200, 70], [570, 30, 150, 60], [620, 22, 220, 80]].forEach(([x, w, h, sp]) => tower(x, w, h, sp));
-    // ventanitas encendidas
-    let win = '';
-    for (let i = 0; i < 16; i++) win += `<rect x="${80 + rnd() * 560 | 0}" y="${500 + rnd() * 150 | 0}" width="3" height="6" fill="#ff7a3a" opacity="${(0.25 + rnd() * 0.5).toFixed(2)}"/>`;
-    return `<svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice" width="100%" height="100%">
-  <defs>
-    <linearGradient id="skG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a0510"/><stop offset=".45" stop-color="#2a0c1c"/><stop offset=".75" stop-color="#5a1a1a"/><stop offset="1" stop-color="#1a0a10"/></linearGradient>
-    <radialGradient id="moonG" cx="42%" cy="38%" r="70%"><stop offset="0" stop-color="#ff8a5a"/><stop offset=".45" stop-color="#c9361e"/><stop offset="1" stop-color="#5a0e12"/></radialGradient>
-    <radialGradient id="moonHalo"><stop offset="0" stop-color="#ff4a2a" stop-opacity=".5"/><stop offset="1" stop-color="#ff4a2a" stop-opacity="0"/></radialGradient>
-    <linearGradient id="mt1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a1220"/><stop offset="1" stop-color="#1a0a14"/></linearGradient>
-    <linearGradient id="mt2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c0b14"/><stop offset="1" stop-color="#0a0509"/></linearGradient>
-  </defs>
-  <rect width="1600" height="900" fill="url(#skG)"/>
-  <circle cx="1230" cy="320" r="330" fill="url(#moonHalo)"/>
-  <circle cx="1230" cy="320" r="150" fill="url(#moonG)"/>
-  <g fill="#3a0a0e" opacity=".22"><circle cx="1190" cy="290" r="22"/><circle cx="1262" cy="352" r="28"/><circle cx="1218" cy="384" r="12"/><circle cx="1292" cy="272" r="10"/></g>
-  <path d="${ridge(560, 120, 70)}" fill="url(#mt1)" opacity=".85"/>
-  <g fill="#0d0610">${castle}</g>${win}
-  <path d="${ridge(690, 90, 55)}" fill="url(#mt2)"/>
-  <path d="${ridge(790, 70, 45)}" fill="#07040a"/>
 </svg>`;
 }
 
@@ -199,7 +157,7 @@ function drawStatic() {
 // ---------- flujo ----------
 export function initLoginUI(ctx: FlowCtx) {
     const root = $('login');
-    $('lbgScene').innerHTML = sceneSvg();
+    $('lbgScene').innerHTML = '<img src="assets/background-login.webp" alt="" decoding="async">';
     $('lEmblem').innerHTML = emblem();
 
     const fit = () => { const s = Math.min(innerWidth / 1280, innerHeight / 720); root.style.setProperty('--s', String(s)); };
