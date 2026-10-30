@@ -38,8 +38,16 @@ const ICON_OF: Record<string, string> = {
     hoja: 'crescent', lanza: 'spike', lluvia: 'drops', ventisca: 'flake', marejada: 'wave', luz: 'pillar', sismo: 'cracks', furia: 'rage', invisibilidad: 'stars', detectar: 'ring',
 };
 
-/** Ícono (data URL) del hechizo `id`, del color `col`. */
+// Íconos pintados (assets/spells/*.png); los hechizos sin uno caen al dibujado por código.
+const ART_OF: Record<string, string> = {
+    proyectil: 'burbuja-arcana', paralisis: 'sello-arcano', aturdir: 'mente-arcana', curar: 'curar', curar2: 'lluvia-de-curacion', vendar: 'fractura', bola: 'explosion', golpe: 'furia',
+    tajo: 'espada-solar', torbellino: 'torbellino-de-escarcha', hoja: 'torbellino-toxico', lanza: 'hacha-venenosa', lluvia: 'flechas-igneas', ventisca: 'remolino-glacial',
+    marejada: 'remolino-de-sombra', luz: 'ascension', sismo: 'piel-de-piedra', furia: 'bestia-furiosa', remover: 'anular', invisibilidad: 'paso-sombrio', detectar: 'modo-cazador',
+};
+
+/** Ícono del hechizo `id`: el pintado si existe, si no uno dibujado (data URL) del color `col`. */
 export function spellIcon(id: string, col: string): string {
+    if (ART_OF[id]) return `assets/spells/${ART_OF[id]}.png`;
     const key = id + col, hit = cache.get(key); if (hit) return hit;
     const cv = document.createElement('canvas'); cv.width = cv.height = S; const c = cv.getContext('2d')!;
     const bg = c.createLinearGradient(0, 0, S, S); bg.addColorStop(0, shade(col, -0.35)); bg.addColorStop(1, shade(col, -0.75));

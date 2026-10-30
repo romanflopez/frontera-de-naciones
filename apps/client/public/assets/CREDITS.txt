@@ -7,3 +7,5 @@ Bosses 3D: origen/licencia por confirmar
 Casa "Fantasy House" (apps/client/public/assets/fantasy_house.webp, armada con tools/src/house): origen/licencia por confirmar. Vino en un zip subido por el usuario (Fantesy_House.zip, PSD de 2020) sin archivo de licencia ni autor; hasta confirmarlo no debe considerarse libre para redistribuir.
 
 Efectos de hechizos (apps/client/public/assets/fx.webp): "TOMAS" (Fire, Water, Wind, Earth, Ailment) de Miradin, licencia CC-BY-SA, hechos con Effekseer. Horneados a cuadros con tools/src/fx/bake.py; mismos términos CC-BY-SA para estos cuadros.
+
+Íconos de hechizos (apps/client/public/assets/spells): arte propio del autor del repo.
