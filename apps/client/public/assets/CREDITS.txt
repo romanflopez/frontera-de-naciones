@@ -1,11 +1,42 @@
-Arte de estos atlas: Flare (https://github.com/flareteam/flare-game), de Clint Bellanger y colaboradores.
-Licencia: CC-BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/). Los atlas son una adaptación
-(recortados, combinados y escalados a la mitad con tools/src/flare/atlas.ts) y quedan bajo la misma licencia.
-El resto del repo es MIT.
-Bosses 3D: origen/licencia por confirmar
+Créditos de Frontera de Naciones (arte, fuentes y código de terceros)
 
-Casa "Fantasy House" (apps/client/public/assets/fantasy_house.webp, armada con tools/src/house): origen/licencia por confirmar. Vino en un zip subido por el usuario (Fantesy_House.zip, PSD de 2020) sin archivo de licencia ni autor; hasta confirmarlo no debe considerarse libre para redistribuir.
+Este archivo reúne las atribuciones que exigen las licencias de los materiales de terceros que SÍ están confirmados.
+El estado de verificación de cada material (y lo que todavía falta confirmar) está en docs/LICENCIAS_AUDITORIA.md.
+Los créditos de arte CC0 (Kenney y Screaming Brain Studios) están en CREDITS-CC0.txt.
 
-Efectos de hechizos (apps/client/public/assets/fx.webp): "TOMAS" (Fire, Water, Wind, Earth, Ailment) de Miradin, licencia CC-BY-SA, hechos con Effekseer. Horneados a cuadros con tools/src/fx/bake.py; mismos términos CC-BY-SA para estos cuadros.
 
-Íconos de hechizos (apps/client/public/assets/spells): arte propio del autor del repo.
+=== Arte de Flare: Empyrean Campaign (CC-BY-SA 3.0) ===
+
+Obra: "Flare" (flare-game), mod fantasycore. https://github.com/flareteam/flare-game
+Autores: Clint Bellanger y colaboradores. Artistas listados por el proyecto Flare: Blarumyrran, Brandon Morris "Augmentality",
+Clint Bellanger, Holly Daniel, Justin Jacobs, Justin Nichol, Jessica "Zeldyn" Cox, remaxim, rubberduck, Sarah Benalene, Scrittl,
+Stefan Beller. La atribución por archivo está en https://github.com/flareteam/flare-game/wiki/Credits
+Licencia: Creative Commons Atribución-CompartirIgual 3.0 (CC-BY-SA 3.0), https://creativecommons.org/licenses/by-sa/3.0/
+
+Archivos de este juego derivados de ese arte (son adaptaciones: recortados, combinados, reordenados en atlas y escalados a la mitad
+con tools/src/flare/atlas.ts) y que se distribuyen bajo la misma licencia, CC-BY-SA 3.0:
+  - world.webp
+  - paper/*.webp (piezas de equipo y cuerpo del personaje)
+  - goblin.webp, goblin_elite.webp, zombie.webp, skeleton.webp, skeleton_mage.webp, antlion.webp, fire_ant.webp, wyvern.webp, minotaur.webp
+El resto del juego (código, protocolo, interfaz) no forma parte de esas adaptaciones.
+
+
+=== Efectos de hechizos "TOMAS" (fx.webp, fx.json) ===
+
+Autor: Miradin. https://miradin.itch.io/tomas-fire (series Fire, Water, Wind, Earth, Ailment), hechos con Effekseer.
+Los cuadros de fx.webp se hornearon con tools/src/fx/bake.py (render de los efectos a una hoja de cuadros).
+
+
+=== Fuentes tipográficas (Google Fonts, SIL Open Font License 1.1) ===
+
+Cinzel (Natanael Gama), Inter (Rasmus Andersson y The Inter Project Authors), Alegreya y Alegreya Sans (Juan Pablo del Peral, Huerta Tipográfica).
+Licencia: SIL Open Font License 1.1, https://openfontlicense.org
+
+
+=== Código de terceros ===
+
+El server y el protocolo parten de helbreath-base-game (https://github.com/ErkoKnoll/helbreath-base-game), licencia MIT,
+Copyright (c) Ion Fraction OÜ. El texto completo de esa licencia está en LICENSE.base-game en la raíz del repositorio.
+No se incluye ningún asset de ese proyecto ni del juego Helbreath original.
+
+Las dependencias npm se distribuyen bajo licencias permisivas (MIT, ISC, BSD, Apache-2.0); el aviso de cada una viene en su paquete.
