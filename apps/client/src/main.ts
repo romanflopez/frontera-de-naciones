@@ -5,6 +5,7 @@
  * quién ve a quién y el chat. Lo que todavía corre solo en este navegador, como en el prototipo:
  * mobs, combate, hechizos, loot y experiencia (pasan al server en la fase 1b).
  */
+import { drawPortalFloor, drawPortalFx, PORTAL_CITY, PORTAL_ZONE } from './portal';
 import { buildSolmar, HUBS, cityAt, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, WAYPOINT_RANGE } from '@fdn/world';
 import { ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Quest, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
@@ -1049,44 +1050,18 @@ function nameTag(name: string, x: number, y: number, col: string, alpha = 1, siz
 const WAYPOINTS: Waypoint[] = MAP.waypoints ?? [];
 const MY_WPS = () => WAYPOINTS.filter((q) => q.kind === 'zone' || q.faction === selectedFaction);
 const wpCol = (q: Waypoint) => (q.kind === 'city' ? '#e2b04a' : TRAINING[q.step!].col);
-const wpScale = (q: Waypoint) => (q.kind === 'city' ? 2.7 : 0.62);
-const ell = (x: number, y: number, rx: number, ry: number) => { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.stroke(); };
-const ellF = (x: number, y: number, rx: number, ry: number) => { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); };
-function drawPortalPad(q: Waypoint, T: number) {
-    const col = wpCol(q), k = wpScale(q), c0 = iso(q.x + 0.5, q.y + 0.5), pulse = 0.5 + 0.5 * Math.sin(T * 2.2 + q.x * 0.7), lw = 1 / Math.sqrt(k);
-    ctx.save(); ctx.translate(c0.x, c0.y); ctx.scale(k, k);
-    ctx.fillStyle = 'rgba(14,16,24,.62)'; ellF(0, 0, 36, 18);
-    ctx.strokeStyle = col; ctx.lineWidth = 3 * lw; ctx.globalAlpha = 0.9; ell(0, 0, 36, 18); ctx.globalAlpha = 1;
-    // runas en el borde: giran
-    for (let j = 0; j < 12; j++) {
-        const a = (j / 12) * Math.PI * 2 + (reduce ? 0 : T * 0.5), cx = Math.cos(a), cy = Math.sin(a);
-        ctx.strokeStyle = col; ctx.lineWidth = 2 * lw; ctx.beginPath(); ctx.moveTo(cx * 29, cy * 14.5); ctx.lineTo(cx * 34, cy * 17); ctx.stroke();
-    }
-    ctx.globalCompositeOperation = 'lighter';
-    const g = ctx.createRadialGradient(0, 0, 2, 0, 0, 36); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.35 + pulse * 0.25; ctx.fillStyle = g; ellF(0, 0, 34, 17);
-    ctx.globalAlpha = 0.8; ctx.strokeStyle = col; ctx.lineWidth = 1.5 * lw; ctx.setLineDash([7, 6]); ctx.lineDashOffset = -T * 18; ell(0, 0, 22, 11);
-    ctx.setLineDash([]);
-    if (q.kind === 'city') { ell(0, 0, 12, 6); ctx.beginPath(); for (let j = 0; j < 6; j++) { const a = (j / 6) * Math.PI * 2 + T * 0.3; ctx.lineTo(Math.cos(a) * 17, Math.sin(a) * 8.5); } ctx.closePath(); ctx.stroke(); }
-    const bg = ctx.createLinearGradient(0, 0, 0, -78); bg.addColorStop(0, col); bg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.16 + pulse * 0.1; ctx.fillStyle = bg;
-    ctx.beginPath(); ctx.moveTo(-26, 0); ctx.lineTo(-20, -78); ctx.lineTo(20, -78); ctx.lineTo(26, 0); ctx.closePath(); ctx.fill();
-    if (!reduce) for (let j = 0; j < 6; j++) { const t = (T * 0.45 + j * 0.17) % 1; ctx.globalAlpha = (1 - t) * 0.9; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(Math.sin(j * 5.1 + T) * 16, -4 - t * 60, 1.6 * lw, 0, Math.PI * 2); ctx.fill(); }
-    ctx.restore();
+const portalAct = new Map<string, { a: number; t: number }>();
+/** Activación suave (0..1, ~0.3 s): el portal se enciende cuando el jugador está dentro de su radio. */
+function portalActivation(q: Waypoint, T: number) {
+    let s = portalAct.get(q.id); if (!s) portalAct.set(q.id, s = { a: 0, t: T });
+    const dt = Math.min(0.1, Math.max(0, T - s.t)); s.t = T;
+    const on = !P.dead && Math.hypot(q.x + 0.5 - P.x, q.y + 0.5 - P.y) <= (q.kind === 'city' ? 1.7 : 1.1);
+    s.a = clamp(s.a + (on ? 1 : -1) * dt / 0.3, 0, 1);
+    return s.a * s.a * (3 - 2 * s.a);
 }
-function drawPortalArch(q: Waypoint, T: number) {
-    const col = wpCol(q), k = wpScale(q), c0 = iso(q.x + 0.5, q.y + 0.5);
-    ctx.save(); ctx.translate(c0.x, c0.y); ctx.scale(k, k);
-    for (const sx of [-1, 1]) { // dos pilares de piedra con una gema rúnica arriba
-        const px = sx * 31, py = -2;
-        ctx.fillStyle = '#5d626b'; ctx.fillRect(px - 5, py - 46, 10, 46); ctx.fillStyle = sx < 0 ? '#7a808a' : '#464b53'; ctx.fillRect(px - (sx < 0 ? 5 : 0), py - 46, 5, 46);
-        ctx.fillStyle = '#6f7580'; ctx.fillRect(px - 7, py - 50, 14, 5); ctx.fillRect(px - 7, py - 2, 14, 4);
-        ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(px, py - 62); ctx.lineTo(px + 5, py - 55); ctx.lineTo(px, py - 49); ctx.lineTo(px - 5, py - 55); ctx.closePath(); ctx.fill();
-        ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(px, py - 55, 0, px, py - 55, 14); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.5 + 0.3 * Math.sin(T * 3 + sx); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px, py - 55, 14, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-    }
-    ctx.strokeStyle = '#6a707a'; ctx.lineWidth = 6; ctx.beginPath(); ctx.ellipse(0, -48, 31, 11, 0, Math.PI, Math.PI * 2); ctx.stroke();
-    ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.ellipse(0, -48, 31, 11, 0, Math.PI, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
-    if (q.kind === 'city') { ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, -66); ctx.lineTo(5, -58); ctx.lineTo(0, -51); ctx.lineTo(-5, -58); ctx.closePath(); ctx.fill(); }
-    ctx.restore();
-}
+const portalStyle = (q: Waypoint) => (q.kind === 'city' ? PORTAL_CITY : PORTAL_ZONE);
+function drawPortalPad(q: Waypoint, T: number) { const c0 = iso(q.x + 0.5, q.y + 0.5); drawPortalFloor(ctx, c0.x, c0.y, portalStyle(q), portalActivation(q, T), T, reduce, q.x * 0.7 + q.y); }
+function drawPortalArch(q: Waypoint, T: number) { const c0 = iso(q.x + 0.5, q.y + 0.5); drawPortalFx(ctx, c0.x, c0.y, portalStyle(q), portalActivation(q, T), T, reduce, q.x * 0.7 + q.y); }
 /** Cartel de cada portal: "Portal de Frontera" en la plaza; los chicos de las zonas dicen "Portal de regreso" cerca. */
 function drawPortalLabels() {
     for (const q of WAYPOINTS) {
