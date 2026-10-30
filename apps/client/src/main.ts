@@ -80,7 +80,8 @@ const RAR: Rarity[] = [
     { n: 'Raro', c: '#ffd24a', k: 2, p: 0.07 },
     { n: 'Épico', c: '#c77dff', k: 3, p: 0.01 },
 ];
-type AttrId = 'crit' | 'aspd' | 'leech' | 'hp' | 'mp' | 'mag' | 'exp' | 'poison' | 'rpar' | 'fres' | 'ires';
+/** 'df' = defensa física, 'rm' = resistencia mágica (ver docs/COMBATE.md). Los viejos 'fres'/'ires' se convierten en 'rm' al cargar. */
+type AttrId = 'crit' | 'aspd' | 'leech' | 'hp' | 'mp' | 'mag' | 'exp' | 'poison' | 'rpar' | 'df' | 'rm';
 const ATTRS: { id: AttrId; r: [number, number]; f: (v: number) => string }[] = [
     { id: 'crit', r: [2, 6], f: (v) => `+${v}% crítico` },
     { id: 'aspd', r: [4, 12], f: (v) => `+${v}% velocidad de ataque` },
@@ -91,11 +92,12 @@ const ATTRS: { id: AttrId; r: [number, number]; f: (v: number) => string }[] = [
     { id: 'exp', r: [3, 10], f: (v) => `+${v}% exp de caza` },
     { id: 'poison', r: [6, 16], f: (v) => `${v}% chance de veneno` },
     { id: 'rpar', r: [5, 15], f: (v) => `+${v}% resistencia a parálisis` },
-    { id: 'fres', r: [5, 15], f: (v) => `+${v}% resistencia al fuego` },
-    { id: 'ires', r: [5, 15], f: (v) => `+${v}% resistencia al hielo` },
+    { id: 'df', r: [3, 9], f: (v) => `+${v} defensa` },
+    { id: 'rm', r: [4, 12], f: (v) => `+${v} resistencia mágica` },
 ];
 type Slot = 'arma' | 'armadura' | 'cabeza' | 'anillo';
-interface Base { name: string; slot: Slot; dmg?: [number, number]; def?: number; mag?: number; look?: string; off?: string }
+/** def = defensa física (DF), rm = resistencia mágica (RM): mitigación = X / (100 + X). */
+interface Base { name: string; slot: Slot; dmg?: [number, number]; def?: number; rm?: number; mag?: number; look?: string; off?: string }
 const BASES: Base[] = [
     { name: 'Espada corta', slot: 'arma', dmg: [4, 8], look: 'shortsword', off: 'buckler' },
     { name: 'Hacha de leñador', slot: 'arma', dmg: [6, 11], look: 'hand_axe', off: 'buckler' },
@@ -106,16 +108,16 @@ const BASES: Base[] = [
     { name: 'Martillo pesado', slot: 'arma', dmg: [10, 16], look: 'maul' },
     { name: 'Mandoble', slot: 'arma', dmg: [12, 18], look: 'zweihander' },
     { name: 'Varita', slot: 'arma', dmg: [1, 3], mag: 8, look: 'wand' },
-    { name: 'Coraza de cuero', slot: 'armadura', def: 3, look: 'leather' },
-    { name: 'Cota de malla', slot: 'armadura', def: 6, look: 'chain' },
-    { name: 'Armadura de placas', slot: 'armadura', def: 9, look: 'plate' },
-    { name: 'Túnica de mago', slot: 'armadura', def: 1, mag: 4, look: 'mage' },
-    { name: 'Ropas de tela', slot: 'armadura', def: 1, look: 'cloth' },
-    { name: 'Capucha de cuero', slot: 'cabeza', def: 1, look: 'leather_hood' },
-    { name: 'Cofia de malla', slot: 'cabeza', def: 2, look: 'chain_coif' },
-    { name: 'Yelmo de hierro', slot: 'cabeza', def: 3, look: 'plate_helm' },
-    { name: 'Capucha de mago', slot: 'cabeza', def: 0, mag: 3, look: 'mage_hood' },
-    { name: 'Anillo opaco', slot: 'anillo' },
+    { name: 'Coraza de cuero', slot: 'armadura', def: 12, rm: 4, look: 'leather' },
+    { name: 'Cota de malla', slot: 'armadura', def: 22, rm: 8, look: 'chain' },
+    { name: 'Armadura de placas', slot: 'armadura', def: 34, rm: 12, look: 'plate' },
+    { name: 'Túnica de mago', slot: 'armadura', def: 4, rm: 24, mag: 4, look: 'mage' },
+    { name: 'Ropas de tela', slot: 'armadura', def: 4, rm: 6, look: 'cloth' },
+    { name: 'Capucha de cuero', slot: 'cabeza', def: 4, rm: 2, look: 'leather_hood' },
+    { name: 'Cofia de malla', slot: 'cabeza', def: 8, rm: 3, look: 'chain_coif' },
+    { name: 'Yelmo de hierro', slot: 'cabeza', def: 12, rm: 4, look: 'plate_helm' },
+    { name: 'Capucha de mago', slot: 'cabeza', def: 2, rm: 10, mag: 3, look: 'mage_hood' },
+    { name: 'Anillo opaco', slot: 'anillo', rm: 8 },
 ];
 /** Bases que solo venden los comerciantes (no caen de los mobs: así no se mueve el reparto de BASES que usa el server). El nombre es la clave del guardado. */
 const SHOP_BASES: Base[] = [
@@ -128,13 +130,17 @@ const SLOTS: Slot[] = ['arma', 'armadura', 'cabeza', 'anillo'];
 interface Item extends Base { id: number; rar: Rarity; attrs: { id: AttrId; v: number }[] }
 let uid = 1;
 /** Clave del generador del server -> atributo del cliente. */
-const SRV_ATTR: Record<string, AttrId> = { critical_chance: 'crit', attack_speed: 'aspd', life_steal: 'leech', fire_resistance: 'fres', ice_resistance: 'ires', paralysis_resistance: 'rpar', bonus_mana: 'mp', bonus_hp: 'hp' };
+const SRV_ATTR: Record<string, AttrId> = { critical_chance: 'crit', attack_speed: 'aspd', life_steal: 'leech', defense: 'df', magic_resistance: 'rm', fire_resistance: 'rm', ice_resistance: 'rm', paralysis_resistance: 'rpar', bonus_mana: 'mp', bonus_hp: 'hp' };
 interface SrvLoot { rarity: number; baseSeed: number; attrs: { key: string; value: number }[] }
 const lootRolls = new Map<number, SrvLoot>();
 function rollItem(lvl: number, minRar = 0, srv?: SrvLoot): Item {
     if (srv) { // el server tiró rareza y atributos (ya escalados al nivel del mob); el cliente solo elige la base
         const rar = RAR[Math.max(0, Math.min(3, srv.rarity))], base = BASES[srv.baseSeed % BASES.length];
-        const attrs: Item['attrs'] = []; for (const a of srv.attrs) { const id = SRV_ATTR[a.key]; if (id) attrs.push({ id, v: Math.max(1, Math.round(a.value)) }); }
+        const attrs: Item['attrs'] = []; for (const a of srv.attrs) { // la defensa y la RM del server vienen en la escala vieja (%): se bajan para la escala DF/RM
+            const id = SRV_ATTR[a.key]; if (!id) continue;
+            const v = id === 'df' || id === 'rm' ? Math.min(30, Math.max(1, Math.round(a.value * 0.6))) : Math.max(1, Math.round(a.value));
+            const dup = attrs.find((x) => x.id === id); if (dup) dup.v += v; else attrs.push({ id, v });
+        }
         return { id: uid++, ...base, rar, attrs };
     }
     const base = BASES[rint(0, BASES.length - 1)];
@@ -214,12 +220,13 @@ function syncMobs(list: { id: number; type: number; zone: number; x: number; y: 
 
 // ---------- stats ----------
 function totals() {
-    const t = { crit: 0, aspd: 0, leech: 0, hp: 0, mp: 0, mag: 0, exp: 0, poison: 0, rpar: 0, fres: 0, ires: 0, def: 0, wdmg: [0, 0] as [number, number] };
+    const t = { crit: 0, aspd: 0, leech: 0, hp: 0, mp: 0, mag: 0, exp: 0, poison: 0, rpar: 0, rm: 0, df: 0, def: 0, wdmg: [0, 0] as [number, number] };
     for (const s of SLOTS) {
         const it = P.eq[s]; if (!it) continue;
-        if (it.dmg) t.wdmg = it.dmg; if (it.def) t.def += it.def; if (it.mag) t.mag += it.mag;
+        if (it.dmg) t.wdmg = it.dmg; if (it.def) t.def += it.def; if (it.rm) t.rm += it.rm; if (it.mag) t.mag += it.mag;
         for (const a of it.attrs) t[a.id] += a.v;
     }
+    t.def += t.df; // el atributo 'df' suma a la defensa
     return t;
 }
 // ---------- clases ----------
@@ -292,7 +299,7 @@ function onServer(m: ServerPayload) {
             if (v.targetId === myId && v.secs < 0) { P.frozenUntil = 0; P.immEnd = now() + 8; log('¡Removiste la parálisis! Sos inmune 8 s.', true); break; }
             if (v.targetId === myId && !P.dead) {
                 {
-                    if (v.dmg > 0) hurtPlayer(v.dmg, '', true);
+                    if (v.dmg > 0) hurtPlayer(v.dmg, 'phys', true);
                     if (v.secs > 0) { P.frozenUntil = now() + v.secs; P.path = []; P.engage = false; P.foe = null; cancelCast(); toast('¡Te paralizaron!'); }
                 }
             }
@@ -428,7 +435,7 @@ function onMobSpecial(v: { mobId: number; phase: number; x: number; y: number })
     if (v.phase === 0) { m.busy = now() + 1.1; oneShot(m, 'special', 1.3); float(m.x, m.y - 0.4, `¡${sp.name}!`, sp.col, true); }
     else { fx.push({ k: 'boom', x: v.x, y: v.y, t: 0, c: sp.col, r: sp.r }); if (!reduce) shake = Math.max(shake, 0.3); }
 }
-/** El server me pegó un mob (el daño ya viene calculado; acá solo resto la defensa). */
+/** El server me pegó un mob (el daño ya viene calculado; acá solo aplico la DF para mostrarlo: los mobs pegan físico). */
 function onMobHitPlayer(v: { mobId: number; dmg: number; stun: number }) {
     if (P.dead) return;
     const m = mobMap.get(v.mobId);
@@ -452,14 +459,14 @@ function explode(p: Proj) {
     for (const m of mobs.slice()) { if (Math.hypot(m.x - p.tx!, m.y - p.ty!) <= p.aoe!) { n++; damageMob(m, Math.round(p.dmg * (0.85 + R() * 0.3)), false, 'spell'); } }
     if (n > 1) log(`Bola de fuego: ${n} enemigos alcanzados.`, true);
 }
-const FIRE_FX = new Set(['sphere', 'eruption', 'cataclysm', 'flamme']), ICE_FX = new Set(['blizz', 'tidal']);
+/** Mitigación con rendimiento decreciente: daño × 100/(100+X), X = DF (físico) o RM (mágico). Igual que el server. */
+const mitigate = (d: number, x: number) => Math.max(1, Math.round((d * 100) / (100 + Math.max(0, x))));
+const mitigPct = (x: number) => Math.round((Math.max(0, x) / (100 + Math.max(0, x))) * 100);
 /** Muestra el golpe que recibí. La vida la lleva el server: acá solo el efecto (`applied` = el daño ya viene con la defensa descontada). */
-function hurtPlayer(d: number, kind = '', applied = false) {
+function hurtPlayer(d: number, kind: 'phys' | 'magic' = 'phys', applied = false) {
     if (P.dead) return;
     if (!applied) {
-        const tt = totals(), res = FIRE_FX.has(kind) ? tt.fres : ICE_FX.has(kind) ? tt.ires : 0;
-        if (res > 0) d = Math.round(d * (1 - Math.min(75, res) / 100));
-        d = Math.max(1, d - tt.def);
+        const tt = totals(); d = mitigate(d, kind === 'magic' ? tt.rm : tt.def);
     }
     P.flash = 0.12; float(P.x, P.y, '-' + d, '#ff6b55');
     if (P.casting) P.casting.end = Math.min(P.casting.end + 0.2, P.casting.start + P.casting.len * 1.6);
@@ -468,7 +475,7 @@ function hurtPlayer(d: number, kind = '', applied = false) {
 /** El server dice que morí: pierdo un poco de exp y pido revivir en mi ciudad. */
 function die() {
     if (P.dead) return;
-    P.dead = true; P.deadT = now(); P.hp = 0; P.path = []; P.casting = null; P.target = null; P.med = false; const lost = Math.round(expNeed() * 0.05); P.exp = Math.max(0, P.exp - lost);
+    P.dead = true; potEpoch++; pots.cd = 0; P.deadT = now(); P.hp = 0; P.path = []; P.casting = null; P.target = null; P.med = false; const lost = Math.round(expNeed() * 0.05); P.exp = Math.max(0, P.exp - lost);
     log(`Moriste. Perdiste ${lost} de exp y volvés a tu ciudad.`, true);
     const ask = (n: number) => { if (!P.dead || n > 10) return; net.send({ $case: 'respawnRequest', value: {} }); later(1, () => ask(n + 1)); };
     later(2.2, () => ask(0));
@@ -575,18 +582,35 @@ function autoTarget(range: number) {
 // ---------- pociones de vida y maná ----------
 const POTS = { hp: { name: 'Poción de vida', price: 25, key: 'Q', col: '#e0524a' }, mp: { name: 'Poción de maná', price: 30, key: 'E', col: '#4a8fe0' } };
 const pots = { hp: 3, mp: 3, cd: 0 };
+/** Delay global entre pociones (vida o maná), aparte de la recarga de los hechizos. Vida: 20 % al instante y el resto en 4 ticks de 0,5 s. El server valida y cura. */
+const POTION_GCD = 1.75, POT_HOT_TICKS = 4, POT_HOT_EVERY = 0.5;
+let potEpoch = 0;
 function usePotion(k: 'hp' | 'mp') {
     if (P.dead) return;
     if (pots[k] < 1) { toast(`No tenés ${POTS[k].name.toLowerCase()}s. Comprá en el Mercader.`); return; }
     if (pots.cd > now()) return;
     if (k === 'hp' ? P.hp >= maxHp() : P.mp >= maxMp()) { toast(k === 'hp' ? 'Ya tenés la vida llena.' : 'Ya tenés el maná lleno.'); return; }
-    pots[k]--; pots.cd = now() + 1.2;
-    if (k === 'hp') { const h = Math.max(50, Math.round(maxHp() * 0.4)); P.hp = Math.min(maxHp(), P.hp + h); float(P.x, P.y - 0.2, '+' + h, '#7ee08a'); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#e0524a' }); }
-    else { const m = Math.max(40, Math.round(maxMp() * 0.5)); P.mp = Math.min(maxMp(), P.mp + m); mpLocalAt = now(); float(P.x, P.y - 0.2, '+' + m + ' maná', '#7fb7ff'); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#4a8fe0' }); }
+    pots[k]--; pots.cd = now() + POTION_GCD;
+    const epoch = ++potEpoch, local = !connected; // conectado: la vida y el maná los cura el server (llegan en Vitals); sin server curo yo
+    if (connected) net.send({ $case: 'potionRequest', value: { kind: k === 'hp' ? 0 : 1 } });
+    if (k === 'hp') {
+        const total = Math.max(50, Math.round(maxHp() * 0.4)), first = Math.round(total * 0.2), rest = total - first, tick = Math.floor(rest / POT_HOT_TICKS);
+        const heal = (n: number) => { if (local) P.hp = Math.min(maxHp(), P.hp + n); float(P.x, P.y - 0.2, '+' + n, '#7ee08a'); };
+        heal(first); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#e0524a' });
+        for (let i = 1; i <= POT_HOT_TICKS; i++) later(i * POT_HOT_EVERY, () => { if (!P.dead && epoch === potEpoch) heal(i === POT_HOT_TICKS ? rest - tick * (POT_HOT_TICKS - 1) : tick); }); // muerto o revivido: se corta
+    } else { const m = Math.max(40, Math.round(maxMp() * 0.5)); if (local) { P.mp = Math.min(maxMp(), P.mp + m); mpLocalAt = now(); } float(P.x, P.y - 0.2, '+' + m + ' maná', '#7fb7ff'); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#4a8fe0' }); }
     syncHp(); efx('sphere', P.x, P.y); renderPots();
 }
+/** Overlay del delay global sobre los chips de pociones (Q/E) y sus slots en la bolsa. */
+function potCdTick() {
+    const left = Math.max(0, pots.cd - now()), t = left > 0 ? left.toFixed(1) : '';
+    document.querySelectorAll<HTMLElement>('.cdv[data-gcd]').forEach((el) => {
+        if (left > 0) { el.style.display = 'flex'; el.style.background = `conic-gradient(rgba(0,0,0,0) 0 ${(1 - left / POTION_GCD) * 100}%, rgba(5,3,8,.74) 0 100%)`; if (el.textContent !== t) el.textContent = t; }
+        else if (el.style.display) { el.style.display = ''; el.textContent = ''; }
+    });
+}
 const POT_ART = { hp: 'curar', mp: 'burbuja-arcana' };
-function renderPots() { for (const k of ['hp', 'mp'] as const) { const el = $('pot' + k); el.title = `${POTS[k].name} (${POTS[k].key}): quedan ${pots[k]}`; el.setAttribute('aria-label', `${POTS[k].name}, tecla ${POTS[k].key}, quedan ${pots[k]}`); el.classList.toggle('none', pots[k] <= 0); el.innerHTML = `<span class="sq"><img alt="" src="assets/spells/${POT_ART[k]}.png"></span><kbd>${POTS[k].key}</kbd><em>${pots[k]}</em>`; } }
+function renderPots() { for (const k of ['hp', 'mp'] as const) { const el = $('pot' + k); el.title = `${POTS[k].name} (${POTS[k].key}): quedan ${pots[k]}`; el.setAttribute('aria-label', `${POTS[k].name}, tecla ${POTS[k].key}, quedan ${pots[k]}`); el.classList.toggle('none', pots[k] <= 0); el.innerHTML = `<span class="sq"><img alt="" src="assets/spells/${POT_ART[k]}.png"></span><kbd>${POTS[k].key}</kbd><em>${pots[k]}</em><i class="cdv" data-gcd></i>`; } potCdTick(); }
 // ---------- /meditar: quieto, el maná sube rápido; se corta si te movés, casteás o te pegan ----------
 function stopMeditating(msg?: string) { if (!P.med) return; P.med = false; if (msg) log(msg, true); syncHp(); }
 function toggleMeditate() {
@@ -1199,7 +1223,7 @@ function drawDrop(d: Drop, T: number) {
 function setClass(id: string) {
     CLS = CLASSES.find((c) => c.id === id) ?? CLASSES[0];
     SPELLS = CLS.spells.map((sid, i) => ({ key: SPECIAL_KEY[sid] ?? KEYS[i], id: sid, ...LIB[sid] }));
-    pots.hp = 3; pots.mp = 3; pots.cd = 0; renderPots();
+    pots.hp = 3; pots.mp = 3; pots.cd = 0; potEpoch++; renderPots();
     cds.fill(0); P.fury = 0; P.ready = null; P.casting = null;
     const mk = (n: string): Item => ({ id: uid++, ...BASES.find((b) => b.name === n)!, rar: RAR[0], attrs: [] });
     P.eq.arma = mk(CLS.weapon); P.eq.armadura = CLS.armor ? mk(CLS.armor) : null; P.eq.cabeza = null; P.bag = [];
@@ -1227,7 +1251,7 @@ function renderBuffs() {
     if (el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; }
 }
 function hud() {
-    renderBuffs(); tickLogout();
+    renderBuffs(); tickLogout(); potCdTick();
     const T = now(), mh = maxHp(), mm = maxMp();
     const hf = clamp(P.hp / mh, 0, 1), mf = clamp(P.mp / mm, 0, 1);
     $('liqHp').style.transform = `translateY(${(1 - hf) * 100}%)`; $('liqMp').style.transform = `translateY(${(1 - mf) * 100}%)`;
@@ -1242,7 +1266,7 @@ function hud() {
         el.hidden = !!s.fury && P.fury <= T; el.classList.toggle('nomp', P.mp < s.mp); el.classList.toggle('ready', !!(P.ready && P.ready.i === i));
     });
     const tt = totals(), wd: [number, number] = tt.wdmg[1] > 0 ? tt.wdmg : CLS.melee;
-    const chips: [string, string][] = [['Nv.', String(P.lvl)], ['Exp', `${Math.floor(P.exp).toLocaleString('es-AR')} / ${expNeed().toLocaleString('es-AR')}`], ['Ataque', `${wd[0]}–${wd[1]}`], ['Defensa', String(tt.def)], ['Vel. mov.', Math.round((270 / P.stepMs) * 100) + '%'], ['Crítico', tt.crit + '%']];
+    const chips: [string, string][] = [['Nv.', String(P.lvl)], ['Exp', `${Math.floor(P.exp).toLocaleString('es-AR')} / ${expNeed().toLocaleString('es-AR')}`], ['Ataque', `${wd[0]}–${wd[1]}`], ['Defensa', `${tt.def} · RM ${tt.rm}`], ['Vel. mov.', Math.round((270 / P.stepMs) * 100) + '%'], ['Crítico', tt.crit + '%']];
     const ch = chips.map(([k, v]) => `<div class="chp"><u>◆</u><span>${k}</span><b>${v}</b></div>`).join('');
     if ($('chips').dataset.h !== ch) { $('chips').dataset.h = ch; $('chips').innerHTML = ch; layoutHud(); }
     const m = P.target && mobs.includes(P.target) ? P.target : null;
@@ -1316,9 +1340,9 @@ function renderChar() {
     $('lvT').textContent = `${Math.floor(P.exp).toLocaleString('es-AR')} / ${need.toLocaleString('es-AR')}`;
     $('lvBar').setAttribute('aria-valuenow', String(Math.floor(clamp(P.exp / need, 0, 1) * 100))); $('lvBar').setAttribute('aria-valuemin', '0'); $('lvBar').setAttribute('aria-valuemax', '100');
     const st = [
-        STAT_ICON('atk', `${wd[0]}–${wd[1]}`, 'Ataque'), STAT_ICON('def', String(tt.def), 'Defensa'), STAT_ICON('mag', String(tt.mag), 'Daño mágico'), STAT_ICON('hp', String(maxHp()), 'Vida máx.'),
+        STAT_ICON('atk', `${wd[0]}–${wd[1]}`, 'Ataque'), STAT_ICON('def', `${tt.def} (${mitigPct(tt.def)}%)`, 'Defensa (DF)'), STAT_ICON('mag', String(tt.mag), 'Daño mágico'), STAT_ICON('hp', String(maxHp()), 'Vida máx.'),
         STAT_ICON('mp', String(maxMp()), 'Maná máx.'), STAT_ICON('crit', tt.crit + '%', 'Crítico'), STAT_ICON('aspd', tt.aspd + '%', 'Vel. ataque'), STAT_ICON('leech', tt.leech + '%', 'Robo de vida'),
-        STAT_ICON('fire', tt.fres + '%', 'Res. fuego'), STAT_ICON('ice', tt.ires + '%', 'Res. hielo'), STAT_ICON('par', tt.rpar + '%', 'Res. parálisis'), STAT_ICON('poi', tt.poison + '%', 'Veneno'),
+        STAT_ICON('fire', `${tt.rm} (${mitigPct(tt.rm)}%)`, 'Res. mágica (RM)'), STAT_ICON('ice', `${mitigPct(tt.def)}% / ${mitigPct(tt.rm)}%`, 'Mitigación F/M'), STAT_ICON('par', tt.rpar + '%', 'Res. parálisis'), STAT_ICON('poi', tt.poison + '%', 'Veneno'),
     ].join('');
     if ($('stats').dataset.h !== st) { $('stats').dataset.h = st; $('stats').innerHTML = st; }
 }
@@ -1343,7 +1367,7 @@ function renderBag() {
     document.querySelectorAll<HTMLElement>('#char [data-eq]').forEach((b) => (b.onclick = () => { const it = P.eq[b.dataset.eq as Slot]; sel = it ? { it, from: 'eq' } : null; selX = null; renderBag(); }));
     // celdas del inventario según la pestaña
     const gear: InvEnt[] = P.bag.map((it, i) => ({ key: 'g' + i, html: `<button type="button" class="cl${sel && sel.it === it ? ' sel' : ''}" data-bag="${i}" data-r="${it.rar.k}" aria-label="${esc(it.name)}, ${it.rar.n}" title="${esc(it.name)}" style="--rc:${rarCol(it)}">${ico(it)}</button>` }));
-    const cons: InvEnt[] = (['hp', 'mp'] as const).filter((k) => pots[k] > 0).map((k) => ({ key: 'p' + k, html: `<button type="button" class="cl${selX && selX.id === k ? ' sel' : ''}" data-pot="${k}" aria-label="${POTS[k].name}, ${pots[k]}" title="${POTS[k].name}" style="--rc:${k === 'hp' ? '#8a3a34' : '#345a8a'}"><img class="iimg" alt="" src="assets/spells/${POT_ART[k]}.png"><span class="q">${pots[k]}</span></button>` }));
+    const cons: InvEnt[] = (['hp', 'mp'] as const).filter((k) => pots[k] > 0).map((k) => ({ key: 'p' + k, html: `<button type="button" class="cl${selX && selX.id === k ? ' sel' : ''}" data-pot="${k}" aria-label="${POTS[k].name}, ${pots[k]}" title="${POTS[k].name}" style="--rc:${k === 'hp' ? '#8a3a34' : '#345a8a'}"><img class="iimg" alt="" src="assets/spells/${POT_ART[k]}.png"><span class="q">${pots[k]}</span><i class="cdv" data-gcd></i></button>` }));
     const mats: InvEnt[] = [];
     for (const kid of ['cripta', 'foso'] as KeyId[]) {
         const kd = KEYDEFS[kid];
@@ -1370,12 +1394,12 @@ function renderTip() {
     const wsc = parseFloat(document.documentElement.style.getPropertyValue('--win-scale')) || 1, n = (bagOpen() ? 1 : 0) + (charOpen() ? 1 : 0);
     d.style.right = `calc(max(12px, env(safe-area-inset-right, 0px)) + ${(n * 356 * wsc).toFixed(1)}px)`; d.hidden = false;
     if (selX) {
-        if (selX.k === 'pot') { const k = selX.id; d.innerHTML = `<div><div class="iname" style="color:${POTS[k].col}">${POTS[k].name}</div><div class="sub">Consumible · ×${pots[k]}</div><div>${k === 'hp' ? 'Recupera 40% de la vida máxima.' : 'Recupera 50% del maná máximo.'}</div><div class="row"><button type="button" id="usePot">Usar (${POTS[k].key})</button></div></div>`; $('usePot').onclick = () => { usePotion(k); renderBag(); }; }
+        if (selX.k === 'pot') { const k = selX.id; d.innerHTML = `<div><div class="iname" style="color:${POTS[k].col}">${POTS[k].name}</div><div class="sub">Consumible · ×${pots[k]}</div><div>${k === 'hp' ? 'Recupera 40% de la vida máxima: 20% al instante y el resto en 2 s.' : 'Recupera 50% del maná máximo.'}</div><div class="sub">Delay global de 1,75 s entre pociones.</div><div class="row"><button type="button" id="usePot">Usar (${POTS[k].key})</button></div></div>`; $('usePot').onclick = () => { usePotion(k); renderBag(); }; }
         else { const id = selX.id, kid = id.slice(1) as KeyId, kd = KEYDEFS[kid], shard = id[0] === 's'; d.innerHTML = `<div><div class="iname" style="color:${shard ? '#b99cff' : '#ffd24a'}">${shard ? kd.shard : kd.name}</div><div class="sub">Material · ×${shard ? Q.shards[kid] : Q.keys[kid]}</div><div>${shard ? `Con ${SHARDS_PER_KEY} esquirlas y ${kd.gold} de oro el Capitán forja la ${kd.name}.` : 'Abre la escalera sellada del portal correspondiente.'}</div></div>`; }
         return;
     }
     const it = sel!.it, base: string[] = [];
-    if (it.dmg) base.push(`Daño ${it.dmg[0]}–${it.dmg[1]}`); if (it.def) base.push(`Defensa ${it.def}`); if (it.mag) base.push(`+${it.mag} daño mágico`);
+    if (it.dmg) base.push(`Daño ${it.dmg[0]}–${it.dmg[1]}`); if (it.def) base.push(`Defensa ${it.def}`); if (it.rm) base.push(`Res. mágica ${it.rm}`); if (it.mag) base.push(`+${it.mag} daño mágico`);
     d.innerHTML = `<div style="border-color:${rarCol(it)}"><div class="iname" style="color:${it.rar.c}">${esc(it.name)}</div><div class="sub">${it.rar.n} · ${it.slot}</div>
     ${base.length ? `<div>${base.join(' · ')}</div>` : ''}
     ${it.attrs.length ? `<ul>${it.attrs.map((a) => `<li style="color:#8fb6f0">${attrText(a)}</li>`).join('')}</ul>` : `<div class="sub">Sin atributos extra</div>`}
@@ -1560,7 +1584,7 @@ const SHOPS: Record<string, ShopDef> = {
         stock: [
             { base: 'Anillo opaco', price: 15, lvl: 1 },
             { base: 'Anillo de cobre', attrs: [['hp', 12]], price: 85, lvl: 2 }, { base: 'Anillo de plata', attrs: [['mp', 10]], price: 95, lvl: 2 },
-            { base: 'Anillo de jade', attrs: [['fres', 8]], price: 120, lvl: 3 }, { base: 'Amuleto del cazador', attrs: [['exp', 5]], price: 150, lvl: 3 },
+            { base: 'Anillo de jade', attrs: [['rm', 8]], price: 120, lvl: 3 }, { base: 'Amuleto del cazador', attrs: [['exp', 5]], price: 150, lvl: 3 },
             { base: 'Anillo del filo', attrs: [['crit', 3]], price: 210, lvl: 5 }, { base: 'Sello del veloz', attrs: [['aspd', 6]], price: 240, lvl: 6 },
         ],
     },
@@ -1783,9 +1807,18 @@ const flow = initLoginUI({
 // ---------- guardado en la cuenta (ver persist.ts) ----------
 let pendingSave: CharSave | null = null, welcomeBack = false;
 const saveItem = (it: Item): SavedItem => ({ n: it.name, r: it.rar.k, a: it.attrs.map((a) => ({ id: a.id, v: a.v })) });
+/** Atributos guardados -> actuales: 'fres'/'ires' (viejos) pasan a 'rm' 1:1 y se juntan con el 'rm' si hay más de uno. */
+function loadAttrs(a: { id: string; v: number }[]): Item['attrs'] {
+    const out: Item['attrs'] = [];
+    for (const x of a) {
+        const id = (x.id === 'fres' || x.id === 'ires' ? 'rm' : x.id) as AttrId; if (!ATTRS.some((t) => t.id === id)) continue;
+        const dup = out.find((o) => o.id === id); if (dup && id === 'rm') dup.v += x.v; else out.push({ id, v: x.v });
+    }
+    return out;
+}
 function loadItem(v: SavedItem | null | undefined): Item | null {
     const b = v && ALL_BASES.find((x) => x.name === v.n); if (!v || !b) return null;
-    return { id: uid++, ...b, rar: RAR[Math.min(3, Math.max(0, v.r))], attrs: v.a.filter((a) => ATTRS.some((t) => t.id === a.id)).map((a) => ({ id: a.id as AttrId, v: a.v })) };
+    return { id: uid++, ...b, rar: RAR[Math.min(3, Math.max(0, v.r))], attrs: loadAttrs(v.a) };
 }
 function buildSave(): CharSave {
     return {

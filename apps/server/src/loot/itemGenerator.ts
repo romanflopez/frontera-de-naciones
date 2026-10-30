@@ -6,7 +6,7 @@ export interface ItemAttribute { key: string; value: number }
 export interface GeneratedItem { rarity: ItemRarity; attributes: ItemAttribute[]; baseSeed: number }
 
 export const STAT_POOL = [
-    'critical_chance', 'attack_speed', 'life_steal', 'fire_resistance', 'ice_resistance', 'paralysis_resistance', 'bonus_mana', 'bonus_hp',
+    'critical_chance', 'attack_speed', 'life_steal', 'defense', 'magic_resistance', 'paralysis_resistance', 'bonus_mana', 'bonus_hp',
 ] as const;
 
 function randomStat(existing: string[]): string {

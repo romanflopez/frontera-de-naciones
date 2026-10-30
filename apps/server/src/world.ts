@@ -6,7 +6,7 @@
  * tick (cada 50 ms) solo dispara los temporizadores. Más adelante, si hace falta escalar,
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
-import { damageAfterDefense, FURY_MS, potionMp, progressFromCharacter, PVP_SPELLS, rollSpellDamage, statsFromCharacter, UTIL_MP } from './systems/pvpCombat.ts';
+import { damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionMp, POTION_GCD_MS, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, progressFromCharacter, PVP_SPELLS, rollSpellDamage, spellDmgKind, statsFromCharacter, UTIL_MP, type DmgKind } from './systems/pvpCombat.ts';
 import { HUBS, TRAINING, WAYPOINT_RANGE, portalGate, trainingUnlocked, waypointDest } from '@fdn/world';
 import { applyParalysis, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
@@ -46,8 +46,8 @@ export class GameWorld {
                 playerById: (id) => this.playersById.get(id),
                 nearby: (cx, cy) => this.nearbyPlayers(cx, cy),
                 after: (ms, fn) => this.setTimeout(ms, fn),
-                hurt: (p, raw, source) => this.damagePlayer(p, raw, '', null, source),
-                stun: (p, secs) => (applyParalysis(p.status, Date.now(), secs * 1000) ? secs : 0),
+                hurt: (p, raw, source) => this.damagePlayer(p, raw, 'phys', null, source), // los ataques de mobs son físicos (los mitiga la DF)
+                stun: (p, secs) => { const s = paralysisSecs(secs, p.combat); return applyParalysis(p.status, Date.now(), s * 1000) ? s : 0; },
             });
         }
         this.tickHandle = setInterval(() => this.tick(), settings.tickInterval);
@@ -326,15 +326,17 @@ export class GameWorld {
                         dmg = rollSpellDamage(spell, p.combat, p.pvp.fury(now));
                         if (v.secs > 0 && p.pvp.allowSecs(spell, tgt.playerId, now)) secs = sp.secs ?? 0;
                         this.changeStatus(p, () => breakInvisibility(p.status));
+                        if (secs > 0) secs = paralysisSecs(secs, tgt.combat); // la RM (y la resistencia a parálisis) del que recibe acortan la duración
                         if (secs > 0 && !applyParalysis(tgt.status, now, secs * 1000)) { p.send(M.pvpHit(tgt.playerId, { fx: 'resist', x: tgt.posX, y: tgt.posY, targetId: 0n, dmg: 0, secs: 0, r: 0 })); secs = 0; if (dmg <= 0) break; }
                         if (!this.isEnemyPair(p, tgt)) break;                              // mismo bando o zona segura
-                        if (dmg > 0) dmg = this.damagePlayer(tgt, dmg, sp.kind ?? fx, p);              // la vida del que recibe la lleva el server
+                        if (dmg > 0) dmg = this.damagePlayer(tgt, dmg, spellDmgKind(spell), p);              // la vida del que recibe la lleva el server
                         if (dmg > 0 || secs > 0) p.send(M.pvpHit(p.playerId, { fx: '', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs, r: 0 })); // para que el que pega vea el número
                     } else if (v.targetId) break; // daño sin hechizo conocido: se descarta
                     this.broadcastNear(p, M.pvpHit(p.playerId, { fx, x, y, targetId: v.targetId, dmg, secs, r }));
                     break;
                 }
                 case 'hpReport': this.acceptHpReport(p, payload.value.hp, payload.value); break;
+                case 'potionRequest': this.usePotion(p, payload.value.kind); break;
                 case 'respawnRequest': this.respawn(p); break;
                 case 'invisibilityRequest': { if (p.isDead || !this.payMp(p, UTIL_MP.invisibilidad)) break; this.changeStatus(p, () => castInvisibility(p.status, Date.now())); break; }
                 case 'detectInvisibleRequest': { if (p.isDead || !this.payMp(p, UTIL_MP.detectar)) break; this.changeStatus(p, () => castDetectInvisible(p.status, Date.now())); break; }
@@ -494,7 +496,7 @@ export class GameWorld {
         const prevMax = p.combat.maxHp, prevLvl = p.combat.lvl;
         p.combat = statsFromCharacter(characterJson);
         p.prog = progressFromCharacter(characterJson);
-        if (login) { p.hp = p.combat.savedHp; p.mp = p.combat.savedMp; p.potionBudget = potionMp(p.combat.maxMp); }
+        if (login) { p.hp = p.combat.savedHp; p.mp = p.combat.savedMp; }
         else if (p.combat.lvl > prevLvl) { p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; }
         else { if (p.hp > p.combat.maxHp) p.hp = p.combat.maxHp; if (p.mp > p.combat.maxMp) p.mp = p.combat.maxMp; }
         void prevMax;
@@ -518,10 +520,10 @@ export class GameWorld {
         const arena = (p: Player) => p.posX >= 46 && p.posX < 61 && p.posY >= 26 && p.posY < 39;
         return this.factionOf(a) !== this.factionOf(b) || (arena(a) && arena(b));
     }
-    /** Le saca vida a un jugador: resistencias y defensa del server; si llega a 0 muere. Devuelve el daño aplicado. */
-    private damagePlayer(p: Player, raw: number, fx: string, killer: Player | null, source = ''): number {
+    /** Le saca vida a un jugador: DF (físico) o RM (mágico) del server, daño × 100/(100+X); si llega a 0 muere. Devuelve el daño aplicado. */
+    private damagePlayer(p: Player, raw: number, kind: DmgKind, killer: Player | null, source = ''): number {
         if (p.isDead || p.spawnProtection || raw <= 0) return 0;
-        const dmg = damageAfterDefense(raw, p.combat, fx);
+        const dmg = damageAfterDefense(raw, p.combat, kind);
         p.hp = Math.max(0, p.hp - dmg); p.meditating = false;
         if (killer) p.lastDamager = { id: killer.playerId, name: killer.characterName, t: Date.now() };
         else if (source) p.lastDamager = { id: 0n, name: source, t: Date.now() };
@@ -530,7 +532,7 @@ export class GameWorld {
         return dmg;
     }
     private killPlayer(p: Player): void {
-        p.hp = 0; p.deadAt = Date.now();
+        p.hp = 0; p.deadAt = Date.now(); p.potionEpoch++; // corta la curación en el tiempo de pociones
         this.changeStatus(p, () => breakInvisibility(p.status));
         p.status.isParalyzed = false;
         const k = p.lastDamager && Date.now() - p.lastDamager.t < 15000 ? p.lastDamager : null;
@@ -541,7 +543,7 @@ export class GameWorld {
     }
     private respawn(p: Player): void {
         if (!p.isDead || Date.now() - p.deadAt < 1800) return;
-        p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; p.meditating = false; p.lastDamager = null;
+        p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; p.meditating = false; p.lastDamager = null; p.potionEpoch++;
         const hub = HUBS[this.factionOf(p)] ?? this.config.spawn ?? { x: 6, y: 7 };
         let x = hub.x, y = hub.y;
         for (let r = 0; r < 6 && !this.occupancy.isFree(x, y); r++) { x = hub.x + ((r * 3) % 5) - 2; y = hub.y + 1 + (r % 3); }
@@ -549,14 +551,44 @@ export class GameWorld {
         this.sendVitals(p, true);
         this.announceVitals(p, true);
     }
-    /** El cliente informa su vida (curas, pociones, regeneración): solo se acepta una suba razonable (hasta ~50 % de la vida máxima por segundo). */
+    /**
+     * El cliente informa su vida (curas de hechizo, regeneración, robo de vida): solo se acepta una suba razonable
+     * (hasta ~50 % de la máxima por segundo, con 2 s de tope, y, además, como mucho 100 % de la máxima en cualquier ventana de 5 s).
+     * Las pociones NO pasan por acá: las cura el server con `potionRequest` (delay global y curación en el tiempo).
+     */
     private acceptHpReport(p: Player, reported: number, r?: { mpSpent?: number; mp?: number; meditating?: boolean }): void {
         if (p.isDead) return;
         if (r) this.acceptMpReport(p, r);
-        const now = Date.now(), dt = Math.min(5, Math.max(0.05, (now - p.lastHpReportAt) / 1000)); p.lastHpReportAt = now;
+        const now = Date.now(), dt = Math.min(2, Math.max(0.05, (now - p.lastHpReportAt) / 1000)); p.lastHpReportAt = now;
         const max = p.combat.maxHp, want = Math.min(max, Math.max(0, Math.round(reported)));
-        if (want > p.hp) p.hp = Math.min(want, p.hp + Math.ceil(max * 0.5 * dt) + 2);
+        if (want > p.hp) {
+            p.healLog = p.healLog.filter(([t]) => now - t < 5000);
+            const room = max - p.healLog.reduce((a, [, n]) => a + n, 0);
+            const up = Math.max(0, Math.min(want - p.hp, Math.ceil(max * 0.5 * dt) + 2, room));
+            if (up > 0) { p.hp += up; p.healLog.push([now, up]); }
+        }
         this.announceVitals(p);
+    }
+
+    // ---------- pociones (las cura el server) ----------
+    /**
+     * Poción de vida (kind 0) o de maná (kind 1). Delay global de 1,75 s entre cualquier poción (con 100 ms de margen por la red),
+     * como mucho 5 por ventana de 10 s. Vida: 20 % al instante y el resto en 4 ticks de 0,5 s (2 s); maná: todo al instante.
+     */
+    private usePotion(p: Player, kind: number): void {
+        if (p.isDead || p.disconnected || (kind !== 0 && kind !== 1)) return;
+        const now = Date.now();
+        if (now - p.lastPotionAt < POTION_GCD_MS - POTION_GCD_SLACK_MS) return;
+        p.potionLog = p.potionLog.filter((t) => now - t < 10000);
+        if (p.potionLog.length >= 5) return;
+        const max = kind === 0 ? p.combat.maxHp : p.combat.maxMp;
+        if ((kind === 0 ? p.hp : p.mp) >= max) return; // lleno: no se gasta el delay
+        p.lastPotionAt = now; p.potionLog.push(now);
+        if (kind === 1) { p.mp = Math.min(max, p.mp + potionMp(max)); this.sendVitals(p, false); return; }
+        const [first, ...ticks] = potionHpSplit(potionHp(max)), epoch = p.potionEpoch;
+        const heal = (n: number) => { p.hp = Math.min(p.combat.maxHp, p.hp + n); this.sendVitals(p, false); this.announceVitals(p); };
+        heal(first);
+        ticks.forEach((n, i) => this.setTimeout((i + 1) * POTION_HOT_EVERY_MS, () => { if (!p.disconnected && !p.isDead && p.potionEpoch === epoch) heal(n); }));
     }
 
 
@@ -580,22 +612,14 @@ export class GameWorld {
         this.sendVitals(p, false);
     }
     /**
-     * Reporte de maná del cliente: lo gastado en hechizos que el server no cobra (curas, hechizos a mobs) solo resta;
-     * una suba (poción) se acepta con un tope: una poción cada ~3 s como mucho. Meditar solo vale quieto.
+     * Reporte de maná del cliente: lo gastado en hechizos que el server no cobra (curas, hechizos a mobs) solo resta.
+     * El maná nunca sube por acá (las pociones van por `potionRequest` y la regeneración la calcula el server). Meditar solo vale quieto.
      */
     private acceptMpReport(p: Player, r: { mpSpent?: number; mp?: number; meditating?: boolean }): void {
-        const now = Date.now(), max = p.combat.maxMp, pot = potionMp(max);
+        const max = p.combat.maxMp;
         let changed = false;
         const spent = Math.min(max, Math.max(0, Math.round(Number(r.mpSpent) || 0)));
         if (spent > 0) { p.mp = Math.max(0, p.mp - spent); changed = true; }
-        // el tope de pociones se recarga con el tiempo (una poción cada 3 s, sin reserva extra)
-        const dt = Math.min(10, Math.max(0, (now - (p.lastMpReportAt || now)) / 1000)); p.lastMpReportAt = now;
-        p.potionBudget = Math.min(pot, p.potionBudget + (pot / 3) * dt);
-        const want = Math.min(max, Math.max(0, Math.round(Number(r.mp) || 0)));
-        if (want > p.mp && p.potionBudget >= 1) {
-            const up = Math.min(want - p.mp, Math.floor(p.potionBudget));
-            p.mp += up; p.potionBudget -= up; changed = true;
-        }
         const med = !!r.meditating && !p.isDead && p.mp < max;
         if (med && !p.meditating) { p.medX = p.posX; p.medY = p.posY; }
         p.meditating = med;

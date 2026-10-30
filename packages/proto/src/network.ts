@@ -116,6 +116,7 @@ export interface ClientMessage {
     | { $case: "detectInvisibleRequest"; value: DetectInvisibleRequest }
     | { $case: "hpReport"; value: HpReport }
     | { $case: "respawnRequest"; value: RespawnRequest }
+    | { $case: "potionRequest"; value: PotionRequest }
     | { $case: "saveCharacterRequest"; value: SaveCharacterRequest }
     | { $case: "mobHitRequest"; value: MobHitRequest }
     | { $case: "pveStatusRequest"; value: PveStatusRequest }
@@ -575,6 +576,11 @@ export interface HpReport {
 }
 
 export interface RespawnRequest {
+}
+
+/** Tomar una poción (kind: 0 = vida, 1 = maná). El server valida el delay global (GCD) y cura: 20 % al instante y el resto en 2 s (vida). */
+export interface PotionRequest {
+  kind: number;
 }
 
 /** Mi vida según el server (la autoridad): después de cada golpe, curación o al revivir. */
@@ -1440,6 +1446,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "respawnRequest":
         RespawnRequest.encode(message.payload.value, writer.uint32(386).fork()).join();
         break;
+      case "potionRequest":
+        PotionRequest.encode(message.payload.value, writer.uint32(394).fork()).join();
+        break;
       case "saveCharacterRequest":
         SaveCharacterRequest.encode(message.payload.value, writer.uint32(642).fork()).join();
         break;
@@ -1964,6 +1973,14 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "respawnRequest", value: RespawnRequest.decode(reader, reader.uint32()) };
             continue;
           }
+          case 49: {
+            if (tag !== 394) {
+              break;
+            }
+
+            message.payload = { $case: "potionRequest", value: PotionRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
           case 80: {
             if (tag !== 642) {
               break;
@@ -2413,6 +2430,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "respawnRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "respawnRequest", value: RespawnRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "potionRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "potionRequest", value: PotionRequest.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -8562,6 +8585,61 @@ export const RespawnRequest: MessageFns<RespawnRequest> = {
   },
   fromPartial<I extends Exact<DeepPartial<RespawnRequest>, I>>(_: I): RespawnRequest {
     const message = createBaseRespawnRequest();
+    return message;
+  },
+};
+
+function createBasePotionRequest(): PotionRequest {
+  return { kind: 0 };
+}
+
+export const PotionRequest: MessageFns<PotionRequest> = {
+  encode(message: PotionRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.kind !== 0) {
+      writer.uint32(8).int32(message.kind);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PotionRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBasePotionRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.kind = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<PotionRequest>, I>>(base?: I): PotionRequest {
+    return PotionRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PotionRequest>, I>>(object: I): PotionRequest {
+    const message = createBasePotionRequest();
+    message.kind = object.kind ?? 0;
     return message;
   },
 };
