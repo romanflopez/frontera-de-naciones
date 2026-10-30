@@ -4,6 +4,7 @@
  * Este módulo es solo vista y flujo; la conexión, el guardado y enterWorld siguen en main.ts.
  */
 import './login.css';
+import { mountDoll } from './paperdoll.ts';
 
 export interface ClassInfo { id: string; name: string; desc: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; armor?: string; spells: string[] }
 export interface FactionInfo { id: string; name: string; col: string; desc: string }
@@ -33,51 +34,20 @@ const CLS_LORE: Record<string, string> = {
 const clsCol = (id: string) => CLS_COL[id] ?? '#d6a445';
 
 // ---------- arte ----------
-/** Siluetas (retrato) dibujadas a mano: mago con báculo y guerrero con espada. */
-function silhouette(kind: string, col: string, uid: string): string {
-    const rim = `<filter id="${uid}f" x="-30%" y="-10%" width="160%" height="120%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="${col}" flood-opacity=".75"/></filter>`;
-    const body = `<linearGradient id="${uid}b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#241830"/><stop offset="1" stop-color="#07040a"/></linearGradient>`;
-    if (kind === 'mago') {
-        return `<svg viewBox="0 0 220 420" role="presentation"><defs>${rim}${body}<radialGradient id="${uid}o"><stop offset="0" stop-color="#fff"/><stop offset=".3" stop-color="${col}"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></radialGradient></defs>
-  <circle cx="168" cy="52" r="46" fill="url(#${uid}o)" class="pulse"/>
-  <g filter="url(#${uid}f)" fill="url(#${uid}b)" stroke="${col}" stroke-opacity=".55" stroke-width="1.2">
-    <path d="M168 62 L168 410" stroke="#120a1a" stroke-width="5" fill="none"/>
-    <path d="M154 40 Q150 20 164 14 M182 40 Q186 20 172 14" fill="none" stroke="${col}" stroke-width="3" stroke-linecap="round"/>
-    <path d="M100 26 C84 26 74 40 74 58 C74 71 80 82 88 88 C72 100 62 126 58 166 C54 218 46 300 36 412 L170 412 C160 300 150 218 146 166 C142 138 134 112 122 96 C130 88 136 76 136 58 C136 40 126 26 100 26Z"/>
-    <path d="M120 120 L156 150 L150 164 L116 140Z"/>
-    <path d="M88 88 C96 96 112 96 120 88" fill="none"/>
-  </g>
-  <ellipse cx="105" cy="62" rx="20" ry="23" fill="#030204"/>
-  <circle cx="97" cy="62" r="2.6" fill="${col}"/><circle cx="113" cy="62" r="2.6" fill="${col}"/>
-  <circle cx="168" cy="52" r="9" fill="#fff"/><circle cx="168" cy="52" r="6" fill="${col}"/>
-</svg>`;
-    }
-    return `<svg viewBox="0 0 220 420" role="presentation"><defs>${rim}${body}</defs>
-  <g filter="url(#${uid}f)" fill="url(#${uid}b)" stroke="${col}" stroke-opacity=".6" stroke-width="1.2">
-    <path d="M100 8 C108 -2 128 4 124 22 C122 12 110 10 104 20Z" fill="${col}" fill-opacity=".5"/>
-    <path d="M100 20 C86 20 80 32 80 46 L80 66 C80 76 88 84 100 84 C112 84 120 76 120 66 L120 46 C120 32 114 20 100 20Z"/>
-    <path d="M42 100 C42 84 64 82 76 92 L124 92 C136 82 158 84 158 100 C158 116 144 124 130 120 L70 120 C56 124 42 116 42 100Z"/>
-    <path d="M72 96 L128 96 L138 176 L130 214 L70 214 L62 176Z"/>
-    <path d="M66 214 L134 214 L130 250 L126 392 L104 392 L100 262 L96 392 L74 392 L70 250Z"/>
-    <path d="M56 160 L44 214 L58 220 L72 170Z M144 160 L156 214 L142 220 L128 170Z"/>
-    <path d="M178 40 L190 40 L190 316 L184 336 L178 316Z" fill="#150c1c"/>
-    <path d="M160 250 H208 L204 262 H164Z M180 262 H188 V300 H180Z"/>
-    <circle cx="184" cy="306" r="6"/>
-  </g>
-  <rect x="86" y="42" width="28" height="5" rx="2" fill="#030204"/><rect x="92" y="38" width="3" height="12" fill="#030204"/>
-  <circle cx="94" cy="53" r="2.2" fill="${col}"/><circle cx="106" cy="53" r="2.2" fill="${col}"/>
-  <path d="M184 44 L184 310" stroke="${col}" stroke-opacity=".75" stroke-width="1.4"/>
-</svg>`;
+/** Lienzo del muñeco real (sprites del juego) de una clase; mountDocs() lo pinta después de insertar el HTML. */
+const dollCv = (id: string, h = 0.82) => `<canvas class="doll" data-doll="${id}" data-h="${h}" aria-hidden="true"></canvas>`;
+function mountDolls(host: HTMLElement) {
+    host.querySelectorAll<HTMLCanvasElement>('canvas[data-doll]').forEach((cv) => { void mountDoll(cv, cv.dataset.doll!, clsCol(cv.dataset.doll!), Number(cv.dataset.h) || undefined); });
 }
 
 function clsIcon(id: string, col: string): string {
     const glyph = id === 'mago'
-        ? `<path d="M0 -17 L5 -4 L17 0 L5 4 L0 17 L-5 4 L-17 0 L-5 -4Z" fill="${col}" fill-opacity=".25" stroke="${col}" stroke-width="1.6" stroke-linejoin="round"/><path d="M0 -26 V26" stroke="${col}" stroke-width="2" opacity=".6"/><circle r="4" fill="#fff"/>`
-        : `<path d="M-14 -16 L16 14 M14 -16 L-16 14" stroke="${col}" stroke-width="3.2" stroke-linecap="round"/><path d="M-19 10 L-11 18 M19 10 L11 18" stroke="${col}" stroke-width="3" stroke-linecap="round"/><circle cx="0" cy="-2" r="3.2" fill="#fff"/>`;
+        ? `<path d="M0 -17 L4.5 -4.5 L17 0 L4.5 4.5 L0 17 L-4.5 4.5 L-17 0 L-4.5 -4.5Z" fill="${col}" fill-opacity=".3" stroke="${col}" stroke-width="1.8" stroke-linejoin="round"/><circle r="4.5" fill="#fff"/><path d="M12 -14 l1.6 3.4 3.4 1.6 -3.4 1.6 -1.6 3.4 -1.6 -3.4 -3.4 -1.6 3.4 -1.6z" fill="#fff" opacity=".85" transform="scale(.5) translate(24 -26)"/>`
+        : `<g stroke="${col}" stroke-linecap="round" stroke-linejoin="round"><path d="M-15 -17 L13 11 M15 -17 L-13 11" stroke-width="3.6"/><path d="M-19 7 L-9 17 M19 7 L9 17" stroke-width="3"/><path d="M-15 -17 L13 11 M15 -17 L-13 11" stroke="#fff" stroke-opacity=".55" stroke-width="1"/></g><path d="M-8 -5 H8 V4 C8 10 3 13 0 15 C-3 13 -8 10 -8 4Z" fill="#150a14" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>`;
     return badge(glyph, col);
 }
 function badge(glyph: string, col: string): string {
-    return `<svg viewBox="-34 -38 68 76" role="presentation"><path d="M0 -36 L30 -18 V18 L0 36 L-30 18 V-18Z" fill="#0c0610" stroke="${col}" stroke-width="2.2" stroke-linejoin="round"/><path d="M0 -30 L25 -15 V15 L0 30 L-25 15 V-15Z" fill="none" stroke="${col}" stroke-opacity=".4" stroke-width="1"/>${glyph}</svg>`;
+    return `<svg viewBox="-34 -34 68 68" role="presentation"><circle r="32" fill="#0c0610" stroke="${col}" stroke-width="2.4"/><circle r="27" fill="none" stroke="${col}" stroke-opacity=".4" stroke-width="1"/>${glyph}</svg>`;
 }
 function shield(id: string, col: string): string {
     const glyph = id === 'solmar'
@@ -164,8 +134,8 @@ export function initLoginUI(ctx: FlowCtx) {
         const top = (fn: (x: ClassInfo) => number) => Math.max(...ctx.classes.map((x) => fn(x)));
         const bar = (label: string, v: number, m: number) => `<li><span class="al">${label}</span><span class="av">${v}</span><span class="bar"><i style="width:${Math.round((v / m) * 100)}%"></i></span></li>`;
         $('slots').innerHTML = `<li><button type="button" class="slot on" aria-pressed="true"><span class="sbadge">${clsIcon(c.id, col)}</span><span class="stxt"><b>${esc(info.name)}</b><small>${c.name} · ${f.name}</small></span><span class="lvl">Nv. ${sv.lvl}</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button></li>`
-            + [1, 2, 3].map(() => `<li><button type="button" class="slot empty" disabled aria-label="Slot vacío, próximamente"><span class="sbadge dim"><svg viewBox="-34 -38 68 76" role="presentation"><path d="M0 -36 L30 -18 V18 L0 36 L-30 18 V-18Z" fill="none" stroke="#6a5a90" stroke-width="2" stroke-dasharray="5 4"/><path d="M0 -9 V9 M-9 0 H9" stroke="#8a78b0" stroke-width="2.4" stroke-linecap="round"/></svg></span><span class="stxt"><b>Vacío</b><small>Próximamente</small></span></button></li>`).join('');
-        $('selArt').innerHTML = silhouette(c.id, col, 'sa');
+            + [1, 2, 3].map(() => `<li><button type="button" class="slot empty" disabled aria-label="Slot vacío, próximamente"><span class="sbadge dim"><svg viewBox="-34 -34 68 68" role="presentation"><circle r="32" fill="none" stroke="#6a5a90" stroke-width="2" stroke-dasharray="5 4"/><path d="M0 -9 V9 M-9 0 H9" stroke="#8a78b0" stroke-width="2.4" stroke-linecap="round"/></svg></span><span class="stxt"><b>Vacío</b><small>Próximamente</small></span></button></li>`).join('');
+        $('selArt').innerHTML = dollCv(c.id, 0.66); mountDolls($('selArt'));
         $('selDetail').innerHTML = `<h3>${esc(info.name)}</h3><p class="dsub"><b style="color:${col}">${c.name}</b> · <b style="color:${f.col}">${f.name}</b></p><ul class="attrs">${bar('Vida', hpMax, top((x) => x.hp + (sv.lvl - 1) * x.hpL))}${bar('Maná', mpMax, top((x) => x.mp + (sv.lvl - 1) * x.mpL))}</ul><dl><dt>Nivel</dt><dd>${sv.lvl}</dd><dt>Zona</dt><dd>${esc(info.zone)}</dd></dl>`;
     }
 
@@ -178,10 +148,10 @@ export function initLoginUI(ctx: FlowCtx) {
     }
     function cardsHtml(kind: 'cls' | 'fac'): string {
         const sel = kind === 'cls' ? ctx.get().cls : ctx.get().faction;
-        if (kind === 'cls') return ctx.classes.map((c) => { const col = clsCol(c.id), on = c.id === sel; return `<button type="button" role="radio" aria-checked="${on}" class="card${on ? ' on' : ''}" data-id="${c.id}" style="--c:${col}"><span class="tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="cbadge">${clsIcon(c.id, col)}</span><span class="cart">${silhouette(c.id, col, 'c' + c.id)}</span><span class="cname">${c.name.toUpperCase()}</span><span class="ctag">${CLS_TAG[c.id] ?? c.desc}</span><ul>${bullets(c).map((b) => `<li>${esc(b)}</li>`).join('')}</ul></button>`; }).join('');
+        if (kind === 'cls') return ctx.classes.map((c) => { const col = clsCol(c.id), on = c.id === sel; return `<button type="button" role="radio" aria-checked="${on}" class="card${on ? ' on' : ''}" data-id="${c.id}" style="--c:${col}"><span class="tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="cname">${c.name.toUpperCase()}</span><span class="cbadge">${clsIcon(c.id, col)}</span><span class="cart"><i class="halo"></i><i class="floor"></i><i class="spk s1"></i><i class="spk s2"></i><i class="spk s3"></i>${dollCv(c.id)}</span><span class="ctag">${CLS_TAG[c.id] ?? c.desc}</span><ul>${bullets(c).map((b) => `<li>${esc(b)}</li>`).join('')}</ul></button>`; }).join('');
         return ctx.factions.map((f) => { const on = f.id === sel; return `<button type="button" role="radio" aria-checked="${on}" class="card fcard${on ? ' on' : ''}" data-id="${f.id}" style="--c:${f.col}"><span class="tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="cbadge">${shield(f.id, f.col)}</span><span class="cart fart">${factionBanner(f.id, f.col)}</span><span class="cname">${f.name.toUpperCase()}</span><span class="ctag">${esc(f.desc)}</span><ul><li>Ciudad inicial: ${esc(ctx.cityName(f.id))}</li><li>${f.id === 'solmar' ? 'Tierras costeras del sol y el mar' : 'Tierras secas del hierro y la ceniza'}</li></ul></button>`; }).join('');
     }
-    function renderClass() { $('clsCards').innerHTML = cardsHtml('cls'); }
+    function renderClass() { $('clsCards').innerHTML = cardsHtml('cls'); mountDolls($('clsCards')); }
     function renderFaction() { $('facCards').innerHTML = cardsHtml('fac'); }
     function pick(kind: 'cls' | 'fac', host: HTMLElement, e: Event) {
         const b = (e.target as HTMLElement).closest<HTMLElement>('.card'); if (!b) return;
@@ -204,7 +174,7 @@ export function initLoginUI(ctx: FlowCtx) {
         const mx = (fn: (x: ClassInfo) => number) => Math.max(...ctx.classes.map(fn));
         const row = (label: string, val: string, v: number, m: number) => `<li><span class="al">${label}</span><span class="av">${val}</span><span class="bar"><i style="width:${Math.round((v / m) * 100)}%"></i></span></li>`;
         const mid = (x: ClassInfo) => (x.melee[0] + x.melee[1]) / 2;
-        $('crArt').innerHTML = silhouette(c.id, col, 'cr');
+        $('crArt').innerHTML = dollCv(c.id, 0.66); mountDolls($('crArt'));
         $('crBody').innerHTML = `
   <div class="crhead"><span class="cbadge">${clsIcon(c.id, col)}</span><div><h3 style="color:${col}">${c.name.toUpperCase()}</h3><p>${esc(CLS_TAG[c.id] ?? '')}. ${esc(c.desc)}</p></div></div>
   <div class="crgrid">

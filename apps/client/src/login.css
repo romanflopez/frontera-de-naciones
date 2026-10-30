@@ -83,7 +83,9 @@
 #login .chev{width:18px;height:18px;flex:none;fill:none;stroke:#e8dce6;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 #login .selart{position:absolute;left:480px;top:150px;width:320px;height:540px;display:grid;place-items:end center}
 #login .selart::before,#login .crart::before{content:"";position:absolute;left:50%;bottom:-6px;width:340px;height:70px;margin-left:-170px;border-radius:50%;background:radial-gradient(ellipse,color-mix(in srgb,var(--ac) 70%,#fff 10%) 0%,color-mix(in srgb,var(--ac) 30%,transparent) 45%,transparent 70%);filter:blur(4px);opacity:.8}
-#login .selart svg,#login .crart svg{position:relative;height:100%;width:auto;opacity:.97}
+#login .selart::after,#login .crart::after{content:"";position:absolute;left:50%;top:6%;width:460px;height:460px;margin-left:-230px;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--ac) 38%,transparent),transparent 66%);filter:blur(8px);opacity:.75;animation:lbreath 5s ease-in-out infinite}
+@keyframes lbreath{0%,100%{opacity:.55;transform:scale(.96)}50%{opacity:.85;transform:scale(1.04)}}
+#login .selart canvas.doll,#login .crart canvas.doll{position:relative;z-index:1;width:100%;height:100%;filter:drop-shadow(0 0 18px color-mix(in srgb,var(--ac) 55%,transparent))}
 #login .sdetail{position:absolute;left:832px;top:178px;width:384px;box-sizing:border-box;padding:22px 24px;background:var(--glass);border:1px solid var(--gline);border-radius:10px;box-shadow:var(--gshadow);backdrop-filter:blur(6px)}
 #login .sdetail h3{margin:0;font:700 28px var(--f-cinzel);color:#fff;letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 0 16px rgba(200,100,255,.5)}
 #login .dsub{margin:6px 0 0;font:600 13px var(--f-inter);letter-spacing:.08em;color:#b9a6d8}
@@ -93,22 +95,30 @@
 #login .sdetail dt{color:#a894c8;font-weight:500}#login .sdetail dd{margin:0;color:#f4ecff;font-weight:600;text-align:right}
 
 /* tarjetas clase / facción */
-#login .cards{position:absolute;left:50%;top:176px;margin-left:-400px;width:800px;height:440px;display:flex;gap:44px;align-items:stretch}
-#login .card{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;padding:0 22px 18px;text-align:center;color:#d8cad6;cursor:pointer;background:linear-gradient(180deg,rgba(38,16,78,.62),rgba(12,5,30,.82));border:1px solid color-mix(in srgb,var(--c) 45%,rgba(150,100,220,.3));border-radius:12px;box-shadow:var(--gshadow);backdrop-filter:blur(6px);overflow:visible;transition:box-shadow .25s,transform .25s,border-color .25s,background .25s}
+#login .cards{position:absolute;left:50%;top:186px;margin-left:-400px;width:800px;height:446px;display:flex;gap:40px;align-items:stretch}
+#login .card{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;padding:18px 20px 16px;text-align:center;color:#d8cad6;cursor:pointer;background:linear-gradient(180deg,rgba(38,16,78,.62),rgba(12,5,30,.84));border:1px solid color-mix(in srgb,var(--c) 45%,rgba(150,100,220,.3));border-radius:12px;box-shadow:var(--gshadow);backdrop-filter:blur(6px);overflow:visible;transition:box-shadow .25s,transform .25s,border-color .25s,background .25s}
 #login .card:hover{transform:translateY(-4px);border-color:var(--c);box-shadow:0 0 26px color-mix(in srgb,var(--c) 40%,transparent),0 16px 40px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.14)}
-#login .card.on{transform:translateY(-4px);border-color:var(--c);background:linear-gradient(180deg,color-mix(in srgb,var(--c) 22%,rgba(38,16,78,.7)),rgba(12,5,30,.86));box-shadow:0 0 0 1px var(--c),0 0 44px color-mix(in srgb,var(--c) 60%,transparent),0 16px 40px rgba(0,0,0,.55),inset 0 0 70px color-mix(in srgb,var(--c) 18%,transparent)}
-#login .card::before{content:"";position:absolute;inset:0;border-radius:12px;background:radial-gradient(ellipse at 50% 36%,color-mix(in srgb,var(--c) 26%,transparent),transparent 62%);pointer-events:none;opacity:.7}
-#login .tick{position:absolute;right:14px;top:14px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--c);box-shadow:0 0 14px var(--c);opacity:0;transform:scale(.5);transition:opacity .2s,transform .2s}
+#login .card.on{transform:translateY(-4px);border-color:var(--c);background:linear-gradient(180deg,color-mix(in srgb,var(--c) 22%,rgba(38,16,78,.7)),rgba(12,5,30,.88));box-shadow:0 0 0 1px var(--c),0 0 44px color-mix(in srgb,var(--c) 60%,transparent),0 16px 40px rgba(0,0,0,.55),inset 0 0 70px color-mix(in srgb,var(--c) 18%,transparent)}
+#login .card::before{content:"";position:absolute;inset:0;border-radius:12px;background:radial-gradient(ellipse at 50% 36%,color-mix(in srgb,var(--c) 22%,transparent),transparent 62%);pointer-events:none;opacity:.7}
+#login .tick{position:absolute;right:14px;top:14px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--c);box-shadow:0 0 14px var(--c);opacity:0;transform:scale(.5);transition:opacity .2s,transform .2s;z-index:3}
 #login .tick svg{width:15px;height:15px;fill:none;stroke:#10040f;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
 #login .card.on .tick{opacity:1;transform:none}
-#login .cbadge{position:relative;z-index:2;width:66px;height:72px;margin-top:-34px;flex:none}#login .cbadge svg{width:100%;height:100%;filter:drop-shadow(0 0 10px var(--c))}
-#login .cart{position:relative;width:100%;height:190px;margin-top:6px;display:grid;place-items:end center;overflow:hidden}
-#login .cart:not(.fart)::after{content:"";position:absolute;left:10%;right:10%;bottom:-14px;height:36px;border-radius:50%;background:radial-gradient(ellipse,color-mix(in srgb,var(--c) 70%,transparent),transparent 70%)}
-#login .cart svg{position:relative;z-index:1;height:100%;width:auto}
-#login .fart{border-radius:6px;border:1px solid color-mix(in srgb,var(--c) 50%,#201826);box-shadow:0 0 18px color-mix(in srgb,var(--c) 28%,transparent)}#login .fart svg{width:100%;height:100%}
-#login .cname{position:relative;margin-top:12px;font:700 27px var(--f-cinzel);letter-spacing:.12em;color:var(--c);text-shadow:0 0 16px color-mix(in srgb,var(--c) 70%,transparent)}
-#login .ctag{position:relative;margin-top:4px;font:500 14px var(--f-inter);color:#e6dcf0;padding-bottom:12px;border-bottom:1px solid rgba(206,150,255,.22);width:86%}
-#login .card ul{position:relative;margin:12px 0 0;padding:0;list-style:none;display:grid;gap:7px;text-align:left;width:92%;font:400 13px/1.35 var(--f-inter);color:#d2c6e0}
+#login .cname{position:relative;z-index:3;font:700 27px var(--f-cinzel);letter-spacing:.16em;color:#fff;text-shadow:0 0 16px color-mix(in srgb,var(--c) 80%,transparent),0 2px 8px #000}
+#login .card.fcard .cname{color:var(--c)}
+#login .cbadge{position:absolute;z-index:3;left:14px;top:10px;width:48px;height:48px;flex:none}#login .cbadge svg{width:100%;height:100%;filter:drop-shadow(0 0 8px var(--c))}
+#login .card.fcard .cbadge{position:relative;left:auto;top:auto;width:66px;height:72px;margin-top:-34px;order:-1}
+#login .cart{position:relative;width:calc(100% + 24px);height:236px;margin:2px -12px 0;display:grid;place-items:end center}
+#login .cart .halo{position:absolute;left:50%;top:-4px;width:300px;height:300px;margin-left:-150px;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--c) 55%,transparent) 0%,color-mix(in srgb,var(--c) 18%,transparent) 48%,transparent 70%);opacity:.55;transition:opacity .3s,transform .3s}
+#login .card:hover .halo,#login .card.on .halo{opacity:1;transform:scale(1.08)}
+#login .cart .floor{position:absolute;left:12%;right:12%;bottom:6px;height:34px;border-radius:50%;background:radial-gradient(ellipse,color-mix(in srgb,var(--c) 85%,#fff 8%) 0%,color-mix(in srgb,var(--c) 35%,transparent) 50%,transparent 72%);filter:blur(2px);opacity:.75}
+#login .cart canvas.doll{position:relative;z-index:1;width:100%;height:100%;margin-top:-34px;height:calc(100% + 34px);filter:drop-shadow(0 0 12px color-mix(in srgb,var(--c) 55%,transparent));transition:transform .3s,filter .3s;transform-origin:50% 100%}
+#login .card:hover canvas.doll,#login .card.on canvas.doll{transform:scale(1.05);filter:drop-shadow(0 0 20px color-mix(in srgb,var(--c) 85%,transparent))}
+#login .spk{position:absolute;z-index:2;width:4px;height:4px;border-radius:50%;background:var(--c);box-shadow:0 0 8px 2px var(--c);opacity:0;animation:lspk 4.6s ease-in infinite}
+#login .spk.s1{left:22%;bottom:30px}#login .spk.s2{left:70%;bottom:50px;animation-delay:1.6s}#login .spk.s3{left:48%;bottom:20px;animation-delay:3s}
+@keyframes lspk{0%{opacity:0;transform:translateY(0)}20%{opacity:.9}100%{opacity:0;transform:translateY(-150px) translateX(14px)}}
+#login .fart{border-radius:6px;border:1px solid color-mix(in srgb,var(--c) 50%,#201826);box-shadow:0 0 18px color-mix(in srgb,var(--c) 28%,transparent);height:190px;width:100%;margin:6px 0 0;display:block;overflow:hidden}#login .fart svg{width:100%;height:100%}
+#login .ctag{position:relative;margin-top:6px;font:500 14px var(--f-inter);color:#e6dcf0;padding-bottom:10px;border-bottom:1px solid rgba(206,150,255,.22);width:86%}
+#login .card ul{position:relative;margin:10px 0 0;padding:0;list-style:none;display:grid;gap:6px;text-align:left;width:94%;font:400 13px/1.3 var(--f-inter);color:#d2c6e0}
 #login .card li{padding-left:18px;position:relative}
 #login .card li::before{content:"";position:absolute;left:3px;top:6px;width:6px;height:6px;transform:rotate(45deg);background:var(--c);box-shadow:0 0 6px var(--c)}
 
@@ -116,7 +126,7 @@
 #login .crart{position:absolute;left:36px;top:150px;width:310px;height:490px;display:grid;place-items:end center}
 #login .crbody{position:absolute;left:372px;top:132px;width:844px;display:grid;gap:14px}
 #login .crhead{display:flex;align-items:center;gap:18px;padding:0 4px}
-#login .crhead .cbadge{margin:0;width:62px;height:68px}
+#login .crhead .cbadge{position:relative;left:auto;top:auto;margin:0;width:62px;height:62px;flex:none}#login .crhead .cbadge svg{width:100%;height:100%;filter:drop-shadow(0 0 8px var(--ac))}
 #login .crhead h3{margin:0;font:700 32px var(--f-cinzel);letter-spacing:.1em;text-shadow:0 0 18px currentColor}
 #login .crhead p{margin:4px 0 0;font-size:14px;color:#d8caea;line-height:1.4}
 #login .crgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
@@ -137,4 +147,4 @@
 #login .crstrip dt{font:600 11px var(--f-inter);letter-spacing:.16em;text-transform:uppercase;color:#a894c8;margin-bottom:5px}
 #login .crstrip dd{margin:0;font:700 17px var(--f-cinzel);letter-spacing:.04em;color:#f6eefc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-@media (prefers-reduced-motion:reduce){#login .fog,#login .pulse{animation:none}#login .card,#login .lbtn{transition:none}}
+@media (prefers-reduced-motion:reduce){#login .fog,#login .pulse,#login .spk,#login .selart::after,#login .crart::after{animation:none}#login .card,#login .lbtn{transition:none}}
