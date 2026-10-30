@@ -2,6 +2,7 @@
  * Estado de un jugador dentro de un mundo. Port recortado de GameWorldPlayer.cs:
  * posición, apariencia, velocidad, controles anti-trampa de movimiento y ping.
  */
+import { DEFAULT_STATS, PvpLimiter, type CombatStats } from './systems/pvpCombat.ts';
 import { createDefaultStatus } from './systems/statusSystem.ts';
 import type { ServerMessage } from '@fdn/proto';
 import type { Settings } from './config.ts';
@@ -46,6 +47,9 @@ export class Player {
     /** Bando;clase;piezas visibles, lo manda el cliente (solo se retransmite a los demás). */
     profile = '';
     lastPvpMs = 0;
+    /** Stats de combate sacados del último guardado validado, y límites del PvP. */
+    combat: CombatStats = { ...DEFAULT_STATS };
+    pvp = new PvpLimiter();
     status = createDefaultStatus();
     disconnected = false;
 

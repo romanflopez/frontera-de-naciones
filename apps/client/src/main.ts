@@ -276,6 +276,9 @@ function onServer(m: ServerPayload) {
             break;
         case 'pvpHit': {
             const v = m.value;
+            if (v.casterId === myId) { // el server me confirma mi golpe con el daño que calculó
+                if (v.dmg > 0) float(v.x, v.y - 0.3, '-' + v.dmg, '#ffd24a'); if (v.secs > 0) float(v.x, v.y - 0.6, 'Paralizado', '#7fd6ff'); break;
+            }
             if (v.fx === 'blizz') fx.push({ k: 'blizz', x: v.x, y: v.y, t: 0, r: v.r || 2.7, d: 3.2 }); else if (v.fx) efxLocal(v.fx, v.x, v.y, v.targetId ? 8 : 0);
             if (v.fx === 'resist') { float(v.x, v.y - 0.5, '¡Resistió!', '#9fe8ff'); break; }
             if (v.targetId === myId && v.secs < 0) { P.frozenUntil = 0; log('¡Removiste la parálisis! Sos inmune 8 s.', true); break; }
@@ -433,7 +436,7 @@ function explode(p: Proj) {
     scorch.push({ x: p.tx!, y: p.ty!, t: now(), r: p.aoe! });
     if (!reduce) shake = 0.3; hitstop = Math.max(hitstop, 0.06);
     let n = 0;
-    for (const o of enemiesNear(p.tx!, p.ty!, p.aoe!)) pvpDamage(o, Math.round(p.dmg * (0.85 + R() * 0.3)), '', false);
+    for (const o of enemiesNear(p.tx!, p.ty!, p.aoe!)) pvpDamage(o, 'bola', '');
     for (const m of mobs.slice()) { if (Math.hypot(m.x - p.tx!, m.y - p.ty!) <= p.aoe!) { n++; damageMob(m, Math.round(p.dmg * (0.85 + R() * 0.3)), false, 'spell'); } }
     if (n > 1) log(`Bola de fuego: ${n} enemigos alcanzados.`, true);
 }
@@ -485,36 +488,36 @@ const LIB: Record<string, SpellDef> = {
     lanza: { name: 'Lanza de piedra', mp: 30, cd: 5, col: '#d9a45a', range: 7, target: true,
         cast(m) { if (!isMob(m)) return false; efx('rocklance', m.x, m.y, 4); if (!reduce) shake = Math.max(shake, 0.2); damageMob(m, rint(30, 42) + P.lvl * 3 + totals().mag, true, 'spell'); } },
     lluvia: { name: 'Lluvia de fuego', mp: 45, cd: 9, col: '#ff7a2f', range: 7, target: true, aoe: 2.4,
-        cast(m) { if (!m) return false; zone(m.x, m.y, 2.4, 4, 0.5, () => rint(11, 16) + P.lvl * 2 + totals().mag, 'cataclysm'); } },
+        cast(m) { if (!m) return false; zone(m.x, m.y, 2.4, 4, 0.5, () => rint(11, 16) + P.lvl * 2 + totals().mag, 'cataclysm', 0, 'lluvia'); } },
     ventisca: { name: 'Ventisca', mp: 50, cd: 10, col: '#9fdcff', range: 7, target: true, aoe: 2.7,
-        cast(m) { if (!m) return false; zone(m.x, m.y, 2.7, 6, 0.4, () => rint(9, 14) + P.lvl * 2 + totals().mag, 'blizz', 1.5); } },
+        cast(m) { if (!m) return false; zone(m.x, m.y, 2.7, 6, 0.4, () => rint(9, 14) + P.lvl * 2 + totals().mag, 'blizz', 1.5, 'ventisca'); } },
     marejada: { name: 'Marejada', mp: 40, cd: 8, col: '#4aa8ff', range: 7, target: true, aoe: 2.2,
-        cast(m) { if (!m) return false; zone(m.x, m.y, 2.2, 3, 0.6, () => rint(12, 17) + P.lvl * 2 + totals().mag, 'tidal', 1.2); } },
+        cast(m) { if (!m) return false; zone(m.x, m.y, 2.2, 3, 0.6, () => rint(12, 17) + P.lvl * 2 + totals().mag, 'tidal', 1.2, 'marejada'); } },
     curar2: { name: 'Curación mayor', mp: 35, cd: 6, col: '#7ee08a', range: 0, target: false,
         cast() { heal(70 + P.lvl * 5, 'godsbreath'); } },
     sismo: { name: 'Sismo', mp: 25, cd: 6, col: '#d9a45a', range: 0, target: false,
-        cast() { fx.push({ k: 'boom', x: P.x, y: P.y, t: 0, r: 2.4, c: '#d9a45a' }); const w = totals().wdmg; zone(P.x, P.y, 2.4, 1, 0, () => rint(12, 18) + P.lvl * 2 + rint(w[0], w[1]), 'cataclysm'); } },
+        cast() { fx.push({ k: 'boom', x: P.x, y: P.y, t: 0, r: 2.4, c: '#d9a45a' }); const w = totals().wdmg; zone(P.x, P.y, 2.4, 1, 0, () => rint(12, 18) + P.lvl * 2 + rint(w[0], w[1]), 'cataclysm', 0, 'sismo'); } },
     remover: { name: 'Remover', mp: 20, cd: 10, col: '#9fe8ff', range: 0, target: false,
         cast() { if (P.frozenUntil <= now()) { toast('No estás paralizado.'); return false; } net.send({ $case: 'removerRequest', value: {} }); } },
     luz: { name: 'Pilar de luz', mp: 35, cd: 7, col: '#bfe6ff', range: 7, target: true, aoe: 1.9,
-        cast(m) { if (!m) return false; const x = m.x, y = m.y; zone(x, y, 1.9, 2, 0.7, () => rint(14, 20) + P.lvl * 2 + totals().mag, 'spread'); later(0.5, () => { if (!P.dead && Math.hypot(P.x - x, P.y - y) <= 1.9) heal(25 + P.lvl * 3); }); } },
+        cast(m) { if (!m) return false; const x = m.x, y = m.y; zone(x, y, 1.9, 2, 0.7, () => rint(14, 20) + P.lvl * 2 + totals().mag, 'spread', 0, 'luz'); later(0.5, () => { if (!P.dead && Math.hypot(P.x - x, P.y - y) <= 1.9) heal(25 + P.lvl * 3); }); } },
     invisibilidad: { name: 'Invisibilidad', mp: 40, cd: 20, col: '#9fb8ff', range: 0, target: false,
         cast() { efx('splash', P.x, P.y); net.send({ $case: 'invisibilityRequest', value: {} }); } },
     detectar: { name: 'Detectar invisible', mp: 30, cd: 12, col: '#ffe9a0', range: 0, target: false,
         cast() { efx('spread', P.x, P.y); net.send({ $case: 'detectInvisibleRequest', value: {} }); } },
     furia: { name: 'Furia', mp: 15, cd: 20, col: '#ff3b2f', range: 0, target: false,
-        cast() { efx('flamme', P.x, P.y); P.fury = now() + 10; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log('Furia: +30% de daño físico y +20% de daño en hechizos por 10 s, sin castigo.', true); } },
+        cast() { efxLocal('flamme', P.x, P.y); pvpSend('flamme', P.x, P.y, 0n, 'furia'); P.fury = now() + 10; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log('Furia: +30% de daño físico y +20% de daño en hechizos por 10 s, sin castigo.', true); } },
 };
 let SPELLS: Spell[] = [];
 const SPECIAL_KEY: Record<string, string | undefined> = { remover: 'r', invisibilidad: 'f', detectar: 'g' };
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
 /** Hechizo de área estilo Blizzard: varios golpes sobre las celdas cercanas al punto elegido. */
-function zone(x: number, y: number, r: number, ticks: number, every: number, dmg: () => number, effect: string, slow = 0) {
+function zone(x: number, y: number, r: number, ticks: number, every: number, dmg: () => number, effect: string, slow = 0, sid = '') {
     for (let i = 0; i < ticks; i++) later(i * every, () => {
         if (P.dead) return;
-        if (effect === 'blizz') { if (i === 0) { fx.push({ k: 'blizz', x, y, t: 0, r, d: ticks * every + 0.5 }); pvpSend('blizz', x, y, 0n, 0, 0, r); } } else if (i === 0 || effect === 'cataclysm') efx(effect, x, y);
+        if (effect === 'blizz') { if (i === 0) { fx.push({ k: 'blizz', x, y, t: 0, r, d: ticks * every + 0.5 }); pvpSend('blizz', x, y, 0n, '', 0, r); } } else if (i === 0 || effect === 'cataclysm') efx(effect, x, y);
         if (!reduce && i === 0) shake = Math.max(shake, 0.15);
-        for (const o of enemiesNear(x, y, r)) pvpDamage(o, dmg(), '', false, slow && i === ticks - 1 ? slow : 0);
+        for (const o of enemiesNear(x, y, r)) { if (sid) { pvpSend('', x, y, o.id, sid, slow && i === ticks - 1 ? slow : 0, r); } }
         for (const m of mobs.slice()) if (Math.hypot(m.x - x, m.y - y) <= r && !isSafe(m.x, m.y)) damageMob(m, dmg(), false, 'spell', slow && m.imm <= now() && i === ticks - 1 ? slow : 0);
     });
 }
@@ -616,27 +619,23 @@ const facOf = (profile: string) => profile.split(';')[0];
 const unseen = (o: Other) => !!o.inv && !P.det && facOf(o.profile) !== selectedFaction;
 const isEnemy = (o: Other) => !o.gone && !unseen(o) && !isSafe(o.x, o.y) && !isSafe(P.x, P.y) && (facOf(o.profile) !== selectedFaction || (inArena(P.x, P.y) && inArena(o.x, o.y)));
 const enemiesNear = (x: number, y: number, r: number) => [...others.values()].filter((o) => isEnemy(o) && Math.hypot(o.x - x, o.y - y) <= r);
-function pvpSend(fx: string, x: number, y: number, targetId = 0n, dmg = 0, secs = 0, r = 0) { net.send({ $case: 'pvpHitRequest', value: { fx, x, y, targetId, dmg, secs, r } }); }
-/** Le pega a un jugador enemigo: el cliente de él aplica el daño. */
-function pvpDamage(o: Other, dmg: number, fxName: string, melee: boolean, secs = 0) {
-    if (P.fury > now()) dmg = Math.round(dmg * (melee ? 1.3 : CLS.id === 'mago' ? 1.2 : 1));
+/** Avisa al server qué hechizo lancé y sobre quién; el daño lo calcula el server (el campo dmg ya no se usa). */
+function pvpSend(fx: string, x: number, y: number, targetId = 0n, spell = '', secs = 0, r = 0) { net.send({ $case: 'pvpHitRequest', value: { fx, x, y, targetId, dmg: 0, secs, r, spell } }); }
+/** Le pega a un jugador enemigo: el server calcula el daño y el cliente de él lo aplica. `secs` > 0 pide la parálisis del hechizo. */
+function pvpDamage(o: Other, spell: string, fxName: string, secs = 0) {
     if (fxName) efxLocal(fxName, o.x, o.y, 8);
-    pvpSend(fxName, o.x, o.y, o.id, dmg, secs);
-    if (dmg > 0) float(o.x, o.y - 0.3, '-' + dmg, '#ffd24a');
-    if (secs > 0) float(o.x, o.y - 0.6, 'Paralizado', '#7fd6ff');
+    pvpSend(fxName, o.x, o.y, o.id, spell, secs);
 }
-const pvpMag = () => rint(12, 18) + P.lvl * 2 + totals().mag;
 /** Hechizos de un solo objetivo contra un jugador. */
 function pvpCast(id: string | undefined, o: Other): boolean {
-    const t = totals(), mel = () => rint(14, 20) + P.lvl * 2 + rint(t.wdmg[0], t.wdmg[1]);
     switch (id) {
-        case 'proyectil': { const d = pvpMag(); later(dist(P, o) / 11, () => { if (isEnemy(o)) pvpDamage(o, d, 'splash', false); }); return true; }
-        case 'paralisis': pvpDamage(o, 0, 'stop', false, 3); return true;
-        case 'aturdir': pvpDamage(o, 0, 'turbulence', false, 2.5); return true;
-        case 'hoja': pvpDamage(o, rint(13, 19) + P.lvl * 2 + t.mag, 'windblade', false); return true;
-        case 'lanza': pvpDamage(o, rint(30, 42) + P.lvl * 3 + t.mag, 'rocklance', false); return true;
-        case 'golpe': pvpDamage(o, mel(), 'crosswind', true); return true;
-        case 'tajo': pvpDamage(o, rint(22, 30) + P.lvl * 3 + rint(t.wdmg[0], t.wdmg[1]), 'crosswind', true); return true;
+        case 'proyectil': later(dist(P, o) / 11, () => { if (isEnemy(o)) pvpDamage(o, 'proyectil', 'splash'); }); return true;
+        case 'paralisis': pvpDamage(o, 'paralisis', 'stop', 3); return true;
+        case 'aturdir': pvpDamage(o, 'aturdir', 'turbulence', 2.5); return true;
+        case 'hoja': pvpDamage(o, 'hoja', 'windblade'); return true;
+        case 'lanza': pvpDamage(o, 'lanza', 'rocklance'); return true;
+        case 'golpe': pvpDamage(o, 'golpe', 'crosswind'); return true;
+        case 'tajo': pvpDamage(o, 'tajo', 'crosswind'); return true;
         default: return false;
     }
 }
@@ -850,7 +849,7 @@ function update(dt: number) {
             if (d > 1.6) { P.repath -= dt; if (P.repath <= 0 || !P.path.length) { moveTo(f.x, f.y); P.repath = 0.35; } }
             else if (!P.step) {
                 P.path = []; turnTo(P, f.x - P.x, f.y - P.y, dt);
-                if (T >= P.nextAtk && T >= P.frozenUntil) { const iv = 0.85 / (1 + tot.aspd / 100); P.nextAtk = T + iv; sendFacing(); oneShot(P, 'swing', Math.min(0.4, iv)); later(0.18, () => { if (isEnemy(f) && dist(P, f) < 1.9 && !P.dead) { const t2 = totals(); pvpDamage(f, rint(CLS.melee[0], CLS.melee[1]) + P.lvl + rint(t2.wdmg[0], t2.wdmg[1]), '', true); } }); }
+                if (T >= P.nextAtk && T >= P.frozenUntil) { const iv = 0.85 / (1 + tot.aspd / 100); P.nextAtk = T + iv; sendFacing(); oneShot(P, 'swing', Math.min(0.4, iv)); later(0.18, () => { if (isEnemy(f) && dist(P, f) < 1.9 && !P.dead) { pvpDamage(f, 'ataque', ''); } }); }
             }
         }
         // caminar: un paso por vez; el server valida cada uno
@@ -1423,7 +1422,7 @@ async function boot() {
     refreshLook();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, openShop, toScreen, give: (n: number) => { for (let i = 0; i < n; i++) P.bag.push(rollItem(1 + i)); renderBag(); } });
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5) });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();
     requestAnimationFrame(frame);

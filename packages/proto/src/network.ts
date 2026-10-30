@@ -558,6 +558,8 @@ export interface PvpHitRequest {
   dmg: number;
   secs: number;
   r: number;
+  /** hechizo que lanza (el daño lo calcula el server) */
+  spell: string;
 }
 
 export interface PvpHit {
@@ -8212,7 +8214,7 @@ export const StatusUpdate: MessageFns<StatusUpdate> = {
 };
 
 function createBasePvpHitRequest(): PvpHitRequest {
-  return { fx: "", x: 0, y: 0, targetId: 0n, dmg: 0, secs: 0, r: 0 };
+  return { fx: "", x: 0, y: 0, targetId: 0n, dmg: 0, secs: 0, r: 0, spell: "" };
 }
 
 export const PvpHitRequest: MessageFns<PvpHitRequest> = {
@@ -8240,6 +8242,9 @@ export const PvpHitRequest: MessageFns<PvpHitRequest> = {
     }
     if (message.r !== 0) {
       writer.uint32(57).double(message.r);
+    }
+    if (message.spell !== "") {
+      writer.uint32(66).string(message.spell);
     }
     return writer;
   },
@@ -8313,6 +8318,14 @@ export const PvpHitRequest: MessageFns<PvpHitRequest> = {
             message.r = reader.double();
             continue;
           }
+          case 8: {
+            if (tag !== 66) {
+              break;
+            }
+
+            message.spell = reader.string();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -8337,6 +8350,7 @@ export const PvpHitRequest: MessageFns<PvpHitRequest> = {
     message.dmg = object.dmg ?? 0;
     message.secs = object.secs ?? 0;
     message.r = object.r ?? 0;
+    message.spell = object.spell ?? "";
     return message;
   },
 };

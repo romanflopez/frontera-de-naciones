@@ -513,6 +513,8 @@ message PvpHitRequest {
   int32 dmg = 5;
   double secs = 6;
   double r = 7;
+  // hechizo que lanza (el daño lo calcula el server)
+  string spell = 8;
 }
 message PvpHit {
   int64 caster_id = 1;

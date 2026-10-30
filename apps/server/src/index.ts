@@ -173,6 +173,7 @@ wss.on('connection', (ws, req) => {
             session = { networkId, sessionId: randomUUID(), worldId, characterName, socket: ws, disconnectDeadline: null, logoutAllowedAt: null };
             sessionsByNetworkId.set(networkId, session);
             worlds.get(worldId)!.playerConnected(session.sessionId, characterName, send, disconnect, persisted);
+            worlds.get(worldId)!.setCombatStats(session.sessionId, auth.account.character);
             return;
         }
 
@@ -196,7 +197,7 @@ wss.on('connection', (ws, req) => {
                 const t = Date.now(); if (t - lastSaveAt < 800) return; lastSaveAt = t;
                 const clean = sanitizeCharacter(payload.value.data);
                 const acc = storage.get(accountKeyOfSession);
-                if (clean && acc) { acc.character = clean; storage.put(accountKeyOfSession, acc); }
+                if (clean && acc) { acc.character = clean; storage.put(accountKeyOfSession, acc); worlds.get(session.worldId)?.setCombatStats(session.sessionId, clean); }
                 return;
             }
             default:

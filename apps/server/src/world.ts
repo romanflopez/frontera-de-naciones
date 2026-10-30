@@ -6,6 +6,7 @@
  * tick (cada 50 ms) solo dispara los temporizadores. Más adelante, si hace falta escalar,
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
+import { PVP_SPELLS, rollSpellDamage, statsFromCharacter } from './systems/pvpCombat.ts';
 import { applyParalysis, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import type { Catalogs, GameWorldConfig, Settings } from './config.ts';
@@ -286,18 +287,31 @@ export class GameWorld {
                     break;
                 }
                 case 'pvpHitRequest': {
-                    // Relé simple: el server limita valores y avisa a los jugadores cercanos; cada cliente decide si le pega a él.
+                    // El server decide el daño: el cliente solo dice qué hechizo y sobre quién (ver systems/pvpCombat.ts).
                     const v = payload.value, num = (n: number, lo: number, hi: number) => (Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : lo);
                     const fx = /^[a-z]{0,16}$/.test(v.fx) ? v.fx : '';
-                    const now = Date.now(); if (now - p.lastPvpMs < 40) break; p.lastPvpMs = now;
-                    const secs = num(v.secs, 0, 6);
-                    if (v.dmg > 0 || secs > 0) this.changeStatus(p, () => breakInvisibility(p.status));
-                    if (secs > 0 && v.targetId) {
+                    const now = Date.now(), spell = /^[a-z0-9]{0,16}$/.test(v.spell) ? v.spell : '';
+                    // los avisos de efecto van con tope de ritmo; los golpes con hechizo los limita cada hechizo (recarga y ritmo)
+                    if (!spell) { if (now - p.lastPvpMs < 40) break; p.lastPvpMs = now; }
+                    const x = num(v.x, 0, 200), y = num(v.y, 0, 200), r = num(v.r, 0, 6);
+                    // Furia: la lleva el server
+                    if (spell === 'furia') { if (p.pvp.castFury(now)) this.broadcastNear(p, M.pvpHit(p.playerId, { fx: fx || 'flamme', x: p.posX, y: p.posY, targetId: 0n, dmg: 0, secs: 0, r: 0 })); break; }
+                    const sp = PVP_SPELLS[spell];
+                    let dmg = 0, secs = 0;
+                    if (sp && v.targetId) {
                         const tgt = this.playersById.get(v.targetId);
-                        if (!tgt || tgt === p) break;
-                        if (!applyParalysis(tgt.status, now, secs * 1000)) { p.send(M.pvpHit(tgt.playerId, { fx: 'resist', x: tgt.posX, y: tgt.posY, targetId: 0n, dmg: 0, secs: 0, r: 0 })); break; }
-                    }
-                    this.broadcastNear(p, M.pvpHit(p.playerId, { fx, x: num(v.x, 0, 200), y: num(v.y, 0, 200), targetId: v.targetId, dmg: Math.round(num(v.dmg, 0, 600)), secs, r: num(v.r, 0, 6) }));
+                        if (!tgt || tgt === p || tgt.disconnected) break;
+                        const dTgt = Math.hypot(tgt.posX - p.posX, tgt.posY - p.posY);
+                        if (dTgt > sp.range + 2.5) break;                                  // muy lejos del que lanza
+                        if (sp.aoe && Math.hypot(tgt.posX - x, tgt.posY - y) > sp.aoe + 2) break; // fuera del área
+                        if (!p.pvp.allow(spell, tgt.playerId, now)) break;                // recarga o ritmo
+                        dmg = rollSpellDamage(spell, p.combat, p.pvp.fury(now));
+                        if (v.secs > 0 && p.pvp.allowSecs(spell, tgt.playerId, now)) secs = sp.secs ?? 0;
+                        this.changeStatus(p, () => breakInvisibility(p.status));
+                        if (secs > 0 && !applyParalysis(tgt.status, now, secs * 1000)) { p.send(M.pvpHit(tgt.playerId, { fx: 'resist', x: tgt.posX, y: tgt.posY, targetId: 0n, dmg: 0, secs: 0, r: 0 })); secs = 0; if (dmg <= 0) break; }
+                        if (dmg > 0 || secs > 0) p.send(M.pvpHit(p.playerId, { fx: '', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs, r: 0 })); // para que el que pega vea el número
+                    } else if (v.targetId) break; // daño sin hechizo conocido: se descarta
+                    this.broadcastNear(p, M.pvpHit(p.playerId, { fx, x, y, targetId: v.targetId, dmg, secs, r }));
                     break;
                 }
                 case 'invisibilityRequest': { this.changeStatus(p, () => castInvisibility(p.status, Date.now())); break; }
@@ -400,6 +414,11 @@ export class GameWorld {
     private handleTeleport(p: Player, x: number, y: number): void {        if (p.isDead || (x === p.posX && y === p.posY) || !this.occupancy.isFree(x, y)) return;
         this.moveTo(p, p.posX, p.posY, x, y, false, true);
         p.send(M.playerTeleported(x, y));
+    }
+
+    /** Stats de combate del jugador a partir del personaje guardado (ya validado). */
+    setCombatStats(sessionId: string, characterJson: string | undefined): void {
+        const p = this.players.get(sessionId); if (p) p.combat = statsFromCharacter(characterJson);
     }
 
     /** Port de Movement.SyncPlayerVisibilityAfterMovement. */
