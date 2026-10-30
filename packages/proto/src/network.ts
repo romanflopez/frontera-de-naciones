@@ -76,7 +76,9 @@ export interface ClientMessage {
     | { $case: "authenticateRequest"; value: AuthenticateRequest }
     | { $case: "logoutRequest"; value: LogoutRequest }
     | { $case: "logoutCancelledRequest"; value: LogoutCancelledRequest }
-    | { $case: "worldChangeRequest"; value: WorldChangeRequest }
+    | //
+    /** En desuso (reservado): el cambio de mapa va por PortalRequest / MapTransfer / MapReady. */
+    { $case: "worldChangeRequest"; value: WorldChangeRequest }
     | { $case: "playerAttackModeChangeRequest"; value: PlayerAttackModeChangeRequest }
     | { $case: "changePlayerIdleDirectionRequest"; value: ChangePlayerIdleDirectionRequest }
     | { $case: "summonMonsterRequested"; value: SummonMonsterRequested }
@@ -133,6 +135,10 @@ export interface ClientMessage {
     | { $case: "mobHitRequest"; value: MobHitRequest }
     | { $case: "pveStatusRequest"; value: PveStatusRequest }
     | { $case: "waypointRequest"; value: WaypointRequest }
+    | //
+    /** Cambio de mapa (ver docs/MUNDO.md 2.3): el cliente pisa un vínculo y pide cruzar por su id estable; cuando terminó de armar el mapa nuevo avisa MapReady. */
+    { $case: "portalRequest"; value: PortalRequest }
+    | { $case: "mapReady"; value: MapReady }
     | undefined;
 }
 
@@ -211,7 +217,17 @@ export interface SpellCastRequest {
   monsterId?: bigint | undefined;
 }
 
-/** Viaje por el menú de waypoints: id = 'city' (volver a la ciudad de tu facción) o el id de una zona de entrenamiento. */
+/** Cruzar un vínculo entre mapas. El id es estable (no depende de coordenadas); el server valida distancia, requisitos y estado. */
+export interface PortalRequest {
+  portalId: string;
+}
+
+/** El cliente terminó de armar el mapa `map_id` (con el hash que calculó). El server recién ahí mete al jugador en el mundo nuevo. */
+export interface MapReady {
+  mapId: string;
+  mapHash: string;
+}
+
 export interface WaypointRequest {
   id: string;
 }
@@ -518,6 +534,9 @@ export interface ServerMessage {
     | { $case: "killReward"; value: KillReward }
     | { $case: "groundItemSpawned"; value: GroundItemSpawned }
     | { $case: "groundItemRemoved"; value: GroundItemRemoved }
+    | //
+    /** Cambio de mapa: el server sacó al jugador del mundo viejo y espera MapReady para meterlo en el nuevo. */
+    { $case: "mapTransfer"; value: MapTransfer }
     | undefined;
 }
 
@@ -1255,6 +1274,27 @@ export interface InitialGameWorldState {
   weather: WeatherMode;
 }
 
+/**
+ * El server sacó al jugador del mundo anterior: el cliente muestra la pantalla de carga, arma el mapa `map_id`,
+ * verifica que `map_hash` coincida con el que generó y contesta MapReady. Después llega InitialGameWorldState.
+ */
+export interface MapTransfer {
+  mapId: string;
+  name: string;
+  /** Celda de llegada y dirección (misma convención que InitialGameWorldState). */
+  x: number;
+  y: number;
+  direction: number;
+  /** Hash del mapa (FNV-1a de tamaño, bloqueos y zonas): detecta un cliente desactualizado. */
+  mapHash: string;
+  musicFile: string;
+  /** Id del mundo (mapa + instancia) donde va a aparecer: es el que el cliente manda en RequestMovement.game_world_id. */
+  gameWorldId: string;
+  /** Rango de nivel recomendado (0 = sin dato) para la pantalla de carga. */
+  lvlMin: number;
+  lvlMax: number;
+}
+
 export interface PingRequest {
   sequence: number;
 }
@@ -1658,6 +1698,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         break;
       case "waypointRequest":
         WaypointRequest.encode(message.payload.value, writer.uint32(978).fork()).join();
+        break;
+      case "portalRequest":
+        PortalRequest.encode(message.payload.value, writer.uint32(986).fork()).join();
+        break;
+      case "mapReady":
+        MapReady.encode(message.payload.value, writer.uint32(994).fork()).join();
         break;
     }
     return writer;
@@ -2297,6 +2343,22 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "waypointRequest", value: WaypointRequest.decode(reader, reader.uint32()) };
             continue;
           }
+          case 123: {
+            if (tag !== 986) {
+              break;
+            }
+
+            message.payload = { $case: "portalRequest", value: PortalRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 124: {
+            if (tag !== 994) {
+              break;
+            }
+
+            message.payload = { $case: "mapReady", value: MapReady.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -2807,6 +2869,18 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "waypointRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "waypointRequest", value: WaypointRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "portalRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "portalRequest", value: PortalRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "mapReady": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "mapReady", value: MapReady.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -3801,6 +3875,128 @@ export const SpellCastRequest: MessageFns<SpellCastRequest> = {
     message.monsterId = (object.monsterId !== undefined && object.monsterId !== null)
       ? BigInt(object.monsterId)
       : undefined;
+    return message;
+  },
+};
+
+function createBasePortalRequest(): PortalRequest {
+  return { portalId: "" };
+}
+
+export const PortalRequest: MessageFns<PortalRequest> = {
+  encode(message: PortalRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.portalId !== "") {
+      writer.uint32(10).string(message.portalId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PortalRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBasePortalRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.portalId = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<PortalRequest>, I>>(base?: I): PortalRequest {
+    return PortalRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PortalRequest>, I>>(object: I): PortalRequest {
+    const message = createBasePortalRequest();
+    message.portalId = object.portalId ?? "";
+    return message;
+  },
+};
+
+function createBaseMapReady(): MapReady {
+  return { mapId: "", mapHash: "" };
+}
+
+export const MapReady: MessageFns<MapReady> = {
+  encode(message: MapReady, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mapId !== "") {
+      writer.uint32(10).string(message.mapId);
+    }
+    if (message.mapHash !== "") {
+      writer.uint32(18).string(message.mapHash);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MapReady {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseMapReady();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.mapId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.mapHash = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<MapReady>, I>>(base?: I): MapReady {
+    return MapReady.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MapReady>, I>>(object: I): MapReady {
+    const message = createBaseMapReady();
+    message.mapId = object.mapId ?? "";
+    message.mapHash = object.mapHash ?? "";
     return message;
   },
 };
@@ -6794,6 +6990,9 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "groundItemRemoved":
         GroundItemRemoved.encode(message.payload.value, writer.uint32(1154).fork()).join();
         break;
+      case "mapTransfer":
+        MapTransfer.encode(message.payload.value, writer.uint32(1202).fork()).join();
+        break;
     }
     return writer;
   },
@@ -7543,6 +7742,14 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "groundItemRemoved", value: GroundItemRemoved.decode(reader, reader.uint32()) };
             continue;
           }
+          case 150: {
+            if (tag !== 1202) {
+              break;
+            }
+
+            message.payload = { $case: "mapTransfer", value: MapTransfer.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -8128,6 +8335,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "groundItemRemoved": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "groundItemRemoved", value: GroundItemRemoved.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "mapTransfer": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "mapTransfer", value: MapTransfer.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -17001,6 +17214,180 @@ export const InitialGameWorldState: MessageFns<InitialGameWorldState> = {
     message.dead = object.dead ?? false;
     message.playerDirection = object.playerDirection ?? 0;
     message.weather = object.weather ?? 0;
+    return message;
+  },
+};
+
+function createBaseMapTransfer(): MapTransfer {
+  return {
+    mapId: "",
+    name: "",
+    x: 0,
+    y: 0,
+    direction: 0,
+    mapHash: "",
+    musicFile: "",
+    gameWorldId: "",
+    lvlMin: 0,
+    lvlMax: 0,
+  };
+}
+
+export const MapTransfer: MessageFns<MapTransfer> = {
+  encode(message: MapTransfer, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mapId !== "") {
+      writer.uint32(10).string(message.mapId);
+    }
+    if (message.name !== "") {
+      writer.uint32(18).string(message.name);
+    }
+    if (message.x !== 0) {
+      writer.uint32(24).int32(message.x);
+    }
+    if (message.y !== 0) {
+      writer.uint32(32).int32(message.y);
+    }
+    if (message.direction !== 0) {
+      writer.uint32(40).int32(message.direction);
+    }
+    if (message.mapHash !== "") {
+      writer.uint32(50).string(message.mapHash);
+    }
+    if (message.musicFile !== "") {
+      writer.uint32(58).string(message.musicFile);
+    }
+    if (message.gameWorldId !== "") {
+      writer.uint32(66).string(message.gameWorldId);
+    }
+    if (message.lvlMin !== 0) {
+      writer.uint32(72).int32(message.lvlMin);
+    }
+    if (message.lvlMax !== 0) {
+      writer.uint32(80).int32(message.lvlMax);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MapTransfer {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseMapTransfer();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.mapId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.name = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.x = reader.int32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.y = reader.int32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.direction = reader.int32();
+            continue;
+          }
+          case 6: {
+            if (tag !== 50) {
+              break;
+            }
+
+            message.mapHash = reader.string();
+            continue;
+          }
+          case 7: {
+            if (tag !== 58) {
+              break;
+            }
+
+            message.musicFile = reader.string();
+            continue;
+          }
+          case 8: {
+            if (tag !== 66) {
+              break;
+            }
+
+            message.gameWorldId = reader.string();
+            continue;
+          }
+          case 9: {
+            if (tag !== 72) {
+              break;
+            }
+
+            message.lvlMin = reader.int32();
+            continue;
+          }
+          case 10: {
+            if (tag !== 80) {
+              break;
+            }
+
+            message.lvlMax = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<MapTransfer>, I>>(base?: I): MapTransfer {
+    return MapTransfer.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MapTransfer>, I>>(object: I): MapTransfer {
+    const message = createBaseMapTransfer();
+    message.mapId = object.mapId ?? "";
+    message.name = object.name ?? "";
+    message.x = object.x ?? 0;
+    message.y = object.y ?? 0;
+    message.direction = object.direction ?? 0;
+    message.mapHash = object.mapHash ?? "";
+    message.musicFile = object.musicFile ?? "";
+    message.gameWorldId = object.gameWorldId ?? "";
+    message.lvlMin = object.lvlMin ?? 0;
+    message.lvlMax = object.lvlMax ?? 0;
     return message;
   },
 };
