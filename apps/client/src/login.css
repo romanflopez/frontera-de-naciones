@@ -15,22 +15,21 @@
 #login[data-screen=login] #lbgScene{filter:none}
 #login:not([data-screen=login]) #lbgScene{filter:brightness(.62) saturate(.85)}
 
+#login .stage::before{content:none}
 #login .stage{position:absolute;left:50%;top:50%;width:1280px;height:720px;margin:-360px 0 0 -640px;transform:scale(var(--s,1));transform-origin:50% 50%}
 #login .scr{position:absolute;inset:0}
 #login .pulse{animation:lpulse 3.4s ease-in-out infinite;transform-origin:center}
 @keyframes lpulse{0%,100%{opacity:.7}50%{opacity:1}}
 
 /* marca */
-#login .brand{position:absolute;left:0;right:0;top:34px;text-align:center;z-index:3;pointer-events:none}
-#login .emblem{height:124px;display:flex;justify-content:center}
-#login .emblem svg{filter:drop-shadow(0 0 18px rgba(200,90,255,.55))}
-#login .gname{margin:2px 0 0;font:700 58px/1.05 var(--f-cinzel);letter-spacing:.07em;color:#f1e6f0;background:linear-gradient(180deg,#fff 0%,#f0dff0 45%,#c4a5d0 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 0 14px rgba(190,90,255,.45)) drop-shadow(0 4px 8px rgba(0,0,0,.9))}
-#login .tagl{margin-top:26px}
-#login .tagl p{margin:0;font:600 14px var(--f-inter);letter-spacing:.34em;text-transform:uppercase;color:#d8c8d6}
-#login .tagl p.s2{margin-top:8px;font-size:11px;letter-spacing:.38em;color:#a8708c}
+#login .brand{position:absolute;left:0;right:0;top:4px;text-align:center;z-index:3;pointer-events:none}
+#login .gname{margin:0;line-height:0}
+#login .gname img{width:520px;height:auto;filter:drop-shadow(0 3px 6px rgba(10,0,30,.75)) drop-shadow(0 0 22px rgba(190,90,255,.4))}
+#login .tagl{margin-top:2px}
+#login .tagl p{margin:0;text-shadow:0 1px 8px #12043a,0 0 14px #12043a;font:600 14px var(--f-inter);letter-spacing:.34em;text-transform:uppercase;color:#f1e8ff}
+#login .tagl p.s2{margin-top:8px;font-size:11px;letter-spacing:.38em;color:#d9b8f0}
 #login:not([data-screen=login]) .brand{top:14px}
-#login:not([data-screen=login]) .emblem{height:62px;transform:scale(.5);transform-origin:50% 0;margin-bottom:-6px}
-#login:not([data-screen=login]) .gname{font-size:34px;margin-top:-4px}
+#login:not([data-screen=login]) .gname img{width:190px}
 #login:not([data-screen=login]) .tagl{display:none}
 #login[data-screen=create] .brand{left:auto;right:0;width:100%}
 
@@ -52,7 +51,7 @@
 #login .acts .lbtn{pointer-events:auto}
 
 /* login */
-#login .lcard{position:absolute;left:50%;top:322px;width:380px;margin-left:-190px;padding:20px 22px 18px;display:grid;gap:12px;background:linear-gradient(180deg,rgba(34,14,70,.62),rgba(14,6,34,.72));border:1px solid rgba(206,150,255,.38);border-radius:8px;box-shadow:0 0 0 1px rgba(10,2,30,.7),0 0 34px rgba(170,80,255,.28),0 16px 44px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.1);backdrop-filter:blur(6px)}
+#login .lcard{position:absolute;left:50%;top:372px;width:380px;margin-left:-190px;padding:20px 22px 18px;display:grid;gap:12px;background:linear-gradient(180deg,rgba(34,14,70,.62),rgba(14,6,34,.72));border:1px solid rgba(206,150,255,.38);border-radius:8px;box-shadow:0 0 0 1px rgba(10,2,30,.7),0 0 34px rgba(170,80,255,.28),0 16px 44px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.1);backdrop-filter:blur(6px)}
 #login .field{position:relative;display:block}
 #login .field svg{position:absolute;left:12px;top:50%;width:18px;height:18px;margin-top:-9px;fill:none;stroke:#c4a8f0;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
 #login .field input{width:100%;box-sizing:border-box;height:42px;padding:0 12px 0 42px;font:500 14px var(--f-inter);color:#f4ecff;background:rgba(10,4,28,.72);border:1px solid #5a3a96;border-radius:5px;box-shadow:inset 0 2px 6px rgba(0,0,0,.6)}

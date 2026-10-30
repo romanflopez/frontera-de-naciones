@@ -1,6 +1,6 @@
 /**
  * Pantallas de entrada: login, selección de personaje, clase, facción y creación.
- * El fondo es assets/background-login.webp; el resto del arte (emblema, brasas, siluetas, escudos) se dibuja por código.
+ * El fondo es assets/background-login.webp; el logo es assets/logo-eris.webp; el resto del arte (brasas, siluetas, escudos) se dibuja por código.
  * Este módulo es solo vista y flujo; la conexión, el guardado y enterWorld siguen en main.ts.
  */
 import './login.css';
@@ -33,33 +33,6 @@ const CLS_LORE: Record<string, string> = {
 const clsCol = (id: string) => CLS_COL[id] ?? '#d6a445';
 
 // ---------- arte ----------
-function emblem(): string {
-    let rays = '';
-    for (let i = 0; i < 13; i++) {
-        const a = -90 + (i - 6) * 11;
-        rays += `<path d="M120 62 L${(120 + Math.cos((a - 2.2) * Math.PI / 180) * 70).toFixed(1)} ${(62 + Math.sin((a - 2.2) * Math.PI / 180) * 70).toFixed(1)} L${(120 + Math.cos((a + 2.2) * Math.PI / 180) * 70).toFixed(1)} ${(62 + Math.sin((a + 2.2) * Math.PI / 180) * 70).toFixed(1)}Z" opacity="${(0.28 + 0.5 * Math.cos((i - 6) * 0.22)).toFixed(2)}"/>`;
-    }
-    return `<svg viewBox="0 0 240 124" width="240" height="124" role="presentation">
-  <defs>
-    <linearGradient id="emG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd2f4"/><stop offset=".35" stop-color="#c25bff"/><stop offset="1" stop-color="#4a1590"/></linearGradient>
-    <linearGradient id="emG2" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff9ad8"/><stop offset="1" stop-color="#7b27c9"/></linearGradient>
-    <linearGradient id="emL" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e8a0c0" stop-opacity="0"/><stop offset=".6" stop-color="#f4c9d8"/><stop offset="1" stop-color="#fff"/></linearGradient>
-    <linearGradient id="emGold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f8de94"/><stop offset=".5" stop-color="#c9954a"/><stop offset="1" stop-color="#6a3f16"/></linearGradient>
-    <radialGradient id="emGlow"><stop offset="0" stop-color="#d870ff" stop-opacity=".75"/><stop offset="1" stop-color="#d870ff" stop-opacity="0"/></radialGradient>
-  </defs>
-  <circle cx="120" cy="62" r="60" fill="url(#emGlow)" class="pulse"/>
-  <g fill="url(#emGold)" stroke="#2b1710" stroke-width=".8" opacity=".8">${rays}</g>
-  <path d="M12 82 H92 M148 82 H228" stroke="url(#emL)" stroke-width="1.4" fill="none"/><path d="M228 82 H148" stroke="url(#emL)" stroke-width="1.4"/>
-  <path d="M30 78 L36 82 L30 86 L24 82Z M210 78 L216 82 L210 86 L204 82Z" fill="#f4c9d8"/>
-  <path d="M96 70 Q70 74 44 64 Q74 90 108 84Z M144 70 Q170 74 196 64 Q166 90 132 84Z" fill="url(#emGold)" stroke="#2b1710" stroke-width="1"/>
-  <path d="M120 14 L148 62 L120 110 L92 62Z" fill="url(#emG)" stroke="#f6d98a" stroke-width="2.4" stroke-linejoin="round"/>
-  <path d="M120 14 L148 62 L120 62Z" fill="#fff" opacity=".22"/><path d="M120 62 L148 62 L120 110Z" fill="#2a0a55" opacity=".35"/>
-  <path d="M120 14 L120 110 M92 62 H148" stroke="#fff" stroke-opacity=".35" stroke-width="1"/>
-  <path d="M104 40 L112 28" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".85"/>
-  <path d="M120 6 L124 14 H116Z M120 118 L124 110 H116Z" fill="url(#emGold)" stroke="#2b1710" stroke-width=".8"/>
-</svg>`;
-}
-
 /** Siluetas (retrato) dibujadas a mano: mago con báculo y guerrero con espada. */
 function silhouette(kind: string, col: string, uid: string): string {
     const rim = `<filter id="${uid}f" x="-30%" y="-10%" width="160%" height="120%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="${col}" flood-opacity=".75"/></filter>`;
@@ -158,7 +131,6 @@ function drawStatic() {
 export function initLoginUI(ctx: FlowCtx) {
     const root = $('login');
     $('lbgScene').innerHTML = '<img src="assets/background-login.webp" alt="" decoding="async">';
-    $('lEmblem').innerHTML = emblem();
 
     const fit = () => { const s = Math.min(innerWidth / 1280, innerHeight / 720); root.style.setProperty('--s', String(s)); };
     fit(); addEventListener('resize', fit);
