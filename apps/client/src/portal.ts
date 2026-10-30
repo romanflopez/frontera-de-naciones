@@ -37,6 +37,20 @@ function crystalFill(g: CanvasRenderingContext2D, h: number, a: number, c1: stri
     g.fillStyle = rg; ellipse(g, 0.7, h); g.fill(); g.globalAlpha = 1;
 }
 
+/** Desgaste de piedra vieja (mugre, grano, musgo en los bordes) para que no se vea plano frente al empedrado del mundo. Solo pinta sobre lo ya dibujado. */
+function weather(g: CanvasRenderingContext2D, seed: number) {
+    let a = seed;
+    const rnd = () => ((a = (a * 1664525 + 1013904223) >>> 0) / 4294967296);
+    g.save(); g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = 'rgba(78,70,52,.30)'; g.fillRect(0, 0, SW, SH); // grisáceo cálido, como las piedras del mundo
+    const vg = g.createRadialGradient(CX, CY - 10, R * 0.2, CX, CY - 10, R * 1.1); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(20,16,8,.38)');
+    g.fillStyle = vg; g.fillRect(0, 0, SW, SH);
+    for (let i = 0; i < 2600; i++) { const x = rnd() * SW, y = rnd() * SH, r = 0.6 + rnd() * 1.8; g.fillStyle = rnd() < 0.62 ? `rgba(30,26,18,${0.1 + rnd() * 0.16})` : `rgba(230,224,205,${0.05 + rnd() * 0.1})`; g.fillRect(x, y, r, r * 0.8); }
+    for (let i = 0; i < 26; i++) { const t = rnd() * Math.PI * 2, r = 0.9 + rnd() * 0.12, x = px(r, t), y = py(r, t, 6 + rnd() * 6), k = 12 + rnd() * 26; const mg = g.createRadialGradient(x, y, 0, x, y, k); mg.addColorStop(0, `rgba(78,100,40,${0.3 + rnd() * 0.25})`); mg.addColorStop(1, 'rgba(78,100,40,0)'); g.fillStyle = mg; g.fillRect(x - k, y - k, k * 2, k * 2); }
+    for (let i = 0; i < 14; i++) { let x = CX + (rnd() - 0.5) * R * 1.7, y = CY + (rnd() - 0.5) * R * 0.7; g.strokeStyle = 'rgba(20,16,10,.35)'; g.lineWidth = 1; g.beginPath(); g.moveTo(x, y); for (let j = 0; j < 4; j++) { x += (rnd() - 0.5) * 22; y += (rnd() - 0.3) * 8; g.lineTo(x, y); } g.stroke(); }
+    g.restore();
+}
+
 function build(): Layers {
     const under = mk(), crystal = mk(), over = mk(), glow = mk();
     const u = under.getContext('2d')!, c = crystal.getContext('2d')!, o = over.getContext('2d')!, w = glow.getContext('2d')!;
@@ -111,12 +125,13 @@ function build(): Layers {
         o.fillStyle = '#8b92a3'; o.beginPath(); o.ellipse(ex + dx * 24, ey + dy * 24 - 3, 10, 6, 0, 0, Math.PI * 2); o.fill();
         w.fillStyle = CYAN; w.beginPath(); w.ellipse(ex + dx * 24, ey + dy * 24 - 3, 11, 7, 0, 0, Math.PI * 2); w.fill();
     }
+    weather(u, 7); weather(o, 19);
     return { under, crystal, over, glow };
 }
 
 export interface PortalStyle { rx: number; beam: number }
-export const PORTAL_CITY: PortalStyle = { rx: 78, beam: 150 };
-export const PORTAL_ZONE: PortalStyle = { rx: 46, beam: 95 };
+export const PORTAL_CITY: PortalStyle = { rx: 56, beam: 125 };
+export const PORTAL_ZONE: PortalStyle = { rx: 36, beam: 85 };
 
 /** Plataforma en el suelo: sprite base + brillo del cristal y de los aros según `act` (0 apagado .. 1 encendido). */
 export function drawPortalFloor(ctx: CanvasRenderingContext2D, x: number, y: number, st: PortalStyle, act: number, T: number, reduce: boolean, seed: number) {
