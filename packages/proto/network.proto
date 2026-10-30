@@ -111,6 +111,7 @@ message ClientMessage {
     EconDropRequest econ_drop_request = 94;
     EconSortRequest econ_sort_request = 95;
     EconQuestRequest econ_quest_request = 96;
+    PickupRequest pickup_request = 97;
     SaveCharacterRequest save_character_request = 80;
     MobHitRequest mob_hit_request = 120;
     PveStatusRequest pve_status_request = 121;
@@ -489,6 +490,8 @@ message ServerMessage {
     InventoryState inventory_state = 140;
     EconResult econ_result = 141;
     KillReward kill_reward = 142;
+    GroundItemSpawned ground_item_spawned = 143;
+    GroundItemRemoved ground_item_removed = 144;
   }
 }
 
@@ -1247,6 +1250,8 @@ message InventoryState {
   repeated string unlocked = 15;
   string cls = 16;
   string faction = 17;
+  // Oro real (puede pasar de 2^31: `gold` queda topado a int32 solo por compatibilidad; el cliente usa gold_d).
+  double gold_d = 18;
 }
 /** Respuesta a una acción de economía: ok=false con un motivo (code) y texto para mostrar. */
 message EconResult { bool ok = 1; string code = 2; string text = 3; }
@@ -1264,4 +1269,21 @@ message KillReward {
   int32 new_lvl = 10;
   bool quest_ready = 11;
   int32 quest_prog = 12;
+  double gold_d = 13;
 }
+
+// ---------- Botín en el suelo (server-autoritativo; ver docs/ECONOMIA_SERVER.md) ----------
+/** Recoger el item del suelo `id`: el server valida que exista, distancia <= 2 celdas, que sea tuyo (o ya libre) y que haya lugar en la bolsa. */
+message PickupRequest { int32 id = 1; }
+/** Aparece (o entra en rango) un item en el suelo. `locked`: todavía no podés recogerlo; `free_in_ms`: cuánto falta para que lo pueda recoger cualquiera; `expires_in_ms`: cuánto falta para que desaparezca. */
+message GroundItemSpawned {
+  int32 id = 1;
+  InvItem item = 2;
+  double x = 3;
+  double y = 4;
+  bool locked = 5;
+  int32 free_in_ms = 6;
+  int32 expires_in_ms = 7;
+}
+/** El item del suelo ya no está (lo recogieron, venció o salió de tu rango). */
+message GroundItemRemoved { int32 id = 1; }

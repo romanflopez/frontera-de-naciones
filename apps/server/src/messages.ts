@@ -193,7 +193,7 @@ const invItem = (i: SItem) => ({ uid: i.u, base: i.n, rarity: i.r, attrs: i.a.ma
 export const inventoryState = (st: Econ): ServerMessage => msg({
     $case: 'inventoryState',
     value: {
-        gold: st.gold, lvl: st.lvl, exp: st.exp, bag: st.bag.map(invItem),
+        gold: Math.min(2147483647, st.gold), goldD: st.gold, lvl: st.lvl, exp: st.exp, bag: st.bag.map(invItem),
         eq: (Object.keys(st.eq) as (keyof Econ['eq'])[]).flatMap((slot) => (st.eq[slot] ? [{ slot, item: invItem(st.eq[slot]!) }] : [])),
         potsHp: st.pots.hp, potsMp: st.pots.mp,
         questI: st.q.i, questState: st.q.st, questProg: st.q.prog,
@@ -202,5 +202,8 @@ export const inventoryState = (st: Econ): ServerMessage => msg({
     },
 });
 export const econResult = (ok: boolean, code: string, text: string): ServerMessage => msg({ $case: 'econResult', value: { ok, code, text } });
-export const killReward = (v: { mobId: number; x: number; y: number; exp: number; gold: number; item?: ReturnType<typeof invItem>; bagFull: boolean; potion: string; shard: string; newLvl: number; questReady: boolean; questProg: number }): ServerMessage =>
-    msg({ $case: 'killReward', value: v });
+export const killReward = (v: { mobId: number; x: number; y: number; exp: number; gold: number; goldD?: number; item?: ReturnType<typeof invItem>; bagFull: boolean; potion: string; shard: string; newLvl: number; questReady: boolean; questProg: number }): ServerMessage =>
+    msg({ $case: 'killReward', value: { ...v, gold: Math.min(2147483647, v.gold), goldD: v.gold } });
+export const groundItemSpawned = (g: { id: number; item: SItem; x: number; y: number }, locked: boolean, freeInMs: number, expiresInMs: number): ServerMessage =>
+    msg({ $case: 'groundItemSpawned', value: { id: g.id, item: invItem(g.item), x: g.x, y: g.y, locked, freeInMs: Math.max(0, Math.round(freeInMs)), expiresInMs: Math.max(0, Math.round(expiresInMs)) } });
+export const groundItemRemoved = (id: number): ServerMessage => msg({ $case: 'groundItemRemoved', value: { id } });

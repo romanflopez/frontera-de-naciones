@@ -188,10 +188,10 @@ button.sl:not(.dis):hover,.cl:hover{border-color:#e0b765;filter:brightness(1.15)
 .cl .iimg{width:84%;height:84%;object-fit:contain;filter:drop-shadow(0 2px 2px #000)}
 .cl .q{position:absolute;right:3px;bottom:1px;font:700 12px/1 var(--f-inter);color:#fff;text-shadow:0 0 3px #000,0 1px 2px #000,1px 0 2px #000}
 .cl[data-r="1"]{box-shadow:inset 0 0 0 1px #000,inset 0 0 10px #3a6ec455}.cl[data-r="2"]{box-shadow:inset 0 0 0 1px #000,inset 0 0 10px #d0a52e55}.cl[data-r="3"]{box-shadow:inset 0 0 0 1px #000,inset 0 0 12px #a050f066}
-.ifoot{display:flex;align-items:center;gap:6px}
+.ifoot{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .fb{display:flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 10px;font:600 12px/1 var(--f-cinzel);color:#d9c79a;background:linear-gradient(#1c1612,#0b0908);border:1px solid #6a5028;border-radius:3px;box-shadow:inset 0 0 0 1px #000}
 .fb:disabled{opacity:.4;cursor:default}.fb:disabled:hover{border-color:#6a5028}
-.gold{margin-left:auto;display:flex;align-items:center;gap:6px;height:32px;padding:0 10px;background:#070605;border:1px solid #4d3b20;border-radius:3px;box-shadow:inset 0 0 8px #000;font:600 13px/1 var(--f-inter);color:#f0dca4;font-variant-numeric:tabular-nums}
+.gold{margin-left:auto;flex:0 0 auto;white-space:nowrap;display:flex;align-items:center;gap:6px;height:32px;padding:0 10px;background:#070605;border:1px solid #4d3b20;border-radius:3px;box-shadow:inset 0 0 8px #000;font:600 13px/1 var(--f-inter);color:#f0dca4;font-variant-numeric:tabular-nums}
 .cap{font-size:11px;color:#8d7a52;text-align:center;letter-spacing:.04em}
 /* tooltip del ítem seleccionado */
 #itip{z-index:5;top:calc(80px + env(safe-area-inset-top,0px));width:220px;transform-origin:top right;transform:scale(var(--win-scale))}
@@ -307,7 +307,7 @@ canvas:focus{outline:none}
       <div class="igrid" id="inv"></div>
       <div class="ifoot">
         <button type="button" class="fb" id="sortBtn" aria-label="Ordenar bolsa por tipo y rareza"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M7 2L12 10H2Z" fill="currentColor"/></svg>Ordenar</button>
-        <button type="button" class="fb" id="dropBtn" aria-label="Descartar el ítem seleccionado" disabled><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 3.5H12M5 3.5V2H9V3.5M3.5 3.5L4 12H10L10.5 3.5M6 5.5V10M8 5.5V10" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>Descartar</button>
+        <button type="button" class="fb" id="dropBtn" aria-label="Tirar el ítem seleccionado al suelo" title="Tira el ítem al suelo: es tuyo 30 s y después lo puede recoger cualquiera" disabled><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 3.5H12M5 3.5V2H9V3.5M3.5 3.5L4 12H10L10.5 3.5M6 5.5V10M8 5.5V10" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>Tirar</button>
         <div class="gold" role="img" aria-label="Oro"><svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="url(#gold)" stroke="#2b1710" stroke-width="1.4"/><circle cx="10" cy="10" r="5.4" fill="none" stroke="#6a3f16" stroke-width="1.2"/><path d="M10 6.5V13.5M8 8.2C8 7 12 7 12 8.4C12 10 8 9.8 8 11.6C8 13 12 13 12 11.7" fill="none" stroke="#6a3f16" stroke-width="1.1"/></svg><span id="gold">0</span></div>
       </div>
       <div class="cap" id="cap"></div>

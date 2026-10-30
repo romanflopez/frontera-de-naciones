@@ -76,7 +76,7 @@ export function sanitizeCharacter(raw: string): string | null {
     const u = TRAINING.filter((t) => asked.has(t.id) && trainingUnlocked(t.step, qi, lvl)).map((t) => t.id);
     const out = {
         v: 1, faction, cls,
-        lvl, exp: num(o.exp, 0, 1e9), gold: num(o.gold, 0, 1e9),
+        lvl, exp: num(o.exp, 0, 1e9), gold: num(o.gold, 0, Number.MAX_SAFE_INTEGER),
         hp: num(o.hp, 1, 100000, 1), mp: num(o.mp, 0, 100000),
         bag: (Array.isArray(o.bag) ? o.bag : []).slice(0, 18).map(cleanItem).filter((x): x is SavedItem => !!x),
         eq: Object.fromEntries(SLOTS.map((s) => [s, cleanItem(eq[s])])),

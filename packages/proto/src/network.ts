@@ -128,6 +128,7 @@ export interface ClientMessage {
     | { $case: "econDropRequest"; value: EconDropRequest }
     | { $case: "econSortRequest"; value: EconSortRequest }
     | { $case: "econQuestRequest"; value: EconQuestRequest }
+    | { $case: "pickupRequest"; value: PickupRequest }
     | { $case: "saveCharacterRequest"; value: SaveCharacterRequest }
     | { $case: "mobHitRequest"; value: MobHitRequest }
     | { $case: "pveStatusRequest"; value: PveStatusRequest }
@@ -515,6 +516,8 @@ export interface ServerMessage {
     | { $case: "inventoryState"; value: InventoryState }
     | { $case: "econResult"; value: EconResult }
     | { $case: "killReward"; value: KillReward }
+    | { $case: "groundItemSpawned"; value: GroundItemSpawned }
+    | { $case: "groundItemRemoved"; value: GroundItemRemoved }
     | undefined;
 }
 
@@ -1411,6 +1414,8 @@ export interface InventoryState {
   unlocked: string[];
   cls: string;
   faction: string;
+  /** Oro real (puede pasar de 2^31: `gold` queda topado a int32 solo por compatibilidad; el cliente usa gold_d). */
+  goldD: number;
 }
 
 /** Respuesta a una acción de economía: ok=false con un motivo (code) y texto para mostrar. */
@@ -1434,6 +1439,28 @@ export interface KillReward {
   newLvl: number;
   questReady: boolean;
   questProg: number;
+  goldD: number;
+}
+
+/** Recoger el item del suelo `id`: el server valida que exista, distancia <= 2 celdas, que sea tuyo (o ya libre) y que haya lugar en la bolsa. */
+export interface PickupRequest {
+  id: number;
+}
+
+/** Aparece (o entra en rango) un item en el suelo. `locked`: todavía no podés recogerlo; `free_in_ms`: cuánto falta para que lo pueda recoger cualquiera; `expires_in_ms`: cuánto falta para que desaparezca. */
+export interface GroundItemSpawned {
+  id: number;
+  item: InvItem | undefined;
+  x: number;
+  y: number;
+  locked: boolean;
+  freeInMs: number;
+  expiresInMs: number;
+}
+
+/** El item del suelo ya no está (lo recogieron, venció o salió de tu rango). */
+export interface GroundItemRemoved {
+  id: number;
 }
 
 function createBaseClientMessage(): ClientMessage {
@@ -1616,6 +1643,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         break;
       case "econQuestRequest":
         EconQuestRequest.encode(message.payload.value, writer.uint32(770).fork()).join();
+        break;
+      case "pickupRequest":
+        PickupRequest.encode(message.payload.value, writer.uint32(778).fork()).join();
         break;
       case "saveCharacterRequest":
         SaveCharacterRequest.encode(message.payload.value, writer.uint32(642).fork()).join();
@@ -2224,6 +2254,14 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "econQuestRequest", value: EconQuestRequest.decode(reader, reader.uint32()) };
             continue;
           }
+          case 97: {
+            if (tag !== 778) {
+              break;
+            }
+
+            message.payload = { $case: "pickupRequest", value: PickupRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
           case 80: {
             if (tag !== 642) {
               break;
@@ -2736,6 +2774,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "econQuestRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "econQuestRequest", value: EconQuestRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "pickupRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "pickupRequest", value: PickupRequest.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -6744,6 +6788,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "killReward":
         KillReward.encode(message.payload.value, writer.uint32(1138).fork()).join();
         break;
+      case "groundItemSpawned":
+        GroundItemSpawned.encode(message.payload.value, writer.uint32(1146).fork()).join();
+        break;
+      case "groundItemRemoved":
+        GroundItemRemoved.encode(message.payload.value, writer.uint32(1154).fork()).join();
+        break;
     }
     return writer;
   },
@@ -7477,6 +7527,22 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "killReward", value: KillReward.decode(reader, reader.uint32()) };
             continue;
           }
+          case 143: {
+            if (tag !== 1146) {
+              break;
+            }
+
+            message.payload = { $case: "groundItemSpawned", value: GroundItemSpawned.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 144: {
+            if (tag !== 1154) {
+              break;
+            }
+
+            message.payload = { $case: "groundItemRemoved", value: GroundItemRemoved.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -8050,6 +8116,18 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "killReward": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "killReward", value: KillReward.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "groundItemSpawned": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "groundItemSpawned", value: GroundItemSpawned.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "groundItemRemoved": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "groundItemRemoved", value: GroundItemRemoved.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -18613,6 +18691,7 @@ function createBaseInventoryState(): InventoryState {
     unlocked: [],
     cls: "",
     faction: "",
+    goldD: 0,
   };
 }
 
@@ -18668,6 +18747,9 @@ export const InventoryState: MessageFns<InventoryState> = {
     }
     if (message.faction !== "") {
       writer.uint32(138).string(message.faction);
+    }
+    if (message.goldD !== 0) {
+      writer.uint32(145).double(message.goldD);
     }
     return writer;
   },
@@ -18821,6 +18903,14 @@ export const InventoryState: MessageFns<InventoryState> = {
             message.faction = reader.string();
             continue;
           }
+          case 18: {
+            if (tag !== 145) {
+              break;
+            }
+
+            message.goldD = reader.double();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -18855,6 +18945,7 @@ export const InventoryState: MessageFns<InventoryState> = {
     message.unlocked = object.unlocked?.map((e) => e) || [];
     message.cls = object.cls ?? "";
     message.faction = object.faction ?? "";
+    message.goldD = object.goldD ?? 0;
     return message;
   },
 };
@@ -18952,6 +19043,7 @@ function createBaseKillReward(): KillReward {
     newLvl: 0,
     questReady: false,
     questProg: 0,
+    goldD: 0,
   };
 }
 
@@ -18992,6 +19084,9 @@ export const KillReward: MessageFns<KillReward> = {
     }
     if (message.questProg !== 0) {
       writer.uint32(96).int32(message.questProg);
+    }
+    if (message.goldD !== 0) {
+      writer.uint32(105).double(message.goldD);
     }
     return writer;
   },
@@ -19105,6 +19200,14 @@ export const KillReward: MessageFns<KillReward> = {
             message.questProg = reader.int32();
             continue;
           }
+          case 13: {
+            if (tag !== 105) {
+              break;
+            }
+
+            message.goldD = reader.double();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -19134,6 +19237,244 @@ export const KillReward: MessageFns<KillReward> = {
     message.newLvl = object.newLvl ?? 0;
     message.questReady = object.questReady ?? false;
     message.questProg = object.questProg ?? 0;
+    message.goldD = object.goldD ?? 0;
+    return message;
+  },
+};
+
+function createBasePickupRequest(): PickupRequest {
+  return { id: 0 };
+}
+
+export const PickupRequest: MessageFns<PickupRequest> = {
+  encode(message: PickupRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== 0) {
+      writer.uint32(8).int32(message.id);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PickupRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBasePickupRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.id = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<PickupRequest>, I>>(base?: I): PickupRequest {
+    return PickupRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PickupRequest>, I>>(object: I): PickupRequest {
+    const message = createBasePickupRequest();
+    message.id = object.id ?? 0;
+    return message;
+  },
+};
+
+function createBaseGroundItemSpawned(): GroundItemSpawned {
+  return { id: 0, item: undefined, x: 0, y: 0, locked: false, freeInMs: 0, expiresInMs: 0 };
+}
+
+export const GroundItemSpawned: MessageFns<GroundItemSpawned> = {
+  encode(message: GroundItemSpawned, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== 0) {
+      writer.uint32(8).int32(message.id);
+    }
+    if (message.item !== undefined) {
+      InvItem.encode(message.item, writer.uint32(18).fork()).join();
+    }
+    if (message.x !== 0) {
+      writer.uint32(25).double(message.x);
+    }
+    if (message.y !== 0) {
+      writer.uint32(33).double(message.y);
+    }
+    if (message.locked !== false) {
+      writer.uint32(40).bool(message.locked);
+    }
+    if (message.freeInMs !== 0) {
+      writer.uint32(48).int32(message.freeInMs);
+    }
+    if (message.expiresInMs !== 0) {
+      writer.uint32(56).int32(message.expiresInMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GroundItemSpawned {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseGroundItemSpawned();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.id = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.item = InvItem.decode(reader, reader.uint32());
+            continue;
+          }
+          case 3: {
+            if (tag !== 25) {
+              break;
+            }
+
+            message.x = reader.double();
+            continue;
+          }
+          case 4: {
+            if (tag !== 33) {
+              break;
+            }
+
+            message.y = reader.double();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.locked = reader.bool();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.freeInMs = reader.int32();
+            continue;
+          }
+          case 7: {
+            if (tag !== 56) {
+              break;
+            }
+
+            message.expiresInMs = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<GroundItemSpawned>, I>>(base?: I): GroundItemSpawned {
+    return GroundItemSpawned.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GroundItemSpawned>, I>>(object: I): GroundItemSpawned {
+    const message = createBaseGroundItemSpawned();
+    message.id = object.id ?? 0;
+    message.item = (object.item !== undefined && object.item !== null) ? InvItem.fromPartial(object.item) : undefined;
+    message.x = object.x ?? 0;
+    message.y = object.y ?? 0;
+    message.locked = object.locked ?? false;
+    message.freeInMs = object.freeInMs ?? 0;
+    message.expiresInMs = object.expiresInMs ?? 0;
+    return message;
+  },
+};
+
+function createBaseGroundItemRemoved(): GroundItemRemoved {
+  return { id: 0 };
+}
+
+export const GroundItemRemoved: MessageFns<GroundItemRemoved> = {
+  encode(message: GroundItemRemoved, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== 0) {
+      writer.uint32(8).int32(message.id);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GroundItemRemoved {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseGroundItemRemoved();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.id = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<GroundItemRemoved>, I>>(base?: I): GroundItemRemoved {
+    return GroundItemRemoved.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GroundItemRemoved>, I>>(object: I): GroundItemRemoved {
+    const message = createBaseGroundItemRemoved();
+    message.id = object.id ?? 0;
     return message;
   },
 };

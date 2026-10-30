@@ -14,15 +14,21 @@ import {
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
 } from '@fdn/world';
 import { RARITY_INDEX, rollMobDrop, type GeneratedItem } from './loot/itemGenerator.ts';
+import { canPickup, GROUND_MAX_PER_OWNER, PICKUP_RANGE, type GroundApi } from './ground.ts';
 import * as M from './messages.ts';
 import type { Player } from './player.ts';
 import type { AccountRecord, Storage } from './storage.ts';
 
 export const ECON_VERSION = 2;
 export const MAX_LVL = 60;
-export const MAX_GOLD = 10_000_000;
-/** Topes de la importación única desde lo que el cliente tenía guardado (cuentas anteriores a la economía del server). */
-export const IMPORT_CAPS = { gold: 25_000, lvl: 40, pots: 99, keys: 9, shards: 9 } as const;
+/** Sin límite de oro de juego: el único techo es el técnico (entero exacto en JS / double del protocolo). */
+export const MAX_GOLD = Number.MAX_SAFE_INTEGER;
+/** Topes de la importación única desde lo que el cliente tenía guardado (cuentas anteriores a la economía del server). El oro NO tiene tope: se importa tal cual (saneado). */
+export const IMPORT_CAPS = { lvl: 40, pots: 99, keys: 9, shards: 9 } as const;
+/** Cuánto falta para que un item caído al suelo lo pueda recoger cualquiera: botín de mob con la bolsa llena / item tirado por el jugador. */
+const lootScale = (() => { const v = Number(process.env.FDN_DEBUG_LOOT_SCALE); return Number.isFinite(v) && v > 0 && v <= 1 ? v : 1; })(); // solo pruebas: acorta las esperas
+export const LOOT_FREE_MS = 60_000 * lootScale;
+export const DROP_FREE_MS = 30_000 * lootScale;
 
 export interface SItem { u: number; n: string; r: number; a: { id: AttrId; v: number }[] }
 export interface Econ {
@@ -130,7 +136,7 @@ export function importLegacy(json: string, trusted = false): Econ | null {
     const lim = (what: string, raw: number, cap: number) => { if (trusted) return raw; if (raw > cap) clipped.push(`${what} ${raw} -> ${cap}`); return Math.min(raw, cap); };
     st.lvl = lim('nivel', clampInt(o.lvl, 1, MAX_LVL, 1), IMPORT_CAPS.lvl);
     st.exp = Math.min(clampInt(o.exp, 0, 1e9), expToLevel(st.lvl) - 1);
-    st.gold = lim('oro', clampInt(o.gold, 0, MAX_GOLD), IMPORT_CAPS.gold);
+    st.gold = clampInt(o.gold, 0, MAX_GOLD); // sin tope de importación: solo entero >= 0 y finito
     for (const x of (Array.isArray(o.bag) ? o.bag : []).slice(0, BAG_MAX)) { const it = cleanImportItem(st, x, clipped, trusted); if (it) st.bag.push(it); }
     for (const s of SLOTS) {
         const it = cleanImportItem(st, o.eq?.[s], clipped, trusted);
@@ -187,6 +193,8 @@ export interface EconCtx {
     npcs: readonly Npc[];
     /** Recalcula los stats de combate del jugador a partir del estado (equipo/nivel) y avisa vida/maná. */
     restat(p: Player): void;
+    /** Botín en el suelo del mundo del jugador. */
+    ground: GroundApi;
 }
 export interface KillInfo { mobId: number; type: MobType; def: MobDef; zoneName: string; x: number; y: number }
 
@@ -335,11 +343,29 @@ export class Economy {
         });
     }
 
+    /** Tirar un item: sale de la bolsa y queda en el suelo, tuyo durante 30 s (para poder arrepentirte) y de cualquiera después. */
     drop(p: Player, ctx: EconCtx, uid: number): void {
         this.run(p, ctx, (st) => {
+            if (p.isDead) return fail('dead', 'Estás muerto.');
             const i = st.bag.findIndex((x) => x.u === uid); if (i < 0) return fail('no_item', 'No tenés ese item.');
+            if (ctx.ground.ownedCount(p.accountKey) >= GROUND_MAX_PER_OWNER) return fail('ground_full', 'Hay demasiados objetos tuyos en el suelo.');
             const [it] = st.bag.splice(i, 1);
-            return done(`Tiraste ${it.n}.`);
+            ctx.ground.add(it, Math.floor(p.posX) + 0.5, Math.floor(p.posY) + 0.5, [p.accountKey], DROP_FREE_MS);
+            return done(`Tiraste ${it.n} al suelo.`);
+        });
+    }
+
+    /** Recoger un item del suelo. Todo se valida acá y es atómico: el primero que llega se lo lleva, el segundo ya no lo encuentra. */
+    pickup(p: Player, ctx: EconCtx, id: number): void {
+        this.run(p, ctx, (st) => {
+            if (p.isDead) return fail('dead', 'Estás muerto.');
+            const g = ctx.ground.get(id); if (!g) return fail('gone', 'Ese objeto ya no está.');
+            if (Math.hypot(p.posX + 0.5 - g.x, p.posY + 0.5 - g.y) > PICKUP_RANGE) return fail('far', 'Está muy lejos.');
+            if (!canPickup(g, p.accountKey, Date.now())) return fail('locked', 'Todavía no podés recoger ese objeto.');
+            if (st.bag.length >= BAG_MAX) return fail('bag_full', 'Bolsa llena.');
+            if (!ctx.ground.take(id)) return fail('gone', 'Ese objeto ya no está.');
+            st.bag.push({ ...g.item, a: g.item.a.map((a) => ({ ...a })), u: st.nextUid++ }); // el uid es por personaje: se renueva
+            return done(`Recogiste ${g.item.n}.`);
         });
     }
 
@@ -411,7 +437,10 @@ export class Economy {
         } else if (Math.random() < 0.62) item = itemFromRoll(st, rollMobDrop(def.lvl, 0));
         else gold = rint(3, 8) * def.lvl;
         if (gold) addGold(st, gold);
-        if (item) { if (st.bag.length < BAG_MAX) st.bag.push(item); else bagFull = true; }
+        if (item) {
+            if (st.bag.length < BAG_MAX) st.bag.push(item);
+            else { bagFull = true; ctx.ground.add(item, Math.floor(p.posX) + 0.5, Math.floor(p.posY) + 0.5, [p.accountKey], LOOT_FREE_MS); } // nada se destruye: cae junto al jugador
+        }
         if (Math.random() < 0.14) { const kind: PotKind = Math.random() < 0.6 ? 'hp' : 'mp'; if (st.pots[kind] < POT_MAX) { st.pots[kind]++; potion = kind; } }
         if (boss) { const kid: KeyId = k.zoneName === 'Cripta olvidada' ? 'foso' : 'cripta'; st.q.shards[kid] = Math.min(99, st.q.shards[kid] + 1); shard = kid; }
         let questReady = false, questProg = 0;

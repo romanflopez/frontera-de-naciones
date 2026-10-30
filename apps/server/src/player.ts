@@ -99,6 +99,8 @@ export class Player {
 
     /** Ids de jugadores que este jugador tiene "a la vista". */
     readonly playersInRange = new Set<bigint>();
+    /** Ids de items del suelo que este jugador tiene a la vista (para mandar solo las diferencias). */
+    readonly groundSeen = new Set<number>();
 
     /** 380 ms por celda: el ritmo del prototipo (unas 2,6 celdas por segundo). */
     private baseMovementSpeedMs = 270;

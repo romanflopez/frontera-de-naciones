@@ -26,6 +26,8 @@ type Zone = (typeof ZONES)[number];
 const R = Math.random;
 const rint = (a: number, b: number) => a + Math.floor(R() * (b - a + 1));
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+/** Números grandes con puntos de miles (el oro no tiene tope). */
+const fmtNum = (n: number): string => Math.floor(n).toLocaleString('es-AR');
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
 const iso = (gx: number, gy: number) => ({ x: ((gx - gy) * TW) / 2, y: ((gx + gy) * TH) / 2 });
 const now = () => performance.now() / 1000;
@@ -122,7 +124,8 @@ const P = {
 interface Other extends Ent { hp?: number; maxHp?: number; fury?: boolean; inv?: boolean; profile: string; id: bigint; name: string; cell: Cell; queue: Cell[]; step: Step | null; stepMs: number; gone: boolean }
 const others = new Map<bigint, Other>();
 
-interface Drop { x: number; y: number; item?: Item; gold?: number; t: number }
+/** Botín en el suelo (lo manda el server con `groundItemSpawned`). `lockedUntil`: hasta cuándo (reloj local) no lo puedo recoger; 0 = es mío o ya está libre. */
+interface Drop { x: number; y: number; item?: Item; gold?: number; t: number; gid?: number; lockedUntil?: number }
 interface Proj { x: number; y: number; m: Mob | null; spd: number; dmg: number; col: string; aoe?: number; tx?: number; ty?: number; sx?: number; sy?: number; arc?: number; trail?: { x: number; y: number }[] }
 interface Fx { k: 'ring' | 'boom' | 'burst' | 'click' | 'efx' | 'blizz'; d?: number; n?: string; dy?: number; x: number; y: number; t: number; c?: string; r?: number }
 const scorch: { x: number; y: number; t: number; r: number }[] = [];
@@ -221,7 +224,7 @@ function onServer(m: ServerPayload) {
             const [dx, dy] = GRID_VEC[m.value.playerDirection] ?? [0, 1];
             turnTo(P, dx, dy, 0, true);
             const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
-            others.clear();
+            others.clear(); drops.length = 0; P.pickup = null; // el server vuelve a mandar el suelo cercano
             break;
         }
         case 'playersEnteredRange':
@@ -254,6 +257,14 @@ function onServer(m: ServerPayload) {
         case 'mobSpecialEvent': onMobSpecial(m.value); break;
         case 'mobDied': onMobDied(m.value); break;
         case 'inventoryState': applyInventory(m.value); break;
+        case 'groundItemSpawned': {
+            const v = m.value; if (!v.item) break;
+            const nd: Drop = { gid: v.id, x: v.x, y: v.y, item: itemFromInv(v.item), t: 0, lockedUntil: v.locked ? now() + v.freeInMs / 1000 : 0 };
+            const old = drops.find((d) => d.gid === v.id);
+            if (old) Object.assign(old, nd, { t: old.t }); else drops.push(nd);
+            break;
+        }
+        case 'groundItemRemoved': { const i = drops.findIndex((d) => d.gid === m.value.id); if (i >= 0) { if (P.pickup === drops[i]) P.pickup = null; drops.splice(i, 1); } break; }
         case 'econResult': if (m.value.ok) log(esc(m.value.text)); else { toast(m.value.text); log(esc(m.value.text)); } break;
         case 'killReward': onKillReward(m.value); break;
         case 'statusUpdate': onStatusUpdate(m.value); break;
@@ -372,17 +383,17 @@ function onMobDied(v: { mobId: number; killerId: bigint; x: number; y: number; t
     corpses.push({ sprite: type, x: v.x, y: v.y, dir: mob?.dir ?? 6, t: now() });
 }
 /** El server ya aplicó el botín del golpe final (exp, oro, item, pociones, misión): acá solo se muestra. El estado nuevo llega en `inventoryState`. */
-function onKillReward(v: { mobId: number; x: number; y: number; exp: number; gold: number; item?: InvItemMsg; bagFull: boolean; potion: string; shard: string; newLvl: number; questReady: boolean; questProg: number }) {
+function onKillReward(v: { mobId: number; x: number; y: number; exp: number; gold: number; goldD: number; item?: InvItemMsg; bagFull: boolean; potion: string; shard: string; newLvl: number; questReady: boolean; questProg: number }) {
     const mob = mobMap.get(v.mobId), boss = !!mob?.boss;
     float(v.x, v.y - 0.3, `+${v.exp} exp`, '#c9a227');
     if (v.item) {
         const it = itemFromInv(v.item);
         if (boss) { log(`¡${mob?.name ?? 'El boss'} cayó! Soltó un item <span style="color:${it.rar.c}">${it.rar.n.toLowerCase()}</span>.`, true); shake = Math.max(shake, 0.4); }
-        if (v.bagFull) log(`La bolsa está llena: se perdió <span style="color:${it.rar.c}">${esc(it.name)}</span>.`, true);
+        if (v.bagFull) { log(`Bolsa llena: <span style="color:${it.rar.c}">${esc(it.name)}</span> cayó al suelo, a tus pies. Es tuyo durante 60 s; recogelo con Espacio o clic.`, true); toast('Bolsa llena: el item cayó al suelo'); }
         else if (it.rar.k >= 2 && !boss) log(`¡Cayó un item <span style="color:${it.rar.c}">${it.rar.n.toLowerCase()}</span>!`, true);
         else log(`Agarraste <span style="color:${it.rar.c}">${esc(it.name)}</span>.`);
     }
-    if (v.gold) log(`Juntaste ${v.gold} de oro.`);
+    if (v.gold || v.goldD) log(`Juntaste ${fmtNum(v.goldD || v.gold)} de oro.`);
     if (v.potion === 'hp' || v.potion === 'mp') log(`Encontraste una ${POTS[v.potion].name.toLowerCase()}.`, true);
     if (v.shard === 'cripta' || v.shard === 'foso') { const kd = KEYDEFS[v.shard]; log(`El boss soltó una <b>${kd.shard}</b>. Con ${SHARDS_PER_KEY} esquirlas y ${kd.gold} de oro el Capitán te forja una ${kd.name}.`, true); }
     if (v.questReady) { const q = QUESTS[Q.i]; log(`Misión lista: volvé con el Capitán${q ? ` (${q.name})` : ''}.`, true); }
@@ -781,7 +792,7 @@ const cam = { x: 0, y: 0, sx: 0, sy: 0 };
 const toScreen = (gx: number, gy: number) => { const p = iso(gx, gy); return { x: (p.x - cam.x) * Z + W / 2 + cam.sx, y: (p.y - cam.y) * Z + H / 2 + cam.sy }; };
 const toGrid = (sx: number, sy: number) => { const x = (sx - W / 2 - cam.sx) / Z + cam.x, y = (sy - H / 2 - cam.sy) / Z + cam.y; return { x: (x / (TW / 2) + y / (TH / 2)) / 2, y: (y / (TH / 2) - x / (TW / 2)) / 2 }; };
 
-let hover: Mob | null = null, mouse = { x: -1, y: -1 };
+let hover: Mob | null = null, hoverDrop: Drop | null = null, mouse = { x: -1, y: -1 };
 function pickMob(sx: number, sy: number) {
     let best: Mob | null = null, bd = 1e9;
     for (const m of mobs) {
@@ -790,6 +801,25 @@ function pickMob(sx: number, sy: number) {
         const d = Math.hypot(sx - p.x, sy - (top + bot) / 2); if (d < bd) { bd = d; best = m; }
     }
     return best;
+}
+/** Pide al server recoger un item del suelo (él valida distancia, permiso y lugar en la bolsa). */
+let lastPickupAt = 0;
+function requestPickup(d: Drop) {
+    if (d.gid == null || P.dead) return;
+    const T = now();
+    if (d.lockedUntil && d.lockedUntil > T) { toast(`Todavía no es tuyo (${Math.ceil(d.lockedUntil - T)} s).`); return; }
+    if (T - lastPickupAt < 0.15) return; lastPickupAt = T;
+    net.send({ $case: 'pickupRequest', value: { id: d.gid } });
+}
+/** Espacio: recoge el item más cercano (a 2 celdas o menos); si no hay, camina hasta el más cercano a la vista que sea recogible. */
+function pickupNearest() {
+    let best: Drop | null = null, bd = 1e9;
+    const T = now();
+    for (const d of drops) { if (d.lockedUntil && d.lockedUntil > T) continue; const k = dist(P, d); if (k < bd) { bd = k; best = d; } }
+    if (!best) { if (drops.length) toast('Todavía no podés recoger lo que hay cerca.'); return; }
+    cancelCast(); P.target = null; P.engage = false;
+    if (bd <= 1.4) { requestPickup(best); return; }
+    P.pickup = best; moveTo(best.x, best.y);
 }
 function pickDrop(sx: number, sy: number) { for (const d of drops) { const p = toScreen(d.x, d.y); if (Math.hypot(sx - p.x, sy - p.y) < 18 * Z) return d; } return null; }
 
@@ -862,6 +892,7 @@ window.addEventListener('keydown', (e) => {
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'e' || e.key === 'E')) { usePotion('mp'); return; }
     const hk = SPELLS.findIndex((x) => SPECIAL_KEY[x.id ?? ''] === e.key.toLowerCase()) >= 0 ? SPELLS.findIndex((x) => SPECIAL_KEY[x.id ?? ''] === e.key.toLowerCase()) : KEYS.indexOf(e.key), dm = /^(?:Digit|Numpad)([0-9])$/.exec(e.code), k = hk >= 0 ? hk : dm ? KEYS.indexOf(dm[1]) : null;
     if (k != null && k < SPELLS.length && !e.repeat) { e.preventDefault(); cast(k); }
+    if (e.code === 'Space' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); pickupNearest(); return; }
     if (e.key === 'i' || e.key === 'I') toggleBag();
     if (e.key === 'c' || e.key === 'C') toggleChar();
     if (e.key === 'Escape') { if (P.casting || P.ready) cancelCast('Hechizo cancelado.'); else P.target = null; }
@@ -926,10 +957,7 @@ function update(dt: number) {
             }
         }
         if (!P.step && !P.path.length && !P.moving) sendFacing();
-        if (P.pickup && dist(P, P.pickup) < 0.9) {
-            // el botín ya no cae al suelo: el server lo pone en la bolsa al matar (ver killReward); no hay nada que juntar acá
-            P.pickup = null;
-        }
+        if (P.pickup) { if (!drops.includes(P.pickup)) P.pickup = null; else if (dist(P, P.pickup) < 1.4) { requestPickup(P.pickup); P.pickup = null; } }
         regenT += dt; if (regenT >= 1) { regenT = 0; const inCity = isSafe(P.x, P.y); P.hp = Math.min(maxHp(), P.hp + (inCity ? 8 : 1)); P.mp = Math.min(maxMp(), P.mp + (P.med ? Math.max(6, Math.round(maxMp() * 0.08)) : inCity ? 8 : 2)); if (P.med && P.mp >= maxMp()) stopMeditating('Terminaste de meditar: maná lleno.'); syncHp(); }
         if (P.med && (P.step || P.path.length || P.casting || P.hp < P.medHp || P.dead)) stopMeditating(P.hp < P.medHp ? 'Te sacaron de la meditación.' : 'Dejaste de meditar.');
         if (P.med) P.medHp = P.hp;
@@ -982,6 +1010,7 @@ function update(dt: number) {
 }
 function updateHover() {
     hover = mouse.x >= 0 ? pickMob(mouse.x, mouse.y) : null;
+    hoverDrop = mouse.x >= 0 && !hover ? pickDrop(mouse.x, mouse.y) : null;
     cv.style.cursor = !hover && !P.ready && mouse.x >= 0 && pickNpc(mouse.x, mouse.y) ? 'pointer' : P.ready ? 'cell' : hover ? 'pointer' : mouse.x >= 0 && pickDrop(mouse.x, mouse.y) ? 'grab' : 'crosshair';
 }
 function updateCam(dt: number) {
@@ -1201,14 +1230,27 @@ function drawMob(m: Mob, T: number) {
     } else if (m.hp < m.hpMax) { const w = 34; ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - w / 2 - 1, p.y - m.head - 5, w + 2, 5); ctx.fillStyle = '#c43e2b'; ctx.fillRect(p.x - w / 2, p.y - m.head - 4, w * Math.max(0, m.hp / m.hpMax), 3); }
 }
 function drawDrop(d: Drop, T: number) {
-    const p = iso(d.x, d.y), y = p.y - 5 - (reduce ? 0 : Math.sin(T * 3 + d.x) * 2);
-    const c = d.gold ? '#e8c34a' : d.item!.rar.c;
-    if (!d.gold && d.item!.rar.k >= 1) { const g = ctx.createRadialGradient(p.x, y, 0, p.x, y, 22); g.addColorStop(0, c + '77'); g.addColorStop(1, c + '00'); ctx.fillStyle = g; ctx.fillRect(p.x - 22, y - 22, 44, 44); }
-    ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(p.x, y - 6); ctx.lineTo(p.x + 5, y); ctx.lineTo(p.x, y + 6); ctx.lineTo(p.x - 5, y); ctx.fill();
-    ctx.font = "600 10px 'Alegreya Sans', system-ui, sans-serif"; ctx.textAlign = 'center';
-    const label = d.gold ? `${d.gold} oro` : d.item!.name; const tw = ctx.measureText(label).width;
-    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(p.x - tw / 2 - 3, y - 21, tw + 6, 12);
-    ctx.fillStyle = c; ctx.fillText(label, p.x, y - 12);
+    const p = iso(d.x, d.y), bob = reduce ? 0 : Math.sin(T * 3 + d.x) * 1.5, y = p.y - 4 - bob;
+    const c = d.gold ? '#e8c34a' : d.item!.rar.c, k = d.gold ? 0 : d.item!.rar.k;
+    const locked = !!d.lockedUntil && d.lockedUntil > now();
+    ctx.save();
+    if (locked) ctx.globalAlpha = 0.6;
+    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(p.x, p.y, 8, 3.5, 0, 0, Math.PI * 2); ctx.fill(); // sombra
+    if (k >= 1) { const g = ctx.createRadialGradient(p.x, y, 0, p.x, y, 12 + k * 6); g.addColorStop(0, c + '88'); g.addColorStop(1, c + '00'); ctx.fillStyle = g; ctx.fillRect(p.x - 26, y - 26, 52, 52); }
+    if (k >= 2) { const g = ctx.createLinearGradient(0, y - 38, 0, y); g.addColorStop(0, c + '00'); g.addColorStop(1, c + '66'); ctx.fillStyle = g; ctx.fillRect(p.x - 3, y - 38, 6, 38); } // haz de luz para raros y épicos
+    // bolsita: cuerpo, cuello y atadura, con el color de la rareza
+    ctx.fillStyle = '#3a2a18'; ctx.strokeStyle = c; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(p.x - 3, y - 5); ctx.quadraticCurveTo(p.x - 9, y + 1, p.x - 6, y + 5); ctx.lineTo(p.x + 6, y + 5); ctx.quadraticCurveTo(p.x + 9, y + 1, p.x + 3, y - 5); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(p.x - 4, y - 7); ctx.lineTo(p.x, y - 4); ctx.lineTo(p.x + 4, y - 7); ctx.stroke();
+    ctx.fillStyle = c; ctx.beginPath(); ctx.arc(p.x, y + 0.5, 1.8, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    if (locked) { ctx.strokeStyle = c + 'aa'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.ellipse(p.x, p.y, 11, 5, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
+    if (hoverDrop === d || P.pickup === d) { // el nombre aparece al pasar el mouse
+        ctx.font = "600 11px 'Alegreya Sans', system-ui, sans-serif"; ctx.textAlign = 'center';
+        const label = (d.gold ? `${fmtNum(d.gold)} oro` : d.item!.name) + (locked ? ` · libre en ${Math.ceil(d.lockedUntil! - now())} s` : ''); const tw = ctx.measureText(label).width;
+        ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(p.x - tw / 2 - 4, y - 28, tw + 8, 15);
+        ctx.fillStyle = c; ctx.fillText(label, p.x, y - 17);
+    }
 }
 
 // ---------- HUD ----------
@@ -1275,7 +1317,7 @@ function hud() {
         if (m.poison > T) ch.push(`<span class="chip ven">Envenenado</span>`);
         $('tChips').innerHTML = ch.join('');
     }
-    $('gold').textContent = P.gold.toLocaleString('es-AR');
+    $('gold').textContent = fmtNum(P.gold);
     const netEl = $('net');
     netEl.textContent = connected ? `En línea · ${playersOnline || 1} ${playersOnline === 1 ? 'jugador' : 'jugadores'}` : 'Sin conexión';
     netEl.classList.toggle('off', !connected);
@@ -1350,7 +1392,7 @@ function winTick(T: number) {
 interface InvEnt { html: string; key: string }
 function renderBag() {
     if (!bagOpen() && !charOpen()) { $('itip').hidden = true; return; }
-    $('gold').textContent = P.gold.toLocaleString('es-AR');
+    $('gold').textContent = fmtNum(P.gold);
     $('eqL').innerHTML = EQ_L.map(slotBtn).join(''); $('eqR').innerHTML = EQ_R.map(slotBtn).join('');
     $('eqRings').innerHTML = ['Anillo 2', 'Anillo 3'].map((l) => `<button type="button" class="sl dis" disabled aria-label="${l} (no disponible todavía)" title="${l}: no disponible todavía"><svg class="gl" aria-hidden="true"><use href="#g-anillo"/></svg></button>`).join('');
     renderChar();
@@ -1556,7 +1598,7 @@ function closeShop() { shopNpc = null; $('shop').hidden = true; $('qdlg').hidden
 function renderShop() {
     if ($('shop').hidden || !shopNpc) return;
     const def = SHOPS[roleOf(shopNpc)];
-    $('shopGold').textContent = P.gold + ' oro';
+    $('shopGold').textContent = fmtNum(P.gold) + ' oro';
     const buy = def.stock.map((st, i) => {
         const it = st.base ? stockItem(st) : null, poor = P.gold < st.price;
         const icon = it ? ico(it) : `<span class="pico" style="background:${POTS[st.pot!].col}"></span>`;
@@ -1741,10 +1783,13 @@ function itemFromInv(v: InvItemMsg): Item {
     return { ...b, id: v.uid, rar: RAR[Math.min(3, Math.max(0, v.rarity))], attrs: loadAttrs(v.attrs) };
 }
 let invApplied = false;
+/** Última foto del server: el save local del login pisa la bolsa con uids locales, así que se vuelve a aplicar al entrar al mundo. */
+let lastInv: InventoryState | null = null;
 /** El server es dueño de oro, bolsa, equipo, nivel, pociones y misiones: lo que llega acá reemplaza lo que muestro. */
 function applyInventory(v: InventoryState) {
+    lastInv = v;
     const prevSel = sel ? sel.it.id : -1, lvlBefore = P.lvl;
-    P.gold = v.gold; P.lvl = v.lvl; P.exp = v.exp;
+    P.gold = v.goldD || v.gold; P.lvl = v.lvl; P.exp = v.exp;
     P.bag = v.bag.map(itemFromInv);
     for (const sl of SLOTS) P.eq[sl] = null;
     for (const e of v.eq) if (e.item && (SLOTS as string[]).includes(e.slot)) P.eq[e.slot as Slot] = itemFromInv(e.item);
@@ -1784,7 +1829,7 @@ $('loginForm').addEventListener('submit', async (e) => {
     net.onMessage = (m) => { if (m.$case === 'characterLoaded') { pendingSave = m.value.exists ? parseSave(m.value.data) : null; if (pendingSave) { selectedClass = pendingSave.cls; selectedFaction = pendingSave.faction; welcomeBack = true; } return; } onServer(m); if (m.$case === 'initialGameWorldState' && !connected && !inFlow) { if (auto) enterWorld(name); else startFlow(name); } };
     let tries = 0;
     net.onClose = (reason) => {
-        const was = connected; saver.stop(); others.clear();
+        const was = connected; saver.stop(); others.clear(); drops.length = 0; lastInv = null;
         inFlow = false;
         if (backToLogin) { backToLogin = false; showLogin(); btn.disabled = false; return; }
         if (leaving) { leaving = false; connected = false; showLogin('Saliste del juego.'); btn.disabled = false; return; }
@@ -1814,7 +1859,7 @@ function enterWorld(name: string) {
     setClass(selectedClass); if (pendingSave) applySave(pendingSave); refreshUnlocks(false); connected = true; P.name = name; lookKey = ''; refreshLook(); sendProfile();
     $('login').hidden = true; ($('loginBtn') as HTMLButtonElement).disabled = false;
     cv.focus({ preventScroll: true });
-    invApplied = false; saver.start(); saver.tick(true); // el primer guardado le dice al server clase y bando si es un personaje nuevo
+    invApplied = false; if (lastInv) applyInventory(lastInv); invApplied = false; saver.start(); saver.tick(true); // el primer guardado le dice al server clase y bando si es un personaje nuevo
     if (welcomeBack) log(`Bienvenido de vuelta, ${name}. Nivel ${P.lvl}.`, true);
     // cada facción arranca en su ciudad (también si el guardado te dejó dentro de la del otro bando)
     const hub = HUBS[selectedFaction], here = cityAt(P.cell.x, P.cell.y);
@@ -1845,7 +1890,7 @@ async function boot() {
     try { FXM = await (await fetch('assets/fx.json')).json(); IMG.fx = await load('assets/fx.webp'); } catch { FXM = null; }
     loadBuildingImages();
     refreshLook();
-    if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
+    if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, toScreen, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, openShop, toScreen });
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;

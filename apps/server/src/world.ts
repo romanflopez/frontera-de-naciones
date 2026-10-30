@@ -18,6 +18,7 @@ import { MobSim } from './mobs.ts';
 import type { WorldMap } from '@fdn/world';
 import { Player, type PersistedPlayer, type Send } from './player.ts';
 import type { Economy, EconCtx } from './economy.ts';
+import { canPickup, GroundLoot, type GroundApi } from './ground.ts';
 
 interface Timer { at: number; fn: () => void }
 
@@ -33,6 +34,9 @@ export class GameWorld {
     private timers: Timer[] = [];
     private readonly tickHandle: NodeJS.Timeout;
     private mobSim?: MobSim;
+    /** Botín en el suelo de este mundo (solo en memoria). */
+    private readonly loot = new GroundLoot();
+    private lastGroundSync = 0;
 
     constructor(
         readonly config: GameWorldConfig,
@@ -63,7 +67,13 @@ export class GameWorld {
     dispose(): void { clearInterval(this.tickHandle); }
 
     /** Lo que la economía necesita del mundo: los NPC (para validar distancia) y recalcular stats. */
-    private readonly econCtx: EconCtx = { npcs: [], restat: (p) => this.restat(p) };
+    private readonly groundApi: GroundApi = {
+        get: (id) => this.loot.items.get(id),
+        take: (id) => { const g = this.loot.take(id); if (g) this.syncGround(); return g; },
+        add: (item, x, y, owners, freeInMs) => { const g = this.loot.add(item, x, y, owners, freeInMs); this.syncGround(); return g; },
+        ownedCount: (key) => this.loot.ownedCount(key),
+    };
+    private readonly econCtx: EconCtx = { npcs: [], restat: (p) => this.restat(p), ground: this.groundApi };
     private get ctx(): EconCtx { (this.econCtx as { npcs: EconCtx['npcs'] }).npcs = this.map?.npcs ?? []; return this.econCtx; }
 
     /** Une la sesión con su cuenta: trae (o importa una sola vez) el estado económico y arma los stats desde el equipo del server. */
@@ -102,7 +112,29 @@ export class GameWorld {
             this.regenMana(pl, now);
         }
         if (this.mobSim) this.safe('mobs', () => this.mobSim!.update());
+        if (now - this.lastGroundSync >= 400) this.safe('suelo', () => this.syncGround(now));
         this.checkPingTimeouts(now);
+    }
+
+    /** Vence lo viejo y manda a cada jugador solo las diferencias de lo que tiene a la vista (aparece / sale de rango / desaparece). */
+    private syncGround(now = Date.now()): void {
+        this.lastGroundSync = now;
+        for (const g of this.loot.expired(now)) this.loot.take(g.id);
+        const { viewRadiusX: rx, viewRadiusY: ry } = this.settings.radius;
+        for (const p of this.players.values()) {
+            if (p.disconnected) continue;
+            const key = p.accountKey;
+            for (const g of this.loot.items.values()) {
+                if (p.groundSeen.has(g.id) || Math.abs(g.x - p.posX) > rx || Math.abs(g.y - p.posY) > ry) continue;
+                p.groundSeen.add(g.id);
+                const free = canPickup(g, key, now);
+                p.send(M.groundItemSpawned(g, !free, free ? 0 : g.freeAt - now, g.expiresAt - now));
+            }
+            for (const id of [...p.groundSeen]) {
+                const g = this.loot.items.get(id);
+                if (!g || Math.abs(g.x - p.posX) > rx + 2 || Math.abs(g.y - p.posY) > ry + 2) { p.groundSeen.delete(id); p.send(M.groundItemRemoved(id)); }
+            }
+        }
     }
 
     private safe(what: string, fn: () => void): void {
@@ -195,6 +227,7 @@ export class GameWorld {
     private completeJoin(p: Player, includeSpells: boolean): void {
         const t = this.settings.timings;
         p.pingGraceUntil = Date.now() + PING_JOIN_GRACE_MS;
+        p.groundSeen.clear(); // un socket nuevo no vio nada del suelo: se le manda de nuevo
         p.send(M.initialState(p, this.catalogs, {
             includeSpells, pingIntervalMs: this.settings.ping.interval, arrowSpeed: t.arrowSpeed,
             pickupMs: t.playerPickupAnimationTime, bowMs: t.playerBowAnimationTime,
@@ -379,6 +412,7 @@ export class GameWorld {
                 case 'econUnequipRequest': this.econ?.unequip(p, this.ctx, payload.value.slot); break;
                 case 'econDropRequest': this.econ?.drop(p, this.ctx, payload.value.uid); break;
                 case 'econSortRequest': this.econ?.sort(p, this.ctx); break;
+                case 'pickupRequest': this.econ?.pickup(p, this.ctx, payload.value.id); break;
                 case 'econQuestRequest': this.econ?.quest(p, this.ctx, payload.value.npcId, payload.value.action, payload.value.key); break;
                 case 'respawnRequest': this.respawn(p); break;
                 case 'invisibilityRequest': { if (p.isDead || !this.payMp(p, UTIL_MP.invisibilidad)) break; this.changeStatus(p, () => castInvisibility(p.status, Date.now())); break; }
