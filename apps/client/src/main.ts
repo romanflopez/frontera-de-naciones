@@ -161,7 +161,7 @@ const P = {
     x: MAP.spawn.x + 0.5, y: MAP.spawn.y + 0.5, dir: 6, ang: undefined as number | undefined, moving: false, phase: 0, ref: 3.4, one: null as OneShot | null, t0: 0, flash: 0,
     name: '', cell: { x: MAP.spawn.x, y: MAP.spawn.y }, path: [] as Cell[], step: null as Step | null, stepMs: 270, frozenUntil: 0, foe: null as Other | null, med: false, medHp: 0,
     target: null as Mob | null, engage: false, pickup: null as Drop | null, repath: 0, queued: null as number | null,
-    lvl: 1, exp: 0, hp: 100, mp: 60, fury: 0, inv: false, det: false, gold: 0, nextAtk: 0, dead: false, deadT: 0,
+    lvl: 1, exp: 0, hp: 100, mp: 60, fury: 0, inv: false, det: false, invEnd: 0, detEnd: 0, immEnd: 0, gold: 0, nextAtk: 0, dead: false, deadT: 0,
     bag: [] as Item[], eq: { arma: null, armadura: null, cabeza: null, anillo: null } as Record<Slot, Item | null>,
     casting: null as Casting | null, ready: null as { i: number; t: number } | null, sentDir: -1,
 };
@@ -281,7 +281,7 @@ function onServer(m: ServerPayload) {
             }
             if (v.fx === 'blizz') fx.push({ k: 'blizz', x: v.x, y: v.y, t: 0, r: v.r || 2.7, d: 3.2 }); else if (v.fx) efxLocal(v.fx, v.x, v.y, v.targetId ? 8 : 0);
             if (v.fx === 'resist') { float(v.x, v.y - 0.5, '¡Resistió!', '#9fe8ff'); break; }
-            if (v.targetId === myId && v.secs < 0) { P.frozenUntil = 0; log('¡Removiste la parálisis! Sos inmune 8 s.', true); break; }
+            if (v.targetId === myId && v.secs < 0) { P.frozenUntil = 0; P.immEnd = now() + 8; log('¡Removiste la parálisis! Sos inmune 8 s.', true); break; }
             if (v.targetId === myId && !P.dead) {
                 {
                     if (v.dmg > 0) hurtPlayer(v.dmg, '', true);
@@ -387,7 +387,7 @@ function onStatusUpdate(v: { playerId: bigint; invisible: boolean; detect: boole
     if (v.playerId === myId) {
         if (P.inv !== v.invisible) log(v.invisible ? 'Te volviste invisible (15 s o hasta que ataques).' : 'Ya no sos invisible.', true);
         if (P.det !== v.detect) log(v.detect ? 'Ves a los invisibles por 10 s.' : 'Se acabó Detectar invisible.', true);
-        P.inv = v.invisible; P.det = v.detect; return;
+        if (v.invisible && !P.inv) P.invEnd = now() + 15; if (v.detect && !P.det) P.detEnd = now() + 10; P.inv = v.invisible; P.det = v.detect; return;
     }
     const o = others.get(v.playerId); if (o) { o.inv = v.invisible; o.fury = v.fury; }
 }
@@ -1174,7 +1174,21 @@ function setClass(id: string) {
     SPELLS.forEach((_, i) => $('sp' + i).addEventListener('click', () => { cast(i); cv.focus({ preventScroll: true }); }));
     $('helpKeys').textContent = `Click o mantener: caminar · Click en mob: atacar · teclas 1–0 usar habilidad (las de objetivo: esperá que cargue y click en el blanco) · Click derecho: cancelar · ${SPELLS.map((x) => x.key + ' ' + x.name).join(' · ')} · I Bolsa · Enter chat`;
 }
+/** Cuadraditos de estado con cuenta regresiva (Furia, invisible, detectar, parálisis, inmunidad), como en HB. */
+const BUFFS: { k: string; n: string; c: string; end: () => number; on: () => boolean }[] = [
+    { k: 'F', n: 'Furia', c: '#ff5a2a', end: () => P.fury, on: () => P.fury > now() },
+    { k: 'I', n: 'Invisible', c: '#7fb8ff', end: () => P.invEnd, on: () => P.inv },
+    { k: 'D', n: 'Detectar invisible', c: '#9be07a', end: () => P.detEnd, on: () => P.det },
+    { k: 'P', n: 'Paralizado', c: '#d9c24a', end: () => P.frozenUntil, on: () => P.frozenUntil > now() },
+    { k: 'R', n: 'Inmune a parálisis', c: '#e8e8ff', end: () => P.immEnd, on: () => P.immEnd > now() },
+];
+function renderBuffs() {
+    const el = $('buffs'), T = now(); let h = '';
+    for (const b of BUFFS) { if (!b.on()) continue; const left = Math.max(0, b.end() - T); h += `<div class="buff${left < 2 ? ' warn' : ''}" style="--c:${b.c}" title="${b.n}"><i>${b.k}</i><b>${Math.ceil(left)}</b></div>`; }
+    if (el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; }
+}
 function hud() {
+    renderBuffs();
     const T = now(), mh = maxHp(), mm = maxMp();
     $('meLvl').textContent = 'Nv ' + P.lvl;
     $('hpI').style.width = (P.hp / mh) * 100 + '%'; $('hpT').textContent = `${Math.ceil(P.hp)} / ${mh}`;

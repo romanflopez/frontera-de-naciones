@@ -74,7 +74,7 @@ export class MobSim {
 
     private eligible(p: Player | undefined): p is Player {
         if (!p || p.disconnected) return false;
-        if (this.budget.get(p)?.dead || p.isDead) return false;
+        if (this.budget.get(p)?.dead || p.isDead || p.status.isInvisible) return false;
         return !this.isSafe(p.posX + 0.5, p.posY + 0.5);
     }
 

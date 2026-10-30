@@ -79,6 +79,11 @@ button:hover{border-color:var(--brass)} button:focus-visible{outline:2px solid v
 #qdForges{display:grid;gap:6px} #qdBody{line-height:1.35} #qdBody small{color:var(--muted)}
 #quest{top:calc(128px + env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));padding:8px 10px;display:grid;gap:2px;max-width:230px;font-size:12px}
 #quest b{font-family:var(--f-display);color:var(--brass);font-size:13px} #quest em{font-style:normal;color:#bfe6ff}
+#buffs{top:calc(10px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);display:flex;gap:5px;pointer-events:none}
+#buffs .buff{width:34px;height:34px;border:2px solid var(--c);border-radius:4px;background:rgba(10,12,10,.8);position:relative;display:grid;place-items:center;box-shadow:0 0 6px var(--c)}
+#buffs .buff i{font-style:normal;font-family:var(--f-display);color:var(--c);font-size:15px;opacity:.9}
+#buffs .buff b{position:absolute;right:2px;bottom:0;font-size:11px;color:#fff;text-shadow:0 0 3px #000,0 0 3px #000}
+#buffs .buff.warn{animation:bw .5s steps(2) infinite}@keyframes bw{50%{opacity:.35}}
 #pots{bottom:calc(12px + env(safe-area-inset-bottom,0px));left:calc(50% + 296px);display:flex;gap:6px}
 .pot{position:relative;width:38px;height:38px;display:grid;place-items:center;padding:2px;border-radius:6px;font-size:9px;line-height:1.1}
 .pot b{font-family:var(--f-display);font-size:9px;margin-top:8px} .pot kbd{position:absolute;top:2px;left:50%;transform:translateX(-50%);font-size:9px;opacity:.8;top:2px;left:4px;transform:none} .pot em{position:absolute;bottom:1px;right:4px;font-style:normal;color:var(--brass);font-size:11px}
@@ -176,6 +181,7 @@ canvas:focus{outline:none}
   </div>
   <div id="quest" class="hud box" hidden></div>
 
+  <div id="buffs" class="hud"></div>
   <div id="pots" class="hud"><button id="pothp" class="pot" type="button"></button><button id="potmp" class="pot" type="button"></button></div>
   <div id="bar" class="hud box"></div>
   <div id="log" class="hud"></div>
