@@ -1,6 +1,6 @@
 # El mundo: de un mapa único a mapas separados
 
-Estado: **diseño** (sin código de juego). Diagrama: [`mundo-grafo.html`](mundo-grafo.html) (SVG autocontenido; se abre en el navegador).
+Estado: **Fases 0 y 1 implementadas** (infraestructura multi-mapa con 3 mapas de prueba; ver «Estado de la implementación» al final de la sección 4). El resto sigue en diseño. Diagrama: [`mundo-grafo.html`](mundo-grafo.html) (SVG autocontenido; se abre en el navegador).
 Base que se mantiene: la curva de niveles y mobs de [`ZONAS.md`](ZONAS.md) (niveles 1-12), la cadena de misiones del Capitán y los portales de `packages/world/src/training.ts`.
 
 Decisión del usuario: **mapas separados**. Cada zona es su propio mapa grande; se conectan con caminos, portales y puertas, con pantalla de carga. La idea de organizar el mundo como un grafo (naciones enfrentadas, zona de principiantes, tierra compartida, mazmorras en cadena, zonas por evento) viene de un diagrama de referencia; los nombres, el lore y el contenido son nuestros.
@@ -307,6 +307,20 @@ Estrategia "estrangulador": el mapa actual sigue existiendo (con id propio, `sol
 ### Fase 8 - Limpieza y balance (S-M)
 - Borrar `buildSolmar/extend*` y `solmar_legacy`; revisar densidades y desbloqueos; extensión Nv 13+ (opcional); instancias de jefes/mazmorras y party (aparte).
 
+### Estado de la implementación (Fases 0 y 1)
+
+**Hecho y verificado** (rama `claude/blissful-allen-8fq0p4`):
+- **Fase 0** (`packages/world/src/maps.ts`, `testmaps.ts`): `MapDef`, `Link` (`id` estable, `kind` walk/portal/oneway/door/npc, `gate` con `lvl`/`quest`/`key`), registro `MAPS` por id, `validateMapGraph()` (ids únicos, destinos caminables y no disparadores, reciprocidad salvo `oneway`, puertas con requisito, todo alcanzable a pie desde el spawn, zonas únicas entre mapas, `build()` determinista, mapas seguros sin mobs) y `mapHash()` (FNV-1a de tamaño, bloqueos y zonas). El mapa actual es `solmar_legacy` (`buildSolmar` y sus `extend*` sin cambios). `Zone.drops` opcional.
+- **Fase 1, protocolo:** `PortalRequest` (cliente, tag 123), `MapReady` (cliente, 124), `MapTransfer` (server, 150). `WorldChangeRequest` queda en desuso. Regenerado con `grpc_tools` de Python porque el `protoc` de `grpc-tools` no se pudo bajar (el resultado es idéntico salvo lo nuevo).
+- **Fase 1, server:** `registry.ts` (`WorldRegistry`: un `GameWorld` por `mapId`/`mapId#instanceId` a pedido, un solo reloj, hibernación de vacíos, baja de instancias, cruce en dos fases con tiempo límite de 20 s y cruce pendiente que se completa si cae el socket). `world.ts`: `detachPlayer`/`attachPlayer`, temporizadores que siguen al jugador (pociones en el tiempo, furia, protección al aparecer), `checkLink` (distancia, vida, nivel/misión/llave; la llave se descuenta al cruzar), respawn y PvP por `MapDef`, hub solo válido en el mapa original. `persist.ts`: guardado con `mapId` y `rest` de mapas temporales. Economía: `maxLootLvl()` recorre todos los mapas; la esquirla del boss puede salir de `Zone.drops`.
+- **Fase 1, cliente:** `loadMap()` (el mapa es estado mutable), pantalla de carga violeta (`#maploading`), verificación de hash y `MapReady`, portales entre mapas dibujados con `portal.ts`, `cityAt`/PvP/arena por mapa, `MAP_WORLD_ID` dinámico.
+- **Mapas de prueba:** `solmar_legacy` (96) ↔ `prueba_caza` (64, goblins Nv1, goblins de élite Nv2 y esqueletos Nv4, campamento seguro con respawn propio, PvP de facción) → puerta de nivel 2 → `prueba_mazmorra` (48, esqueletos Nv3 y hechiceros Nv4, vestíbulo seguro con respawn propio, sin PvP, `temporary` con `rest` en la puerta del claro) → atajo de una vía a `solmar_legacy`. Portal nuevo en Solmar en la celda (11, 11) junto a la plaza (único cambio visible del mapa viejo).
+- Verificación: `pnpm --filter @fdn/server test` (27 tests: validador del grafo, registro, transferencia, hibernación, instancias, respawn, PvP, guardado) y una pasada con Playwright contra server y cliente reales (cruce de ida y vuelta, puerta bloqueada a nivel 1, puerta abierta a nivel 5, muerte con respawn en la entrada de la mazmorra, atajo de una vía y reconexión con el personaje guardado en otro mapa).
+
+**Desvíos del plan original:** (1) no hay `v: 2` ni migración al hogar de facción (decisión del usuario: sin usuarios reales); (2) `data/worlds.json` ya no se lee (los mundos salen de `MAPS`; `settings.initialMap` ahora es `solmar_legacy`); (3) el scheduler es uno solo en el registro, no un `setInterval` por mundo; (4) los vínculos viven en `MapDef.links`, no dentro de `WorldMap.portals` (las escaleras del mapa viejo siguen siendo `Portal` del mismo mapa); (5) los waypoints y el Portal de Frontera siguen siendo del mapa original (Fase 2/3 los mueven); (6) `scripts/test-maps.ts` del plan quedó como tests de `node --test` (`apps/server/test`).
+
+**Pendiente de la Fase 1:** posición en la cuenta/Postgres (decisión 9), canales de chat por mapa, minimapa. Quedan sin usar: instancias de party, `Link.kind` `walk`/`npc` (solo `portal`, `door` y `oneway` se probaron).
+
 ### Qué se puede paralelizar
 - Sí: F2 (Solmar/Vhar), mapas de F3-F5 una vez listo el kit, F6, F7. Cada uno en archivos nuevos.
 - No: F1 (contrato proto → server/cliente), cualquier cambio a `main.ts` y a `world.ts`/`index.ts` (un agente por vez), la extracción del kit de terreno (antes de F3).
@@ -320,6 +334,11 @@ Estrategia "estrangulador": el mapa actual sigue existiendo (con id propio, `sol
 
 - **PvP:** no hay PvP en las ciudades. Tampoco en los bosses/bolsillos de jefe por ahora (se decide más adelante). PvP de facción solo en tierras compartidas y zonas de caza, y en el Coliseo/Campo de Batalla por evento.
 - **Mazmorras y jefes:** por ahora mapas compartidos. Más adelante se quiere una **cola de grupo** (o un comando de chat para invitar) para entrar a una mazmorra o jefe en **instancia privada**: al entrar el líder, aparecen todos los miembros de la party en la misma instancia. La Fase 1 debe dejar el registro de mundos preparado para eso (clave `mapId` + `instanceId`, hibernar instancias vacías) aunque todavía no se use.
+- **Muerte:** si morís dentro de una mazmorra reaparecés en la entrada de esa mazmorra. Cada `MapDef` define su punto de respawn (`respawn`); los mapas de caza y de ciudad definen el suyo. Por ahora no hay lógica especial de llaves (la llave se sigue consumiendo al cruzar).
+- **Mapas compartidos:** sin instancias por ahora, pero el registro de mundos ya usa la clave `mapId` + `instanceId` y sabe hibernar mundos vacíos y dar de baja instancias vacías (implementado, sin uso todavía).
+- **Misiones:** se siguen contando por tipo de mob, sin importar el mapa (no se acotan por mapa; deja sin efecto la recomendación 7).
+- **Foso:** un solo demonio, el del Trono (mapa futuro). En las fases 0-1 no se tocaron las zonas del mapa viejo.
+- **Posición del personaje:** todavía no hay usuarios reales: sin migración de datos. Se guarda `mapId` + celda donde ya se guardaba (`chars/<id>.json`, sin Postgres); cargar un guardado sin `mapId` válido cae en el mapa por defecto sin crashear (un `worldId: 'solmar'` viejo vale como `solmar_legacy`).
 - **Resto de las decisiones (secciones siguientes):** sin respuesta todavía; se toma la recomendación del documento hasta que el usuario diga otra cosa.
 
 ## 5. Decisiones para el usuario (con recomendación)
