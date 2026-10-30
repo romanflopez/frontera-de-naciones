@@ -16,6 +16,10 @@ export interface MobHost {
     playerById(id: bigint): Player | undefined;
     nearby(cx: number, cy: number): Player[];
     after(ms: number, fn: () => void): void;
+    /** Le saca vida al jugador en el server (defensa incluida) y avisa. */
+    hurt(p: Player, raw: number, source: string): void;
+    /** Paraliza al jugador (si no es inmune): devuelve los segundos que quedó. */
+    stun(p: Player, secs: number): number;
 }
 
 interface SimMob {
@@ -70,7 +74,7 @@ export class MobSim {
 
     private eligible(p: Player | undefined): p is Player {
         if (!p || p.disconnected) return false;
-        if (this.budget.get(p)?.dead) return false;
+        if (this.budget.get(p)?.dead || p.isDead) return false;
         return !this.isSafe(p.posX + 0.5, p.posY + 0.5);
     }
 
@@ -147,7 +151,7 @@ export class MobSim {
                     this.host.after(200, () => {
                         const p = this.host.playerById(tid);
                         if (!this.mobs.has(m.id) || m.par > this.now() || !this.eligible(p)) return;
-                        if (Math.hypot(m.x - (p.posX + 0.5), m.y - (p.posY + 0.5)) < 1.8) p.send(M.mobHitPlayer(m.id, dmg, 0));
+                        if (Math.hypot(m.x - (p.posX + 0.5), m.y - (p.posY + 0.5)) < 1.8) { p.send(M.mobHitPlayer(m.id, dmg, 0)); this.host.hurt(p, dmg, d.name); }
                     });
                 }
             } else if (m.state === 'return') {
@@ -168,7 +172,8 @@ export class MobSim {
             this.broadcastNear(m, M.mobSpecialEvent(m.id, 1, m.x, m.y));
             for (const p of this.host.nearby(m.x, m.y)) {
                 if (!this.eligible(p) || Math.hypot(m.x - (p.posX + 0.5), m.y - (p.posY + 0.5)) > sp.r) continue;
-                p.send(M.mobHitPlayer(m.id, sp.dmg ? rint(sp.dmg[0], sp.dmg[1]) : 0, sp.stun ?? 0));
+                const dmg = sp.dmg ? rint(sp.dmg[0], sp.dmg[1]) : 0, stun = sp.stun ? this.host.stun(p, sp.stun) : 0;
+                p.send(M.mobHitPlayer(m.id, dmg, stun)); if (dmg > 0) this.host.hurt(p, dmg, MOBS[m.type].name);
             }
         });
     }

@@ -98,6 +98,8 @@ message ClientMessage {
     RemoverRequest remover_request = 44;
     InvisibilityRequest invisibility_request = 45;
     DetectInvisibleRequest detect_invisible_request = 46;
+    HpReport hp_report = 47;
+    RespawnRequest respawn_request = 48;
     SaveCharacterRequest save_character_request = 80;
     MobHitRequest mob_hit_request = 120;
     PveStatusRequest pve_status_request = 121;
@@ -463,6 +465,9 @@ message ServerMessage {
     MobDied mob_died = 125;
     LootRoll loot_roll = 130;
     StatusUpdate status_update = 131;
+    Vitals vitals = 132;
+    PlayerVitals player_vitals = 133;
+    PvpKill pvp_kill = 134;
   }
 }
 
@@ -504,7 +509,15 @@ message DetectInvisibleRequest {}
 message LootAttr { string key = 1; int32 value = 2; }
 /** Botín tirado por el server para quien dio el golpe final. */
 message LootRoll { int32 mob_id = 1; int32 rarity = 2; int32 base_seed = 3; repeated LootAttr attrs = 4; }
-message StatusUpdate { int64 player_id = 1; bool invisible = 2; bool detect = 3; }
+message StatusUpdate { int64 player_id = 1; bool invisible = 2; bool detect = 3; bool fury = 4; }
+/** El cliente informa su vida (curas, pociones, regeneración); el server solo acepta subas razonables. */
+message HpReport { int32 hp = 1; }
+message RespawnRequest {}
+/** Mi vida según el server (la autoridad): después de cada golpe, curación o al revivir. */
+message Vitals { int32 hp = 1; int32 max_hp = 2; bool dead = 3; }
+/** Vida de otro jugador cercano (para su barra). */
+message PlayerVitals { int64 player_id = 1; int32 hp = 2; int32 max_hp = 3; }
+message PvpKill { int64 player_id = 1; int64 killer_id = 2; string victim_name = 3; string killer_name = 4; }
 message PvpHitRequest {
   string fx = 1;
   double x = 2;

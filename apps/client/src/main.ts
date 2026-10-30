@@ -167,7 +167,7 @@ const P = {
 };
 
 /** Otros jugadores, según lo que manda el server. */
-interface Other extends Ent { inv?: boolean; profile: string; id: bigint; name: string; cell: Cell; queue: Cell[]; step: Step | null; stepMs: number; gone: boolean }
+interface Other extends Ent { hp?: number; maxHp?: number; fury?: boolean; inv?: boolean; profile: string; id: bigint; name: string; cell: Cell; queue: Cell[]; step: Step | null; stepMs: number; gone: boolean }
 const others = new Map<bigint, Other>();
 
 interface Drop { x: number; y: number; item?: Item; gold?: number; t: number }
@@ -283,9 +283,8 @@ function onServer(m: ServerPayload) {
             if (v.fx === 'resist') { float(v.x, v.y - 0.5, '¡Resistió!', '#9fe8ff'); break; }
             if (v.targetId === myId && v.secs < 0) { P.frozenUntil = 0; log('¡Removiste la parálisis! Sos inmune 8 s.', true); break; }
             if (v.targetId === myId && !P.dead) {
-                const c = others.get(v.casterId);
-                if (c && isEnemy(c)) {
-                    if (v.dmg > 0) hurtPlayer(v.dmg, v.fx);
+                {
+                    if (v.dmg > 0) hurtPlayer(v.dmg, '', true);
                     if (v.secs > 0) { P.frozenUntil = now() + v.secs; P.path = []; P.engage = false; P.foe = null; cancelCast(); toast('¡Te paralizaron!'); }
                 }
             }
@@ -303,6 +302,9 @@ function onServer(m: ServerPayload) {
         case 'mobDied': onMobDied(m.value); break;
         case 'lootRoll': lootRolls.set(m.value.mobId, { rarity: m.value.rarity, baseSeed: m.value.baseSeed, attrs: m.value.attrs }); break;
         case 'statusUpdate': onStatusUpdate(m.value); break;
+        case 'vitals': onVitals(m.value); break;
+        case 'playerVitals': { const o = others.get(m.value.playerId); if (o) { o.hp = m.value.hp; o.maxHp = m.value.maxHp; } break; }
+        case 'pvpKill': { const v = m.value; if (v.playerId !== myId) log(v.killerName ? `<b>${esc(v.killerName)}</b> derrotó a <b>${esc(v.victimName)}</b>.` : `<b>${esc(v.victimName)}</b> cayó.`, true); else if (v.killerName) log(`Te derrotó <b>${esc(v.killerName)}</b>.`, true); break; }
         case 'playerProfileChanged': { const o = others.get(m.value.playerId); if (o) o.profile = m.value.profile; break; }
         case 'playersLeftRange':
             for (const id of m.value.playerIds) others.delete(id);
@@ -361,7 +363,7 @@ function damageMob(m: Mob, dmg: number, crit: boolean, src: 'melee' | 'spell', p
     if (!mobs.includes(m) || P.dead) return;
     if (P.fury > now()) dmg = Math.round(dmg * (src === 'melee' ? 1.3 : CLS.id === 'mago' ? 1.2 : 1));
     const t = totals();
-    if (src === 'melee' && t.leech) P.hp = Math.min(maxHp(), P.hp + Math.max(1, Math.round((dmg * t.leech) / 100)));
+    if (src === 'melee' && t.leech) P.hp = Math.min(maxHp(), P.hp + Math.max(1, Math.round((dmg * t.leech) / 100))); syncHp();
     let poisonSecs = 0;
     if (src === 'melee' && t.poison && R() * 100 < t.poison) { poisonSecs = 4; log(`${m.name} quedó envenenado.`); }
     net.send({ $case: 'mobHitRequest', value: { mobId: m.id, dmg, melee: src === 'melee', crit, parSecs, poisonSecs } });
@@ -376,17 +378,17 @@ function onMobDamaged(v: { mobId: number; attackerId: bigint; dmg: number; crit:
     if (mine) { hitstop = Math.max(hitstop, v.crit ? 0.09 : 0.045); if (v.crit && !reduce) shake = 0.25; }
 }
 function levelUp() {
-    while (P.exp >= expNeed()) { P.exp -= expNeed(); P.lvl++; P.hp = maxHp(); P.mp = maxMp(); float(P.x, P.y - 0.5, `¡Nivel ${P.lvl}!`, '#ffd24a', true); log(`Subiste a nivel ${P.lvl}.`, true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd24a' }); }
+    while (P.exp >= expNeed()) { P.exp -= expNeed(); P.lvl++; P.hp = maxHp(); P.mp = maxMp(); later(0.1, () => saver.tick(true)); float(P.x, P.y - 0.5, `¡Nivel ${P.lvl}!`, '#ffd24a', true); log(`Subiste a nivel ${P.lvl}.`, true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd24a' }); }
 }
 /** El server avisó que un mob murió: lo saca del espejo, deja el cadáver y, si el golpe final fue mío, cobro el botín. */
 /** El server avisa quién está invisible y si yo veo invisibles. */
-function onStatusUpdate(v: { playerId: bigint; invisible: boolean; detect: boolean }) {
+function onStatusUpdate(v: { playerId: bigint; invisible: boolean; detect: boolean; fury: boolean }) {
     if (v.playerId === myId) {
         if (P.inv !== v.invisible) log(v.invisible ? 'Te volviste invisible (15 s o hasta que ataques).' : 'Ya no sos invisible.', true);
         if (P.det !== v.detect) log(v.detect ? 'Ves a los invisibles por 10 s.' : 'Se acabó Detectar invisible.', true);
         P.inv = v.invisible; P.det = v.detect; return;
     }
-    const o = others.get(v.playerId); if (o) o.inv = v.invisible;
+    const o = others.get(v.playerId); if (o) { o.inv = v.invisible; o.fury = v.fury; }
 }
 function onMobDied(v: { mobId: number; killerId: bigint; x: number; y: number; type: number; zone: number }) {
     const type = MOB_TYPES[v.type], z = ZONES[v.zone]; if (!type || !z) return;
@@ -441,23 +443,35 @@ function explode(p: Proj) {
     if (n > 1) log(`Bola de fuego: ${n} enemigos alcanzados.`, true);
 }
 const FIRE_FX = new Set(['sphere', 'eruption', 'cataclysm', 'flamme']), ICE_FX = new Set(['blizz', 'tidal']);
-function hurtPlayer(d: number, kind = '') {
+/** Muestra el golpe que recibí. La vida la lleva el server: acá solo el efecto (`applied` = el daño ya viene con la defensa descontada). */
+function hurtPlayer(d: number, kind = '', applied = false) {
     if (P.dead) return;
-    const tt = totals(), res = FIRE_FX.has(kind) ? tt.fres : ICE_FX.has(kind) ? tt.ires : 0;
-    if (res > 0) d = Math.round(d * (1 - Math.min(75, res) / 100));
-    const dmg = Math.max(1, d - tt.def); P.hp -= dmg; P.flash = 0.12; float(P.x, P.y, '-' + dmg, '#ff6b55');
+    if (!applied) {
+        const tt = totals(), res = FIRE_FX.has(kind) ? tt.fres : ICE_FX.has(kind) ? tt.ires : 0;
+        if (res > 0) d = Math.round(d * (1 - Math.min(75, res) / 100));
+        d = Math.max(1, d - tt.def);
+    }
+    P.flash = 0.12; float(P.x, P.y, '-' + d, '#ff6b55');
     if (P.casting) P.casting.end = Math.min(P.casting.end + 0.2, P.casting.start + P.casting.len * 1.6);
     if (!(P.one && P.one.anim !== 'hit' && now() < P.one.until)) oneShot(P, 'hit', 0.15);
-    if (P.hp <= 0) {
-        P.dead = true; P.deadT = now(); P.hp = 0; P.path = []; P.casting = null; P.target = null; const lost = Math.round(expNeed() * 0.05); P.exp = Math.max(0, P.exp - lost);
-        log(`Moriste. Perdiste ${lost} de exp y volvés al campamento.`, true);
-        later(2.2, () => {
-            // volver al campamento: el server confirma con playerTeleported
-            const hub = HUBS[selectedFaction] ?? MAP.spawn; net.send({ $case: 'playerTeleportRequested', value: { x: hub.x, y: hub.y } });
-            P.dead = false; P.one = null; P.hp = maxHp(); P.mp = maxMp();
-        });
-    }
 }
+/** El server dice que morí: pierdo un poco de exp y pido revivir en mi ciudad. */
+function die() {
+    if (P.dead) return;
+    P.dead = true; P.deadT = now(); P.hp = 0; P.path = []; P.casting = null; P.target = null; P.med = false; const lost = Math.round(expNeed() * 0.05); P.exp = Math.max(0, P.exp - lost);
+    log(`Moriste. Perdiste ${lost} de exp y volvés a tu ciudad.`, true);
+    const ask = (n: number) => { if (!P.dead || n > 10) return; net.send({ $case: 'respawnRequest', value: {} }); later(1, () => ask(n + 1)); };
+    later(2.2, () => ask(0));
+}
+/** Mi vida según el server: es la que vale. */
+function onVitals(v: { hp: number; maxHp: number; dead: boolean }) {
+    if (v.dead) { if (!P.dead) die(); P.hp = 0; return; }
+    if (P.dead) { P.dead = false; P.one = null; P.mp = maxMp(); log('Revivís en tu ciudad.', true); }
+    P.hp = Math.min(maxHp(), v.hp);
+}
+let lastHpSent = -1;
+/** Le cuento al server mi vida (curas, pociones, regeneración): él solo acepta subas razonables. */
+function syncHp() { const h = Math.round(P.hp); if (h === lastHpSent || P.dead || !connected) return; lastHpSent = h; net.send({ $case: 'hpReport', value: { hp: h } }); }
 
 // ---------- hechizos ----------
 type Target = Mob | { x: number; y: number; ground: true } | { x: number; y: number; pvp: Other };
@@ -521,7 +535,7 @@ function zone(x: number, y: number, r: number, ticks: number, every: number, dmg
         for (const m of mobs.slice()) if (Math.hypot(m.x - x, m.y - y) <= r && !isSafe(m.x, m.y)) damageMob(m, dmg(), false, 'spell', slow && m.imm <= now() && i === ticks - 1 ? slow : 0);
     });
 }
-function heal(h: number, eff = 'sphere') { P.hp = Math.min(maxHp(), P.hp + h); float(P.x, P.y - 0.2, '+' + h, '#7ee08a'); efx(eff, P.x, P.y); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#7ee08a' }); }
+function heal(h: number, eff = 'sphere') { P.hp = Math.min(maxHp(), P.hp + h); syncHp(); float(P.x, P.y - 0.2, '+' + h, '#7ee08a'); efx(eff, P.x, P.y); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#7ee08a' }); }
 function control(m: Target | null, secs: number, verb: string, noun: string, eff = 'stop'): false | void {
     if (!isMob(m)) return false;
     if (m.imm > now()) { log(`${m.name} es inmune al control por unos segundos.`); return false; }
@@ -548,7 +562,7 @@ function usePotion(k: 'hp' | 'mp') {
     pots[k]--; pots.cd = now() + 1.2;
     if (k === 'hp') { const h = Math.max(50, Math.round(maxHp() * 0.4)); P.hp = Math.min(maxHp(), P.hp + h); float(P.x, P.y - 0.2, '+' + h, '#7ee08a'); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#e0524a' }); }
     else { const m = Math.max(40, Math.round(maxMp() * 0.5)); P.mp = Math.min(maxMp(), P.mp + m); float(P.x, P.y - 0.2, '+' + m + ' maná', '#7fb7ff'); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#4a8fe0' }); }
-    efx('sphere', P.x, P.y); renderPots();
+    syncHp(); efx('sphere', P.x, P.y); renderPots();
 }
 function renderPots() { for (const k of ['hp', 'mp'] as const) { const el = $('pot' + k); el.innerHTML = `<kbd>${POTS[k].key}</kbd><b>${POTS[k].name.replace('Poción de ', '')}</b><em>${pots[k]}</em>`; } }
 // ---------- /meditar: quieto, el maná sube rápido; se corta si te movés, casteás o te pegan ----------
@@ -872,7 +886,7 @@ function update(dt: number) {
             else if (d.item && P.bag.length < 18) { P.bag.push(d.item); drops.splice(drops.indexOf(d), 1); log(`Agarraste <span style="color:${d.item.rar.c}">${d.item.name}</span>.`); renderBag(); }
             else log('La bolsa está llena.');
         }
-        regenT += dt; if (regenT >= 1) { regenT = 0; const inCity = isSafe(P.x, P.y); P.hp = Math.min(maxHp(), P.hp + (inCity ? 8 : 1)); P.mp = Math.min(maxMp(), P.mp + (P.med ? Math.max(6, Math.round(maxMp() * 0.08)) : inCity ? 8 : 2)); if (P.med && P.mp >= maxMp()) stopMeditating('Terminaste de meditar: maná lleno.'); }
+        regenT += dt; if (regenT >= 1) { regenT = 0; const inCity = isSafe(P.x, P.y); P.hp = Math.min(maxHp(), P.hp + (inCity ? 8 : 1)); syncHp(); P.mp = Math.min(maxMp(), P.mp + (P.med ? Math.max(6, Math.round(maxMp() * 0.08)) : inCity ? 8 : 2)); if (P.med && P.mp >= maxMp()) stopMeditating('Terminaste de meditar: maná lleno.'); }
         if (P.med && (P.step || P.path.length || P.casting || P.hp < P.medHp || P.dead)) stopMeditating(P.hp < P.medHp ? 'Te sacaron de la meditación.' : 'Dejaste de meditar.');
         if (P.med) P.medHp = P.hp;
     }
@@ -979,7 +993,7 @@ function render() {
     for (const d of drops) objs.push({ d: d.x + d.y - 0.2, f: () => drawDrop(d, T) });
     for (const c of corpses) objs.push({ d: c.x + c.y - 0.3, f: () => { const p = iso(c.x, c.y), age = T - c.t; drawSprite(c.sprite, 'die', age, c.dir, p.x, p.y, null, age > 2 ? 3 - age : 1); } });
     for (const m of mobs) objs.push({ d: m.x + m.y, f: () => drawMob(m, T) });
-    for (const o of others.values()) objs.push({ d: o.x + o.y, f: () => { const p = iso(o.x, o.y), [a, t] = animFor(o, T); if (unseen(o)) return; drawSprite(otherSprite(o), a, t, o.dir, p.x, p.y, o.inv ? 'rgba(150,200,255,.25)' : null, o.inv ? 0.35 + 0.1 * Math.sin(T * 5) : o.gone ? 0.45 : 1); } });
+    for (const o of others.values()) objs.push({ d: o.x + o.y, f: () => { const p = iso(o.x, o.y), [a, t] = animFor(o, T); if (unseen(o)) return; drawSprite(otherSprite(o), a, t, o.dir, p.x, p.y, o.inv ? 'rgba(150,200,255,.25)' : null, o.inv ? 0.35 + 0.1 * Math.sin(T * 5) : o.gone ? 0.45 : 1); if (o.fury) { ctx.save(); ctx.globalAlpha = 0.35 + 0.15 * Math.sin(T * 8); ctx.strokeStyle = '#ff5a2a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 22, 11, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); } } });
     objs.push({ d: P.x + P.y, f: () => { const p = iso(P.x, P.y); if (P.frozenUntil > T && !P.dead) { ctx.strokeStyle = 'rgba(190,235,255,.85)'; ctx.lineWidth = 1.5; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(p.x, p.y - 8 - i * 14, 16, 6, 0, 0, Math.PI * 2); ctx.stroke(); } } if (P.dead) drawSprite('hero', 'die', T - P.deadT, P.dir, p.x, p.y); else {
             const [a, t] = animFor(P, T), bz = P.fury > T;
             if (P.med) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const k = 0.5 + 0.5 * Math.sin(T * 3); ctx.strokeStyle = `rgba(110,170,255,${0.35 + k * 0.4})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 16 + k * 14, (16 + k * 14) / 2, 0, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.ellipse(p.x, p.y - 20 - k * 22, 5, 2.5, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
@@ -992,7 +1006,7 @@ function render() {
         } } });
     objs.sort((a, b) => a.d - b.d).forEach((o) => o.f());
     // nombres arriba de todo
-    for (const o of others.values()) { if (unseen(o)) continue; const p = iso(o.x, o.y); nameTag(o.name, p.x, p.y - 70, factionCol(o.profile.split(';')[0]), o.gone ? 0.5 : 1); }
+    for (const o of others.values()) { if (unseen(o)) continue; const p = iso(o.x, o.y); nameTag(o.name, p.x, p.y - 70, factionCol(o.profile.split(';')[0]), o.gone ? 0.5 : 1); if (o.maxHp && o.hp !== undefined && o.hp < o.maxHp) { const f = Math.max(0, o.hp / o.maxHp); ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - 17, p.y - 66, 34, 5); ctx.fillStyle = isEnemy(o) ? '#d9443a' : '#58b85a'; ctx.fillRect(p.x - 16, p.y - 65, 32 * f, 3); } }
     { const p = iso(P.x, P.y); nameTag(P.name, p.x, p.y - 70, factionCol(selectedFaction)); }
     for (const n of MAP.npcs) { const p = iso(n.x + 0.5, n.y + 0.5); nameTag(n.name, p.x, p.y - 70, '#9fd36b'); if (n.id === 'capitan' && questMark()) { ctx.font = "700 22px 'Alegreya SC', Georgia, serif"; ctx.textAlign = 'center'; ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#2a1a00'; ctx.lineWidth = 3; ctx.strokeText(questMark(), p.x, p.y - 90 + Math.sin(now() * 4) * 2); ctx.fillText(questMark(), p.x, p.y - 90 + Math.sin(now() * 4) * 2); } }
     for (const p of projs) {
@@ -1139,9 +1153,9 @@ function renderBag() {
     ${it.attrs.length ? `<ul>${it.attrs.map((a) => `<li style="color:#8fb6f0">${attrText(a)}</li>`).join('')}</ul>` : `<div class="label">Sin atributos extra</div>`}
     <div class="row">${sel.from === 'bag' ? `<button type="button" id="eqBtn">Equipar</button><button type="button" id="dropBtn">Tirar</button>` : `<button type="button" id="uneqBtn">Sacar</button>`}</div>`;
     const eqBtn = document.getElementById('eqBtn'), dropBtn = document.getElementById('dropBtn'), uneqBtn = document.getElementById('uneqBtn');
-    if (eqBtn) eqBtn.onclick = () => { P.bag.splice(P.bag.indexOf(it), 1); const prev = P.eq[it.slot]; if (prev) P.bag.push(prev); P.eq[it.slot] = it; refreshLook(); sel = { it, from: 'eq' }; P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); renderBag(); };
+    if (eqBtn) eqBtn.onclick = () => { P.bag.splice(P.bag.indexOf(it), 1); const prev = P.eq[it.slot]; if (prev) P.bag.push(prev); P.eq[it.slot] = it; refreshLook(); sel = { it, from: 'eq' }; P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); later(0.1, () => saver.tick(true)); renderBag(); };
     if (dropBtn) dropBtn.onclick = () => { P.bag.splice(P.bag.indexOf(it), 1); sel = null; renderBag(); };
-    if (uneqBtn) uneqBtn.onclick = () => { if (P.bag.length >= 18) { log('La bolsa está llena.'); return; } P.eq[it.slot] = null; refreshLook(); P.bag.push(it); sel = { it, from: 'bag' }; P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); renderBag(); };
+    if (uneqBtn) uneqBtn.onclick = () => { if (P.bag.length >= 18) { log('La bolsa está llena.'); return; } P.eq[it.slot] = null; refreshLook(); P.bag.push(it); sel = { it, from: 'bag' }; P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); later(0.1, () => saver.tick(true)); renderBag(); };
 }
 
 // ---------- edificios y NPCs ----------

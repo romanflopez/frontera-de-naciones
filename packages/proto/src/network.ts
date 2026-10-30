@@ -114,6 +114,8 @@ export interface ClientMessage {
     | { $case: "removerRequest"; value: RemoverRequest }
     | { $case: "invisibilityRequest"; value: InvisibilityRequest }
     | { $case: "detectInvisibleRequest"; value: DetectInvisibleRequest }
+    | { $case: "hpReport"; value: HpReport }
+    | { $case: "respawnRequest"; value: RespawnRequest }
     | { $case: "saveCharacterRequest"; value: SaveCharacterRequest }
     | { $case: "mobHitRequest"; value: MobHitRequest }
     | { $case: "pveStatusRequest"; value: PveStatusRequest }
@@ -488,6 +490,9 @@ export interface ServerMessage {
     | { $case: "mobDied"; value: MobDied }
     | { $case: "lootRoll"; value: LootRoll }
     | { $case: "statusUpdate"; value: StatusUpdate }
+    | { $case: "vitals"; value: Vitals }
+    | { $case: "playerVitals"; value: PlayerVitals }
+    | { $case: "pvpKill"; value: PvpKill }
     | undefined;
 }
 
@@ -548,6 +553,36 @@ export interface StatusUpdate {
   playerId: bigint;
   invisible: boolean;
   detect: boolean;
+  fury: boolean;
+}
+
+/** El cliente informa su vida (curas, pociones, regeneración); el server solo acepta subas razonables. */
+export interface HpReport {
+  hp: number;
+}
+
+export interface RespawnRequest {
+}
+
+/** Mi vida según el server (la autoridad): después de cada golpe, curación o al revivir. */
+export interface Vitals {
+  hp: number;
+  maxHp: number;
+  dead: boolean;
+}
+
+/** Vida de otro jugador cercano (para su barra). */
+export interface PlayerVitals {
+  playerId: bigint;
+  hp: number;
+  maxHp: number;
+}
+
+export interface PvpKill {
+  playerId: bigint;
+  killerId: bigint;
+  victimName: string;
+  killerName: string;
 }
 
 export interface PvpHitRequest {
@@ -1384,6 +1419,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "detectInvisibleRequest":
         DetectInvisibleRequest.encode(message.payload.value, writer.uint32(370).fork()).join();
         break;
+      case "hpReport":
+        HpReport.encode(message.payload.value, writer.uint32(378).fork()).join();
+        break;
+      case "respawnRequest":
+        RespawnRequest.encode(message.payload.value, writer.uint32(386).fork()).join();
+        break;
       case "saveCharacterRequest":
         SaveCharacterRequest.encode(message.payload.value, writer.uint32(642).fork()).join();
         break;
@@ -1889,6 +1930,22 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             };
             continue;
           }
+          case 47: {
+            if (tag !== 378) {
+              break;
+            }
+
+            message.payload = { $case: "hpReport", value: HpReport.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 48: {
+            if (tag !== 386) {
+              break;
+            }
+
+            message.payload = { $case: "respawnRequest", value: RespawnRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
           case 80: {
             if (tag !== 642) {
               break;
@@ -2318,6 +2375,18 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             $case: "detectInvisibleRequest",
             value: DetectInvisibleRequest.fromPartial(object.payload.value),
           };
+        }
+        break;
+      }
+      case "hpReport": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "hpReport", value: HpReport.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "respawnRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "respawnRequest", value: RespawnRequest.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -6244,6 +6313,15 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "statusUpdate":
         StatusUpdate.encode(message.payload.value, writer.uint32(1050).fork()).join();
         break;
+      case "vitals":
+        Vitals.encode(message.payload.value, writer.uint32(1058).fork()).join();
+        break;
+      case "playerVitals":
+        PlayerVitals.encode(message.payload.value, writer.uint32(1066).fork()).join();
+        break;
+      case "pvpKill":
+        PvpKill.encode(message.payload.value, writer.uint32(1074).fork()).join();
+        break;
     }
     return writer;
   },
@@ -6921,6 +6999,30 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "statusUpdate", value: StatusUpdate.decode(reader, reader.uint32()) };
             continue;
           }
+          case 132: {
+            if (tag !== 1058) {
+              break;
+            }
+
+            message.payload = { $case: "vitals", value: Vitals.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 133: {
+            if (tag !== 1066) {
+              break;
+            }
+
+            message.payload = { $case: "playerVitals", value: PlayerVitals.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 134: {
+            if (tag !== 1074) {
+              break;
+            }
+
+            message.payload = { $case: "pvpKill", value: PvpKill.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -7452,6 +7554,24 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "statusUpdate": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "statusUpdate", value: StatusUpdate.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "vitals": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "vitals", value: Vitals.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "playerVitals": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "playerVitals", value: PlayerVitals.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "pvpKill": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "pvpKill", value: PvpKill.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -8132,7 +8252,7 @@ export const LootRoll: MessageFns<LootRoll> = {
 };
 
 function createBaseStatusUpdate(): StatusUpdate {
-  return { playerId: 0n, invisible: false, detect: false };
+  return { playerId: 0n, invisible: false, detect: false, fury: false };
 }
 
 export const StatusUpdate: MessageFns<StatusUpdate> = {
@@ -8148,6 +8268,9 @@ export const StatusUpdate: MessageFns<StatusUpdate> = {
     }
     if (message.detect !== false) {
       writer.uint32(24).bool(message.detect);
+    }
+    if (message.fury !== false) {
+      writer.uint32(32).bool(message.fury);
     }
     return writer;
   },
@@ -8189,6 +8312,14 @@ export const StatusUpdate: MessageFns<StatusUpdate> = {
             message.detect = reader.bool();
             continue;
           }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.fury = reader.bool();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -8209,6 +8340,363 @@ export const StatusUpdate: MessageFns<StatusUpdate> = {
     message.playerId = (object.playerId !== undefined && object.playerId !== null) ? BigInt(object.playerId) : 0n;
     message.invisible = object.invisible ?? false;
     message.detect = object.detect ?? false;
+    message.fury = object.fury ?? false;
+    return message;
+  },
+};
+
+function createBaseHpReport(): HpReport {
+  return { hp: 0 };
+}
+
+export const HpReport: MessageFns<HpReport> = {
+  encode(message: HpReport, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.hp !== 0) {
+      writer.uint32(8).int32(message.hp);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): HpReport {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseHpReport();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.hp = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<HpReport>, I>>(base?: I): HpReport {
+    return HpReport.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<HpReport>, I>>(object: I): HpReport {
+    const message = createBaseHpReport();
+    message.hp = object.hp ?? 0;
+    return message;
+  },
+};
+
+function createBaseRespawnRequest(): RespawnRequest {
+  return {};
+}
+
+export const RespawnRequest: MessageFns<RespawnRequest> = {
+  encode(_: RespawnRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): RespawnRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseRespawnRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<RespawnRequest>, I>>(base?: I): RespawnRequest {
+    return RespawnRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<RespawnRequest>, I>>(_: I): RespawnRequest {
+    const message = createBaseRespawnRequest();
+    return message;
+  },
+};
+
+function createBaseVitals(): Vitals {
+  return { hp: 0, maxHp: 0, dead: false };
+}
+
+export const Vitals: MessageFns<Vitals> = {
+  encode(message: Vitals, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.hp !== 0) {
+      writer.uint32(8).int32(message.hp);
+    }
+    if (message.maxHp !== 0) {
+      writer.uint32(16).int32(message.maxHp);
+    }
+    if (message.dead !== false) {
+      writer.uint32(24).bool(message.dead);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): Vitals {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseVitals();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.hp = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.maxHp = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.dead = reader.bool();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<Vitals>, I>>(base?: I): Vitals {
+    return Vitals.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<Vitals>, I>>(object: I): Vitals {
+    const message = createBaseVitals();
+    message.hp = object.hp ?? 0;
+    message.maxHp = object.maxHp ?? 0;
+    message.dead = object.dead ?? false;
+    return message;
+  },
+};
+
+function createBasePlayerVitals(): PlayerVitals {
+  return { playerId: 0n, hp: 0, maxHp: 0 };
+}
+
+export const PlayerVitals: MessageFns<PlayerVitals> = {
+  encode(message: PlayerVitals, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.playerId !== 0n) {
+      if (BigInt.asIntN(64, message.playerId) !== message.playerId) {
+        throw new globalThis.Error("value provided for field message.playerId of type int64 too large");
+      }
+      writer.uint32(8).int64(message.playerId);
+    }
+    if (message.hp !== 0) {
+      writer.uint32(16).int32(message.hp);
+    }
+    if (message.maxHp !== 0) {
+      writer.uint32(24).int32(message.maxHp);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PlayerVitals {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBasePlayerVitals();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.playerId = reader.int64() as bigint;
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.hp = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.maxHp = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<PlayerVitals>, I>>(base?: I): PlayerVitals {
+    return PlayerVitals.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PlayerVitals>, I>>(object: I): PlayerVitals {
+    const message = createBasePlayerVitals();
+    message.playerId = (object.playerId !== undefined && object.playerId !== null) ? BigInt(object.playerId) : 0n;
+    message.hp = object.hp ?? 0;
+    message.maxHp = object.maxHp ?? 0;
+    return message;
+  },
+};
+
+function createBasePvpKill(): PvpKill {
+  return { playerId: 0n, killerId: 0n, victimName: "", killerName: "" };
+}
+
+export const PvpKill: MessageFns<PvpKill> = {
+  encode(message: PvpKill, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.playerId !== 0n) {
+      if (BigInt.asIntN(64, message.playerId) !== message.playerId) {
+        throw new globalThis.Error("value provided for field message.playerId of type int64 too large");
+      }
+      writer.uint32(8).int64(message.playerId);
+    }
+    if (message.killerId !== 0n) {
+      if (BigInt.asIntN(64, message.killerId) !== message.killerId) {
+        throw new globalThis.Error("value provided for field message.killerId of type int64 too large");
+      }
+      writer.uint32(16).int64(message.killerId);
+    }
+    if (message.victimName !== "") {
+      writer.uint32(26).string(message.victimName);
+    }
+    if (message.killerName !== "") {
+      writer.uint32(34).string(message.killerName);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PvpKill {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBasePvpKill();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.playerId = reader.int64() as bigint;
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.killerId = reader.int64() as bigint;
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.victimName = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.killerName = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<PvpKill>, I>>(base?: I): PvpKill {
+    return PvpKill.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PvpKill>, I>>(object: I): PvpKill {
+    const message = createBasePvpKill();
+    message.playerId = (object.playerId !== undefined && object.playerId !== null) ? BigInt(object.playerId) : 0n;
+    message.killerId = (object.killerId !== undefined && object.killerId !== null) ? BigInt(object.killerId) : 0n;
+    message.victimName = object.victimName ?? "";
+    message.killerName = object.killerName ?? "";
     return message;
   },
 };

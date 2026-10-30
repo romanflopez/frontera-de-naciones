@@ -54,6 +54,11 @@ export class Player {
     disconnected = false;
 
     hp = 1000;
+    /** Hora de la muerte y último que le pegó (para el aviso de muerte). */
+    deadAt = 0;
+    lastDamager: { id: bigint; name: string; t: number } | null = null;
+    lastVitalsAt = 0;
+    lastHpReportAt = 0;
     maxHp = 1000;
     gender = 0;
     skinColor = 0;

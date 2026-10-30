@@ -9,6 +9,8 @@ export interface PvpSpell {
     /** Paralización (s) sobre el objetivo; solo se aplica si el cliente la pide (último tick) y no más seguido que `cd`. */
     secs?: number;
     range: number; cd: number; ticks?: number; every?: number; aoe?: number; melee?: boolean;
+    /** Elemento para las resistencias (fuego: eruption/cataclysm; hielo: blizz/tidal). */
+    kind?: string;
 }
 export const PVP_SPELLS: Record<string, PvpSpell> = {
     ataque: { dmg: [0, 0], lvlK: 1, stat: 'melee', range: 2.6, cd: 0.3, melee: true },
@@ -19,24 +21,27 @@ export const PVP_SPELLS: Record<string, PvpSpell> = {
     lanza: { dmg: [30, 42], lvlK: 3, stat: 'mag', range: 8.5, cd: 4.5 },
     golpe: { dmg: [14, 20], lvlK: 2, stat: 'wdmg', range: 2.8, cd: 0.9, melee: true },
     tajo: { dmg: [22, 30], lvlK: 3, stat: 'wdmg', range: 2.8, cd: 0.9, melee: true },
-    bola: { dmg: [18, 26], lvlK: 2, stat: 'mag', range: 9, cd: 3.6, aoe: 1.9 },
-    lluvia: { dmg: [11, 16], lvlK: 2, stat: 'mag', range: 9, cd: 8.5, ticks: 4, every: 0.5, aoe: 2.4 },
-    ventisca: { dmg: [9, 14], lvlK: 2, stat: 'mag', range: 9, cd: 9.5, ticks: 6, every: 0.4, aoe: 2.7, secs: 1.5 },
-    marejada: { dmg: [12, 17], lvlK: 2, stat: 'mag', range: 9, cd: 7.5, ticks: 3, every: 0.6, aoe: 2.2, secs: 1.2 },
+    bola: { kind: 'eruption', dmg: [18, 26], lvlK: 2, stat: 'mag', range: 9, cd: 3.6, aoe: 1.9 },
+    lluvia: { kind: 'cataclysm', dmg: [11, 16], lvlK: 2, stat: 'mag', range: 9, cd: 8.5, ticks: 4, every: 0.5, aoe: 2.4 },
+    ventisca: { kind: 'blizz', dmg: [9, 14], lvlK: 2, stat: 'mag', range: 9, cd: 9.5, ticks: 6, every: 0.4, aoe: 2.7, secs: 1.5 },
+    marejada: { kind: 'tidal', dmg: [12, 17], lvlK: 2, stat: 'mag', range: 9, cd: 7.5, ticks: 3, every: 0.6, aoe: 2.2, secs: 1.2 },
     sismo: { dmg: [12, 18], lvlK: 2, stat: 'wdmg', range: 2.5, cd: 5.5, aoe: 2.4 },
     luz: { dmg: [14, 20], lvlK: 2, stat: 'mag', range: 9, cd: 6.5, ticks: 2, every: 0.7, aoe: 1.9 },
 };
 export const FURY_MS = 10000, FURY_CD_MS = 18000;
 
-export interface CombatStats { lvl: number; cls: string; mag: number; wdmg: [number, number] }
-export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', mag: 0, wdmg: [0, 0] };
+export interface CombatStats { lvl: number; cls: string; mag: number; wdmg: [number, number]; maxHp: number; def: number; fres: number; ires: number; savedHp: number }
+const CLASS_HP: Record<string, [number, number]> = { guerrero: [140, 18], mago: [90, 10] };
+export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, fres: 0, ires: 0, savedHp: 140 };
 
 /** Bases de items (mismas que el cliente): arma con daño, y bonos de magia. */
-const BASE: Record<string, { dmg?: [number, number]; mag?: number; slot: string }> = {
+const BASE: Record<string, { dmg?: [number, number]; mag?: number; def?: number; slot: string }> = {
     'Espada corta': { dmg: [4, 8], slot: 'arma' }, 'Hacha de leñador': { dmg: [6, 11], slot: 'arma' }, 'Báculo de fresno': { dmg: [2, 4], mag: 5, slot: 'arma' },
     'Espada larga': { dmg: [7, 12], slot: 'arma' }, 'Hacha de guerra': { dmg: [9, 15], slot: 'arma' }, 'Maza': { dmg: [6, 11], slot: 'arma' },
     'Martillo pesado': { dmg: [10, 16], slot: 'arma' }, 'Mandoble': { dmg: [12, 18], slot: 'arma' }, 'Varita': { dmg: [1, 3], mag: 8, slot: 'arma' },
-    'Túnica de mago': { mag: 4, slot: 'armadura' }, 'Capucha de mago': { mag: 3, slot: 'cabeza' },
+    'Túnica de mago': { mag: 4, def: 1, slot: 'armadura' }, 'Capucha de mago': { mag: 3, slot: 'cabeza' },
+    'Coraza de cuero': { def: 3, slot: 'armadura' }, 'Cota de malla': { def: 6, slot: 'armadura' }, 'Armadura de placas': { def: 9, slot: 'armadura' }, 'Ropas de tela': { def: 1, slot: 'armadura' },
+    'Capucha de cuero': { def: 1, slot: 'cabeza' }, 'Cofia de malla': { def: 2, slot: 'cabeza' }, 'Yelmo de hierro': { def: 3, slot: 'cabeza' },
 };
 const MELEE: Record<string, [number, number]> = { guerrero: [5, 9], mago: [2, 4] };
 
@@ -44,16 +49,29 @@ const MELEE: Record<string, [number, number]> = { guerrero: [5, 9], mago: [2, 4]
 export function statsFromCharacter(json: string | undefined): CombatStats {
     if (!json) return { ...DEFAULT_STATS };
     try {
-        const o = JSON.parse(json) as { lvl?: number; cls?: string; eq?: Record<string, { n: string; a?: { id: string; v: number }[] } | null> };
-        const s: CombatStats = { lvl: Math.max(1, Math.min(60, Number(o.lvl) || 1)), cls: o.cls === 'mago' ? 'mago' : 'guerrero', mag: 0, wdmg: [0, 0] };
+        const o = JSON.parse(json) as { lvl?: number; cls?: string; hp?: number; eq?: Record<string, { n: string; a?: { id: string; v: number }[] } | null> };
+        const cls = o.cls === 'mago' ? 'mago' : 'guerrero', lvl = Math.max(1, Math.min(60, Number(o.lvl) || 1));
+        const s: CombatStats = { lvl, cls, mag: 0, wdmg: [0, 0], maxHp: 0, def: 0, fres: 0, ires: 0, savedHp: 1 };
+        let bonusHp = 0;
         for (const [slot, it] of Object.entries(o.eq ?? {})) {
             if (!it) continue;
             const b = BASE[it.n];
-            if (b && b.slot === slot) { if (b.dmg) s.wdmg = b.dmg; if (b.mag) s.mag += b.mag; }
-            for (const a of it.a ?? []) if (a.id === 'mag') s.mag += a.v;
+            if (b && b.slot === slot) { if (b.dmg) s.wdmg = b.dmg; if (b.mag) s.mag += b.mag; if (b.def) s.def += b.def; }
+            for (const a of it.a ?? []) { if (a.id === 'mag') s.mag += a.v; else if (a.id === 'hp') bonusHp += a.v; else if (a.id === 'fres') s.fres += a.v; else if (a.id === 'ires') s.ires += a.v; }
         }
+        const [hp0, hpL] = CLASS_HP[cls];
+        s.maxHp = hp0 + (lvl - 1) * hpL + bonusHp;
+        s.savedHp = Math.max(1, Math.min(s.maxHp, Math.round(Number(o.hp) || s.maxHp)));
         return s;
     } catch { return { ...DEFAULT_STATS }; }
+}
+
+/** Daño que realmente recibe un jugador: resistencia a fuego/hielo (hasta 75 %) y después la defensa; mínimo 1. */
+export function damageAfterDefense(raw: number, s: CombatStats, fx: string): number {
+    const fire = ['sphere', 'eruption', 'cataclysm', 'flamme'], ice = ['blizz', 'tidal'];
+    const res = fire.includes(fx) ? s.fres : ice.includes(fx) ? s.ires : 0;
+    const d = res > 0 ? Math.round(raw * (1 - Math.min(75, res) / 100)) : raw;
+    return Math.max(1, d - s.def);
 }
 
 const rint = (a: number, b: number) => Math.floor(a + Math.random() * (b - a + 1));

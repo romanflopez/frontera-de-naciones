@@ -173,7 +173,7 @@ wss.on('connection', (ws, req) => {
             session = { networkId, sessionId: randomUUID(), worldId, characterName, socket: ws, disconnectDeadline: null, logoutAllowedAt: null };
             sessionsByNetworkId.set(networkId, session);
             worlds.get(worldId)!.playerConnected(session.sessionId, characterName, send, disconnect, persisted);
-            worlds.get(worldId)!.setCombatStats(session.sessionId, auth.account.character);
+            worlds.get(worldId)!.setCombatStats(session.sessionId, auth.account.character, true);
             return;
         }
 
