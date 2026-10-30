@@ -3,6 +3,7 @@
  * con las mismas fórmulas del juego, el nivel y el equipo del último guardado validado, la Furia que lleva el server,
  * y límites de recarga, alcance y ritmo por hechizo.
  */
+import { BASE_BY_NAME } from '@fdn/world';
 export type Stat = 'mag' | 'wdmg' | 'melee';
 export interface PvpSpell {
     dmg?: [number, number]; lvlK?: number; stat?: Stat;
@@ -59,54 +60,36 @@ export interface CombatStats { lvl: number; cls: string; mag: number; wdmg: [num
 const CLASS_HP: Record<string, [number, number]> = { guerrero: [140, 18], mago: [90, 10] };
 export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, rm: 0, rpar: 0, savedHp: 140, maxMp: 40, savedMp: 40 };
 
-/** Bases de items (mismas que el cliente): arma con daño, y bonos de magia. */
-const BASE: Record<string, { dmg?: [number, number]; mag?: number; def?: number; rm?: number; slot: string }> = {
-    'Espada corta': { dmg: [4, 8], slot: 'arma' }, 'Hacha de leñador': { dmg: [6, 11], slot: 'arma' }, 'Báculo de fresno': { dmg: [2, 4], mag: 5, slot: 'arma' },
-    'Espada larga': { dmg: [7, 12], slot: 'arma' }, 'Hacha de guerra': { dmg: [9, 15], slot: 'arma' }, 'Maza': { dmg: [6, 11], slot: 'arma' },
-    'Martillo pesado': { dmg: [10, 16], slot: 'arma' }, 'Mandoble': { dmg: [12, 18], slot: 'arma' }, 'Varita': { dmg: [1, 3], mag: 8, slot: 'arma' },
-    // DF = defensa física, RM = resistencia mágica (ver docs/COMBATE.md): mitigación = X / (100 + X)
-    'Túnica de mago': { mag: 4, def: 4, rm: 24, slot: 'armadura' }, 'Capucha de mago': { mag: 3, def: 2, rm: 10, slot: 'cabeza' },
-    'Coraza de cuero': { def: 12, rm: 4, slot: 'armadura' }, 'Cota de malla': { def: 22, rm: 8, slot: 'armadura' }, 'Armadura de placas': { def: 34, rm: 12, slot: 'armadura' }, 'Ropas de tela': { def: 4, rm: 6, slot: 'armadura' },
-    'Capucha de cuero': { def: 4, rm: 2, slot: 'cabeza' }, 'Cofia de malla': { def: 8, rm: 3, slot: 'cabeza' }, 'Yelmo de hierro': { def: 12, rm: 4, slot: 'cabeza' },
-    'Anillo opaco': { rm: 8, slot: 'anillo' },
-};
+/** Las bases de items son las compartidas de @fdn/world (el cliente usa las mismas). */
 const MELEE: Record<string, [number, number]> = { guerrero: [5, 9], mago: [2, 4] };
 
-/** Stats de combate a partir del JSON del personaje ya validado por `sanitizeCharacter`. */
-export function statsFromCharacter(json: string | undefined): CombatStats {
-    if (!json) return { ...DEFAULT_STATS };
-    try {
-        const o = JSON.parse(json) as { lvl?: number; cls?: string; hp?: number; mp?: number; eq?: Record<string, { n: string; a?: { id: string; v: number }[] } | null> };
-        const cls = o.cls === 'mago' ? 'mago' : 'guerrero', lvl = Math.max(1, Math.min(60, Number(o.lvl) || 1));
-        const s: CombatStats = { lvl, cls, mag: 0, wdmg: [0, 0], maxHp: 0, def: 0, rm: 0, rpar: 0, savedHp: 1, maxMp: 0, savedMp: 0 };
-        let bonusHp = 0, bonusMp = 0;
-        for (const [slot, it] of Object.entries(o.eq ?? {})) {
-            if (!it) continue;
-            const b = BASE[it.n];
-            if (b && b.slot === slot) { if (b.dmg) s.wdmg = b.dmg; if (b.mag) s.mag += b.mag; if (b.def) s.def += b.def; if (b.rm) s.rm += b.rm; }
-            for (const a of it.a ?? []) { if (a.id === 'mag') s.mag += a.v; else if (a.id === 'hp') bonusHp += a.v; else if (a.id === 'mp') bonusMp += a.v; else if (a.id === 'df') s.def += a.v; else if (a.id === 'rm' || a.id === 'fres' || a.id === 'ires') s.rm += a.v; /* fres/ires: atributos viejos, ahora valen RM 1:1 */ else if (a.id === 'rpar') s.rpar += a.v; }
-        }
-        const [hp0, hpL] = CLASS_HP[cls];
-        s.maxHp = hp0 + (lvl - 1) * hpL + bonusHp;
-        const [mp0, mpL] = CLASS_MP[cls];
-        s.maxMp = mp0 + (lvl - 1) * mpL + bonusMp;
-        s.savedMp = Math.max(0, Math.min(s.maxMp, Math.round(Number(o.mp) || 0)));
-        s.savedHp = Math.max(1, Math.min(s.maxHp, Math.round(Number(o.hp) || s.maxHp)));
-        return s;
-    } catch { return { ...DEFAULT_STATS }; }
+/** Lo mínimo del personaje que hace falta para calcular los stats de combate: nivel, clase, vida/maná guardados y el EQUIPO. */
+export interface StatSource { lvl: number; cls: string; hp?: number; mp?: number; eq: Partial<Record<string, { n: string; a?: { id: string; v: number }[] } | null>> }
+
+/** Stats de combate a partir del personaje del server (equipo autoritativo, ver economy.ts). */
+export function statsFromChar(o: StatSource | undefined): CombatStats {
+    if (!o) return { ...DEFAULT_STATS };
+    const cls = o.cls === 'mago' ? 'mago' : 'guerrero', lvl = Math.max(1, Math.min(60, Number(o.lvl) || 1));
+    const s: CombatStats = { lvl, cls, mag: 0, wdmg: [0, 0], maxHp: 0, def: 0, rm: 0, rpar: 0, savedHp: 1, maxMp: 0, savedMp: 0 };
+    let bonusHp = 0, bonusMp = 0;
+    for (const [slot, it] of Object.entries(o.eq ?? {})) {
+        if (!it) continue;
+        const b = BASE_BY_NAME.get(it.n);
+        if (b && b.slot === slot) { if (b.dmg) s.wdmg = b.dmg; if (b.mag) s.mag += b.mag; if (b.def) s.def += b.def; if (b.rm) s.rm += b.rm; }
+        for (const a of it.a ?? []) { if (a.id === 'mag') s.mag += a.v; else if (a.id === 'hp') bonusHp += a.v; else if (a.id === 'mp') bonusMp += a.v; else if (a.id === 'df') s.def += a.v; else if (a.id === 'rm' || a.id === 'fres' || a.id === 'ires') s.rm += a.v; /* fres/ires: atributos viejos, ahora valen RM 1:1 */ else if (a.id === 'rpar') s.rpar += a.v; }
+    }
+    const [hp0, hpL] = CLASS_HP[cls];
+    s.maxHp = hp0 + (lvl - 1) * hpL + bonusHp;
+    const [mp0, mpL] = CLASS_MP[cls];
+    s.maxMp = mp0 + (lvl - 1) * mpL + bonusMp;
+    s.savedMp = Math.max(0, Math.min(s.maxMp, Math.round(Number(o.mp) || 0)));
+    s.savedHp = Math.max(1, Math.min(s.maxHp, Math.round(Number(o.hp) || s.maxHp)));
+    return s;
 }
 
-/** Progreso para los portales (misiones entregadas, nivel, llaves, portales abiertos) a partir del JSON ya validado. */
-export function progressFromCharacter(json: string | undefined): { qi: number; lvl: number; keys: Record<string, number>; unlocked: string[] } {
-    const out = { qi: 0, lvl: 1, keys: {} as Record<string, number>, unlocked: [] as string[] };
-    if (!json) return out;
-    try {
-        const o = JSON.parse(json) as { lvl?: number; q?: { i?: number; keys?: Record<string, number> }; u?: unknown };
-        out.lvl = Math.max(1, Math.min(60, Number(o.lvl) || 1)); out.qi = Math.max(0, Number(o.q?.i) || 0);
-        for (const [k, v] of Object.entries(o.q?.keys ?? {})) out.keys[k] = Math.max(0, Number(v) || 0);
-        out.unlocked = Array.isArray(o.u) ? o.u.filter((x): x is string => typeof x === 'string') : [];
-    } catch { /* se queda con lo básico */ }
-    return out;
+/** Progreso para los portales (del estado del server) */
+export function progressFromEcon(st: { lvl: number; q: { i: number; keys: Record<string, number> }; u: string[] } | undefined): { qi: number; lvl: number; keys: Record<string, number>; unlocked: string[] } {
+    return st ? { qi: st.q.i, lvl: st.lvl, keys: { ...st.q.keys }, unlocked: [...st.u] } : { qi: 0, lvl: 1, keys: {}, unlocked: [] };
 }
 
 /** Mitigación con rendimiento decreciente: daño × 100 / (100 + X), con X = DF (físico) o RM (mágico). Mínimo 1. */

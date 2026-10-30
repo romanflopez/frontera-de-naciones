@@ -6,7 +6,9 @@
  * mobs, combate, hechizos, loot y experiencia (pasan al server en la fase 1b).
  */
 import { buildSolmar, HUBS, cityAt, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, WAYPOINT_RANGE } from '@fdn/world';
+import { ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Quest, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
+import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
 import { spellIcon } from './icons.ts';
 import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
 import { itemIcon } from './itemicons.ts';
@@ -80,79 +82,15 @@ const RAR: Rarity[] = [
     { n: 'Raro', c: '#ffd24a', k: 2, p: 0.07 },
     { n: 'Épico', c: '#c77dff', k: 3, p: 0.01 },
 ];
-/** 'df' = defensa física, 'rm' = resistencia mágica (ver docs/COMBATE.md). Los viejos 'fres'/'ires' se convierten en 'rm' al cargar. */
-type AttrId = 'crit' | 'aspd' | 'leech' | 'hp' | 'mp' | 'mag' | 'exp' | 'poison' | 'rpar' | 'df' | 'rm';
-const ATTRS: { id: AttrId; r: [number, number]; f: (v: number) => string }[] = [
-    { id: 'crit', r: [2, 6], f: (v) => `+${v}% crítico` },
-    { id: 'aspd', r: [4, 12], f: (v) => `+${v}% velocidad de ataque` },
-    { id: 'leech', r: [2, 6], f: (v) => `${v}% robo de vida` },
-    { id: 'hp', r: [8, 25], f: (v) => `+${v} vida` },
-    { id: 'mp', r: [6, 20], f: (v) => `+${v} maná` },
-    { id: 'mag', r: [2, 6], f: (v) => `+${v} daño mágico` },
-    { id: 'exp', r: [3, 10], f: (v) => `+${v}% exp de caza` },
-    { id: 'poison', r: [6, 16], f: (v) => `${v}% chance de veneno` },
-    { id: 'rpar', r: [5, 15], f: (v) => `+${v}% resistencia a parálisis` },
-    { id: 'df', r: [3, 9], f: (v) => `+${v} defensa` },
-    { id: 'rm', r: [4, 12], f: (v) => `+${v} resistencia mágica` },
-];
-type Slot = 'arma' | 'armadura' | 'cabeza' | 'anillo';
-/** def = defensa física (DF), rm = resistencia mágica (RM): mitigación = X / (100 + X). */
-interface Base { name: string; slot: Slot; dmg?: [number, number]; def?: number; rm?: number; mag?: number; look?: string; off?: string }
-const BASES: Base[] = [
-    { name: 'Espada corta', slot: 'arma', dmg: [4, 8], look: 'shortsword', off: 'buckler' },
-    { name: 'Hacha de leñador', slot: 'arma', dmg: [6, 11], look: 'hand_axe', off: 'buckler' },
-    { name: 'Báculo de fresno', slot: 'arma', dmg: [2, 4], mag: 5, look: 'staff' },
-    { name: 'Espada larga', slot: 'arma', dmg: [7, 12], look: 'longsword', off: 'iron_buckler' },
-    { name: 'Hacha de guerra', slot: 'arma', dmg: [9, 15], look: 'battle_axe' },
-    { name: 'Maza', slot: 'arma', dmg: [6, 11], look: 'mace', off: 'kite_shield' },
-    { name: 'Martillo pesado', slot: 'arma', dmg: [10, 16], look: 'maul' },
-    { name: 'Mandoble', slot: 'arma', dmg: [12, 18], look: 'zweihander' },
-    { name: 'Varita', slot: 'arma', dmg: [1, 3], mag: 8, look: 'wand' },
-    { name: 'Coraza de cuero', slot: 'armadura', def: 12, rm: 4, look: 'leather' },
-    { name: 'Cota de malla', slot: 'armadura', def: 22, rm: 8, look: 'chain' },
-    { name: 'Armadura de placas', slot: 'armadura', def: 34, rm: 12, look: 'plate' },
-    { name: 'Túnica de mago', slot: 'armadura', def: 4, rm: 24, mag: 4, look: 'mage' },
-    { name: 'Ropas de tela', slot: 'armadura', def: 4, rm: 6, look: 'cloth' },
-    { name: 'Capucha de cuero', slot: 'cabeza', def: 4, rm: 2, look: 'leather_hood' },
-    { name: 'Cofia de malla', slot: 'cabeza', def: 8, rm: 3, look: 'chain_coif' },
-    { name: 'Yelmo de hierro', slot: 'cabeza', def: 12, rm: 4, look: 'plate_helm' },
-    { name: 'Capucha de mago', slot: 'cabeza', def: 2, rm: 10, mag: 3, look: 'mage_hood' },
-    { name: 'Anillo opaco', slot: 'anillo', rm: 8 },
-];
-/** Bases que solo venden los comerciantes (no caen de los mobs: así no se mueve el reparto de BASES que usa el server). El nombre es la clave del guardado. */
-const SHOP_BASES: Base[] = [
-    { name: 'Anillo de cobre', slot: 'anillo', look: 'ring_copper' }, { name: 'Anillo de plata', slot: 'anillo', look: 'ring_silver' }, { name: 'Anillo de jade', slot: 'anillo', look: 'ring_jade' },
-    { name: 'Anillo del filo', slot: 'anillo', look: 'ring_ruby' }, { name: 'Sello del veloz', slot: 'anillo', look: 'ring_gold' },
-    { name: 'Amuleto del cazador', slot: 'anillo', look: 'amulet_bone' },
-];
-const ALL_BASES = [...BASES, ...SHOP_BASES];
-const SLOTS: Slot[] = ['arma', 'armadura', 'cabeza', 'anillo'];
+/** Texto de cada atributo; los rangos y las bases viven en @fdn/world (el server valida con las mismas tablas). */
+const ATTR_FMT: Record<AttrId, (v: number) => string> = {
+    crit: (v) => `+${v}% crítico`, aspd: (v) => `+${v}% velocidad de ataque`, leech: (v) => `${v}% robo de vida`, hp: (v) => `+${v} vida`, mp: (v) => `+${v} maná`,
+    mag: (v) => `+${v} daño mágico`, exp: (v) => `+${v}% exp de caza`, poison: (v) => `${v}% chance de veneno`, rpar: (v) => `+${v}% resistencia a parálisis`,
+    df: (v) => `+${v} defensa`, rm: (v) => `+${v} resistencia mágica`,
+};
+const ATTRS = ATTR_IDS.map((id) => ({ id, r: ATTR_RANGES[id], f: ATTR_FMT[id] }));
 interface Item extends Base { id: number; rar: Rarity; attrs: { id: AttrId; v: number }[] }
 let uid = 1;
-/** Clave del generador del server -> atributo del cliente. */
-const SRV_ATTR: Record<string, AttrId> = { critical_chance: 'crit', attack_speed: 'aspd', life_steal: 'leech', defense: 'df', magic_resistance: 'rm', fire_resistance: 'rm', ice_resistance: 'rm', paralysis_resistance: 'rpar', bonus_mana: 'mp', bonus_hp: 'hp' };
-interface SrvLoot { rarity: number; baseSeed: number; attrs: { key: string; value: number }[] }
-const lootRolls = new Map<number, SrvLoot>();
-function rollItem(lvl: number, minRar = 0, srv?: SrvLoot): Item {
-    if (srv) { // el server tiró rareza y atributos (ya escalados al nivel del mob); el cliente solo elige la base
-        const rar = RAR[Math.max(0, Math.min(3, srv.rarity))], base = BASES[srv.baseSeed % BASES.length];
-        const attrs: Item['attrs'] = []; for (const a of srv.attrs) { // la defensa y la RM del server vienen en la escala vieja (%): se bajan para la escala DF/RM
-            const id = SRV_ATTR[a.key]; if (!id) continue;
-            const v = id === 'df' || id === 'rm' ? Math.min(30, Math.max(1, Math.round(a.value * 0.6))) : Math.max(1, Math.round(a.value));
-            const dup = attrs.find((x) => x.id === id); if (dup) dup.v += v; else attrs.push({ id, v });
-        }
-        return { id: uid++, ...base, rar, attrs };
-    }
-    const base = BASES[rint(0, BASES.length - 1)];
-    let r = R(), rar = RAR[0]; for (const x of RAR) { if (r < x.p) { rar = x; break; } r -= x.p; }
-    if (rar.k < minRar) rar = RAR[minRar]; // bosses: drop garantizado de rareza alta
-    const pool = ATTRS.slice(), attrs: Item['attrs'] = [];
-    for (let i = 0; i < rar.k; i++) {
-        const a = pool.splice(rint(0, pool.length - 1), 1)[0];
-        attrs.push({ id: a.id, v: Math.round((a.r[0] + R() * (a.r[1] - a.r[0])) * (1 + (lvl - 1) * 0.2)) });
-    }
-    return { id: uid++, ...base, rar, attrs };
-}
 const attrText = (a: { id: AttrId; v: number }) => ATTRS.find((x) => x.id === a.id)!.f(a.v);
 
 // ---------- entidades ----------
@@ -315,7 +253,9 @@ function onServer(m: ServerPayload) {
         case 'mobHitPlayer': onMobHitPlayer(m.value); break;
         case 'mobSpecialEvent': onMobSpecial(m.value); break;
         case 'mobDied': onMobDied(m.value); break;
-        case 'lootRoll': lootRolls.set(m.value.mobId, { rarity: m.value.rarity, baseSeed: m.value.baseSeed, attrs: m.value.attrs }); break;
+        case 'inventoryState': applyInventory(m.value); break;
+        case 'econResult': if (m.value.ok) log(esc(m.value.text)); else { toast(m.value.text); log(esc(m.value.text)); } break;
+        case 'killReward': onKillReward(m.value); break;
         case 'statusUpdate': onStatusUpdate(m.value); break;
         case 'skillEffect': onSkillEffect(m.value); break;
         case 'vitals': onVitals(m.value); break;
@@ -394,9 +334,9 @@ function onMobDamaged(v: { mobId: number; attackerId: bigint; dmg: number; crit:
     float(m.x, m.y, poisonTick ? '3' : (v.crit ? '¡' : '') + v.dmg + (v.crit ? '!' : ''), poisonTick ? '#8fd14f' : v.crit ? '#ffd24a' : '#fff', v.crit);
     if (mine) { hitstop = Math.max(hitstop, v.crit ? 0.09 : 0.045); if (v.crit && !reduce) shake = 0.25; }
 }
-function levelUp() {
-    while (P.exp >= expNeed()) { P.exp -= expNeed(); P.lvl++; P.hp = maxHp(); P.mp = maxMp(); later(0.1, () => saver.tick(true)); float(P.x, P.y - 0.5, `¡Nivel ${P.lvl}!`, '#ffd24a', true); log(`Subiste a nivel ${P.lvl}.`, true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd24a' }); }
-    refreshUnlocks(true);
+/** Subí de nivel (lo decide el server): efecto y aviso. */
+function onLevelUp() {
+    P.hp = maxHp(); P.mp = maxMp(); float(P.x, P.y - 0.5, `¡Nivel ${P.lvl}!`, '#ffd24a', true); log(`Subiste a nivel ${P.lvl}.`, true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd24a' });
 }
 /** El server avisó que un mob murió: lo saca del espejo, deja el cadáver y, si el golpe final fue mío, cobro el botín. */
 /** El server avisa quién está invisible y si yo veo invisibles. */
@@ -430,23 +370,23 @@ function onMobDied(v: { mobId: number; killerId: bigint; x: number; y: number; t
     const type = MOB_TYPES[v.type], z = ZONES[v.zone]; if (!type || !z) return;
     const mob = mobMap.get(v.mobId); if (mob) dropMob(mob);
     corpses.push({ sprite: type, x: v.x, y: v.y, dir: mob?.dir ?? 6, t: now() });
-    const srv = lootRolls.get(v.mobId); lootRolls.delete(v.mobId);
-    if (v.killerId === myId) rewardKill(type, v.x, v.y, z, srv);
 }
-function rewardKill(type: MobType, x: number, y: number, zone: Zone, srv?: SrvLoot) {
-    const m = { ...mobDef(type, zone), sprite: type, x, y, zone };
-    const t = totals(), gain = Math.round(m.exp * (1 + t.exp / 100));
-    P.exp += gain; float(m.x, m.y - 0.3, `+${gain} exp`, '#c9a227');
-    if (m.boss) {
-        // boss: item garantizado de rareza alta (+1 al nivel de botín) y un buen puñado de oro al lado
-        const it = rollItem(m.lvl + 2, m.boss.minRar, srv);
-        drops.push({ x: m.x, y: m.y, item: it, t: 0 }); drops.push({ x: m.x + 0.6, y: m.y + 0.4, gold: rint(m.boss.gold[0], m.boss.gold[1]), t: 0 });
-        log(`¡${m.name} cayó! Soltó un item <span style="color:${it.rar.c}">${it.rar.n.toLowerCase()}</span>.`, true); shake = Math.max(shake, 0.4);
-    } else if (R() < 0.62) { const it = rollItem(m.lvl, 0, srv); drops.push({ x: m.x, y: m.y, item: it, t: 0 }); if (it.rar.k >= 2) log(`¡Cayó un item <span style="color:${it.rar.c}">${it.rar.n.toLowerCase()}</span>!`, true); }
-    else drops.push({ x: m.x, y: m.y, gold: rint(3, 8) * m.lvl, t: 0 });
-    levelUp(); questKill(m.sprite);
-    if (R() < 0.14) { const k = R() < 0.6 ? 'hp' : 'mp'; pots[k]++; log(`Encontraste una ${POTS[k].name.toLowerCase()}.`, true); renderPots(); }
-    if (m.boss) { const kid = m.zone.name === 'Cripta olvidada' ? 'foso' : 'cripta', kd = KEYDEFS[kid]; Q.shards[kid]++; log(`El boss soltó una <b>${kd.shard}</b>. Con ${SHARDS_PER_KEY} esquirlas y ${kd.gold} de oro el Capitán te forja una ${kd.name}.`, true); renderQuest(); }
+/** El server ya aplicó el botín del golpe final (exp, oro, item, pociones, misión): acá solo se muestra. El estado nuevo llega en `inventoryState`. */
+function onKillReward(v: { mobId: number; x: number; y: number; exp: number; gold: number; item?: InvItemMsg; bagFull: boolean; potion: string; shard: string; newLvl: number; questReady: boolean; questProg: number }) {
+    const mob = mobMap.get(v.mobId), boss = !!mob?.boss;
+    float(v.x, v.y - 0.3, `+${v.exp} exp`, '#c9a227');
+    if (v.item) {
+        const it = itemFromInv(v.item);
+        if (boss) { log(`¡${mob?.name ?? 'El boss'} cayó! Soltó un item <span style="color:${it.rar.c}">${it.rar.n.toLowerCase()}</span>.`, true); shake = Math.max(shake, 0.4); }
+        if (v.bagFull) log(`La bolsa está llena: se perdió <span style="color:${it.rar.c}">${esc(it.name)}</span>.`, true);
+        else if (it.rar.k >= 2 && !boss) log(`¡Cayó un item <span style="color:${it.rar.c}">${it.rar.n.toLowerCase()}</span>!`, true);
+        else log(`Agarraste <span style="color:${it.rar.c}">${esc(it.name)}</span>.`);
+    }
+    if (v.gold) log(`Juntaste ${v.gold} de oro.`);
+    if (v.potion === 'hp' || v.potion === 'mp') log(`Encontraste una ${POTS[v.potion].name.toLowerCase()}.`, true);
+    if (v.shard === 'cripta' || v.shard === 'foso') { const kd = KEYDEFS[v.shard]; log(`El boss soltó una <b>${kd.shard}</b>. Con ${SHARDS_PER_KEY} esquirlas y ${kd.gold} de oro el Capitán te forja una ${kd.name}.`, true); }
+    if (v.questReady) { const q = QUESTS[Q.i]; log(`Misión lista: volvé con el Capitán${q ? ` (${q.name})` : ''}.`, true); }
+    else if (v.questProg > 0) { const q = QUESTS[Q.i]; if (q) float(P.x, P.y - 0.9, `${v.questProg}/${q.n}`, '#ffd24a'); }
 }
 /** Habilidad distintiva del boss (el server decide cuándo y a quién pega): fase 0 = aviso y carga, fase 1 = el golpe en área. */
 function onMobSpecial(v: { mobId: number; phase: number; x: number; y: number }) {
@@ -494,7 +434,7 @@ function hurtPlayer(d: number, kind: 'phys' | 'magic' = 'phys', applied = false)
 /** El server dice que morí: pierdo un poco de exp y pido revivir en mi ciudad. */
 function die() {
     if (P.dead) return;
-    P.dead = true; potEpoch++; pots.cd = 0; P.deadT = now(); P.hp = 0; P.path = []; P.casting = null; P.target = null; P.med = false; const lost = Math.round(expNeed() * 0.05); P.exp = Math.max(0, P.exp - lost);
+    P.dead = true; potEpoch++; pots.cd = 0; P.deadT = now(); P.hp = 0; P.path = []; P.casting = null; P.target = null; P.med = false; const lost = Math.round(expNeed() * 0.05); // la pérdida de exp la aplica el server (llega en inventoryState)
     log(`Moriste. Perdiste ${lost} de exp y volvés a tu ciudad.`, true);
     const ask = (n: number) => { if (!P.dead || n > 10) return; net.send({ $case: 'respawnRequest', value: {} }); later(1, () => ask(n + 1)); };
     later(2.2, () => ask(0));
@@ -621,7 +561,6 @@ function autoTarget(range: number) {
     return best;
 }
 // ---------- pociones de vida y maná ----------
-const POTS = { hp: { name: 'Poción de vida', price: 25, key: 'Q', col: '#e0524a' }, mp: { name: 'Poción de maná', price: 30, key: 'E', col: '#4a8fe0' } };
 const pots = { hp: 3, mp: 3, cd: 0 };
 /** Delay global entre pociones (vida o maná), aparte de la recarga de los hechizos. Vida: 20 % al instante y el resto en 4 ticks de 0,5 s. El server valida y cura. */
 const POTION_GCD = 1.75, POT_HOT_TICKS = 4, POT_HOT_EVERY = 0.5;
@@ -631,7 +570,7 @@ function usePotion(k: 'hp' | 'mp') {
     if (pots[k] < 1) { toast(`No tenés ${POTS[k].name.toLowerCase()}s. Comprá en el Mercader.`); return; }
     if (pots.cd > now()) return;
     if (k === 'hp' ? P.hp >= maxHp() : P.mp >= maxMp()) { toast(k === 'hp' ? 'Ya tenés la vida llena.' : 'Ya tenés el maná lleno.'); return; }
-    pots[k]--; pots.cd = now() + POTION_GCD;
+    pots.cd = now() + POTION_GCD; // el server descuenta la poción (llega en inventoryState)
     const epoch = ++potEpoch, local = !connected; // conectado: la vida y el maná los cura el server (llegan en Vitals); sin server curo yo
     if (connected) net.send({ $case: 'potionRequest', value: { kind: k === 'hp' ? 0 : 1 } });
     if (k === 'hp') {
@@ -988,10 +927,8 @@ function update(dt: number) {
         }
         if (!P.step && !P.path.length && !P.moving) sendFacing();
         if (P.pickup && dist(P, P.pickup) < 0.9) {
-            const d = P.pickup; P.pickup = null;
-            if (d.gold) { P.gold += d.gold; log(`Juntaste ${d.gold} de oro.`); drops.splice(drops.indexOf(d), 1); }
-            else if (d.item && P.bag.length < 18) { P.bag.push(d.item); drops.splice(drops.indexOf(d), 1); log(`Agarraste <span style="color:${d.item.rar.c}">${d.item.name}</span>.`); renderBag(); }
-            else log('La bolsa está llena.');
+            // el botín ya no cae al suelo: el server lo pone en la bolsa al matar (ver killReward); no hay nada que juntar acá
+            P.pickup = null;
         }
         regenT += dt; if (regenT >= 1) { regenT = 0; const inCity = isSafe(P.x, P.y); P.hp = Math.min(maxHp(), P.hp + (inCity ? 8 : 1)); P.mp = Math.min(maxMp(), P.mp + (P.med ? Math.max(6, Math.round(maxMp() * 0.08)) : inCity ? 8 : 2)); if (P.med && P.mp >= maxMp()) stopMeditating('Terminaste de meditar: maná lleno.'); syncHp(); }
         if (P.med && (P.step || P.path.length || P.casting || P.hp < P.medHp || P.dead)) stopMeditating(P.hp < P.medHp ? 'Te sacaron de la meditación.' : 'Dejaste de meditar.');
@@ -1358,7 +1295,6 @@ let sel: { it: Item; from: 'bag' | 'eq' } | null = null;
 /** Selección de algo que no es equipo (poción o material): se muestra en el tooltip. */
 let selX: { k: 'pot'; id: 'hp' | 'mp' } | { k: 'mat'; id: string } | null = null;
 let invTab: 'all' | 'gear' | 'cons' | 'mat' = 'all';
-const BAG_MAX = 18;
 const bagOpen = () => !$('bag').hidden, charOpen = () => !$('char').hidden;
 /** I: abre Personaje + Inventario juntos (o cierra ambos). */
 function toggleBag() { const open = bagOpen(); $('bag').hidden = open; $('char').hidden = open; renderBag(); }
@@ -1371,13 +1307,10 @@ $('bagClose').addEventListener('click', () => { $('bag').hidden = true; renderBa
 $('charClose').addEventListener('click', () => { $('char').hidden = true; renderBag(); });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && (bagOpen() || charOpen()) && !(e.target instanceof HTMLInputElement)) closeWins(); });
 document.querySelectorAll<HTMLElement>('#invTabs [data-tab]').forEach((b) => b.addEventListener('click', () => { invTab = b.dataset.tab as typeof invTab; renderBag(); }));
-$('sortBtn').addEventListener('click', () => {
-    P.bag.sort((a, b) => SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot) || b.rar.k - a.rar.k || a.name.localeCompare(b.name, 'es'));
-    later(0.1, () => saver.tick(true)); renderBag(); renderShop();
-});
+$('sortBtn').addEventListener('click', () => net.send({ $case: 'econSortRequest', value: {} }));
 $('dropBtn').addEventListener('click', () => {
-    if (!sel || sel.from !== 'bag') return; const it = sel.it, i = P.bag.indexOf(it); if (i < 0) return;
-    P.bag.splice(i, 1); sel = null; renderBag(); renderShop();
+    if (!sel || sel.from !== 'bag') return;
+    net.send({ $case: 'econDropRequest', value: { uid: sel.it.id } });
 });
 /** Borde de rareza (los comunes en bronce para que no destaquen). */
 const rarCol = (it: Item) => (it.rar.k ? it.rar.c : '#6b5a3c');
@@ -1462,8 +1395,8 @@ function renderTip() {
     ${it.attrs.length ? `<ul>${it.attrs.map((a) => `<li style="color:#8fb6f0">${attrText(a)}</li>`).join('')}</ul>` : `<div class="sub">Sin atributos extra</div>`}
     <div class="row">${sel!.from === 'bag' ? `<button type="button" id="eqBtn">Equipar</button>` : `<button type="button" id="uneqBtn">Sacar</button>`}</div></div>`;
     const eqBtn = document.getElementById('eqBtn'), uneqBtn = document.getElementById('uneqBtn');
-    if (eqBtn) eqBtn.onclick = () => { P.bag.splice(P.bag.indexOf(it), 1); const prev = P.eq[it.slot]; if (prev) P.bag.push(prev); P.eq[it.slot] = it; refreshLook(); sel = { it, from: 'eq' }; P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); later(0.1, () => saver.tick(true)); renderBag(); };
-    if (uneqBtn) uneqBtn.onclick = () => { if (P.bag.length >= BAG_MAX) { log('La bolsa está llena.'); return; } P.eq[it.slot] = null; refreshLook(); P.bag.push(it); sel = { it, from: 'bag' }; P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); later(0.1, () => saver.tick(true)); renderBag(); };
+    if (eqBtn) eqBtn.onclick = () => net.send({ $case: 'econEquipRequest', value: { uid: it.id } }); // el server valida y manda el estado nuevo
+    if (uneqBtn) uneqBtn.onclick = () => net.send({ $case: 'econUnequipRequest', value: { slot: it.slot } });
 }
 /** Salir: en zona segura es inmediato; en zona insegura hay que aguantar quieto unos segundos (se cancela si te movés o te pegan). */
 let logout: { at: number; cell: Cell; hp: number; asked: boolean } | null = null;
@@ -1512,8 +1445,6 @@ const NPC_LOOKS: Record<string, string[]> = {
     guardia_s: ['chain_boots', 'chain_greaves', 'chain_gloves', 'chain_cuirass', 'head_short', 'plate_helm', 'longsword', 'kite_shield'],
     guardia_v: ['plate_boots', 'chain_greaves', 'plate_gauntlets', 'chain_cuirass', 'head_bald', 'chain_coif', 'battle_axe'],
 };
-/** Rol del NPC (mercader, armero, ...): el id es `rol_s` / `rol_v` (o `rol_s1`...). */
-const roleOf = (n: { id: string }) => n.id.split('_')[0];
 const lookOfNpc = (n: { id: string }) => NPC_LOOKS[n.id] ?? NPC_LOOKS[n.id.replace(/\d+$/, '')];
 function refreshNpcLook() {
     if (!PAPER) return;
@@ -1537,27 +1468,6 @@ function pickNpc(sx: number, sy: number): Npc | null {
 
 // ---------- misiones y progreso por zonas (lógica tipo Dreadmyst) ----------
 // Un solo pueblo seguro; cada zona tiene un rango de nivel y el Capitán te empuja de una a la siguiente. La cripta se abre con llave.
-interface Quest { name: string; zone: string; type: MobType; n: number; xp: number; gold: number; say: string; shard?: 'cripta' | 'foso' }
-const QUESTS: Quest[] = [
-    { name: 'Goblins del campamento', zone: 'Campamento goblin', type: 'goblin', n: 5, xp: 70, gold: 30, say: 'Unos goblins lanceros rondan al sureste y asustan a los mercaderes. Matá a 5 y volvé.' },
-    { name: 'La avanzada goblin', zone: 'Avanzada goblin', type: 'goblin_elite', n: 4, xp: 120, gold: 55, say: 'Más al norte armaron una avanzada con goblins de élite. Eliminá a 4.' },
-    { name: 'Hoyos traicioneros', zone: 'Hoyos de hormiga león', type: 'antlion', n: 5, xp: 190, gold: 80, say: 'Al oeste las hormigas león cavaron hoyos en el camino. Acabá con 5.' },
-    { name: 'El pantano muerto', zone: 'Pantano muerto', type: 'zombie', n: 5, xp: 260, gold: 110, say: 'Del pantano del este salen zombis. Necesito que mates a 5.' },
-    { name: 'Huesos inquietos', zone: 'Cementerio viejo', type: 'skeleton', n: 5, xp: 420, gold: 150, say: 'Los esqueletos del cementerio ya no descansan. Derrotá a 5.' },
-    { name: 'Magia prohibida', zone: 'Ruinas del nigromante', type: 'skeleton_mage', n: 4, xp: 520, gold: 190, say: 'Hay hechiceros esqueleto en las ruinas del sur. Cuidado con sus hechizos: matá a 4.' },
-    { name: 'Fuego en el hormiguero', zone: 'Hormiguero ardiente', type: 'fire_ant', n: 6, xp: 700, gold: 260, shard: 'cripta', say: 'El hormiguero ardiente del noreste es peligroso. Si volvés con 6 cabezas te doy una esquirla de llave: con 3 más de los bosses te forjo la llave de la cripta.' },
-    { name: 'Alas de ceniza', zone: 'Nidal de ceniza', type: 'wyvern', n: 4, xp: 950, gold: 320, say: 'Al sur del páramo hay un corredor que baja a las Tierras de ceniza. Los wyverns anidan en el centro: derribá a 4.' },
-    { name: 'El osario ardiente', zone: 'Osario ardiente', type: 'skeleton_mage', n: 5, xp: 1150, gold: 400, say: 'Más al este, los hechiceros del osario no se apagan. Acabá con 5.' },
-    { name: 'La cantera del minotauro', zone: 'Cantera del minotauro', type: 'minotaur', n: 2, xp: 1700, gold: 650, shard: 'foso', say: 'Los minotauros de la cantera cuidan el camino al foso. Si matás a 2 te doy una esquirla del foso: con 3 y 120 de oro te forjo la llave de la Cámara del foso.' },
-];
-const SHARDS_PER_KEY = 3;
-/** Llaves de mazmorra: se forjan con esquirlas que sueltan los bosses (la de la cripta, los de afuera; la del foso, el jefe de la cripta). */
-type KeyId = 'cripta' | 'foso';
-const KEYDEFS: Record<KeyId, { name: string; shard: string; gold: number }> = {
-    cripta: { name: 'Llave de la cripta', shard: 'Esquirla de llave', gold: 60 },
-    foso: { name: 'Llave del foso', shard: 'Esquirla del foso', gold: 120 },
-};
-const KEY_IDS = Object.keys(KEYDEFS) as KeyId[];
 const Q = { i: 0, st: 'new' as 'new' | 'active' | 'ready', prog: 0, keys: { cripta: 0, foso: 0 } as Record<KeyId, number>, shards: { cripta: 0, foso: 0 } as Record<KeyId, number> };
 const keyLines = () => KEY_IDS.map((k) => (Q.keys[k] ? `<em>${KEYDEFS[k].name}: ${Q.keys[k]}</em>` : '') + (Q.shards[k] ? `<em>${KEYDEFS[k].shard}: ${Q.shards[k]}/${SHARDS_PER_KEY}</em>` : '')).join('');
 const hasKeyStuff = () => KEY_IDS.some((k) => Q.keys[k] || Q.shards[k]);
@@ -1565,20 +1475,7 @@ const hasKeyStuff = () => KEY_IDS.some((k) => Q.keys[k] || Q.shards[k]);
 const UNLOCKED = new Set<string>();
 const trainOpen = (t: TrainingStep) => UNLOCKED.has(t.id) || trainingUnlocked(t.step, Q.i, P.lvl);
 const portalProgress = () => ({ qi: Q.i, lvl: P.lvl, keys: Q.keys as Record<string, number>, unlocked: [...UNLOCKED] });
-function refreshUnlocks(announce: boolean) {
-    let fresh = false;
-    for (const t of TRAINING) if (!UNLOCKED.has(t.id) && trainingUnlocked(t.step, Q.i, P.lvl)) {
-        UNLOCKED.add(t.id); fresh = true;
-        if (announce) { log(`Portal desbloqueado: <b>${t.zone}</b>. Ya podés viajar ahí desde el Portal de Frontera de tu ciudad.`, true); toast(`Portal desbloqueado: ${t.zone}`); }
-    }
-    if (fresh && announce) later(0.1, () => saver.tick(true));
-}
-function questKill(t: MobType) {
-    const q = QUESTS[Q.i]; if (!q || Q.st !== 'active' || q.type !== t) return;
-    Q.prog = Math.min(q.n, Q.prog + 1);
-    if (Q.prog >= q.n) { Q.st = 'ready'; log(`Misión lista: volvé con el Capitán (${q.name}).`, true); } else float(P.x, P.y - 0.9, `${Q.prog}/${q.n}`, '#ffd24a');
-    renderQuest();
-}
+function refreshUnlocks(_announce: boolean) { /* los portales abiertos los decide el server (inventoryState.unlocked) */ }
 function renderQuest() {
     const q = QUESTS[Q.i], el = $('quest');
     el.hidden = (!q || Q.st === 'new') && !hasKeyStuff();
@@ -1600,71 +1497,24 @@ function openQuestDlg(n: Npc) {
     for (const k of KEY_IDS) {
         const kd = KEYDEFS[k]; if (k === 'foso' && Q.i < 7 && !Q.shards.foso && !Q.keys.foso) continue;
         const fb = document.createElement('button'); fb.type = 'button'; fb.textContent = `Forjar ${kd.name} (${Q.shards[k]}/${SHARDS_PER_KEY} esq. · ${kd.gold} oro)`; fb.disabled = Q.shards[k] < SHARDS_PER_KEY || P.gold < kd.gold;
-        fb.onclick = () => { if (Q.shards[k] < SHARDS_PER_KEY || P.gold < kd.gold) return; Q.shards[k] -= SHARDS_PER_KEY; P.gold -= kd.gold; Q.keys[k]++; log(`El Capitán forjó una <b>${kd.name}</b>.`, true); renderQuest(); openQuestDlg(n); };
+        fb.onclick = () => { if (Q.shards[k] < SHARDS_PER_KEY || P.gold < kd.gold) return; net.send({ $case: 'econQuestRequest', value: { npcId: n.id, action: 'forge', key: k } }); };
         fg.appendChild(fb);
     }
     $('qdBody').innerHTML = body; const b = $('qdBtn'); b.hidden = !btn; b.textContent = btn;
     b.onclick = () => {
-        if (Q.st === 'new') { Q.st = 'active'; Q.prog = 0; log(`Misión aceptada: ${q!.name}.`, true); }
-        else if (Q.st === 'ready') { P.exp += q!.xp; P.gold += q!.gold; if (q!.shard) Q.shards[q!.shard]++; log(`Entregaste «${q!.name}»: +${q!.xp} exp, +${q!.gold} oro${q!.shard ? ' y una ' + KEYDEFS[q!.shard].shard : ''}.`, true); Q.i++; Q.st = 'new'; Q.prog = 0; levelUp(); refreshUnlocks(true); }
-        renderQuest(); closeShop(); if (n) openQuestDlg(n);
+        if (Q.st === 'new') net.send({ $case: 'econQuestRequest', value: { npcId: n.id, action: 'accept', key: '' } });
+        else if (Q.st === 'ready') net.send({ $case: 'econQuestRequest', value: { npcId: n.id, action: 'turnin', key: '' } });
     };
 }
 /** "!" amarillo sobre el Capitán cuando tiene misión para vos; "?" cuando podés entregar. */
 const questMark = () => (!QUESTS[Q.i] ? '' : Q.st === 'new' ? '!' : Q.st === 'ready' ? '?' : '');
 
 // ---------- vendedores y servicios de las ciudades: cada NPC tiene un rol (ver roleOf) ----------
-/** Una línea del stock fijo de un vendedor: un item común de la base `base` (con atributos fijos si los hay) o pociones sueltas / en pack. */
-interface Stock { base?: string; attrs?: [AttrId, number][]; price: number; lvl: number; pot?: 'hp' | 'mp'; qty?: number }
-interface ShopDef { label: string; col: string; greet: string; stock: Stock[] }
-const SHOPS: Record<string, ShopDef> = {
-    mercader: {
-        label: 'Mercader de pociones', col: '#e0524a', greet: 'Pociones frescas: una de vida te salva el pellejo, una de maná te da otro hechizo.',
-        stock: [{ pot: 'hp', qty: 1, price: POTS.hp.price, lvl: 1 }, { pot: 'mp', qty: 1, price: POTS.mp.price, lvl: 1 }],
-    },
-    armero: {
-        label: 'Armero', col: '#c8d2da', greet: 'Acero bien templado. Si buscás algo para romper cráneos, llegaste al lugar.',
-        stock: [
-            { base: 'Espada corta', price: 45, lvl: 1 }, { base: 'Hacha de leñador', price: 80, lvl: 1 }, { base: 'Maza', price: 130, lvl: 3 }, { base: 'Espada larga', price: 190, lvl: 4 },
-            { base: 'Hacha de guerra', price: 320, lvl: 6 }, { base: 'Martillo pesado', price: 420, lvl: 8 }, { base: 'Mandoble', price: 600, lvl: 10 },
-        ],
-    },
-    armadurero: {
-        label: 'Armadurero', col: '#8fb6d8', greet: 'Una buena armadura vale más que un buen brazo. Probate lo que quieras.',
-        stock: [
-            { base: 'Ropas de tela', price: 20, lvl: 1 }, { base: 'Capucha de cuero', price: 30, lvl: 1 }, { base: 'Coraza de cuero', price: 70, lvl: 2 }, { base: 'Cofia de malla', price: 90, lvl: 4 },
-            { base: 'Yelmo de hierro', price: 190, lvl: 6 }, { base: 'Cota de malla', price: 230, lvl: 5 }, { base: 'Armadura de placas', price: 520, lvl: 9 },
-        ],
-    },
-    joyero: {
-        label: 'Joyero', col: '#e8c34a', greet: 'Piedras, plata y un poco de magia: nada que no se pueda llevar en un dedo.',
-        stock: [
-            { base: 'Anillo opaco', price: 15, lvl: 1 },
-            { base: 'Anillo de cobre', attrs: [['hp', 12]], price: 85, lvl: 2 }, { base: 'Anillo de plata', attrs: [['mp', 10]], price: 95, lvl: 2 },
-            { base: 'Anillo de jade', attrs: [['rm', 8]], price: 120, lvl: 3 }, { base: 'Amuleto del cazador', attrs: [['exp', 5]], price: 150, lvl: 3 },
-            { base: 'Anillo del filo', attrs: [['crit', 3]], price: 210, lvl: 5 }, { base: 'Sello del veloz', attrs: [['aspd', 6]], price: 240, lvl: 6 },
-        ],
-    },
-    alquimista: {
-        label: 'Alquimista', col: '#7fe0b0', greet: 'Pociones al por mayor y lo necesario para quien vive de la magia.',
-        stock: [
-            { pot: 'hp', qty: 5, price: 110, lvl: 1 }, { pot: 'mp', qty: 5, price: 135, lvl: 1 },
-            { base: 'Capucha de mago', price: 95, lvl: 3 }, { base: 'Báculo de fresno', price: 70, lvl: 1 }, { base: 'Varita', price: 140, lvl: 4 }, { base: 'Túnica de mago', price: 150, lvl: 4 },
-        ],
-    },
-    capitan: { label: 'Capitán', col: '#ffd24a', greet: '', stock: [] },
-    guardia: { label: 'Guardia', col: '#9fa8b0', greet: '', stock: [] },
-};
+// el stock, los precios y los vendedores viven en @fdn/world (economy.ts): el server valida las compras con la misma tabla
 const GUARD_LINES: Record<string, string[]> = {
     s: ['La empalizada aguanta, pero los goblins del sureste no se cansan. Si vas a salir, llevate pociones.', 'Dentro de las murallas no pelea nadie: en la ciudad se descansa y se comercia.', 'El Capitán Aldric tiene encargos para quien sepa pelear. Hablá con él en la plaza.', 'Armero, armadurero, joyero... todo lo que necesitás está a unos pasos de la plaza.'],
     v: ['Vhar no se rinde: las murallas son de hierro y de paciencia. Pasá, pero sin armar lío.', 'Más allá de la puerta sur empieza el páramo. No salgas sin armadura.', 'El Capitán Kharos recluta cazadores. Está en la plaza del noreste.', 'La forja no se apaga nunca. Si necesitás acero, el armero está al oeste.'],
 };
-/** Valor base de cada item de tienda (precio de lista): el precio de venta es una fracción de esto. */
-const VALUE: Record<string, number> = {};
-for (const sh of Object.values(SHOPS)) for (const st of sh.stock) if (st.base && VALUE[st.base] == null) VALUE[st.base] = st.price;
-const SELL_PRICE = [4, 15, 50, 150]; // oro por rareza (Común, Mágico, Raro, Épico), más un cuarto del valor de lista
-const sellPrice = (it: Item) => Math.round((SELL_PRICE[it.rar.k] ?? 1) + (VALUE[it.name] ?? 0) * 0.25);
-const TALK_RANGE = 2.6;
 let talkNpc: Npc | null = null, shopNpc: Npc | null = null;
 const npcDist = (n: Npc) => Math.hypot(n.x + 0.5 - P.x, n.y + 0.5 - P.y);
 function talkTo(n: Npc) {
@@ -1713,30 +1563,20 @@ function renderShop() {
         return `<button type="button" class="srow${poor ? ' poor' : ''}" data-buy="${i}" title="${esc(stockInfo(st))}">${icon}<span style="color:${it ? '#e7e2d3' : POTS[st.pot!].col}">${esc(stockLabel(st))}<small>${esc(stockInfo(st))}</small></span><em>${st.price} oro</em></button>`;
     }).join('');
     $('shopList').innerHTML = `<div class="label">Comprar</div>${buy}<div class="label">Tu bolsa · tocá un item para venderlo</div>` + (P.bag.length
-        ? P.bag.map((it, i) => `<button type="button" class="srow" data-sell="${i}">${ico(it)}<span style="color:${it.rar.c}">${esc(it.name)}<small>${it.rar.n} · ${it.slot}</small></span><em>${sellPrice(it)} oro</em></button>`).join('')
+        ? P.bag.map((it, i) => `<button type="button" class="srow" data-sell="${i}">${ico(it)}<span style="color:${it.rar.c}">${esc(it.name)}<small>${it.rar.n} · ${it.slot}</small></span><em>${sellPrice(it.name, it.rar.k)} oro</em></button>`).join('')
         : `<div class="label">La bolsa está vacía</div>`);
     document.querySelectorAll<HTMLElement>('[data-buy]').forEach((b) => (b.onclick = () => buyStock(def.stock[+b.dataset.buy!])));
     document.querySelectorAll<HTMLElement>('[data-sell]').forEach((b) => (b.onclick = () => sellItem(+b.dataset.sell!)));
 }
 function buyStock(st: Stock) {
-    if (P.gold < st.price) { toast('No te alcanza el oro.'); return; }
-    if (st.pot) {
-        if (pots[st.pot] >= 99) { toast('Ya llevás el máximo de pociones.'); return; }
-        P.gold -= st.price; pots[st.pot] = Math.min(99, pots[st.pot] + st.qty!); renderPots();
-        log(`Compraste ${st.qty! > 1 ? st.qty + ' ' : 'una '}${POTS[st.pot].name.toLowerCase()}${st.qty! > 1 ? 's' : ''} por ${st.price} de oro.`);
-    } else {
-        if (P.bag.length >= 18) { toast('La bolsa está llena.'); return; }
-        const it = stockItem(st); P.gold -= st.price; P.bag.push(it);
-        log(`Compraste <span style="color:${it.rar.c}">${esc(it.name)}</span> por ${st.price} de oro.`); renderBag();
-    }
-    renderShop();
+    if (!shopNpc) return;
+    const index = SHOPS[roleOf(shopNpc)].stock.indexOf(st);
+    if (P.gold < st.price) { toast('No te alcanza el oro.'); return; } // aviso rápido; la decisión es del server
+    net.send({ $case: 'econBuyRequest', value: { npcId: shopNpc.id, stockIndex: index } });
 }
 function sellItem(i: number) {
-    const it = P.bag[i]; if (!it) return;
-    const g = sellPrice(it);
-    P.bag.splice(i, 1); P.gold += g; if (sel && sel.it === it) sel = null;
-    log(`Vendiste <span style="color:${it.rar.c}">${esc(it.name)}</span> por ${g} de oro.`);
-    renderBag(); renderShop();
+    const it = P.bag[i]; if (!it || !shopNpc) return;
+    net.send({ $case: 'econSellRequest', value: { npcId: shopNpc.id, uid: it.id } });
 }
 /** Abre la tienda al llegar y la cierra si te alejás. */
 function npcTick() {
@@ -1759,7 +1599,7 @@ function checkPortals() {
     if (p.key) {
         const kid = p.key as KeyId, kd = KEYDEFS[kid];
         if (Q.keys[kid] < 1) { portalLock = now() + 2; toast(`La escalera está sellada: necesitás una ${kd.name}.`); log(`La escalera está sellada. Forjá una ${kd.name} con el Capitán: ${SHARDS_PER_KEY} esquirlas (las sueltan los bosses) y ${kd.gold} de oro.`, true); return; }
-        Q.keys[kid]--; renderQuest(); log(`Usaste una ${kd.name}.`, true);
+        log(`Usaste una ${kd.name}.`, true); // el server descuenta la llave al cruzar
     }
     portalLock = now() + 1.5; P.path = []; P.target = null; P.engage = false; P.pickup = null;
     net.send({ $case: 'playerTeleportRequested', value: { x: p.tx, y: p.ty } });
@@ -1895,6 +1735,35 @@ function applySave(sv: CharSave) {
     refreshLook(); P.hp = Math.min(maxHp(), sv.hp); P.mp = Math.min(maxMp(), sv.mp);
     renderBag(); renderQuest(); renderPots();
 }
+/** Item del server -> item del cliente (la base y la rareza salen de las tablas compartidas). */
+function itemFromInv(v: InvItemMsg): Item {
+    const b = ALL_BASES.find((x) => x.name === v.base) ?? ALL_BASES[0];
+    return { ...b, id: v.uid, rar: RAR[Math.min(3, Math.max(0, v.rarity))], attrs: loadAttrs(v.attrs) };
+}
+let invApplied = false;
+/** El server es dueño de oro, bolsa, equipo, nivel, pociones y misiones: lo que llega acá reemplaza lo que muestro. */
+function applyInventory(v: InventoryState) {
+    const prevSel = sel ? sel.it.id : -1, lvlBefore = P.lvl;
+    P.gold = v.gold; P.lvl = v.lvl; P.exp = v.exp;
+    P.bag = v.bag.map(itemFromInv);
+    for (const sl of SLOTS) P.eq[sl] = null;
+    for (const e of v.eq) if (e.item && (SLOTS as string[]).includes(e.slot)) P.eq[e.slot as Slot] = itemFromInv(e.item);
+    pots.hp = v.potsHp; pots.mp = v.potsMp;
+    Q.i = v.questI; Q.st = v.questState === 'active' || v.questState === 'ready' ? v.questState : 'new'; Q.prog = v.questProg;
+    Q.keys.cripta = v.keysCripta; Q.keys.foso = v.keysFoso; Q.shards.cripta = v.shardsCripta; Q.shards.foso = v.shardsFoso;
+    for (const id of v.unlocked) if (!UNLOCKED.has(id)) {
+        const t = TRAINING.find((x) => x.id === id); if (!t) continue;
+        UNLOCKED.add(id);
+        if (invApplied) { log(`Portal desbloqueado: <b>${t.zone}</b>. Ya podés viajar ahí desde el Portal de Frontera de tu ciudad.`, true); toast(`Portal desbloqueado: ${t.zone}`); }
+    }
+    // la selección sigue al item (por uid) aunque haya cambiado de lugar (bolsa <-> equipo)
+    sel = null;
+    if (prevSel >= 0) { const inBag = P.bag.find((x) => x.id === prevSel); const inEq = SLOTS.map((sl) => P.eq[sl]).find((x) => x && x.id === prevSel); sel = inBag ? { it: inBag, from: 'bag' } : inEq ? { it: inEq!, from: 'eq' } : null; }
+    if (invApplied && v.lvl > lvlBefore) onLevelUp(); else { P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); }
+    invApplied = true;
+    refreshLook(); renderBag(); renderQuest(); renderPots(); renderShop(); sendProfile();
+    if (!$('qdlg').hidden && shopNpc && roleOf(shopNpc) === 'capitan') openQuestDlg(shopNpc);
+}
 const saver = new Saver(buildSave, (data) => net.send({ $case: 'saveCharacterRequest', value: { data } }));
 function showLogin(error = '') {
     connected = false;
@@ -1945,7 +1814,7 @@ function enterWorld(name: string) {
     setClass(selectedClass); if (pendingSave) applySave(pendingSave); refreshUnlocks(false); connected = true; P.name = name; lookKey = ''; refreshLook(); sendProfile();
     $('login').hidden = true; ($('loginBtn') as HTMLButtonElement).disabled = false;
     cv.focus({ preventScroll: true });
-    saver.start();
+    invApplied = false; saver.start(); saver.tick(true); // el primer guardado le dice al server clase y bando si es un personaje nuevo
     if (welcomeBack) log(`Bienvenido de vuelta, ${name}. Nivel ${P.lvl}.`, true);
     // cada facción arranca en su ciudad (también si el guardado te dejó dentro de la del otro bando)
     const hub = HUBS[selectedFaction], here = cityAt(P.cell.x, P.cell.y);
@@ -1977,8 +1846,8 @@ async function boot() {
     loadBuildingImages();
     refreshLook();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, openShop, toScreen, give: (n: number) => { for (let i = 0; i < n; i++) P.bag.push(rollItem(1 + i)); renderBag(); } });
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, levelUp, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5) });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, openShop, toScreen });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();
     requestAnimationFrame(frame);

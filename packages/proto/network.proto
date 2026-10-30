@@ -103,6 +103,14 @@ message ClientMessage {
     BlinkRequest blink_request = 49;
     SkillRequest skill_request = 50;
     PotionRequest potion_request = 51;
+    // Economía autoritativa (ver docs/ECONOMIA_SERVER.md): el cliente pide, el server valida y es dueño del estado.
+    EconBuyRequest econ_buy_request = 90;
+    EconSellRequest econ_sell_request = 91;
+    EconEquipRequest econ_equip_request = 92;
+    EconUnequipRequest econ_unequip_request = 93;
+    EconDropRequest econ_drop_request = 94;
+    EconSortRequest econ_sort_request = 95;
+    EconQuestRequest econ_quest_request = 96;
     SaveCharacterRequest save_character_request = 80;
     MobHitRequest mob_hit_request = 120;
     PveStatusRequest pve_status_request = 121;
@@ -478,6 +486,9 @@ message ServerMessage {
     Vitals vitals = 132;
     PlayerVitals player_vitals = 133;
     PvpKill pvp_kill = 134;
+    InventoryState inventory_state = 140;
+    EconResult econ_result = 141;
+    KillReward kill_reward = 142;
   }
 }
 
@@ -1195,4 +1206,62 @@ message MobDied {
   float y = 4;
   int32 type = 5;
   int32 zone = 6;
+}
+
+// ---------- Economía autoritativa: oro, bolsa, equipo, nivel, pociones y misiones son del server ----------
+/** Comprar la línea `stock_index` del stock del vendedor `npc_id` (el precio y el stock salen de la tabla compartida de packages/world). */
+message EconBuyRequest { string npc_id = 1; int32 stock_index = 2; }
+/** Vender un item de la bolsa (por uid de instancia) al vendedor `npc_id`. */
+message EconSellRequest { string npc_id = 1; int32 uid = 2; }
+/** Equipar un item de la bolsa (el que estaba puesto en ese slot vuelve a la bolsa). */
+message EconEquipRequest { int32 uid = 1; }
+/** Sacar el item de un slot (arma | armadura | cabeza | anillo) a la bolsa. */
+message EconUnequipRequest { string slot = 1; }
+/** Tirar (destruir) un item de la bolsa. */
+message EconDropRequest { int32 uid = 1; }
+/** Ordenar la bolsa (por slot, rareza y nombre). */
+message EconSortRequest {}
+/** Misiones del Capitán: action = accept | turnin | forge (forge usa key = cripta | foso). */
+message EconQuestRequest { string npc_id = 1; string action = 2; string key = 3; }
+
+message InvAttr { string id = 1; int32 v = 2; }
+/** Item con identidad: uid único por personaje, base (nombre en la tabla de bases), rareza 0..3 y atributos. */
+message InvItem { int32 uid = 1; string base = 2; int32 rarity = 3; repeated InvAttr attrs = 4; }
+message InvEquip { string slot = 1; InvItem item = 2; }
+/** Foto completa del estado económico del personaje según el server. Se manda al entrar y después de cada cambio. */
+message InventoryState {
+  int32 gold = 1;
+  int32 lvl = 2;
+  int32 exp = 3;
+  repeated InvItem bag = 4;
+  repeated InvEquip eq = 5;
+  int32 pots_hp = 6;
+  int32 pots_mp = 7;
+  int32 quest_i = 8;
+  string quest_state = 9;
+  int32 quest_prog = 10;
+  int32 keys_cripta = 11;
+  int32 keys_foso = 12;
+  int32 shards_cripta = 13;
+  int32 shards_foso = 14;
+  repeated string unlocked = 15;
+  string cls = 16;
+  string faction = 17;
+}
+/** Respuesta a una acción de economía: ok=false con un motivo (code) y texto para mostrar. */
+message EconResult { bool ok = 1; string code = 2; string text = 3; }
+/** Lo que ganó quien dio el golpe final (ya aplicado en el server; InventoryState trae el estado nuevo). */
+message KillReward {
+  int32 mob_id = 1;
+  double x = 2;
+  double y = 3;
+  int32 exp = 4;
+  int32 gold = 5;
+  InvItem item = 6;
+  bool bag_full = 7;
+  string potion = 8;
+  string shard = 9;
+  int32 new_lvl = 10;
+  bool quest_ready = 11;
+  int32 quest_prog = 12;
 }

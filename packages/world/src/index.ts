@@ -15,6 +15,7 @@ export { CITIES, HUBS, cityAt, type City } from './cities';
 export { TRAINING, TRAINING_IDS, WAYPOINT_RANGE, CITY_PORTAL_OFFSET, waypointDest, trainingUnlocked, portalGate, type TrainingStep, type PortalProgress, type Waypoint } from './training';
 import type { MobType } from './mobs';
 export * from './mobs';
+export * from './economy';
 
 export const MAP_SIZE = 40;
 

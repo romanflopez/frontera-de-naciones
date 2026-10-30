@@ -2,7 +2,6 @@
  * Mobs del mundo: el server los simula (IA, vida, daño, respawn) y los jugadores solo los ven.
  * Port de la lógica que antes corría en cada navegador (apps/client/src/main.ts): mismos números.
  */
-import { rollMobDrop, RARITY_INDEX } from './loot/itemGenerator.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import { MOB_TYPES, mobDef, mobRespawnSecs, type MobDef, type MobType, type WorldMap, type Zone } from '@fdn/world';
 import * as M from './messages.ts';
@@ -20,6 +19,8 @@ export interface MobHost {
     hurt(p: Player, raw: number, source: string): void;
     /** Paraliza al jugador (si no es inmune): devuelve los segundos que quedó. */
     stun(p: Player, secs: number): number;
+    /** Botín y exp del golpe final: lo decide y lo aplica el server (economía autoritativa). */
+    reward(killer: Player, info: { mobId: number; type: MobType; def: MobDef; zoneName: string; x: number; y: number }): void;
 }
 
 interface SimMob {
@@ -182,7 +183,7 @@ export class MobSim {
 
     private kill(m: SimMob, killer: Player | null) {
         m.dead = true; this.mobs.delete(m.id);
-        if (killer) { const it = rollMobDrop(m.def.lvl, m.def.boss?.minRar ?? 0); killer.send(M.lootRoll(m.id, RARITY_INDEX[it.rarity], it.baseSeed, it.attributes)); }
+        if (killer) this.host.reward(killer, { mobId: m.id, type: m.type, def: m.def, zoneName: m.zone.name, x: m.x, y: m.y }); // una sola vez: el mob ya salió del mapa
         this.broadcastNear(m, M.mobDied(m.id, killer ? killer.playerId : 0n, m.x, m.y, m.typeIdx, m.zoneIdx));
         this.host.after(mobRespawnSecs(m.type) * 1000, () => this.spawn(m.zone, m.zoneIdx));
     }
@@ -229,7 +230,7 @@ export class MobSim {
 
     status(p: Player, v: Pkt<'pveStatusRequest'>) {
         const b = this.bud(p);
-        b.dead = !!v.dead; b.lvl = clamp(Math.round(v.lvl) || 1, 1, 60);
+        b.dead = !!v.dead; b.lvl = p.combat.lvl; // el nivel es el del server, no el que diga el cliente
     }
 
     hit(p: Player, v: Pkt<'mobHitRequest'>) {
@@ -241,7 +242,7 @@ export class MobSim {
         if (Math.hypot(p.posX + 0.5 - m.x, p.posY + 0.5 - m.y) > range) return;
         b.tokens -= 1;
         const T = this.now();
-        const dmg = clamp(Math.round(v.dmg) || 0, 0, 120 + b.lvl * 20);
+        const dmg = clamp(Math.round(v.dmg) || 0, 0, 120 + p.combat.lvl * 20);
         const parSecs = clamp(Number(v.parSecs) || 0, 0, 5), poisonSecs = clamp(Number(v.poisonSecs) || 0, 0, 5);
         if (dmg <= 0 && parSecs <= 0 && poisonSecs <= 0) return;
         if (parSecs > 0 && m.imm <= T) { m.par = T + parSecs; m.imm = T + parSecs + 8; m.moving = false; }
