@@ -17,13 +17,9 @@ export const CITIES: City[] = [
 export const HUBS: Record<string, { x: number; y: number }> = { solmar: { x: 7, y: 8 }, vhar: { x: 78, y: 13 } };
 export const cityAt = (x: number, y: number): City | undefined => CITIES.find((c) => x >= c.x0 && x < c.x1 + 1 && y >= c.y0 && y < c.y1 + 1);
 
-/** Celdas que tienen que quedar libres: los portales de entrenamiento actuales (training.ts), el 3x3 a la derecha de cada HUB (portal único) y las escaleras de la arena. */
-const RESERVED: [number, number][] = [
-    [1, 5], [1, 3], [2, 1], [4, 1], [6, 1], [8, 1], [13, 1], [13, 3], [13, 5], [12, 6],
-    [67, 4], [69, 4], [71, 4], [73, 4], [76, 4], [78, 4], [80, 4], [83, 4], [85, 4], [87, 4],
-    [9, 9], [10, 9],
-];
-for (const h of Object.values(HUBS)) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) RESERVED.push([h.x + 3 + dx, h.y + dy], [h.x, h.y]);
+/** Celdas que tienen que quedar libres: el 3x3 alrededor de HUB+(3,0) de cada ciudad (portal único de training.ts) y la escalera de la arena de Solmar (frontier.ts) con su celda de llegada. */
+const RESERVED: [number, number][] = [[13, 13], [13, 14]];
+for (const h of Object.values(HUBS)) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) RESERVED.push([h.x + 3 + dx, h.y + dy]);
 
 const GRASS = [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31];
 const STONE = [32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43];
@@ -93,7 +89,7 @@ export function extendCities(w: WorldMap): WorldMap {
         // armadurero: toldo y perchas
         prop(75, 5, 13); prop(76, 3, 14); prop(100, 6, 12);
         // herrería (armero): yunque, fogata, leña y la torre de piedra al fondo
-        prop(103, 4, 18); prop(102, 3, 20); prop(101, 5, 21); prop(100, 2, 17); prop(98, 6, 19); prop(296, 2, 21);
+        prop(103, 4, 18); prop(102, 3, 20); prop(101, 5, 21); prop(100, 2, 17); prop(98, 6, 19);
         prop(77, 11, 14); prop(99, 12, 14);
         // patio de entrenamiento: cerca con un acceso por el oeste, postes y troncos
         fenceH(13, 17, 17); fenceV(13, 18, 21, [19]);
@@ -131,7 +127,7 @@ export function extendCities(w: WorldMap): WorldMap {
         // barrio oeste: casas, armadurero (toldo) y la forja del armero
         cabinA(70, 9); cabinA(70, 16); cabinB(65, 7);
         prop(72, 66, 10); prop(98, 65, 11); prop(76, 64, 14);
-        prop(103, 66, 18); prop(102, 66, 20); prop(101, 64, 19); prop(100, 69, 19); prop(99, 65, 22); prop(98, 69, 21); prop(296, 71, 23);
+        prop(103, 66, 18); prop(102, 66, 20); prop(101, 64, 19); prop(100, 69, 19); prop(99, 65, 22); prop(98, 69, 21);
         // plaza noreste: casa del Capitán
         w.buildings = [{ id: 'fantasy_house', x: 88, y: 7, w: 3, h: 3 }];
         for (const b of w.buildings) rectF(b.x, b.y, b.x + b.w - 1, b.y + b.h - 1, (x, y) => block(x, y));
@@ -163,7 +159,7 @@ export function extendCities(w: WorldMap): WorldMap {
     // celdas reservadas: portales, 3x3 del portal único y escaleras de la arena siempre libres (props y bloqueos fuera)
     for (const [x, y] of RESERVED) { w.blocked[y][x] = false; w.safe[y][x] = true; }
     w.props = w.props.filter((p) => !(isRes(Math.floor(p.x), Math.floor(p.y)) && p.id !== STAIRS));
-    if (!w.props.some((p) => p.id === STAIRS && Math.floor(p.x) === 10 && Math.floor(p.y) === 9)) w.props.push({ id: STAIRS, x: 10.5, y: 9.5 }); // escalera a la arena de arena (el portal está en frontier.ts)
+    if (!w.props.some((p) => p.id === STAIRS && Math.floor(p.x) === 13 && Math.floor(p.y) === 13)) w.props.push({ id: STAIRS, x: 13.5, y: 13.5 }); // escalera a la arena de arena (el portal está en frontier.ts)
 
     // puertas entre el mundo y Vhar (pisar el tile y pasar al otro lado)
     w.portals = [...(w.portals ?? []),

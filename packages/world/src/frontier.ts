@@ -180,7 +180,7 @@ export function extendSolmar(w: WorldMap): WorldMap {
     // 6) Arena de arena: un recinto de arena para pelear y probar teletransportes (entrada desde el campamento)
     const AR = { x0: 46, y0: 26, x1: 60, y1: 38 };
     const inArena = (x: number, y: number) => x >= AR.x0 && x <= AR.x1 && y >= AR.y0 && y <= AR.y1;
-    const arenaIn = { x: 10, y: 9 }, arenaBack = { x: 48, y: 32 }, arenaArrive = { x: 49, y: 32 };
+    const arenaIn = { x: 13, y: 13 }, arenaBack = { x: 48, y: 32 }, arenaArrive = { x: 49, y: 32 };
     for (let y = AR.y0 - 1; y <= AR.y1 + 1; y++) for (let x = AR.x0 - 1; x <= AR.x1 + 1; x++) {
         if (inArena(x, y)) {
             w.tiles[y][x] = pickTile(SAND, noise(x, y, 77, 5)); w.blocked[y][x] = false; w.safe[y][x] = false;
@@ -198,7 +198,7 @@ export function extendSolmar(w: WorldMap): WorldMap {
         { x: portalIn.x, y: portalIn.y, tx: arriveInCrypt.x, ty: arriveInCrypt.y, key: 'cripta', msg: 'Bajás por la escalera de caracol a la Cripta olvidada.' },
         { x: exit.x, y: exit.y, tx: arriveFromCrypt.x, ty: arriveFromCrypt.y, msg: 'Subís las escaleras de vuelta al páramo.' },
         { x: arenaIn.x, y: arenaIn.y, tx: arenaArrive.x, ty: arenaArrive.y, msg: 'Entrás a la Arena de arena.' },
-        { x: arenaBack.x, y: arenaBack.y, tx: 9, ty: 9, msg: 'Volvés al campamento de Solmar.' },
+        { x: arenaBack.x, y: arenaBack.y, tx: 13, ty: 14, msg: 'Volvés al campamento de Solmar.' },
     ];
     w.dungeon = { x0: OX, y0: OY, x1: OX + 21, y1: OY + 19 };
     return w;
