@@ -12,7 +12,7 @@ import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
 import { spellIcon } from './icons.ts';
 import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
-import { itemIcon, keyIcon, potionIcon, shardIcon } from './itemicons.ts';
+import { coinIcon, itemIcon, keyIcon, potionIcon, shardIcon } from './itemicons.ts';
 import { initLoginUI } from './loginui.ts';
 const ico = (it: { look?: string; slot: string; rar: { c: string; k: number } }) => `<img class="iico" alt="" src="${itemIcon(it.look, it.slot, it.rar.c, it.rar.k)}">`;
 
@@ -610,8 +610,8 @@ function potCdTick() {
         else if (el.style.display) { el.style.display = ''; el.textContent = ''; }
     });
 }
-const POT_ART = { hp: 'curar', mp: 'burbuja-arcana' };
-function renderPots() { for (const k of ['hp', 'mp'] as const) { const el = $('pot' + k); el.title = `${POTS[k].name} (${POTS[k].key}): quedan ${pots[k]}`; el.setAttribute('aria-label', `${POTS[k].name}, tecla ${POTS[k].key}, quedan ${pots[k]}`); el.classList.toggle('none', pots[k] <= 0); el.innerHTML = `<span class="sq"><img alt="" src="assets/spells/${POT_ART[k]}.png"></span><kbd>${POTS[k].key}</kbd><em>${pots[k]}</em><i class="cdv" data-gcd></i>`; } potCdTick(); }
+($('goldIco') as HTMLImageElement).src = coinIcon();
+function renderPots() { for (const k of ['hp', 'mp'] as const) { const el = $('pot' + k); el.title = `${POTS[k].name} (${POTS[k].key}): quedan ${pots[k]}`; el.setAttribute('aria-label', `${POTS[k].name}, tecla ${POTS[k].key}, quedan ${pots[k]}`); el.classList.toggle('none', pots[k] <= 0); el.innerHTML = `<span class="sq"><img alt="" src="${potionIcon(k)}"></span><kbd>${POTS[k].key}</kbd><em>${pots[k]}</em><i class="cdv" data-gcd></i>`; } potCdTick(); }
 // ---------- /meditar: quieto, el maná sube rápido; se corta si te movés, casteás o te pegan ----------
 function stopMeditating(msg?: string) { if (!P.med) return; P.med = false; if (msg) log(msg, true); syncHp(); }
 function toggleMeditate() {
