@@ -14,6 +14,7 @@ import { spellIcon } from './icons.ts';
 import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
 import { coinIcon, itemIcon, keyIcon, potionIcon, shardIcon } from './itemicons.ts';
 import { initLoginUI } from './loginui.ts';
+import { createMinimap, type Minimap } from './minimap.ts';
 const ico = (it: { look?: string; slot: string; rar: { c: string; k: number } }) => `<img class="iico" alt="" src="${itemIcon(it.look, it.slot, it.rar.c, it.rar.k)}">`;
 
 // ---------- utilidades ----------
@@ -1785,12 +1786,25 @@ const inDungeon = (gx: number, gy: number) => [MAP.dungeon, ...(MAP.dungeons ?? 
 /** Clave del mundo donde estoy (mapa o mapa#instancia): la manda el server y va en cada requestMovement. */
 let MAP_WORLD_ID = '';
 let last = now(), lastCam = now();
+// ---------- minimapa (minimap.ts): se crea al entrar al mundo, se re-arma cuando loadMap() cambia MAP y los marcadores van a ~10 fps ----------
+let minimap: Minimap | null = null, minimapOf: WorldMap | null = null;
+function minimapTick() {
+    if (!connected) return;
+    minimap ??= createMinimap($('game'), { active: () => connected && !mapLoading });
+    if (minimapOf !== MAP) { minimapOf = MAP; minimap.setMap(MAP, { id: MAP_DEF.id, name: MAP_DEF.name }); }
+    minimap.tick(() => ({
+        player: { x: P.x, y: P.y, dir: P.dir },
+        party: [], // todavía no hay grupos en el cliente
+        others: [...others.values()].filter((o) => !o.gone && !unseen(o)).map((o) => ({ x: o.x, y: o.y, faction: facOf(o.profile) })),
+        mobs, npcs: MAP.npcs.map((n) => ({ x: n.x, y: n.y, role: roleOf(n) })),
+    }));
+}
 function frame() {
     const T = now(); let dt = Math.min(0.05, T - last); last = T;
     if (hitstop > 0) { hitstop -= dt; dt = 0; }
     if (!mapLoading) { update(dt); checkPortals(); checkLinks(); wpTick(); npcTick(); }
     updateCam(Math.min(0.05, T - lastCam)); lastCam = T;
-    updateHover(); render(); hud(); winTick(T); requestAnimationFrame(frame);
+    updateHover(); render(); hud(); winTick(T); minimapTick(); requestAnimationFrame(frame);
 }
 
 // ---------- entrada ----------
