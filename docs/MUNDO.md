@@ -316,6 +316,12 @@ Estrategia "estrangulador": el mapa actual sigue existiendo (con id propio, `sol
 
 ---
 
+## 5.0 Decisiones ya tomadas por el usuario
+
+- **PvP:** no hay PvP en las ciudades. Tampoco en los bosses/bolsillos de jefe por ahora (se decide más adelante). PvP de facción solo en tierras compartidas y zonas de caza, y en el Coliseo/Campo de Batalla por evento.
+- **Mazmorras y jefes:** por ahora mapas compartidos. Más adelante se quiere una **cola de grupo** (o un comando de chat para invitar) para entrar a una mazmorra o jefe en **instancia privada**: al entrar el líder, aparecen todos los miembros de la party en la misma instancia. La Fase 1 debe dejar el registro de mundos preparado para eso (clave `mapId` + `instanceId`, hibernar instancias vacías) aunque todavía no se use.
+- **Resto de las decisiones (secciones siguientes):** sin respuesta todavía; se toma la recomendación del documento hasta que el usuario diga otra cosa.
+
 ## 5. Decisiones para el usuario (con recomendación)
 
 1. **Generación**: ¿mapas por código determinista compartido (como hoy) o JSON generado en build? Recomiendo código determinista + `map_hash` en F1-F5 y evaluar JSON (editor tipo Tiled) más adelante.
