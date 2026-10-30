@@ -119,6 +119,15 @@ export interface ClientMessage {
     | { $case: "blinkRequest"; value: BlinkRequest }
     | { $case: "skillRequest"; value: SkillRequest }
     | { $case: "potionRequest"; value: PotionRequest }
+    | //
+    /** Economía autoritativa (ver docs/ECONOMIA_SERVER.md): el cliente pide, el server valida y es dueño del estado. */
+    { $case: "econBuyRequest"; value: EconBuyRequest }
+    | { $case: "econSellRequest"; value: EconSellRequest }
+    | { $case: "econEquipRequest"; value: EconEquipRequest }
+    | { $case: "econUnequipRequest"; value: EconUnequipRequest }
+    | { $case: "econDropRequest"; value: EconDropRequest }
+    | { $case: "econSortRequest"; value: EconSortRequest }
+    | { $case: "econQuestRequest"; value: EconQuestRequest }
     | { $case: "saveCharacterRequest"; value: SaveCharacterRequest }
     | { $case: "mobHitRequest"; value: MobHitRequest }
     | { $case: "pveStatusRequest"; value: PveStatusRequest }
@@ -503,6 +512,9 @@ export interface ServerMessage {
     | { $case: "vitals"; value: Vitals }
     | { $case: "playerVitals"; value: PlayerVitals }
     | { $case: "pvpKill"; value: PvpKill }
+    | { $case: "inventoryState"; value: InventoryState }
+    | { $case: "econResult"; value: EconResult }
+    | { $case: "killReward"; value: KillReward }
     | undefined;
 }
 
@@ -1324,6 +1336,106 @@ export interface MobDied {
   zone: number;
 }
 
+/** Comprar la línea `stock_index` del stock del vendedor `npc_id` (el precio y el stock salen de la tabla compartida de packages/world). */
+export interface EconBuyRequest {
+  npcId: string;
+  stockIndex: number;
+}
+
+/** Vender un item de la bolsa (por uid de instancia) al vendedor `npc_id`. */
+export interface EconSellRequest {
+  npcId: string;
+  uid: number;
+}
+
+/** Equipar un item de la bolsa (el que estaba puesto en ese slot vuelve a la bolsa). */
+export interface EconEquipRequest {
+  uid: number;
+}
+
+/** Sacar el item de un slot (arma | armadura | cabeza | anillo) a la bolsa. */
+export interface EconUnequipRequest {
+  slot: string;
+}
+
+/** Tirar (destruir) un item de la bolsa. */
+export interface EconDropRequest {
+  uid: number;
+}
+
+/** Ordenar la bolsa (por slot, rareza y nombre). */
+export interface EconSortRequest {
+}
+
+/** Misiones del Capitán: action = accept | turnin | forge (forge usa key = cripta | foso). */
+export interface EconQuestRequest {
+  npcId: string;
+  action: string;
+  key: string;
+}
+
+export interface InvAttr {
+  id: string;
+  v: number;
+}
+
+/** Item con identidad: uid único por personaje, base (nombre en la tabla de bases), rareza 0..3 y atributos. */
+export interface InvItem {
+  uid: number;
+  base: string;
+  rarity: number;
+  attrs: InvAttr[];
+}
+
+export interface InvEquip {
+  slot: string;
+  item: InvItem | undefined;
+}
+
+/** Foto completa del estado económico del personaje según el server. Se manda al entrar y después de cada cambio. */
+export interface InventoryState {
+  gold: number;
+  lvl: number;
+  exp: number;
+  bag: InvItem[];
+  eq: InvEquip[];
+  potsHp: number;
+  potsMp: number;
+  questI: number;
+  questState: string;
+  questProg: number;
+  keysCripta: number;
+  keysFoso: number;
+  shardsCripta: number;
+  shardsFoso: number;
+  unlocked: string[];
+  cls: string;
+  faction: string;
+}
+
+/** Respuesta a una acción de economía: ok=false con un motivo (code) y texto para mostrar. */
+export interface EconResult {
+  ok: boolean;
+  code: string;
+  text: string;
+}
+
+/** Lo que ganó quien dio el golpe final (ya aplicado en el server; InventoryState trae el estado nuevo). */
+export interface KillReward {
+  mobId: number;
+  x: number;
+  y: number;
+  exp: number;
+  gold: number;
+  item: InvItem | undefined;
+  bagFull: boolean;
+  potion: string;
+  shard: string;
+  newLvl: number;
+  questReady: boolean;
+  questProg: number;
+}
+
 function createBaseClientMessage(): ClientMessage {
   return { payload: undefined };
 }
@@ -1483,6 +1595,27 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         break;
       case "potionRequest":
         PotionRequest.encode(message.payload.value, writer.uint32(410).fork()).join();
+        break;
+      case "econBuyRequest":
+        EconBuyRequest.encode(message.payload.value, writer.uint32(722).fork()).join();
+        break;
+      case "econSellRequest":
+        EconSellRequest.encode(message.payload.value, writer.uint32(730).fork()).join();
+        break;
+      case "econEquipRequest":
+        EconEquipRequest.encode(message.payload.value, writer.uint32(738).fork()).join();
+        break;
+      case "econUnequipRequest":
+        EconUnequipRequest.encode(message.payload.value, writer.uint32(746).fork()).join();
+        break;
+      case "econDropRequest":
+        EconDropRequest.encode(message.payload.value, writer.uint32(754).fork()).join();
+        break;
+      case "econSortRequest":
+        EconSortRequest.encode(message.payload.value, writer.uint32(762).fork()).join();
+        break;
+      case "econQuestRequest":
+        EconQuestRequest.encode(message.payload.value, writer.uint32(770).fork()).join();
         break;
       case "saveCharacterRequest":
         SaveCharacterRequest.encode(message.payload.value, writer.uint32(642).fork()).join();
@@ -2032,6 +2165,65 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "potionRequest", value: PotionRequest.decode(reader, reader.uint32()) };
             continue;
           }
+          case 90: {
+            if (tag !== 722) {
+              break;
+            }
+
+            message.payload = { $case: "econBuyRequest", value: EconBuyRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 91: {
+            if (tag !== 730) {
+              break;
+            }
+
+            message.payload = { $case: "econSellRequest", value: EconSellRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 92: {
+            if (tag !== 738) {
+              break;
+            }
+
+            message.payload = { $case: "econEquipRequest", value: EconEquipRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 93: {
+            if (tag !== 746) {
+              break;
+            }
+
+            message.payload = {
+              $case: "econUnequipRequest",
+              value: EconUnequipRequest.decode(reader, reader.uint32()),
+            };
+            continue;
+          }
+          case 94: {
+            if (tag !== 754) {
+              break;
+            }
+
+            message.payload = { $case: "econDropRequest", value: EconDropRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 95: {
+            if (tag !== 762) {
+              break;
+            }
+
+            message.payload = { $case: "econSortRequest", value: EconSortRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 96: {
+            if (tag !== 770) {
+              break;
+            }
+
+            message.payload = { $case: "econQuestRequest", value: EconQuestRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
           case 80: {
             if (tag !== 642) {
               break;
@@ -2499,6 +2691,51 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "potionRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "potionRequest", value: PotionRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "econBuyRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "econBuyRequest", value: EconBuyRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "econSellRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "econSellRequest", value: EconSellRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "econEquipRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "econEquipRequest", value: EconEquipRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "econUnequipRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "econUnequipRequest",
+            value: EconUnequipRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "econDropRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "econDropRequest", value: EconDropRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "econSortRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "econSortRequest", value: EconSortRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "econQuestRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "econQuestRequest", value: EconQuestRequest.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -6498,6 +6735,15 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "pvpKill":
         PvpKill.encode(message.payload.value, writer.uint32(1074).fork()).join();
         break;
+      case "inventoryState":
+        InventoryState.encode(message.payload.value, writer.uint32(1122).fork()).join();
+        break;
+      case "econResult":
+        EconResult.encode(message.payload.value, writer.uint32(1130).fork()).join();
+        break;
+      case "killReward":
+        KillReward.encode(message.payload.value, writer.uint32(1138).fork()).join();
+        break;
     }
     return writer;
   },
@@ -7207,6 +7453,30 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "pvpKill", value: PvpKill.decode(reader, reader.uint32()) };
             continue;
           }
+          case 140: {
+            if (tag !== 1122) {
+              break;
+            }
+
+            message.payload = { $case: "inventoryState", value: InventoryState.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 141: {
+            if (tag !== 1130) {
+              break;
+            }
+
+            message.payload = { $case: "econResult", value: EconResult.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 142: {
+            if (tag !== 1138) {
+              break;
+            }
+
+            message.payload = { $case: "killReward", value: KillReward.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -7762,6 +8032,24 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "pvpKill": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "pvpKill", value: PvpKill.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "inventoryState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "inventoryState", value: InventoryState.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "econResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "econResult", value: EconResult.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "killReward": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "killReward", value: KillReward.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -17656,6 +17944,1196 @@ export const MobDied: MessageFns<MobDied> = {
     message.y = object.y ?? 0;
     message.type = object.type ?? 0;
     message.zone = object.zone ?? 0;
+    return message;
+  },
+};
+
+function createBaseEconBuyRequest(): EconBuyRequest {
+  return { npcId: "", stockIndex: 0 };
+}
+
+export const EconBuyRequest: MessageFns<EconBuyRequest> = {
+  encode(message: EconBuyRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.npcId !== "") {
+      writer.uint32(10).string(message.npcId);
+    }
+    if (message.stockIndex !== 0) {
+      writer.uint32(16).int32(message.stockIndex);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EconBuyRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseEconBuyRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.npcId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.stockIndex = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<EconBuyRequest>, I>>(base?: I): EconBuyRequest {
+    return EconBuyRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EconBuyRequest>, I>>(object: I): EconBuyRequest {
+    const message = createBaseEconBuyRequest();
+    message.npcId = object.npcId ?? "";
+    message.stockIndex = object.stockIndex ?? 0;
+    return message;
+  },
+};
+
+function createBaseEconSellRequest(): EconSellRequest {
+  return { npcId: "", uid: 0 };
+}
+
+export const EconSellRequest: MessageFns<EconSellRequest> = {
+  encode(message: EconSellRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.npcId !== "") {
+      writer.uint32(10).string(message.npcId);
+    }
+    if (message.uid !== 0) {
+      writer.uint32(16).int32(message.uid);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EconSellRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseEconSellRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.npcId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.uid = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<EconSellRequest>, I>>(base?: I): EconSellRequest {
+    return EconSellRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EconSellRequest>, I>>(object: I): EconSellRequest {
+    const message = createBaseEconSellRequest();
+    message.npcId = object.npcId ?? "";
+    message.uid = object.uid ?? 0;
+    return message;
+  },
+};
+
+function createBaseEconEquipRequest(): EconEquipRequest {
+  return { uid: 0 };
+}
+
+export const EconEquipRequest: MessageFns<EconEquipRequest> = {
+  encode(message: EconEquipRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.uid !== 0) {
+      writer.uint32(8).int32(message.uid);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EconEquipRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseEconEquipRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.uid = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<EconEquipRequest>, I>>(base?: I): EconEquipRequest {
+    return EconEquipRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EconEquipRequest>, I>>(object: I): EconEquipRequest {
+    const message = createBaseEconEquipRequest();
+    message.uid = object.uid ?? 0;
+    return message;
+  },
+};
+
+function createBaseEconUnequipRequest(): EconUnequipRequest {
+  return { slot: "" };
+}
+
+export const EconUnequipRequest: MessageFns<EconUnequipRequest> = {
+  encode(message: EconUnequipRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.slot !== "") {
+      writer.uint32(10).string(message.slot);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EconUnequipRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseEconUnequipRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.slot = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<EconUnequipRequest>, I>>(base?: I): EconUnequipRequest {
+    return EconUnequipRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EconUnequipRequest>, I>>(object: I): EconUnequipRequest {
+    const message = createBaseEconUnequipRequest();
+    message.slot = object.slot ?? "";
+    return message;
+  },
+};
+
+function createBaseEconDropRequest(): EconDropRequest {
+  return { uid: 0 };
+}
+
+export const EconDropRequest: MessageFns<EconDropRequest> = {
+  encode(message: EconDropRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.uid !== 0) {
+      writer.uint32(8).int32(message.uid);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EconDropRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseEconDropRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.uid = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<EconDropRequest>, I>>(base?: I): EconDropRequest {
+    return EconDropRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EconDropRequest>, I>>(object: I): EconDropRequest {
+    const message = createBaseEconDropRequest();
+    message.uid = object.uid ?? 0;
+    return message;
+  },
+};
+
+function createBaseEconSortRequest(): EconSortRequest {
+  return {};
+}
+
+export const EconSortRequest: MessageFns<EconSortRequest> = {
+  encode(_: EconSortRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EconSortRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseEconSortRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<EconSortRequest>, I>>(base?: I): EconSortRequest {
+    return EconSortRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EconSortRequest>, I>>(_: I): EconSortRequest {
+    const message = createBaseEconSortRequest();
+    return message;
+  },
+};
+
+function createBaseEconQuestRequest(): EconQuestRequest {
+  return { npcId: "", action: "", key: "" };
+}
+
+export const EconQuestRequest: MessageFns<EconQuestRequest> = {
+  encode(message: EconQuestRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.npcId !== "") {
+      writer.uint32(10).string(message.npcId);
+    }
+    if (message.action !== "") {
+      writer.uint32(18).string(message.action);
+    }
+    if (message.key !== "") {
+      writer.uint32(26).string(message.key);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EconQuestRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseEconQuestRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.npcId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.action = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.key = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<EconQuestRequest>, I>>(base?: I): EconQuestRequest {
+    return EconQuestRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EconQuestRequest>, I>>(object: I): EconQuestRequest {
+    const message = createBaseEconQuestRequest();
+    message.npcId = object.npcId ?? "";
+    message.action = object.action ?? "";
+    message.key = object.key ?? "";
+    return message;
+  },
+};
+
+function createBaseInvAttr(): InvAttr {
+  return { id: "", v: 0 };
+}
+
+export const InvAttr: MessageFns<InvAttr> = {
+  encode(message: InvAttr, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    if (message.v !== 0) {
+      writer.uint32(16).int32(message.v);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): InvAttr {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseInvAttr();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.id = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.v = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<InvAttr>, I>>(base?: I): InvAttr {
+    return InvAttr.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<InvAttr>, I>>(object: I): InvAttr {
+    const message = createBaseInvAttr();
+    message.id = object.id ?? "";
+    message.v = object.v ?? 0;
+    return message;
+  },
+};
+
+function createBaseInvItem(): InvItem {
+  return { uid: 0, base: "", rarity: 0, attrs: [] };
+}
+
+export const InvItem: MessageFns<InvItem> = {
+  encode(message: InvItem, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.uid !== 0) {
+      writer.uint32(8).int32(message.uid);
+    }
+    if (message.base !== "") {
+      writer.uint32(18).string(message.base);
+    }
+    if (message.rarity !== 0) {
+      writer.uint32(24).int32(message.rarity);
+    }
+    for (const v of message.attrs) {
+      InvAttr.encode(v!, writer.uint32(34).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): InvItem {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseInvItem();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.uid = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.base = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.rarity = reader.int32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.attrs.push(InvAttr.decode(reader, reader.uint32()));
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<InvItem>, I>>(base?: I): InvItem {
+    return InvItem.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<InvItem>, I>>(object: I): InvItem {
+    const message = createBaseInvItem();
+    message.uid = object.uid ?? 0;
+    message.base = object.base ?? "";
+    message.rarity = object.rarity ?? 0;
+    message.attrs = object.attrs?.map((e) => InvAttr.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseInvEquip(): InvEquip {
+  return { slot: "", item: undefined };
+}
+
+export const InvEquip: MessageFns<InvEquip> = {
+  encode(message: InvEquip, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.slot !== "") {
+      writer.uint32(10).string(message.slot);
+    }
+    if (message.item !== undefined) {
+      InvItem.encode(message.item, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): InvEquip {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseInvEquip();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.slot = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.item = InvItem.decode(reader, reader.uint32());
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<InvEquip>, I>>(base?: I): InvEquip {
+    return InvEquip.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<InvEquip>, I>>(object: I): InvEquip {
+    const message = createBaseInvEquip();
+    message.slot = object.slot ?? "";
+    message.item = (object.item !== undefined && object.item !== null) ? InvItem.fromPartial(object.item) : undefined;
+    return message;
+  },
+};
+
+function createBaseInventoryState(): InventoryState {
+  return {
+    gold: 0,
+    lvl: 0,
+    exp: 0,
+    bag: [],
+    eq: [],
+    potsHp: 0,
+    potsMp: 0,
+    questI: 0,
+    questState: "",
+    questProg: 0,
+    keysCripta: 0,
+    keysFoso: 0,
+    shardsCripta: 0,
+    shardsFoso: 0,
+    unlocked: [],
+    cls: "",
+    faction: "",
+  };
+}
+
+export const InventoryState: MessageFns<InventoryState> = {
+  encode(message: InventoryState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.gold !== 0) {
+      writer.uint32(8).int32(message.gold);
+    }
+    if (message.lvl !== 0) {
+      writer.uint32(16).int32(message.lvl);
+    }
+    if (message.exp !== 0) {
+      writer.uint32(24).int32(message.exp);
+    }
+    for (const v of message.bag) {
+      InvItem.encode(v!, writer.uint32(34).fork()).join();
+    }
+    for (const v of message.eq) {
+      InvEquip.encode(v!, writer.uint32(42).fork()).join();
+    }
+    if (message.potsHp !== 0) {
+      writer.uint32(48).int32(message.potsHp);
+    }
+    if (message.potsMp !== 0) {
+      writer.uint32(56).int32(message.potsMp);
+    }
+    if (message.questI !== 0) {
+      writer.uint32(64).int32(message.questI);
+    }
+    if (message.questState !== "") {
+      writer.uint32(74).string(message.questState);
+    }
+    if (message.questProg !== 0) {
+      writer.uint32(80).int32(message.questProg);
+    }
+    if (message.keysCripta !== 0) {
+      writer.uint32(88).int32(message.keysCripta);
+    }
+    if (message.keysFoso !== 0) {
+      writer.uint32(96).int32(message.keysFoso);
+    }
+    if (message.shardsCripta !== 0) {
+      writer.uint32(104).int32(message.shardsCripta);
+    }
+    if (message.shardsFoso !== 0) {
+      writer.uint32(112).int32(message.shardsFoso);
+    }
+    for (const v of message.unlocked) {
+      writer.uint32(122).string(v!);
+    }
+    if (message.cls !== "") {
+      writer.uint32(130).string(message.cls);
+    }
+    if (message.faction !== "") {
+      writer.uint32(138).string(message.faction);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): InventoryState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseInventoryState();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.gold = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.lvl = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.exp = reader.int32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.bag.push(InvItem.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.eq.push(InvEquip.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.potsHp = reader.int32();
+            continue;
+          }
+          case 7: {
+            if (tag !== 56) {
+              break;
+            }
+
+            message.potsMp = reader.int32();
+            continue;
+          }
+          case 8: {
+            if (tag !== 64) {
+              break;
+            }
+
+            message.questI = reader.int32();
+            continue;
+          }
+          case 9: {
+            if (tag !== 74) {
+              break;
+            }
+
+            message.questState = reader.string();
+            continue;
+          }
+          case 10: {
+            if (tag !== 80) {
+              break;
+            }
+
+            message.questProg = reader.int32();
+            continue;
+          }
+          case 11: {
+            if (tag !== 88) {
+              break;
+            }
+
+            message.keysCripta = reader.int32();
+            continue;
+          }
+          case 12: {
+            if (tag !== 96) {
+              break;
+            }
+
+            message.keysFoso = reader.int32();
+            continue;
+          }
+          case 13: {
+            if (tag !== 104) {
+              break;
+            }
+
+            message.shardsCripta = reader.int32();
+            continue;
+          }
+          case 14: {
+            if (tag !== 112) {
+              break;
+            }
+
+            message.shardsFoso = reader.int32();
+            continue;
+          }
+          case 15: {
+            if (tag !== 122) {
+              break;
+            }
+
+            message.unlocked.push(reader.string());
+            continue;
+          }
+          case 16: {
+            if (tag !== 130) {
+              break;
+            }
+
+            message.cls = reader.string();
+            continue;
+          }
+          case 17: {
+            if (tag !== 138) {
+              break;
+            }
+
+            message.faction = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<InventoryState>, I>>(base?: I): InventoryState {
+    return InventoryState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<InventoryState>, I>>(object: I): InventoryState {
+    const message = createBaseInventoryState();
+    message.gold = object.gold ?? 0;
+    message.lvl = object.lvl ?? 0;
+    message.exp = object.exp ?? 0;
+    message.bag = object.bag?.map((e) => InvItem.fromPartial(e)) || [];
+    message.eq = object.eq?.map((e) => InvEquip.fromPartial(e)) || [];
+    message.potsHp = object.potsHp ?? 0;
+    message.potsMp = object.potsMp ?? 0;
+    message.questI = object.questI ?? 0;
+    message.questState = object.questState ?? "";
+    message.questProg = object.questProg ?? 0;
+    message.keysCripta = object.keysCripta ?? 0;
+    message.keysFoso = object.keysFoso ?? 0;
+    message.shardsCripta = object.shardsCripta ?? 0;
+    message.shardsFoso = object.shardsFoso ?? 0;
+    message.unlocked = object.unlocked?.map((e) => e) || [];
+    message.cls = object.cls ?? "";
+    message.faction = object.faction ?? "";
+    return message;
+  },
+};
+
+function createBaseEconResult(): EconResult {
+  return { ok: false, code: "", text: "" };
+}
+
+export const EconResult: MessageFns<EconResult> = {
+  encode(message: EconResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.ok !== false) {
+      writer.uint32(8).bool(message.ok);
+    }
+    if (message.code !== "") {
+      writer.uint32(18).string(message.code);
+    }
+    if (message.text !== "") {
+      writer.uint32(26).string(message.text);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EconResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseEconResult();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.ok = reader.bool();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.code = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.text = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<EconResult>, I>>(base?: I): EconResult {
+    return EconResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EconResult>, I>>(object: I): EconResult {
+    const message = createBaseEconResult();
+    message.ok = object.ok ?? false;
+    message.code = object.code ?? "";
+    message.text = object.text ?? "";
+    return message;
+  },
+};
+
+function createBaseKillReward(): KillReward {
+  return {
+    mobId: 0,
+    x: 0,
+    y: 0,
+    exp: 0,
+    gold: 0,
+    item: undefined,
+    bagFull: false,
+    potion: "",
+    shard: "",
+    newLvl: 0,
+    questReady: false,
+    questProg: 0,
+  };
+}
+
+export const KillReward: MessageFns<KillReward> = {
+  encode(message: KillReward, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mobId !== 0) {
+      writer.uint32(8).int32(message.mobId);
+    }
+    if (message.x !== 0) {
+      writer.uint32(17).double(message.x);
+    }
+    if (message.y !== 0) {
+      writer.uint32(25).double(message.y);
+    }
+    if (message.exp !== 0) {
+      writer.uint32(32).int32(message.exp);
+    }
+    if (message.gold !== 0) {
+      writer.uint32(40).int32(message.gold);
+    }
+    if (message.item !== undefined) {
+      InvItem.encode(message.item, writer.uint32(50).fork()).join();
+    }
+    if (message.bagFull !== false) {
+      writer.uint32(56).bool(message.bagFull);
+    }
+    if (message.potion !== "") {
+      writer.uint32(66).string(message.potion);
+    }
+    if (message.shard !== "") {
+      writer.uint32(74).string(message.shard);
+    }
+    if (message.newLvl !== 0) {
+      writer.uint32(80).int32(message.newLvl);
+    }
+    if (message.questReady !== false) {
+      writer.uint32(88).bool(message.questReady);
+    }
+    if (message.questProg !== 0) {
+      writer.uint32(96).int32(message.questProg);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): KillReward {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseKillReward();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.mobId = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 17) {
+              break;
+            }
+
+            message.x = reader.double();
+            continue;
+          }
+          case 3: {
+            if (tag !== 25) {
+              break;
+            }
+
+            message.y = reader.double();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.exp = reader.int32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.gold = reader.int32();
+            continue;
+          }
+          case 6: {
+            if (tag !== 50) {
+              break;
+            }
+
+            message.item = InvItem.decode(reader, reader.uint32());
+            continue;
+          }
+          case 7: {
+            if (tag !== 56) {
+              break;
+            }
+
+            message.bagFull = reader.bool();
+            continue;
+          }
+          case 8: {
+            if (tag !== 66) {
+              break;
+            }
+
+            message.potion = reader.string();
+            continue;
+          }
+          case 9: {
+            if (tag !== 74) {
+              break;
+            }
+
+            message.shard = reader.string();
+            continue;
+          }
+          case 10: {
+            if (tag !== 80) {
+              break;
+            }
+
+            message.newLvl = reader.int32();
+            continue;
+          }
+          case 11: {
+            if (tag !== 88) {
+              break;
+            }
+
+            message.questReady = reader.bool();
+            continue;
+          }
+          case 12: {
+            if (tag !== 96) {
+              break;
+            }
+
+            message.questProg = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<KillReward>, I>>(base?: I): KillReward {
+    return KillReward.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<KillReward>, I>>(object: I): KillReward {
+    const message = createBaseKillReward();
+    message.mobId = object.mobId ?? 0;
+    message.x = object.x ?? 0;
+    message.y = object.y ?? 0;
+    message.exp = object.exp ?? 0;
+    message.gold = object.gold ?? 0;
+    message.item = (object.item !== undefined && object.item !== null) ? InvItem.fromPartial(object.item) : undefined;
+    message.bagFull = object.bagFull ?? false;
+    message.potion = object.potion ?? "";
+    message.shard = object.shard ?? "";
+    message.newLvl = object.newLvl ?? 0;
+    message.questReady = object.questReady ?? false;
+    message.questProg = object.questProg ?? 0;
     return message;
   },
 };

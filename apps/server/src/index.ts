@@ -16,7 +16,8 @@ import { loadOccupancy, occupancyFromGrid } from './map.ts';
 import * as M from './messages.ts';
 import type { PersistedPlayer } from './player.ts';
 import { GameWorld } from './world.ts';
-import { authenticate, sanitizeCharacter } from './accounts.ts';
+import { authenticate } from './accounts.ts';
+import { Economy, toCharSave } from './economy.ts';
 import { FileStorage, PgStorage, type Storage } from './storage.ts';
 
 const MAX_INCOMING_BYTES = 24576;
@@ -25,13 +26,19 @@ const settings = loadSettings();
 const catalogs = loadCatalogs();
 const worldConfigs = loadWorlds();
 const worlds = new Map<string, GameWorld>();
+// el estado económico (oro, bolsa, equipo, nivel) es del server; se guarda en la cuenta por el mismo Storage
+/** Dónde se guardan cuentas y personajes: DATA_DIR (env) o, por defecto, la carpeta data del server. */
+const SAVE_DIR = process.env.DATA_DIR || DATA_DIR;
+// con DATABASE_URL las cuentas van a Postgres (sobreviven a los redeploys); sin ella, archivos JSON
+const storage: Storage & { close?: () => Promise<void> } = process.env.DATABASE_URL ? await PgStorage.create(process.env.DATABASE_URL) : new FileStorage(SAVE_DIR);
+const economy = new Economy(storage);
 for (const wc of worldConfigs) {
     const teleportCells = (wc.teleportLocs ?? []).flatMap((t) => t.locs);
     // Mapas generados por código (iguales en cliente y server) o, si no, un .amd en data/maps
     const generated = MAPS[wc.map];
     const wmap = generated?.();
     const occ = wmap ? occupancyFromGrid(wmap.blocked, teleportCells) : loadOccupancy(wc.map, teleportCells);
-    worlds.set(wc.id, new GameWorld(wc, settings, catalogs, occ, wmap));
+    worlds.set(wc.id, new GameWorld(wc, settings, catalogs, occ, wmap, economy));
     console.log(`[Server] Mundo '${wc.id}' (${wc.name}): mapa ${wc.map}, ${occ.sizeX}x${occ.sizeY}, ${occ.occupiedCount} celdas bloqueadas`);
 }
 if (!worlds.has(settings.initialMap)) throw new Error(`initialMap '${settings.initialMap}' no está en worlds.json`);
@@ -40,8 +47,6 @@ const worldsListMessage = M.worldsList(worldConfigs);
 const monstersListMessage = M.monstersList(catalogs);
 
 // ---------- guardado de personajes (un JSON por id, igual que el original: solo para desarrollo) ----------
-/** Dónde se guardan cuentas y personajes: DATA_DIR (env) o, por defecto, la carpeta data del server. */
-const SAVE_DIR = process.env.DATA_DIR || DATA_DIR;
 const charsDir = join(SAVE_DIR, 'chars');
 mkdirSync(charsDir, { recursive: true });
 const charFile = (networkId: string) => join(charsDir, `${networkId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json`);
@@ -56,8 +61,6 @@ function saveChar(networkId: string, state: PersistedPlayer | undefined): void {
 }
 
 // ---------- cuentas y progreso (ver docs/PERSISTENCIA.md) ----------
-// con DATABASE_URL las cuentas van a Postgres (sobreviven a los redeploys); sin ella, archivos JSON
-const storage: Storage & { close?: () => Promise<void> } = process.env.DATABASE_URL ? await PgStorage.create(process.env.DATABASE_URL) : new FileStorage(SAVE_DIR);
 const clientIp = (req: { headers: Record<string, string | string[] | undefined>; socket: { remoteAddress?: string } }) => {
     const xf = req.headers['x-forwarded-for'];
     const first = (Array.isArray(xf) ? xf[0] : xf)?.split(',')[0]?.trim();
@@ -94,7 +97,9 @@ setInterval(() => {
     for (const s of sessionsByNetworkId.values()) {
         if (s.socket || s.disconnectDeadline === null || s.disconnectDeadline > now) continue;
         const world = worlds.get(s.worldId);
+        world?.persistVitals(s.sessionId);
         saveChar(s.networkId, world?.removePlayer(s.sessionId));
+        storage.flush();
         sessionsByNetworkId.delete(s.networkId);
     }
 }, 1000).unref();
@@ -119,7 +124,6 @@ wss.on('connection', (ws, req) => {
     let session: Session | null = null;
     let closing = false;
     let lastSaveAt = 0;
-    let accountKeyOfSession = '';
 
     const send = (m: ServerMessage) => { if (ws.readyState === ws.OPEN) ws.send(encode(m)); };
     const disconnect = (reason: string) => {
@@ -151,8 +155,9 @@ wss.on('connection', (ws, req) => {
             if (!auth.ok) { disconnect(auth.error); return; }
             // la identidad la define la cuenta, no lo que mande el cliente
             const networkId = `acc:${auth.key}`, characterName = auth.account.name;
-            accountKeyOfSession = auth.key;
-            send(M.characterLoaded(!!auth.account.character, auth.account.character ?? ''));
+            // lo que ve el cliente sale del estado del server (cuentas viejas: se importa una sola vez lo que el cliente tenía)
+            const econ = economy.load(auth.key);
+            send(M.characterLoaded(!!econ, econ ? toCharSave(econ) : ''));
 
             const existing = sessionsByNetworkId.get(networkId);
             if (existing) {
@@ -163,6 +168,7 @@ wss.on('connection', (ws, req) => {
                 existing.characterName = characterName;
                 session = existing;
                 worlds.get(session.worldId)?.playerReconnected(session.sessionId, characterName, send, disconnect);
+                worlds.get(session.worldId)?.resendEconomy(session.sessionId); // el cliente nuevo necesita la foto del estado
                 return;
             }
 
@@ -173,7 +179,7 @@ wss.on('connection', (ws, req) => {
             session = { networkId, sessionId: randomUUID(), worldId, characterName, socket: ws, disconnectDeadline: null, logoutAllowedAt: null };
             sessionsByNetworkId.set(networkId, session);
             worlds.get(worldId)!.playerConnected(session.sessionId, characterName, send, disconnect, persisted);
-            worlds.get(worldId)!.setCombatStats(session.sessionId, auth.account.character, true);
+            worlds.get(worldId)!.bindAccount(session.sessionId, auth.key);
             return;
         }
 
@@ -194,10 +200,10 @@ wss.on('connection', (ws, req) => {
                 handleChat(session, payload.value.message, send);
                 return;
             case 'saveCharacterRequest': {
+                // el guardado del cliente ya NO define oro, items ni nivel: solo sirve para crear el personaje de una cuenta nueva (clase y bando)
                 const t = Date.now(); if (t - lastSaveAt < 800) return; lastSaveAt = t;
-                const clean = sanitizeCharacter(payload.value.data);
-                const acc = storage.get(accountKeyOfSession);
-                if (clean && acc) { acc.character = clean; storage.put(accountKeyOfSession, acc); worlds.get(session.worldId)?.setCombatStats(session.sessionId, clean); }
+                if (payload.value.data.length > 20000) return;
+                worlds.get(session.worldId)?.onClientSave(session.sessionId, payload.value.data);
                 return;
             }
             default:
@@ -216,7 +222,9 @@ wss.on('connection', (ws, req) => {
         session.logoutAllowedAt = null;
         const remainsActive = session.disconnectDeadline > now;
         const world = worlds.get(session.worldId);
+        world?.persistVitals(session.sessionId);
         saveChar(session.networkId, world?.snapshot(session.sessionId));
+        storage.flush(); // la economía se guarda ya al desconectar
         world?.playerDisconnected(session.sessionId, remainsActive);
         if (!remainsActive) sessionsByNetworkId.delete(session.networkId);
     });
@@ -235,7 +243,7 @@ function handleChat(sender: Session, raw: string, reply: (m: ServerMessage) => v
 
 async function shutdown(): Promise<void> {
     console.log('[Server] Cerrando: guardando personajes…');
-    for (const s of sessionsByNetworkId.values()) saveChar(s.networkId, worlds.get(s.worldId)?.snapshot(s.sessionId));
+    for (const s of sessionsByNetworkId.values()) { worlds.get(s.worldId)?.persistVitals(s.sessionId); saveChar(s.networkId, worlds.get(s.worldId)?.snapshot(s.sessionId)); }
     for (const w of worlds.values()) w.dispose();
     try { if (storage.close) await storage.close(); else storage.flush(); } catch (e) { console.error('[Storage] Error al cerrar:', (e as Error).message); }
     process.exit(0);

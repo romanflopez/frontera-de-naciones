@@ -4,6 +4,7 @@
 import { ServerMessage, type DeepPartial, type PlayerEnteredRange } from '@fdn/proto';
 import type { Catalogs, GameWorldConfig, ItemConfig, SpellConfig } from './config.ts';
 import type { Player } from './player.ts';
+import type { Econ, SItem } from './economy.ts';
 
 type Payload = NonNullable<DeepPartial<ServerMessage>['payload']>;
 const msg = (payload: Payload): ServerMessage => ServerMessage.fromPartial({ payload });
@@ -186,3 +187,20 @@ export const pvpKill = (playerId: bigint, killerId: bigint, victimName: string, 
     msg({ $case: 'pvpKill', value: { playerId, killerId, victimName, killerName } });
 export const mobDied = (mobId: number, killerId: bigint, x: number, y: number, type: number, zone: number): ServerMessage =>
     msg({ $case: 'mobDied', value: { mobId, killerId, x, y, type, zone } });
+
+// ---------- economía (ver economy.ts) ----------
+const invItem = (i: SItem) => ({ uid: i.u, base: i.n, rarity: i.r, attrs: i.a.map((a) => ({ id: a.id, v: a.v })) });
+export const inventoryState = (st: Econ): ServerMessage => msg({
+    $case: 'inventoryState',
+    value: {
+        gold: st.gold, lvl: st.lvl, exp: st.exp, bag: st.bag.map(invItem),
+        eq: (Object.keys(st.eq) as (keyof Econ['eq'])[]).flatMap((slot) => (st.eq[slot] ? [{ slot, item: invItem(st.eq[slot]!) }] : [])),
+        potsHp: st.pots.hp, potsMp: st.pots.mp,
+        questI: st.q.i, questState: st.q.st, questProg: st.q.prog,
+        keysCripta: st.q.keys.cripta, keysFoso: st.q.keys.foso, shardsCripta: st.q.shards.cripta, shardsFoso: st.q.shards.foso,
+        unlocked: st.u, cls: st.cls, faction: st.faction,
+    },
+});
+export const econResult = (ok: boolean, code: string, text: string): ServerMessage => msg({ $case: 'econResult', value: { ok, code, text } });
+export const killReward = (v: { mobId: number; x: number; y: number; exp: number; gold: number; item?: ReturnType<typeof invItem>; bagFull: boolean; potion: string; shard: string; newLvl: number; questReady: boolean; questProg: number }): ServerMessage =>
+    msg({ $case: 'killReward', value: v });

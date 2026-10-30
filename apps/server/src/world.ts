@@ -6,7 +6,7 @@
  * tick (cada 50 ms) solo dispara los temporizadores. Más adelante, si hace falta escalar,
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
-import { damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionMp, POTION_GCD_MS, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, progressFromCharacter, PVP_SPELLS, rollSpellDamage, SKILLS, spellDmgKind, statsFromCharacter, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
+import { damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionMp, POTION_GCD_MS, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, progressFromEcon, PVP_SPELLS, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
 import { HUBS, TRAINING, WAYPOINT_RANGE, portalGate, trainingUnlocked, waypointDest } from '@fdn/world';
 import { applyParalysis, applySlow, applyWarcry, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, hasWarcry, isSlowed, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
@@ -17,6 +17,7 @@ import * as M from './messages.ts';
 import { MobSim } from './mobs.ts';
 import type { WorldMap } from '@fdn/world';
 import { Player, type PersistedPlayer, type Send } from './player.ts';
+import type { Economy, EconCtx } from './economy.ts';
 
 interface Timer { at: number; fn: () => void }
 
@@ -39,6 +40,7 @@ export class GameWorld {
         private readonly catalogs: Catalogs,
         private readonly occupancy: Occupancy,
         private readonly map?: WorldMap,
+        private readonly econ?: Economy,
     ) {
         if (map) {
             this.mobSim = new MobSim(map, {
@@ -48,6 +50,7 @@ export class GameWorld {
                 after: (ms, fn) => this.setTimeout(ms, fn),
                 hurt: (p, raw, source) => this.damagePlayer(p, raw, 'phys', null, source), // los ataques de mobs son físicos (los mitiga la DF)
                 stun: (p, secs) => { const s = paralysisSecs(secs, p.combat); return applyParalysis(p.status, Date.now(), s * 1000) ? s : 0; },
+                reward: (p, info) => { if (this.econ) this.econ.reward(p, this.econCtx, info); },
             });
         }
         this.tickHandle = setInterval(() => this.tick(), settings.tickInterval);
@@ -58,6 +61,29 @@ export class GameWorld {
     get playerCount(): number { return this.players.size; }
 
     dispose(): void { clearInterval(this.tickHandle); }
+
+    /** Lo que la economía necesita del mundo: los NPC (para validar distancia) y recalcular stats. */
+    private readonly econCtx: EconCtx = { npcs: [], restat: (p) => this.restat(p) };
+    private get ctx(): EconCtx { (this.econCtx as { npcs: EconCtx['npcs'] }).npcs = this.map?.npcs ?? []; return this.econCtx; }
+
+    /** Une la sesión con su cuenta: trae (o importa una sola vez) el estado económico y arma los stats desde el equipo del server. */
+    bindAccount(sessionId: string, key: string): void {
+        const p = this.players.get(sessionId); if (!p || !this.econ) return;
+        p.accountKey = key;
+        this.econ.attach(p, key);
+        this.restat(p, true);
+        if (p.econ) { this.econ.snapshot(p); p.econSynced = true; }
+    }
+    /** El cliente mandó su guardado: sirve para crear el personaje de una cuenta nueva (clase y bando); el resto ya no vale. */
+    onClientSave(sessionId: string, raw: string): void {
+        const p = this.players.get(sessionId); if (!p || !this.econ) return;
+        if (process.env.FDN_DEBUG_TRUST_SAVE === '1') { if (this.econ.debugReplace(p, raw)) this.restat(p, true); this.econ.snapshot(p); return; }
+        if (!p.econ && this.econ.createFromSave(p, raw)) { this.restat(p, true); p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; this.sendVitals(p, true); }
+        if (p.econ) { this.econ.persistVitals(p); if (!p.econSynced) { this.econ.snapshot(p); p.econSynced = true; } }
+    }
+    /** Reconexión dentro de la gracia: mismo jugador, socket nuevo; se le manda de nuevo el estado. */
+    resendEconomy(sessionId: string): void { const p = this.players.get(sessionId); if (p?.econ) { this.econ?.snapshot(p); p.econSynced = true; } }
+    persistVitals(sessionId: string): void { const p = this.players.get(sessionId); if (p) this.econ?.persistVitals(p); }
 
     // ---------- temporizadores ----------
     private setTimeout(ms: number, fn: () => void): void { this.timers.push({ at: Date.now() + ms, fn }); }
@@ -347,6 +373,13 @@ export class GameWorld {
                 case 'skillRequest': this.handleSkill(p, payload.value.skill, payload.value.targetId, payload.value.mobId); break;
                 case 'hpReport': this.acceptHpReport(p, payload.value.hp, payload.value); break;
                 case 'potionRequest': this.usePotion(p, payload.value.kind); break;
+                case 'econBuyRequest': this.econ?.buy(p, this.ctx, payload.value.npcId, payload.value.stockIndex); break;
+                case 'econSellRequest': this.econ?.sell(p, this.ctx, payload.value.npcId, payload.value.uid); break;
+                case 'econEquipRequest': this.econ?.equip(p, this.ctx, payload.value.uid); break;
+                case 'econUnequipRequest': this.econ?.unequip(p, this.ctx, payload.value.slot); break;
+                case 'econDropRequest': this.econ?.drop(p, this.ctx, payload.value.uid); break;
+                case 'econSortRequest': this.econ?.sort(p, this.ctx); break;
+                case 'econQuestRequest': this.econ?.quest(p, this.ctx, payload.value.npcId, payload.value.action, payload.value.key); break;
                 case 'respawnRequest': this.respawn(p); break;
                 case 'invisibilityRequest': { if (p.isDead || !this.payMp(p, UTIL_MP.invisibilidad)) break; this.changeStatus(p, () => castInvisibility(p.status, Date.now())); break; }
                 case 'detectInvisibleRequest': { if (p.isDead || !this.payMp(p, UTIL_MP.detectar)) break; this.changeStatus(p, () => castDetectInvisible(p.status, Date.now())); break; }
@@ -622,7 +655,7 @@ export class GameWorld {
             const free = findNearestFreeLocation((cx, cy) => this.occupancy.isFree(cx, cy), reqX, reqY, 3);
             if (!free) return;
             x = free.x; y = free.y;
-            if (portal?.key) p.prog.keys[portal.key] = Math.max(0, (p.prog.keys[portal.key] ?? 0) - 1);
+            if (portal?.key) { p.prog.keys[portal.key] = Math.max(0, (p.prog.keys[portal.key] ?? 0) - 1); this.econ?.consumeKey(p, portal.key); }
         } else if (!this.occupancy.isFree(x, y)) return;
         this.moveTo(p, p.posX, p.posY, x, y, false, true);
         p.send(M.playerTeleported(x, y));
@@ -651,16 +684,14 @@ export class GameWorld {
         p.send(M.playerTeleported(free.x, free.y));
     }
 
-    /** Stats de combate del jugador a partir del personaje guardado (ya validado). */
-    setCombatStats(sessionId: string, characterJson: string | undefined, login = false): void {
-        const p = this.players.get(sessionId); if (!p) return;
-        const prevMax = p.combat.maxHp, prevLvl = p.combat.lvl;
-        p.combat = statsFromCharacter(characterJson);
-        p.prog = progressFromCharacter(characterJson);
+    /** Stats de combate del jugador a partir del personaje del server (equipo y nivel autoritativos). */
+    private restat(p: Player, login = false): void {
+        const prevLvl = p.combat.lvl, st = p.econ;
+        p.combat = statsFromChar(st);
+        p.prog = progressFromEcon(st);
         if (login) { p.hp = p.combat.savedHp; p.mp = p.combat.savedMp; }
         else if (p.combat.lvl > prevLvl) { p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; }
         else { if (p.hp > p.combat.maxHp) p.hp = p.combat.maxHp; if (p.mp > p.combat.maxMp) p.mp = p.combat.maxMp; }
-        void prevMax;
         this.sendVitals(p, true);
     }
 
@@ -693,7 +724,7 @@ export class GameWorld {
         return dmg;
     }
     private killPlayer(p: Player): void {
-        p.hp = 0; p.deadAt = Date.now(); p.potionEpoch++; // corta la curación en el tiempo de pociones
+        p.hp = 0; p.deadAt = Date.now(); p.potionEpoch++; this.econ?.onDeath(p); // corta la curación en el tiempo de pociones
         this.changeStatus(p, () => breakInvisibility(p.status));
         p.status.isParalyzed = false;
         const k = p.lastDamager && Date.now() - p.lastDamager.t < 15000 ? p.lastDamager : null;
@@ -744,7 +775,13 @@ export class GameWorld {
         if (p.potionLog.length >= 5) return;
         const max = kind === 0 ? p.combat.maxHp : p.combat.maxMp;
         if ((kind === 0 ? p.hp : p.mp) >= max) return; // lleno: no se gasta el delay
+        const pk = kind === 0 ? 'hp' : 'mp';
+        if (this.econ) { // las pociones salen del inventario del server
+            if (!this.econ.hasPotion(p, pk)) { p.send(M.sendMessage(`No tenés ${pk === 'hp' ? 'pociones de vida' : 'pociones de maná'}.`)); this.econ.snapshot(p); return; }
+            this.econ.spendPotion(p, pk);
+        }
         p.lastPotionAt = now; p.potionLog.push(now);
+        this.econ?.snapshot(p);
         if (kind === 1) { p.mp = Math.min(max, p.mp + potionMp(max)); this.sendVitals(p, false); return; }
         const [first, ...ticks] = potionHpSplit(potionHp(max)), epoch = p.potionEpoch;
         const heal = (n: number) => { p.hp = Math.min(p.combat.maxHp, p.hp + n); this.sendVitals(p, false); this.announceVitals(p); };

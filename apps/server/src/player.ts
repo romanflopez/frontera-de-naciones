@@ -6,6 +6,7 @@ import { DEFAULT_STATS, PvpLimiter, type CombatStats } from './systems/pvpCombat
 import { createDefaultStatus } from './systems/statusSystem.ts';
 import type { ServerMessage } from '@fdn/proto';
 import type { Settings } from './config.ts';
+import type { Econ } from './economy.ts';
 
 export type Send = (message: ServerMessage) => void;
 
@@ -51,6 +52,11 @@ export class Player {
     combat: CombatStats = { ...DEFAULT_STATS };
     /** Progreso del último guardado validado, para decidir si un portal deja pasar (misiones entregadas, nivel, llaves, portales abiertos). */
     prog: { qi: number; lvl: number; keys: Record<string, number>; unlocked: string[] } = { qi: 0, lvl: 1, keys: {}, unlocked: [] };
+    /** Clave de la cuenta y estado económico autoritativo (oro, bolsa, equipo, nivel). */
+    accountKey = '';
+    econ?: Econ;
+    /** Ya se mandó la foto del inventario en esta sesión. */
+    econSynced = false;
     joinedAt = Date.now();
     pvp = new PvpLimiter();
     status = createDefaultStatus();

@@ -5,6 +5,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { Econ } from './economy.ts';
 
 export interface AccountRecord {
     /** Nombre tal como lo escribió la primera vez (para mostrar). */
@@ -15,6 +16,8 @@ export interface AccountRecord {
     lastLogin: number;
     /** Progreso del personaje, ya validado (JSON de CharSave). */
     character?: string;
+    /** Estado económico autoritativo del personaje (oro, bolsa, equipo, nivel, misiones). Ver economy.ts. */
+    econ?: Econ;
 }
 
 export interface Storage {
