@@ -564,7 +564,7 @@ function usePotion(k: 'hp' | 'mp') {
     else { const m = Math.max(40, Math.round(maxMp() * 0.5)); P.mp = Math.min(maxMp(), P.mp + m); float(P.x, P.y - 0.2, '+' + m + ' maná', '#7fb7ff'); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#4a8fe0' }); }
     syncHp(); efx('sphere', P.x, P.y); renderPots();
 }
-function renderPots() { for (const k of ['hp', 'mp'] as const) { const el = $('pot' + k); el.innerHTML = `<kbd>${POTS[k].key}</kbd><b>${POTS[k].name.replace('Poción de ', '')}</b><em>${pots[k]}</em>`; } }
+function renderPots() { for (const k of ['hp', 'mp'] as const) { const el = $('pot' + k); el.title = `${POTS[k].name} (${POTS[k].key})`; el.innerHTML = `<kbd>${POTS[k].key}</kbd><b>${POTS[k].name.replace('Poción de ', '')}</b><em>${pots[k]}</em>`; } }
 // ---------- /meditar: quieto, el maná sube rápido; se corta si te movés, casteás o te pegan ----------
 function stopMeditating(msg?: string) { if (!P.med) return; P.med = false; if (msg) log(msg, true); }
 function toggleMeditate() {
@@ -653,7 +653,9 @@ function pvpCast(id: string | undefined, o: Other): boolean {
         default: return false;
     }
 }
-const load = (src: string) => new Promise<HTMLImageElement>((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = src; });
+/** Versión de los atlas (hash de meta.json): evita que el navegador mezcle un meta nuevo con un .webp viejo en caché, que dejaba huecos en el piso. */
+let ASSET_V = '';
+const load = (src: string) => new Promise<HTMLImageElement>((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = ASSET_V && src.startsWith('assets/') ? `${src}?v=${ASSET_V}` : src; });
 const off = document.createElement('canvas'), octx = off.getContext('2d')!;
 function frameIndex(A: Anim, t: number) {
     const fd = A.dur / A.n / 1000, k = Math.max(0, Math.floor(t / fd));
@@ -1420,7 +1422,9 @@ function enterWorld(name: string) {
 
 async function boot() {
     try {
-        const meta = await (await fetch('assets/meta.json')).json();
+        const metaTxt = await (await fetch('assets/meta.json', { cache: 'no-cache' })).text();
+        { let h = 5381; for (let i = 0; i < metaTxt.length; i++) h = ((h * 33) ^ metaTxt.charCodeAt(i)) >>> 0; ASSET_V = h.toString(36); }
+        const meta = JSON.parse(metaTxt);
         WORLD = meta.world; delete meta.world;
         BUILD = meta.buildings ?? {}; delete meta.buildings;
         for (const k of ['dungeon', 'terrain']) {
