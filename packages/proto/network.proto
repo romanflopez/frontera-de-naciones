@@ -120,6 +120,8 @@ message ClientMessage {
     // Cambio de mapa (ver docs/MUNDO.md 2.3): el cliente pisa un vínculo y pide cruzar por su id estable; cuando terminó de armar el mapa nuevo avisa MapReady.
     PortalRequest portal_request = 123;
     MapReady map_ready = 124;
+    // Casa de subastas (ver docs/SUBASTAS.md). Rango propio de tags desde 300.
+    AuctionRequest auction_request = 300;
   }
 }
 
@@ -503,6 +505,9 @@ message ServerMessage {
     GroundItemRemoved ground_item_removed = 144;
     // Cambio de mapa: el server sacó al jugador del mundo viejo y espera MapReady para meterlo en el nuevo.
     MapTransfer map_transfer = 150;
+    // Casa de subastas (ver docs/SUBASTAS.md). Rango propio de tags desde 300; el resultado de cada acción va en EconResult.
+    AuctionSearchResult auction_search_result = 300;
+    AuctionMyState auction_my_state = 301;
   }
 }
 
@@ -1319,3 +1324,61 @@ message GroundItemSpawned {
 }
 /** El item del suelo ya no está (lo recogieron, venció o salió de tu rango). */
 message GroundItemRemoved { int32 id = 1; }
+
+// ---------- Casa de subastas (ver docs/SUBASTAS.md) ----------
+/** Filtros de búsqueda. 0 / vacío = sin filtro. rarity: 0 = todas, 1..4 = Común..Épico. sort: price_asc | price_desc | time_asc | time_desc. */
+message AuctionQuery {
+  string slot = 1;
+  int32 rarity = 2;
+  string text = 3;
+  int32 lvl_min = 4;
+  int32 lvl_max = 5;
+  double max_price = 6;
+  string sort = 7;
+  int32 page = 8;
+}
+/**
+ * Pedido al Subastador (npc_id: el NPC con el que se habla; el server valida la distancia).
+ * action = open | search | post | cancel | buy | claim. post usa uid + price; cancel y buy, listing_id; claim, mail_id (0 = todo).
+ */
+message AuctionRequest {
+  string npc_id = 1;
+  string action = 2;
+  AuctionQuery query = 3;
+  int32 uid = 4;
+  double price = 5;
+  int32 listing_id = 6;
+  int32 mail_id = 7;
+}
+message AuctionListing {
+  int32 id = 1;
+  InvItem item = 2;
+  double price = 3;
+  string seller = 4;
+  /** Milisegundos hasta que vence. */
+  double expires_in_ms = 5;
+  /** La publicó quien recibe el mensaje. */
+  bool mine = 6;
+  /** Nivel del item (el de su base en las tiendas). */
+  int32 lvl = 7;
+}
+message AuctionSearchResult {
+  repeated AuctionListing listings = 1;
+  int32 page = 2;
+  int32 pages = 3;
+  int32 total = 4;
+}
+/** Un reclamo del buzón: un item (vuelto o comprado) o el oro de una venta. */
+message AuctionMail {
+  int32 id = 1;
+  InvItem item = 2;
+  double gold = 3;
+  string text = 4;
+  double age_ms = 5;
+}
+/** Mis publicaciones activas y mi buzón. */
+message AuctionMyState {
+  repeated AuctionListing listings = 1;
+  repeated AuctionMail mail = 2;
+  int32 max_listings = 3;
+}
