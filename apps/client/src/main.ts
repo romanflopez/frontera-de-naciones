@@ -151,6 +151,8 @@ interface Mob extends Omit<Ent, 'ref'>, MobDef {
     id: number; sprite: MobType; zone: Zone; hpMax: number;
     /** Última posición que mandó el server: el mob dibujado la persigue suavemente. */
     sx: number; sy: number;
+    /** Fotos recientes del server (hora local de llegada + posición): se dibuja con un pequeño retraso interpolando entre ellas. */
+    buf: { t: number; x: number; y: number }[];
     /** Instante (reloj local) hasta el que sigue en ese estado; `busy` es la carga de la habilidad de boss. */
     busy: number; par: number; parT: number; imm: number; poison: number;
 }
@@ -182,6 +184,7 @@ function dropMob(m: Mob) {
     const i = mobs.indexOf(m); if (i >= 0) mobs.splice(i, 1);
     mobMap.delete(m.id); if (P.target === m) P.target = null;
 }
+const MOB_DELAY = 0.2;
 function syncMobs(list: { id: number; type: number; zone: number; x: number; y: number; hp: number; par: number; imm: number; poison: boolean; moving: boolean }[]) {
     const T = now(), seen = new Set<number>();
     for (const s of list) {
@@ -190,10 +193,11 @@ function syncMobs(list: { id: number; type: number; zone: number; x: number; y: 
         if (!m) {
             const type = MOB_TYPES[s.type], z = ZONES[s.zone]; if (!type || !z) continue;
             const d = MOBS[type];
-            m = { ...d, sprite: type, zone: z, x: s.x, y: s.y, sx: s.x, sy: s.y, hpMax: d.hp, hp: s.hp, busy: 0, par: 0, parT: 0, imm: 0, poison: 0, dir: rint(0, 7), moving: false, flash: 0, one: null, t0: R() * 5, id: s.id };
+            m = { ...d, sprite: type, zone: z, x: s.x, y: s.y, sx: s.x, sy: s.y, buf: [], hpMax: d.hp, hp: s.hp, busy: 0, par: 0, parT: 0, imm: 0, poison: 0, dir: rint(0, 7), moving: false, flash: 0, one: null, t0: R() * 5, id: s.id };
             mobs.push(m); mobMap.set(s.id, m);
         }
         m.sx = s.x; m.sy = s.y; m.hp = s.hp;
+        m.buf.push({ t: T, x: s.x, y: s.y }); if (m.buf.length > 8) m.buf.shift();
         if (s.par > 0.05) { if (m.par <= T) m.parT = T; m.par = T + s.par; } else m.par = 0;
         m.imm = T + s.imm; m.poison = s.poison ? T + 1 : 0;
     }
@@ -886,13 +890,18 @@ function update(dt: number) {
     }
     for (const m of mobs.slice()) {
         m.flash = Math.max(0, m.flash - dt); m.moving = false;
-        // el server manda la posición real unas 10 veces por segundo: acá se la persigue para que el movimiento se vea fluido
-        const dx = m.sx - m.x, dy = m.sy - m.y, d = Math.hypot(dx, dy);
-        if (d > 4) { m.x = m.sx; m.y = m.sy; }
-        else if (d > 0.05) {
-            const s = Math.min(d, (m.spd * 1.4 + d * 4) * dt);
-            m.x += (dx / d) * s; m.y += (dy / d) * s; m.moving = true;
-            turnTo(m, dx, dy, dt); m.phase = (m.phase || 0) + s / (m.ref || 3.4);
+        // el server manda la posición unas 10 veces por segundo: se dibuja 0.2 s atrás, interpolando entre fotos (sin saltitos aunque la red tiemble)
+        const rt = T - MOB_DELAY, b = m.buf; let tx = m.sx, ty = m.sy, vx = 0, vy = 0;
+        if (b.length) {
+            let k = b.length - 1; while (k > 0 && b[k - 1].t >= rt) k--;
+            if (b[k].t <= rt || k === 0) { tx = b[k].x; ty = b[k].y; if (k + 1 < b.length && b[k].t < rt) { const a = b[k], c = b[k + 1], u = Math.min(1, (rt - a.t) / Math.max(0.001, c.t - a.t)); tx = a.x + (c.x - a.x) * u; ty = a.y + (c.y - a.y) * u; vx = c.x - a.x; vy = c.y - a.y; } }
+            else { const a = b[k - 1], c = b[k], u = Math.min(1, Math.max(0, (rt - a.t) / Math.max(0.001, c.t - a.t))); tx = a.x + (c.x - a.x) * u; ty = a.y + (c.y - a.y) * u; vx = c.x - a.x; vy = c.y - a.y; }
+        }
+        const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy);
+        if (d > 4) { m.x = tx; m.y = ty; }
+        else {
+            m.x = tx; m.y = ty;
+            if (d > 0.004) { m.moving = d / dt > 0.35 * (m.spd || 1); if (m.moving) { turnTo(m, vx || dx, vy || dy, dt); m.phase = (m.phase || 0) + d / (m.ref || 3.4); } }
         }
     }
     for (const p of projs.slice()) {
