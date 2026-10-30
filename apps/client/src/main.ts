@@ -12,7 +12,7 @@ import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
 import { spellIcon } from './icons.ts';
 import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
-import { itemIcon } from './itemicons.ts';
+import { itemIcon, keyIcon, potionIcon, shardIcon } from './itemicons.ts';
 import { initLoginUI } from './loginui.ts';
 const ico = (it: { look?: string; slot: string; rar: { c: string; k: number } }) => `<img class="iico" alt="" src="${itemIcon(it.look, it.slot, it.rar.c, it.rar.k)}">`;
 
@@ -1374,12 +1374,12 @@ function renderBag() {
     document.querySelectorAll<HTMLElement>('#char [data-eq]').forEach((b) => (b.onclick = () => { const it = P.eq[b.dataset.eq as Slot]; sel = it ? { it, from: 'eq' } : null; selX = null; renderBag(); }));
     // celdas del inventario según la pestaña
     const gear: InvEnt[] = P.bag.map((it, i) => ({ key: 'g' + i, html: `<button type="button" class="cl${sel && sel.it === it ? ' sel' : ''}" data-bag="${i}" data-r="${it.rar.k}" aria-label="${esc(it.name)}, ${it.rar.n}" title="${esc(it.name)}" style="--rc:${rarCol(it)}">${ico(it)}</button>` }));
-    const cons: InvEnt[] = (['hp', 'mp'] as const).filter((k) => pots[k] > 0).map((k) => ({ key: 'p' + k, html: `<button type="button" class="cl${selX && selX.id === k ? ' sel' : ''}" data-pot="${k}" aria-label="${POTS[k].name}, ${pots[k]}" title="${POTS[k].name}" style="--rc:${k === 'hp' ? '#8a3a34' : '#345a8a'}"><img class="iimg" alt="" src="assets/spells/${POT_ART[k]}.png"><span class="q">${pots[k]}</span><i class="cdv" data-gcd></i></button>` }));
+    const cons: InvEnt[] = (['hp', 'mp'] as const).filter((k) => pots[k] > 0).map((k) => ({ key: 'p' + k, html: `<button type="button" class="cl${selX && selX.id === k ? ' sel' : ''}" data-pot="${k}" aria-label="${POTS[k].name}, ${pots[k]}" title="${POTS[k].name}" style="--rc:${k === 'hp' ? '#8a3a34' : '#345a8a'}"><img class="iico" alt="" src="${potionIcon(k)}"><span class="q">${pots[k]}</span><i class="cdv" data-gcd></i></button>` }));
     const mats: InvEnt[] = [];
     for (const kid of ['cripta', 'foso'] as KeyId[]) {
         const kd = KEYDEFS[kid];
-        if (Q.shards[kid] > 0) mats.push({ key: 's' + kid, html: `<button type="button" class="cl${selX && selX.id === 's' + kid ? ' sel' : ''}" data-mat="s${kid}" aria-label="${kd.shard}, ${Q.shards[kid]}" title="${kd.shard}" style="--rc:#6a4aa0"><svg class="iimg" viewBox="0 0 20 20" aria-hidden="true"><use href="#gemS"/></svg><span class="q">${Q.shards[kid]}</span></button>` });
-        if (Q.keys[kid] > 0) mats.push({ key: 'k' + kid, html: `<button type="button" class="cl${selX && selX.id === 'k' + kid ? ' sel' : ''}" data-mat="k${kid}" aria-label="${kd.name}, ${Q.keys[kid]}" title="${kd.name}" style="--rc:#c9a227"><img class="iimg" alt="" src="assets/spells/sello-arcano.png"><span class="q">${Q.keys[kid]}</span></button>` });
+        if (Q.shards[kid] > 0) mats.push({ key: 's' + kid, html: `<button type="button" class="cl${selX && selX.id === 's' + kid ? ' sel' : ''}" data-mat="s${kid}" aria-label="${kd.shard}, ${Q.shards[kid]}" title="${kd.shard}" style="--rc:#6a4aa0"><img class="iico" alt="" src="${shardIcon(kid)}"><span class="q">${Q.shards[kid]}</span></button>` });
+        if (Q.keys[kid] > 0) mats.push({ key: 'k' + kid, html: `<button type="button" class="cl${selX && selX.id === 'k' + kid ? ' sel' : ''}" data-mat="k${kid}" aria-label="${kd.name}, ${Q.keys[kid]}" title="${kd.name}" style="--rc:#c9a227"><img class="iico" alt="" src="${keyIcon(kid)}"><span class="q">${Q.keys[kid]}</span></button>` });
     }
     const list = invTab === 'gear' ? gear : invTab === 'cons' ? cons : invTab === 'mat' ? mats : [...gear, ...cons, ...mats];
     const total = Math.max(25, Math.ceil(list.length / 5) * 5), cells = list.map((e) => e.html);
@@ -1576,7 +1576,7 @@ function renderShop() {
     $('shopGold').textContent = fmtNum(P.gold) + ' oro';
     const buy = def.stock.map((st, i) => {
         const it = st.base ? stockItem(st) : null, poor = P.gold < st.price;
-        const icon = it ? ico(it) : `<span class="pico" style="background:${POTS[st.pot!].col}"></span>`;
+        const icon = it ? ico(it) : `<img class="iico" alt="" src="${potionIcon(st.pot!)}">`;
         return `<button type="button" class="srow${poor ? ' poor' : ''}" data-buy="${i}" title="${esc(stockInfo(st))}">${icon}<span style="color:${it ? '#e7e2d3' : POTS[st.pot!].col}">${esc(stockLabel(st))}<small>${esc(stockInfo(st))}</small></span><em>${st.price} oro</em></button>`;
     }).join('');
     $('shopList').innerHTML = `<div class="label">Comprar</div>${buy}<div class="label">Tu bolsa · tocá un item para venderlo</div>` + (P.bag.length
