@@ -137,6 +137,11 @@ button:hover{border-color:var(--brass)} button:focus-visible{outline:2px solid v
 #shop{top:calc(84px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(330px,calc(100vw - 24px));padding:12px;display:grid;gap:8px;max-height:calc(100% - 220px);overflow:auto}
 #shop h2{margin:0;font-family:var(--f-display);font-size:15px;color:var(--brass);letter-spacing:.04em;display:flex;align-items:center;gap:8px}
 #shop h2 small{font-family:var(--f-body);color:var(--text);font-variant-numeric:tabular-nums;margin-left:auto}
+#shop h2 small.role{margin-left:0;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em} #shop h2 #shopGold{margin-left:auto}
+.srow.poor{opacity:.55}
+.srow .pico{width:30px;height:30px;flex:none;border-radius:50% 50% 8px 8px;border:2px solid rgba(255,255,255,.35);box-shadow:inset 0 -8px 10px rgba(0,0,0,.35)}
+.srow .pico + span{flex:1}
+#shop{width:min(360px,calc(100vw - 24px))}
 #shop h2 button{padding:0 8px;line-height:22px;font-size:16px}
 #qdlg{top:calc(84px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(340px,calc(100vw - 24px));padding:12px;display:grid;gap:10px}
 #qdlg h2{margin:0;font-family:var(--f-display);font-size:15px;color:var(--brass);display:flex;align-items:center;gap:8px} #qdlg h2 button{margin-left:auto;padding:0 8px;line-height:22px}
@@ -219,8 +224,7 @@ canvas:focus{outline:none}
   </div>
 
   <div id="shop" class="hud box" hidden>
-    <h2><span id="shopName">Mercader</span> <small id="shopGold"></small><button id="shopClose" type="button" aria-label="Cerrar">×</button></h2>
-    <div class="label">Tu bolsa · tocá un item para venderlo</div>
+    <h2><span id="shopName">Mercader</span> <small id="shopRole" class="role"></small> <small id="shopGold"></small><button id="shopClose" type="button" aria-label="Cerrar">×</button></h2>
     <div id="shopList"></div>
   </div>
 
