@@ -30,6 +30,20 @@ export const PVP_SPELLS: Record<string, PvpSpell> = {
     sismo: { mp: 25, dmg: [12, 18], lvlK: 2, stat: 'wdmg', range: 2.5, cd: 5.5, aoe: 2.4 },
     luz: { mp: 35, dmg: [14, 20], lvlK: 2, stat: 'mag', range: 9, cd: 6.5, ticks: 2, every: 0.7, aoe: 1.9 },
 };
+/**
+ * Habilidades de clase (las valida y cobra el server): Mago = blink; Guerrero = carga, giro, grito.
+ * Van aparte de PVP_SPELLS a propósito: no se pueden pedir por pvpHitRequest para pegar sin moverse.
+ */
+export interface ClassSkill extends PvpSpell { cls: 'mago' | 'guerrero'; /** ralentización (s) que aplica */ slow?: number }
+export const SKILLS: Record<string, ClassSkill> = {
+    // blink: ≈ 39 % del maná base del Mago a nivel 1 (90); alcance en celdas
+    blink: { cls: 'mago', mp: 35, range: 4.25, cd: 12 },
+    carga: { cls: 'guerrero', mp: 15, dmg: [14, 20], lvlK: 2, stat: 'wdmg', range: 6.3, cd: 10, melee: true, slow: 1.5 },
+    giro: { cls: 'guerrero', mp: 8, dmg: [16, 22], lvlK: 2, stat: 'wdmg', range: 0, cd: 4, melee: true, aoe: 1.9 },
+    grito: { cls: 'guerrero', mp: 20, range: 0, cd: 25 },
+};
+/** Grito de guerra: duración (ms), radio de aliados y defensa plana que suma. */
+export const WARCRY_MS = 10000, WARCRY_RADIUS = 5, WARCRY_DEF = 15;
 export const FURY_MS = 10000, FURY_CD_MS = 18000;
 /** Costos de maná de los hechizos de utilidad que cobra el server (iguales a los del cliente). */
 export const UTIL_MP = { furia: 15, invisibilidad: 40, detectar: 30, remover: 20 } as const;
@@ -101,7 +115,7 @@ const rint = (a: number, b: number) => Math.floor(a + Math.random() * (b - a + 1
 
 /** Daño de un golpe del hechizo `id` (sin resistencias ni defensa: eso lo aplica quien lo recibe). */
 export function rollSpellDamage(id: string, s: CombatStats, fury: boolean): number {
-    const sp = PVP_SPELLS[id]; if (!sp || !sp.dmg) return 0;
+    const sp = PVP_SPELLS[id] ?? SKILLS[id]; if (!sp || !sp.dmg) return 0;
     let d = id === 'ataque' ? rint(...(MELEE[s.cls] ?? MELEE.guerrero)) + s.lvl + rint(s.wdmg[0], s.wdmg[1])
         : rint(sp.dmg[0], sp.dmg[1]) + s.lvl * (sp.lvlK ?? 0) + (sp.stat === 'mag' ? s.mag : sp.stat === 'wdmg' ? rint(s.wdmg[0], s.wdmg[1]) : 0);
     if (sp.aoe && (sp.stat === 'mag' && id === 'bola')) d = Math.round(d * (0.85 + Math.random() * 0.3));
@@ -139,6 +153,11 @@ export class PvpLimiter {
         const key = `${id}|${targetId}`; if (now - (this.lastSecs.get(key) ?? 0) < sp.cd * 900) return false;
         this.lastSecs.set(key, now); return true;
     }
+
+    private skillAt = new Map<string, number>();
+    /** ¿Terminó la recarga de la habilidad de clase `id`? (un 5 % de tolerancia por la latencia) */
+    skillReady(id: string, now: number): boolean { const sp = SKILLS[id]; return !!sp && now - (this.skillAt.get(id) ?? -1e12) >= sp.cd * 950; }
+    markSkill(id: string, now: number): void { this.skillAt.set(id, now); }
 
     castFury(now: number): boolean {
         if (now < this.furyCdUntil) return false;

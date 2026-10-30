@@ -6,9 +6,9 @@
  * tick (cada 50 ms) solo dispara los temporizadores. Más adelante, si hace falta escalar,
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
-import { damageAfterDefense, FURY_MS, potionMp, progressFromCharacter, PVP_SPELLS, rollSpellDamage, statsFromCharacter, UTIL_MP } from './systems/pvpCombat.ts';
+import { damageAfterDefense, FURY_MS, potionMp, progressFromCharacter, PVP_SPELLS, rollSpellDamage, SKILLS, statsFromCharacter, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS } from './systems/pvpCombat.ts';
 import { HUBS, TRAINING, WAYPOINT_RANGE, portalGate, trainingUnlocked, waypointDest } from '@fdn/world';
-import { applyParalysis, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, updateStatus } from './systems/statusSystem.ts';
+import { applyParalysis, applySlow, applyWarcry, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, hasWarcry, isSlowed, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import type { Catalogs, GameWorldConfig, Settings } from './config.ts';
 import { adjacentCellsAt45, distance, findNearestFreeLocation, nextGridDirection } from './location.ts';
@@ -71,6 +71,8 @@ export class GameWorld {
         }
         for (const pl of this.players.values()) {
             this.changeStatus(pl, () => updateStatus(pl.status, now));
+            expireTimed(pl.status, now);
+            if (pl.status.dirty) { pl.status.dirty = false; this.announceStatus(pl); }
             this.regenMana(pl, now);
         }
         if (this.mobSim) this.safe('mobs', () => this.mobSim!.update());
@@ -110,6 +112,13 @@ export class GameWorld {
         return target.status.isInvisible && !viewer.status.hasDetectInvisible && this.factionOf(viewer) !== this.factionOf(target);
     }
 
+    /** Estado visible de `p` (invisible, detectar, furia, grito de guerra, ralentizado) para `p` y los cercanos. */
+    private statusMsg(p: Player): ServerMessage {
+        const now = Date.now();
+        return M.statusUpdate(p.playerId, p.status.isInvisible, p.status.hasDetectInvisible, p.pvp.fury(now), hasWarcry(p.status, now), isSlowed(p.status, now));
+    }
+    private announceStatus(p: Player): void { const m = this.statusMsg(p); p.send(m); this.broadcastNear(p, m); }
+
     /** Aplica un cambio de estado y avisa lo justo: a los que dejan de ver (o empiezan a ver) a `p` y a los que ven distinto por Detectar. */
     private changeStatus(p: Player, mutate: () => void): void {
         const inv = p.status.isInvisible, det = p.status.hasDetectInvisible;
@@ -118,16 +127,16 @@ export class GameWorld {
         const hiddenOthersBefore = new Set(near.filter((o) => this.hiddenFrom(p, o)).map((o) => o.sessionId));
         mutate();
         if (inv === p.status.isInvisible && det === p.status.hasDetectInvisible) return;
-        p.send(M.statusUpdate(p.playerId, p.status.isInvisible, p.status.hasDetectInvisible));
+        p.send(this.statusMsg(p));
         for (const o of near) {
             if (o.disconnected) continue;
             const sees = !this.hiddenFrom(o, p);
             if (sees && !seenBefore.get(o.sessionId)) o.send(M.playersEnteredRange([p]));
             if (!sees && seenBefore.get(o.sessionId)) o.send(M.playersLeftRange([p.playerId]));
-            if (sees) o.send(M.statusUpdate(p.playerId, p.status.isInvisible, p.status.hasDetectInvisible));
+            if (sees) o.send(this.statusMsg(p));
             // lo que yo veo de los demás cambió por Detectar
             const hiddenNow = this.hiddenFrom(p, o);
-            if (hiddenOthersBefore.has(o.sessionId) && !hiddenNow) { p.send(M.playersEnteredRange([o])); p.send(M.statusUpdate(o.playerId, o.status.isInvisible, o.status.hasDetectInvisible)); }
+            if (hiddenOthersBefore.has(o.sessionId) && !hiddenNow) { p.send(M.playersEnteredRange([o])); p.send(this.statusMsg(o)); }
             if (!hiddenOthersBefore.has(o.sessionId) && hiddenNow) p.send(M.playersLeftRange([o.playerId]));
         }
     }
@@ -192,7 +201,7 @@ export class GameWorld {
         const list = [...sources].filter((s) => !this.hiddenFrom(recipient, s));
         if (!list.length) return;
         recipient.send(M.playersEnteredRange(list));
-        for (const s of list) { if (s.status.isInvisible) recipient.send(M.statusUpdate(s.playerId, true, s.status.hasDetectInvisible)); recipient.send(M.playerVitals(s.playerId, Math.max(0, Math.round(s.hp)), s.combat.maxHp)); }
+        for (const s of list) { if (s.status.isInvisible || hasWarcry(s.status, Date.now())) recipient.send(this.statusMsg(s)); recipient.send(M.playerVitals(s.playerId, Math.max(0, Math.round(s.hp)), s.combat.maxHp)); }
         for (const s of list) if (s.disconnected) recipient.send(M.playerDisconnected(s.playerId));
     }
 
@@ -309,8 +318,7 @@ export class GameWorld {
                     if (spell === 'furia') {
                         if (!p.isDead && now >= p.pvp.furyCdUntil && this.payMp(p, UTIL_MP.furia) && p.pvp.castFury(now)) {
                             this.broadcastNear(p, M.pvpHit(p.playerId, { fx: fx || 'flamme', x: p.posX, y: p.posY, targetId: 0n, dmg: 0, secs: 0, r: 0 }));
-                            const fury = (on: boolean) => { const m = M.statusUpdate(p.playerId, p.status.isInvisible, p.status.hasDetectInvisible, on); p.send(m); this.broadcastNear(p, m); };
-                            fury(true); this.setTimeout(FURY_MS, () => fury(false));
+                            this.announceStatus(p); this.setTimeout(FURY_MS + 30, () => this.announceStatus(p));
                         }
                         break;
                     }
@@ -334,6 +342,8 @@ export class GameWorld {
                     this.broadcastNear(p, M.pvpHit(p.playerId, { fx, x, y, targetId: v.targetId, dmg, secs, r }));
                     break;
                 }
+                case 'blinkRequest': this.handleBlink(p, payload.value.x, payload.value.y); break;
+                case 'skillRequest': this.handleSkill(p, payload.value.skill, payload.value.targetId, payload.value.mobId); break;
                 case 'hpReport': this.acceptHpReport(p, payload.value.hp, payload.value); break;
                 case 'respawnRequest': this.respawn(p); break;
                 case 'invisibilityRequest': { if (p.isDead || !this.payMp(p, UTIL_MP.invisibilidad)) break; this.changeStatus(p, () => castInvisibility(p.status, Date.now())); break; }
@@ -437,6 +447,157 @@ export class GameWorld {
         this.syncVisibilityAfterMovement(p, fromX, fromY, toX, toY, dashAttack, teleport);
     }
 
+    // ---------- habilidades de clase ----------
+    private cellWalkable(x: number, y: number): boolean { return !!this.map && x >= 0 && y >= 0 && x < this.map.size && y < this.map.size && !this.map.blocked[y][x]; }
+    private cellSafe(x: number, y: number): boolean { return !!this.map?.safe[y]?.[x]; }
+    private isPortalCell(x: number, y: number): boolean { return !!this.map?.portals?.some((q) => q.x === x && q.y === y); }
+    /** Rechazo de una habilidad de clase: el que la pidió se entera (y su cliente devuelve la recarga). */
+    private skillDenied(p: Player, skill: string, why: string): void {
+        p.send(M.skillEffect(p.playerId, skill, p.posX, p.posY, p.posX, p.posY, false));
+        if (why) p.send(M.sendMessage(why));
+    }
+    /** Chequeos comunes: vivo, no paralizado, clase correcta, recarga y maná alcanza (todavía no cobra). */
+    private skillGate(p: Player, id: string): boolean {
+        const sp = SKILLS[id], now = Date.now();
+        if (!sp || !this.map) return false;
+        if (p.isDead) { this.skillDenied(p, id, ''); return false; }
+        if (p.combat.cls !== sp.cls) { this.skillDenied(p, id, `Esa habilidad es de ${sp.cls === 'mago' ? 'Mago' : 'Guerrero'}.`); return false; }
+        if (p.isParalyzed(now)) { this.skillDenied(p, id, 'Estás paralizado.'); return false; }
+        if (!p.pvp.skillReady(id, now)) { this.skillDenied(p, id, 'Todavía se está recargando.'); return false; }
+        if (p.mp < sp.mp) { this.skillDenied(p, id, 'No te alcanza el maná.'); return false; }
+        return true;
+    }
+    /** Cobra el maná, arranca la recarga y rompe la invisibilidad: se llama recién cuando la habilidad es válida. */
+    private skillCommit(p: Player, id: string): void {
+        this.payMp(p, SKILLS[id].mp); p.pvp.markSkill(id, Date.now());
+        this.changeStatus(p, () => breakInvisibility(p.status));
+    }
+    /** Mueve al jugador de golpe (los cercanos lo ven aparecer en destino) y lo avisa a él. */
+    private jumpTo(p: Player, x: number, y: number): void {
+        const fx = p.posX, fy = p.posY;
+        this.moveTo(p, fx, fy, x, y, false, true);
+        p.send(M.playerTeleported(x, y));
+    }
+    private skillBroadcast(p: Player, id: string, fromX: number, fromY: number): void {
+        const m = M.skillEffect(p.playerId, id, fromX, fromY, p.posX, p.posY, true);
+        p.send(m); this.broadcastNear(p, m);
+    }
+
+    /**
+     * Mago: Blink. Hasta 4 celdas hacia (x, y), atraviesa jugadores y mobs, pero no muros: la línea no puede cruzar celdas
+     * bloqueadas, y el destino tiene que ser caminable, libre (sin jugador ni mob), sin portal y del mismo lado de la zona segura.
+     */
+    private handleBlink(p: Player, x: number, y: number): void {
+        if (!this.skillGate(p, 'blink')) return;
+        const sp = SKILLS.blink, fx = p.posX, fy = p.posY;
+        if (!Number.isInteger(x) || !Number.isInteger(y)) return this.skillDenied(p, 'blink', '');
+        const d = Math.hypot(x - fx, y - fy);
+        if (d < 1 || d > sp.range) return this.skillDenied(p, 'blink', d < 1 ? '' : 'Está muy lejos para el Blink (máx. 4 celdas).');
+        if (!this.cellWalkable(x, y) || !this.occupancy.isFreeAndNotTeleportCell(x, y) || this.isPortalCell(x, y) || this.mobSim?.near(x + 0.5, y + 0.5, 0.75).length)
+            return this.skillDenied(p, 'blink', 'No podés aparecer ahí: la celda está ocupada o bloqueada.');
+        if (this.cellSafe(x, y) !== this.cellSafe(fx, fy)) return this.skillDenied(p, 'blink', 'No podés cruzar la zona segura con el Blink.');
+        // línea recta: ningún muro entre medio (las celdas con jugadores o mobs sí se atraviesan)
+        const n = Math.ceil(Math.max(Math.abs(x - fx), Math.abs(y - fy)) * 2);
+        for (let i = 1; i < n; i++) {
+            const cx = Math.round(fx + ((x - fx) * i) / n), cy = Math.round(fy + ((y - fy) * i) / n);
+            if (!this.cellWalkable(cx, cy)) return this.skillDenied(p, 'blink', 'Hay un muro en el camino.');
+        }
+        this.skillCommit(p, 'blink');
+        this.jumpTo(p, x, y);
+        // los cercanos al destino (y el propio jugador) reciben el efecto; los que solo veían el origen, también
+        const m = M.skillEffect(p.playerId, 'blink', fx, fy, x, y, true);
+        p.send(m); this.broadcastNear(p, m);
+        const atDest = new Set(this.nearbyPlayers(x, y, p.sessionId));
+        for (const o of this.nearbyPlayers(fx, fy, p.sessionId)) if (!atDest.has(o) && !this.hiddenFrom(o, p)) o.send(m);
+    }
+
+    /** Camino corto (BFS de 8 vecinos, sin cortar esquinas de muros) por celdas caminables; devuelve el largo o -1. */
+    private pathLen(fx: number, fy: number, tx: number, ty: number, max: number): number {
+        if (fx === tx && fy === ty) return 0;
+        const seen = new Set<number>([fy * 1000 + fx]);
+        let frontier: [number, number][] = [[fx, fy]];
+        for (let len = 1; len <= max && frontier.length; len++) {
+            const next: [number, number][] = [];
+            for (const [cx, cy] of frontier) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                if (!dx && !dy) continue;
+                const nx = cx + dx, ny = cy + dy, k = ny * 1000 + nx;
+                if (seen.has(k) || !this.cellWalkable(nx, ny)) continue;
+                if (dx && dy && (!this.cellWalkable(cx + dx, cy) || !this.cellWalkable(cx, cy + dy))) continue;
+                if (nx === tx && ny === ty) return len;
+                seen.add(k); next.push([nx, ny]);
+            }
+            frontier = next;
+        }
+        return -1;
+    }
+
+    /** Guerrero: Carga / Tajo giratorio / Grito de guerra. */
+    private handleSkill(p: Player, skill: string, targetId: bigint, mobId: number): void {
+        if (skill !== 'carga' && skill !== 'giro' && skill !== 'grito') return;
+        if (!this.skillGate(p, skill)) return;
+        const sp = SKILLS[skill], now = Date.now();
+        const rollDmg = () => rollSpellDamage(skill, p.combat, p.pvp.fury(now));
+        const hitPlayer = (tgt: Player, slow: boolean) => {
+            const dmg = this.damagePlayer(tgt, rollDmg(), 'melee', p);
+            if (slow && sp.slow) { applySlow(tgt.status, now, sp.slow * 1000); this.announceStatus(tgt); }
+            p.send(M.pvpHit(p.playerId, { fx: '', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs: 0, r: 0 })); // número para el que pega
+            this.broadcastNear(p, M.pvpHit(p.playerId, { fx: 'crosswind', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs: 0, r: 0 }));
+            return dmg;
+        };
+        if (skill === 'grito') {
+            this.skillCommit(p, 'grito');
+            const fac = this.factionOf(p);
+            for (const o of [p, ...this.nearbyPlayers(p.posX, p.posY, p.sessionId)]) {
+                if (o.disconnected || o.isDead || this.factionOf(o) !== fac || Math.hypot(o.posX - p.posX, o.posY - p.posY) > WARCRY_RADIUS) continue;
+                applyWarcry(o.status, now, WARCRY_MS); this.announceStatus(o);
+            }
+            this.skillBroadcast(p, 'grito', p.posX, p.posY);
+            return;
+        }
+        if (skill === 'giro') {
+            this.skillCommit(p, 'giro');
+            const cx = p.posX + 0.5, cy = p.posY + 0.5;
+            for (const o of this.nearbyPlayers(p.posX, p.posY, p.sessionId)) {
+                if (!this.isEnemyPair(p, o) || o.isDead || Math.hypot(o.posX + 0.5 - cx, o.posY + 0.5 - cy) > sp.aoe!) continue;
+                hitPlayer(o, false);
+            }
+            if (!this.cellSafe(p.posX, p.posY)) for (const m of this.mobSim?.near(cx, cy, sp.aoe!) ?? []) this.mobSim!.skillHit(p, m.id, rollDmg());
+            this.skillBroadcast(p, 'giro', p.posX, p.posY);
+            return;
+        }
+        // carga: contra un jugador enemigo o un mob, a no más de 6 celdas; termina en la celda libre más cercana pegada al blanco
+        let tx: number, ty: number, tgt: Player | undefined;
+        if (targetId) {
+            tgt = this.playersById.get(targetId);
+            if (!tgt || tgt === p || tgt.isDead || !this.isEnemyPair(p, tgt)) return this.skillDenied(p, 'carga', 'No podés cargar contra eso.');
+            tx = tgt.posX; ty = tgt.posY;
+        } else {
+            const m = this.mobSim?.get(mobId);
+            if (!m) return this.skillDenied(p, 'carga', 'Elegí un objetivo.');
+            tx = Math.floor(m.x); ty = Math.floor(m.y);
+        }
+        if (this.cellSafe(p.posX, p.posY)) return this.skillDenied(p, 'carga', 'No en zona segura.');
+        if (Math.hypot(tx - p.posX, ty - p.posY) > sp.range) return this.skillDenied(p, 'carga', 'Está muy lejos para la Carga.');
+        let dest: { x: number; y: number } | null = Math.hypot(tx - p.posX, ty - p.posY) < 1.5 ? { x: p.posX, y: p.posY } : null;
+        if (!dest) {
+            let best = 1e9;
+            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                const x = tx + dx, y = ty + dy;
+                if ((!dx && !dy) || !this.cellWalkable(x, y) || !this.occupancy.isFreeAndNotTeleportCell(x, y) || this.isPortalCell(x, y) || this.cellSafe(x, y)) continue;
+                const len = this.pathLen(p.posX, p.posY, x, y, 9);
+                if (len < 0) continue;
+                const score = len + Math.hypot(x - p.posX, y - p.posY) * 0.01;
+                if (score < best) { best = score; dest = { x, y }; }
+            }
+        }
+        if (!dest) return this.skillDenied(p, 'carga', 'No hay camino hasta el objetivo.');
+        const fx = p.posX, fy = p.posY;
+        this.skillCommit(p, 'carga');
+        if (dest.x !== fx || dest.y !== fy) this.jumpTo(p, dest.x, dest.y);
+        if (tgt) hitPlayer(tgt, true); else this.mobSim!.skillHit(p, mobId, rollDmg(), sp.slow);
+        this.skillBroadcast(p, 'carga', fx, fy);
+    }
+
     /**
      * Teletransporte pedido por el cliente. Solo se acepta (a) cruzar un portal del mapa parado sobre él y con el progreso
      * del personaje que lo permite (misión/nivel/llave), o (b) ir al punto de aparición de la propia facción justo al entrar.
@@ -521,7 +682,7 @@ export class GameWorld {
     /** Le saca vida a un jugador: resistencias y defensa del server; si llega a 0 muere. Devuelve el daño aplicado. */
     private damagePlayer(p: Player, raw: number, fx: string, killer: Player | null, source = ''): number {
         if (p.isDead || p.spawnProtection || raw <= 0) return 0;
-        const dmg = damageAfterDefense(raw, p.combat, fx);
+        const dmg = damageAfterDefense(raw, hasWarcry(p.status, Date.now()) ? { ...p.combat, def: p.combat.def + WARCRY_DEF } : p.combat, fx); // el Grito de guerra suma a la defensa antes de la fórmula
         p.hp = Math.max(0, p.hp - dmg); p.meditating = false;
         if (killer) p.lastDamager = { id: killer.playerId, name: killer.characterName, t: Date.now() };
         else if (source) p.lastDamager = { id: 0n, name: source, t: Date.now() };

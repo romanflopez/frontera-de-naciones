@@ -10,6 +10,10 @@ export interface CharacterStatus {
     invisibleEndTime: number;
     hasDetectInvisible: boolean;
     detectInvisibleEndTime: number;
+    /** Grito de guerra (suma defensa) y ralentización: vencen solos; `dirty` avisa al mundo que hay que anunciarlo. */
+    warcryEndTime: number;
+    slowEndTime: number;
+    dirty: boolean;
 }
 
 export const MAX_PARALYSIS_MS = 4000;
@@ -17,7 +21,7 @@ export const IMMUNITY_MS = 8000;
 export const REMOVER_CD_MS = 10000;
 
 export function createDefaultStatus(): CharacterStatus {
-    return { isParalyzed: false, paralysisEndTime: 0, immunityEndTime: 0, removerCooldown: 0, isInvisible: false, invisibleEndTime: 0, hasDetectInvisible: false, detectInvisibleEndTime: 0 };
+    return { isParalyzed: false, paralysisEndTime: 0, immunityEndTime: 0, removerCooldown: 0, isInvisible: false, invisibleEndTime: 0, hasDetectInvisible: false, detectInvisibleEndTime: 0, warcryEndTime: 0, slowEndTime: 0, dirty: false };
 }
 
 /** Intenta paralizar. Devuelve false si el objetivo está en su ventana de inmunidad (8 s después de una parálisis). */
@@ -60,4 +64,16 @@ export function updateStatus(status: CharacterStatus, now: number): void {
     }
     if (status.isInvisible && now >= status.invisibleEndTime) status.isInvisible = false;
     if (status.hasDetectInvisible && now >= status.detectInvisibleEndTime) status.hasDetectInvisible = false;
+}
+
+/** Grito de guerra: sube la defensa hasta `endTime`. */
+export function applyWarcry(status: CharacterStatus, now: number, durationMs: number): void { status.warcryEndTime = now + durationMs; status.dirty = true; }
+export const hasWarcry = (status: CharacterStatus, now: number) => now < status.warcryEndTime;
+/** Ralentización (Carga): menos velocidad al caminar un rato; no se acumula, solo se renueva. */
+export function applySlow(status: CharacterStatus, now: number, durationMs: number): void { status.slowEndTime = Math.max(status.slowEndTime, now + durationMs); status.dirty = true; }
+export const isSlowed = (status: CharacterStatus, now: number) => now < status.slowEndTime;
+/** Vence los estados temporizados nuevos; deja `dirty` si cambió algo que hay que anunciar. */
+export function expireTimed(status: CharacterStatus, now: number): void {
+    if (status.warcryEndTime && now >= status.warcryEndTime) { status.warcryEndTime = 0; status.dirty = true; }
+    if (status.slowEndTime && now >= status.slowEndTime) { status.slowEndTime = 0; status.dirty = true; }
 }

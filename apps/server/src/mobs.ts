@@ -27,7 +27,7 @@ interface SimMob {
     x: number; y: number; hp: number; hpMax: number;
     state: 'idle' | 'chase' | 'return'; target: bigint | null; lastAttacker: bigint | null;
     wx: number; wy: number; wait: number; nextAtk: number; nextSp: number; busy: number;
-    par: number; imm: number; poison: number; poisonTick: number; moving: boolean; dead: boolean;
+    par: number; imm: number; slow: number; poison: number; poisonTick: number; moving: boolean; dead: boolean;
 }
 
 interface Budget { tokens: number; t: number; dead: boolean; lvl: number }
@@ -66,7 +66,7 @@ export class MobSim {
             this.mobs.set(id, {
                 id, type: z.type, def: d, typeIdx: MOB_TYPES.indexOf(z.type), zone: z, zoneIdx: zi, x: x + 0.5, y: y + 0.5, hp: d.hp, hpMax: d.hp,
                 state: 'idle', target: null, lastAttacker: null, wx: x + 0.5, wy: y + 0.5, wait: Math.random() * 2, nextAtk: 0, nextSp: T + 4, busy: 0,
-                par: 0, imm: 0, poison: 0, poisonTick: 0, moving: false, dead: false,
+                par: 0, imm: 0, slow: 0, poison: 0, poisonTick: 0, moving: false, dead: false,
             });
             return;
         }
@@ -80,7 +80,7 @@ export class MobSim {
 
     private step(m: SimMob, tx: number, ty: number, spd: number, dt: number): boolean {
         const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy); if (d < 0.02) return true;
-        const s = Math.min(d, spd * dt), nx = m.x + (dx / d) * s, ny = m.y + (dy / d) * s;
+        const s = Math.min(d, spd * (m.slow > this.now() ? 0.5 : 1) * dt), nx = m.x + (dx / d) * s, ny = m.y + (dy / d) * s;
         const ok = (x: number, y: number) => this.walk(Math.floor(x), Math.floor(y)) && !this.isSafe(x, y);
         if (ok(nx, ny)) { m.x = nx; m.y = ny; } else if (ok(nx, m.y)) m.x = nx; else if (ok(m.x, ny)) m.y = ny;
         m.moving = true; return false;
@@ -198,6 +198,26 @@ export class MobSim {
             }
             p.send(M.mobsSnapshot(list));
         }
+    }
+
+    // ---------- habilidades de clase del server (carga, giro) ----------
+    /** Mobs vivos a menos de `r` celdas del centro de (cx, cy), fuera de la zona segura. */
+    near(cx: number, cy: number, r: number): { id: number; x: number; y: number }[] {
+        const out = [];
+        for (const m of this.mobs.values()) if (!m.dead && Math.hypot(m.x - cx, m.y - cy) <= r && !this.isSafe(m.x, m.y)) out.push({ id: m.id, x: m.x, y: m.y });
+        return out;
+    }
+    get(id: number): { id: number; x: number; y: number } | undefined { const m = this.mobs.get(id); return m && !m.dead && !this.isSafe(m.x, m.y) ? { id: m.id, x: m.x, y: m.y } : undefined; }
+    /** Daño ya calculado por el server (sin tope del cliente) + ralentización opcional. */
+    skillHit(p: Player, id: number, dmg: number, slowSecs = 0): void {
+        const m = this.mobs.get(id); if (!m || m.dead) return;
+        const T = this.now();
+        if (slowSecs > 0) m.slow = T + slowSecs;
+        m.lastAttacker = p.playerId; m.hp -= dmg;
+        if (m.par > T && dmg >= m.hpMax * 0.45) m.par = 0;
+        this.broadcastNear(m, M.mobDamaged(m.id, p.playerId, dmg, false, Math.max(0, m.hp)));
+        if (m.state === 'idle' || m.target == null) this.aggro(m, p);
+        if (m.hp <= 0) this.kill(m, p);
     }
 
     // ---------- paquetes del cliente ----------

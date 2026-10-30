@@ -42,7 +42,7 @@ const ICON_OF: Record<string, string> = {
 const ART_OF: Record<string, string> = {
     proyectil: 'burbuja-arcana', paralisis: 'sello-arcano', aturdir: 'mente-arcana', curar: 'curar', curar2: 'lluvia-de-curacion', vendar: 'fractura', bola: 'explosion', golpe: 'furia',
     tajo: 'espada-solar', torbellino: 'torbellino-de-escarcha', hoja: 'torbellino-toxico', lanza: 'hacha-venenosa', lluvia: 'flechas-igneas', ventisca: 'remolino-glacial',
-    marejada: 'remolino-de-sombra', luz: 'ascension', sismo: 'piel-de-piedra', furia: 'bestia-furiosa', remover: 'anular', invisibilidad: 'paso-sombrio', detectar: 'modo-cazador',
+    marejada: 'remolino-de-sombra', luz: 'ascension', sismo: 'piel-de-piedra', furia: 'bestia-furiosa', remover: 'anular', invisibilidad: 'encapuchado', detectar: 'modo-cazador', blink: 'paso-sombrio', carga: 'embestida', giro: 'hacha-de-guerra', grito: 'bendicion',
 };
 
 /** Ícono del hechizo `id`: el pintado si existe, si no uno dibujado (data URL) del color `col`. */
