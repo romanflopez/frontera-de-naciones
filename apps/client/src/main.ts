@@ -5,7 +5,7 @@
  * quién ve a quién y el chat. Lo que todavía corre solo en este navegador, como en el prototipo:
  * mobs, combate, hechizos, loot y experiencia (pasan al server en la fase 1b).
  */
-import { buildSolmar, MOBS, MOB_TYPES, type MobType, type MobDef } from '@fdn/world';
+import { buildSolmar, HUBS, cityAt, MOBS, MOB_TYPES, type MobType, type MobDef } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import { spellIcon } from './icons.ts';
 import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
@@ -453,7 +453,7 @@ function hurtPlayer(d: number, kind = '') {
         log(`Moriste. Perdiste ${lost} de exp y volvés al campamento.`, true);
         later(2.2, () => {
             // volver al campamento: el server confirma con playerTeleported
-            net.send({ $case: 'playerTeleportRequested', value: { x: MAP.spawn.x, y: MAP.spawn.y } });
+            const hub = HUBS[selectedFaction] ?? MAP.spawn; net.send({ $case: 'playerTeleportRequested', value: { x: hub.x, y: hub.y } });
             P.dead = false; P.one = null; P.hp = maxHp(); P.mp = maxMp();
         });
     }
@@ -1049,7 +1049,7 @@ function render() {
     if (inDungeon(P.x, P.y)) { ctx.fillStyle = 'rgba(12,8,24,.28)'; ctx.fillRect(0, 0, W, H); }
     ctx.textAlign = 'center';
     const zn = isSafe(P.x, P.y) ? null : ZONES.find((z) => near(P.x, P.y, z, z.r + 2)), zl = zn ? MOBS[zn.type].lvl : 0;
-    const zone = isSafe(P.x, P.y) ? 'Campamento de Solmar · zona segura' : zn ? `${zn.name} · Nv ${Math.max(1, zl - 1)}–${zl + 1}` : '';
+    const zone = isSafe(P.x, P.y) ? `${cityAt(P.x, P.y)?.name ?? 'Zona segura'} · zona segura` : zn ? `${zn.name} · Nv ${Math.max(1, zl - 1)}–${zl + 1}` : '';
     const danger = zl - P.lvl; // verde: tranquila · dorado: a tu nivel · rojo: te pasa por mucho
     if (zone) { ctx.font = "600 13px 'Alegreya SC', Georgia, serif"; ctx.fillStyle = !zn ? 'rgba(214,164,69,.9)' : danger >= 4 ? '#ff6b5a' : danger >= 1 ? '#ffb347' : danger >= -3 ? 'rgba(214,164,69,.9)' : '#8fd18b'; ctx.fillText(zone + (zn && danger >= 4 ? ' · ¡peligrosa!' : ''), W / 2, H - 98); }
 }
@@ -1397,7 +1397,10 @@ function enterWorld(name: string) {
     cv.focus({ preventScroll: true });
     saver.start();
     if (welcomeBack) log(`Bienvenido de vuelta, ${name}. Nivel ${P.lvl}.`, true);
-    log('Bienvenido al campamento de Solmar. Goblins al sureste, zombis en el pantano del este, esqueletos en el cementerio.', true);
+    // cada facción arranca en su ciudad (también si el guardado te dejó dentro de la del otro bando)
+    const hub = HUBS[selectedFaction], here = cityAt(P.cell.x, P.cell.y);
+    if (hub && (!welcomeBack || (here && here.faction !== selectedFaction))) net.send({ $case: 'playerTeleportRequested', value: { x: hub.x, y: hub.y } });
+    log(selectedFaction === 'vhar' ? 'Bienvenido a la Ciudad de Vhar. La puerta del sur lleva a las tierras de Solmar: goblins al sureste, zombis en el pantano, esqueletos en el cementerio.' : 'Bienvenido a la Ciudad de Solmar. Goblins al sureste, zombis en el pantano del este, esqueletos en el cementerio.', true);
     log('Tocá un mob para atacarlo. Apretá un hechizo (1–4), esperá que cargue y hacé clic en el objetivo. Enter para chatear.');
 }
 

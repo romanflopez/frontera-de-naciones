@@ -164,7 +164,7 @@ for (const l of readFileSync(join(mod, 'tilesetdefs', 'tileset_grassland.txt'), 
     if (l.startsWith('tile=')) { const v = l.trim().slice(5).split(',').map(Number); defs.set(v[0], v.slice(1)); }
 }
 const range = (a: number, b: number) => Array.from({ length: b - a }, (_, i) => a + i);
-const ids = [...range(16, 48), 72, 73, 76, 77, 96, 97, 98, 99, 100, 101, 102, 103, 104, 107, ...range(112, 144), ...range(240, 256), 264, 265, 296];
+const ids = [...range(16, 48), 72, 73, 74, 75, ...range(208, 216), 76, 77, 96, 97, 98, 99, 100, 101, 102, 103, 104, 107, ...range(112, 144), ...range(240, 256), 264, 265, 296];
 const items = ids.map((id) => { const [x, y, w, h, ox, oy] = defs.get(id)!; return { id, x, y, w, h, sw: Math.max(1, Math.round(w * S)), sh: Math.max(1, Math.round(h * S)), ox: ox * S, oy: oy * S }; })
     .sort((a, b) => b.sh - a.sh);
 const W = 2048;

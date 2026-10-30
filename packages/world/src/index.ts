@@ -9,6 +9,8 @@
 
 import { extendSolmar } from './frontier';
 import { extendAshlands } from './ashlands';
+import { extendCities } from './cities';
+export { CITIES, HUBS, cityAt, type City } from './cities';
 import type { MobType } from './mobs';
 export * from './mobs';
 
@@ -43,6 +45,9 @@ export interface WorldMap {
     dungeon?: { x0: number; y0: number; x1: number; y1: number };
     /** Otras mazmorras (Cámara del foso): el cliente las oscurece igual. */
     dungeons?: { x0: number; y0: number; x1: number; y1: number }[];
+    /** Punto de aparición de cada facción y rectángulo de cada ciudad (zona segura con nombre). */
+    hubs?: Record<string, { x: number; y: number }>;
+    cities?: { faction: string; name: string; x0: number; y0: number; x1: number; y1: number }[];
 }
 
 const GRASS = [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31];
@@ -122,7 +127,7 @@ export function buildSolmar(): WorldMap {
     for (const b of buildings) for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) blocked[y][x] = true;
     const npcs: Npc[] = [{ id: 'mercader', name: 'Mercader', x: 9, y: 7, dir: 6 }, { id: 'capitan', name: 'Capitán Aldric', x: 6, y: 10, dir: 2 }];
     for (const n of npcs) blocked[n.y][n.x] = true;
-    return extendAshlands(extendSolmar({ size: N, tiles, blocked, safe, props, decals, zones, buildings, npcs, spawn: { x: 6, y: 7 }, fire: { x: 8, y: 8 } }));
+    return extendCities(extendAshlands(extendSolmar({ size: N, tiles, blocked, safe, props, decals, zones, buildings, npcs, spawn: { x: 6, y: 7 }, fire: { x: 8, y: 8 } })));
 }
 
 /** Mapas por nombre (el que figura en worlds.json del server). */
