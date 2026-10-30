@@ -6,9 +6,83 @@
 <title>Frontera de Naciones</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@500;700&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@500;700&family=Alegreya+Sans:wght@400;500;700&family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap">
 <style>
 [hidden]{display:none!important}
+/* ===== HUD de Frontera (diseño del usuario): orbes, barra de madera y oro, ventanas Personaje/Inventario ===== */
+:root{--hud-scale:1;--hud-h:200px;--win-scale:1;--f-cinzel:"Cinzel",Georgia,serif;--f-inter:"Inter",system-ui,sans-serif}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes spinr{to{transform:rotate(-360deg)}}
+@keyframes bub{0%{transform:translateY(0);opacity:0}20%{opacity:.85}100%{transform:translateY(-80px);opacity:0}}
+@keyframes pulse{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:1;transform:scale(1.07)}}
+@keyframes rise{0%{transform:translateY(0) translateX(0) scale(1);opacity:0}15%{opacity:.95}100%{transform:translateY(-120px) translateX(12px) scale(.3);opacity:0}}
+@keyframes sweep{0%{transform:translateX(-140%) skewX(-20deg)}55%,100%{transform:translateX(260%) skewX(-20deg)}}
+@keyframes shine{0%{left:-30%}100%{left:130%}}
+@keyframes selpulse{0%,100%{box-shadow:0 0 6px rgba(255,200,90,.55),0 0 0 1px #000}50%{box-shadow:0 0 18px rgba(255,214,110,1),0 0 0 1px #000}}
+@keyframes ray{0%,100%{opacity:.65}50%{opacity:1}}
+@keyframes spark{0%{transform:translateY(0);opacity:0}30%{opacity:1}100%{transform:translateY(-34px);opacity:0}}
+#hudroot{position:absolute;left:50%;bottom:calc(8px + env(safe-area-inset-bottom,0px));width:max-content;transform:translateX(-50%) scale(var(--hud-scale));transform-origin:50% 100%;pointer-events:none;font-family:var(--f-inter)}
+#hudroot .hrow{position:relative;display:flex;align-items:flex-end;justify-content:center}
+.wv{position:absolute;left:-60%;width:220%;height:220%;border-radius:42%}
+.bb{position:absolute;bottom:-8px;border-radius:50%;background:rgba(255,255,255,.55);animation:bub 4.2s ease-in infinite}
+.em{position:absolute;width:5px;height:5px;border-radius:50%;opacity:0;animation:rise 3.8s ease-in infinite;top:0}
+.orb{position:relative;width:150px;height:150px;flex:none;z-index:3}
+.orb.hp{margin-right:-14px}.orb.mp{margin-left:-14px}
+.orb .aura{position:absolute;inset:-16px;border-radius:50%;animation:pulse 3s ease-in-out infinite;background:radial-gradient(circle,rgba(255,70,60,.5) 0%,rgba(255,70,60,0) 70%)}
+.orb.mp .aura{background:radial-gradient(circle,rgba(70,130,255,.5) 0%,rgba(70,130,255,0) 70%);animation-duration:3.4s}
+.orb .embers{position:absolute;left:20px;top:-4px;width:110px;height:8px}
+.orb .ring{position:absolute;inset:0;border-radius:50%;background:repeating-conic-gradient(from 0deg,rgba(30,15,5,.75) 0 .9deg,rgba(0,0,0,0) .9deg 7.5deg),conic-gradient(from 210deg,#5a3210,#f6d98a,#7a4a1c,#e8b965,#4a2a0e,#f6d98a,#5a3210);box-shadow:0 10px 22px rgba(0,0,0,.75),inset 0 0 0 2px #2b1710,inset 0 0 0 4px rgba(255,230,160,.35)}
+.orb .glass{position:absolute;inset:12px;border-radius:50%;overflow:hidden;background:#2a0508;box-shadow:inset 0 0 0 3px #2b1710,0 0 0 2px #2b1710}
+.orb .liq{position:absolute;inset:0;transition:transform .35s ease-out;will-change:transform}
+.orb .liq .body{position:absolute;left:0;right:0;top:0;bottom:0}
+.orb .hl{position:absolute;left:14%;top:8%;width:50%;height:28%;border-radius:50%;background:linear-gradient(180deg,rgba(255,255,255,.6),rgba(255,255,255,0));transform:rotate(-24deg)}
+.orb .shade{position:absolute;inset:0;border-radius:50%}
+.orb .otxt{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-shadow:0 1px 3px #000,0 0 6px #000;line-height:1.1}
+.orb .ol{font-size:10px;font-weight:600;letter-spacing:.16em}.orb .on{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}.orb .om{font-size:10px;font-weight:500;opacity:.8;font-variant-numeric:tabular-nums}
+.orb .g1{position:absolute;left:64px;top:-9px}.orb .g2{position:absolute;left:66px;bottom:-7px}
+.hcenter{position:relative;display:flex;flex-direction:column;flex:none;min-width:890px}
+.crest{position:absolute;left:50%;top:-74px;margin-left:-100px;z-index:4;width:200px;height:88px}
+.crest .cglow{position:absolute;left:50px;top:0;width:100px;height:88px;border-radius:50%;background:radial-gradient(circle,rgba(255,190,70,.55) 0%,rgba(255,190,70,0) 70%);animation:pulse 2.6s ease-in-out infinite}
+.crest svg{position:relative;display:block}
+.scrl,.scrr{position:absolute;top:-30px;z-index:3}.scrl{left:6px}.scrr{right:6px;transform:scaleX(-1)}
+.wood{position:relative;display:flex;align-items:center;justify-content:center;gap:12px;padding:16px;box-sizing:border-box;background:linear-gradient(180deg,#5a4030 0%,#33241a 16%,#1c130e 100%);border:3px solid #2b1710;border-radius:12px;box-shadow:inset 0 0 0 2px #e0ae60,inset 0 0 0 4px #5a3210,inset 0 8px 12px rgba(255,220,150,.14),0 14px 26px rgba(0,0,0,.65)}
+.wood .grain{position:absolute;inset:0;border-radius:10px;pointer-events:none;mix-blend-mode:overlay}
+.rv{position:absolute;width:8px;height:8px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff1b0,#b07a2a 60%,#3a2010);box-shadow:0 1px 2px #000}
+.rv.tl{left:6px;top:6px}.rv.tr{right:6px;top:6px}.rv.bl{left:6px;bottom:6px}.rv.br{right:6px;bottom:6px}
+.tray{position:relative;display:flex;gap:4px;padding:5px;background:#0a0709;border-radius:12px;box-shadow:inset 0 2px 6px #000,0 0 0 1px #7d5a2c;pointer-events:auto}
+.gemsep{display:flex;flex-direction:column;align-items:center;gap:4px}.gemsep i{display:block;width:4px;height:16px;background:linear-gradient(180deg,rgba(0,0,0,0),#c9954a)}.gemsep i+svg+i{background:linear-gradient(180deg,#c9954a,rgba(0,0,0,0))}
+.sw{position:relative;width:58px;height:58px;box-sizing:border-box;padding:3px;border-radius:10px;background:linear-gradient(145deg,#f0c878 0%,#a8702a 45%,#5a3210 100%);box-shadow:0 0 0 1px #000,0 3px 6px rgba(0,0,0,.6);border:0;cursor:pointer;display:block;flex:none}
+.sw.q{width:48px;height:48px}
+.sw:hover{filter:brightness(1.15)}.sw:focus-visible{outline:2px solid #fff3c0;outline-offset:2px}
+.sw.empty{cursor:default;filter:none;opacity:.8}
+.sq{position:relative;width:100%;height:100%;box-sizing:border-box;border-radius:7px;background:#0b080d;overflow:hidden;box-shadow:inset 0 0 0 1px #000,inset 0 0 10px rgba(0,0,0,.85)}
+.sq img{width:100%;height:100%;display:block;object-fit:cover}
+.sw.nomp .sq img{filter:brightness(.42) saturate(.55)}
+.sw.ready{animation:selpulse 1.8s ease-in-out infinite}
+.sw.ready .sq::after{content:"";position:absolute;top:0;bottom:0;left:0;width:40%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:sweep 2.6s ease-in-out infinite}
+.sw.fired{animation:fired .35s ease-out}
+.sw .cdo{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;text-shadow:0 0 4px #000;z-index:1}
+.sw.q .cdo{font-size:13px}
+.kb{position:absolute;left:0;top:0;min-width:16px;height:16px;padding:0 3px;box-sizing:border-box;background:linear-gradient(180deg,#3a2414,#150d08);border-right:1px solid #c9954a;border-bottom:1px solid #c9954a;border-radius:6px 0 6px 0;font-size:10px;font-weight:700;line-height:15px;text-align:center;color:#f6dc9a;z-index:3;text-transform:uppercase}
+.mpc{position:absolute;right:3px;bottom:1px;font-size:10px;font-weight:700;color:#9fc4ff;text-shadow:0 0 3px #000,0 0 3px #000;z-index:2;font-variant-numeric:tabular-nums}
+.xpbar{position:relative;height:16px;margin:10px 18px 0;box-sizing:border-box;background:#0b080d;border:2px solid #2b1710;border-radius:9px;box-shadow:0 0 0 1px #c9954a,0 3px 8px rgba(0,0,0,.6);overflow:hidden}
+.xpf{position:relative;width:0;height:100%;background:linear-gradient(180deg,#9af066 0%,#3aa22a 55%,#1e6a1a 100%);box-shadow:0 0 10px rgba(120,255,90,.6);overflow:hidden;transition:width .3s}
+.xpf i{position:absolute;top:0;bottom:0;width:22%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.55),rgba(255,255,255,0));animation:shine 3.4s linear infinite}
+.xpbar .ticks{position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(0,0,0,0) 0 38px,rgba(0,0,0,.55) 38px 40px)}
+.xpbar .xgl{position:absolute;left:0;right:0;top:0;height:45%;background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0))}
+.xpt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;letter-spacing:.1em;color:#fff;text-shadow:0 0 3px #000,0 0 3px #000}
+#chips{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:12px}
+#chips .chp{display:flex;align-items:center;gap:8px;height:30px;padding:0 14px;box-sizing:border-box;background:linear-gradient(180deg,#3a2a1e,#17100d);border:2px solid #7d5a2c;border-radius:15px;box-shadow:inset 0 1px 0 rgba(255,220,150,.2),0 2px 5px rgba(0,0,0,.5);font-size:12px;color:#c9bda8;font-variant-numeric:tabular-nums}
+#chips .chp u{color:#e0ae60;font-size:9px;text-decoration:none}#chips .chp b{font-weight:700;color:#f6dc9a}
+/* pociones Q/E: al costado de cada orbe */
+#pots{position:absolute;inset:0;pointer-events:none}
+.pot{position:absolute;bottom:6px;width:46px;height:46px;padding:3px;box-sizing:border-box;border-radius:10px;background:linear-gradient(145deg,#f0c878 0%,#a8702a 45%,#5a3210 100%);border:0;box-shadow:0 0 0 1px #000,0 3px 6px rgba(0,0,0,.6);pointer-events:auto;display:block;cursor:pointer}
+#pothp{left:-56px}#potmp{right:-56px}
+.pot .sq{background:#0b080d}
+.pot.none .sq img{filter:grayscale(1) brightness(.4)}
+.pot kbd{position:absolute;left:0;top:0;min-width:15px;height:15px;padding:0 3px;box-sizing:border-box;background:linear-gradient(180deg,#3a2414,#150d08);border-right:1px solid #c9954a;border-bottom:1px solid #c9954a;border-radius:6px 0 6px 0;font:700 10px/14px var(--f-inter);text-align:center;color:#f6dc9a;z-index:3}
+.pot em{position:absolute;right:3px;bottom:1px;font:700 12px/1 var(--f-inter);font-style:normal;color:#fff;text-shadow:0 0 3px #000,0 0 3px #000;z-index:2}
+
 /* Layout: full-bleed canvas world, HUD floats at the corners like an old MMO client, brass-on-iron panels */
 :root{
   --ink:#0d100e; --panel:rgba(16,19,17,.88); --line:#3b423b; --text:#ebe4cf; --muted:#9c9683;
@@ -22,7 +96,6 @@ canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
 .hud{position:absolute;pointer-events:none;font-size:14px}
 .hud > *{pointer-events:auto}
 .box{background:var(--panel);border:1px solid var(--line);border-radius:4px;box-shadow:0 2px 10px rgba(0,0,0,.4)}
-#me{top:calc(10px + env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));padding:10px 12px;width:min(230px,52vw);display:grid;gap:6px}
 .name{font-family:var(--f-display);font-size:16px;letter-spacing:.02em;display:flex;justify-content:space-between;gap:8px}
 .name small{font-family:var(--f-body);color:var(--muted);font-size:12px;align-self:center}
 .bar{position:relative;height:12px;background:#1c201d;border:1px solid #2a302b;border-radius:2px;overflow:hidden}
@@ -43,19 +116,10 @@ canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
 button{font:inherit;color:var(--text);background:#1d221e;border:1px solid var(--line);border-radius:4px;cursor:pointer}
 button:hover{border-color:var(--brass)} button:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
 #bagBtn button{padding:8px 12px;font-family:var(--f-display)}
-#bar{bottom:calc(12px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);display:flex;gap:8px;padding:8px}
-.slot[hidden]{display:none}
-.slot{position:relative;width:62px;height:62px;display:grid;place-items:center;padding:4px;overflow:hidden}
-.slot b{font-family:var(--f-display);font-size:12px;line-height:1.05;text-align:center}
-.slot .ico{position:absolute;inset:2px;width:calc(100% - 4px);height:calc(100% - 4px);border-radius:8px;image-rendering:auto}
-.slot kbd{z-index:2;text-shadow:0 1px 2px #000;color:#fff !important;position:absolute;top:3px;left:5px;font-size:10px;color:var(--muted);font-family:var(--f-body)}
-.slot em{z-index:2;text-shadow:0 1px 2px #000;position:absolute;bottom:2px;right:5px;font-style:normal;font-size:10px;color:#8fb6f0;font-variant-numeric:tabular-nums}
-.slot .cd{position:absolute;inset:auto 0 0 0;background:rgba(0,0,0,.6);pointer-events:none}
-.slot.nomp b{color:var(--muted)}
-#log{bottom:calc(92px + env(safe-area-inset-bottom,0px));left:max(12px,env(safe-area-inset-left,0px));width:min(360px,70vw);font-size:12.5px;line-height:1.35;color:var(--muted);text-shadow:0 1px 2px #000;pointer-events:none}
+#log{bottom:calc(var(--hud-h) + 50px);left:max(12px,env(safe-area-inset-left,0px));width:min(360px,70vw);font-size:12.5px;line-height:1.35;color:var(--muted);text-shadow:0 1px 2px #000;pointer-events:none}
 #log p{margin:0}
 #log p.hi{color:var(--text)}
-#bag{top:calc(56px + env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));width:min(300px,calc(100vw - 24px));padding:12px;display:grid;gap:10px;max-height:calc(100% - 180px);overflow:auto}
+#bag{z-index:4;top:calc(56px + env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));width:min(300px,calc(100vw - 24px));padding:12px;display:grid;gap:10px;max-height:calc(100% - var(--hud-h) - 80px);overflow:auto}
 #bag h2{margin:0;font-family:var(--f-display);font-size:15px;color:var(--brass);letter-spacing:.04em;display:flex;justify-content:space-between}
 #bag h2 small{font-family:var(--f-body);color:var(--text);font-variant-numeric:tabular-nums}
 .label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
@@ -77,17 +141,13 @@ button:hover{border-color:var(--brass)} button:focus-visible{outline:2px solid v
 #qdlg{top:calc(84px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(340px,calc(100vw - 24px));padding:12px;display:grid;gap:10px}
 #qdlg h2{margin:0;font-family:var(--f-display);font-size:15px;color:var(--brass);display:flex;align-items:center;gap:8px} #qdlg h2 button{margin-left:auto;padding:0 8px;line-height:22px}
 #qdForges{display:grid;gap:6px} #qdBody{line-height:1.35} #qdBody small{color:var(--muted)}
-#quest{top:calc(128px + env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));padding:8px 10px;display:grid;gap:2px;max-width:230px;font-size:12px}
+#quest{top:calc(10px + env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));padding:8px 10px;display:grid;gap:2px;max-width:230px;font-size:12px}
 #quest b{font-family:var(--f-display);color:var(--brass);font-size:13px} #quest em{font-style:normal;color:#bfe6ff}
 #buffs{top:calc(10px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);display:flex;gap:5px;pointer-events:none}
 #buffs .buff{width:34px;height:34px;border:2px solid var(--c);border-radius:4px;background:rgba(10,12,10,.8);position:relative;display:grid;place-items:center;box-shadow:0 0 6px var(--c)}
 #buffs .buff i{font-style:normal;font-family:var(--f-display);color:var(--c);font-size:15px;opacity:.9}
 #buffs .buff b{position:absolute;right:2px;bottom:0;font-size:11px;color:#fff;text-shadow:0 0 3px #000,0 0 3px #000}
 #buffs .buff.warn{animation:bw .5s steps(2) infinite}@keyframes bw{50%{opacity:.35}}
-#pots{bottom:calc(12px + env(safe-area-inset-bottom,0px));left:calc(50% + 296px);display:flex;gap:6px}
-.pot{position:relative;width:38px;height:38px;display:grid;place-items:center;padding:2px;border-radius:6px;font-size:9px;line-height:1.1}
-.pot b{font-family:var(--f-display);font-size:9px;margin-top:8px} .pot kbd{position:absolute;top:2px;left:50%;transform:translateX(-50%);font-size:9px;opacity:.8;top:2px;left:4px;transform:none} .pot em{position:absolute;bottom:1px;right:4px;font-style:normal;color:var(--brass);font-size:11px}
-#pothp{border-color:#8a2f2a;background:#2a1412} #potmp{border-color:#2a4f8a;background:#121c2a}
 #shopList{display:grid;gap:4px}
 .srow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 8px;text-align:left;background:#181c19;border-color:#2b312c}
 .srow span{display:grid;line-height:1.15} .srow small{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
@@ -97,15 +157,14 @@ button:hover{border-color:var(--brass)} button:focus-visible{outline:2px solid v
 #detail ul{margin:0;padding-left:16px}
 #detail .row{display:flex;gap:6px;margin-top:4px}
 #detail .row button{padding:5px 10px;flex:1}
-#toast{bottom:calc(96px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--brass);color:var(--text);padding:6px 12px;border-radius:4px;font-size:13px;white-space:nowrap;max-width:calc(100vw - 32px);overflow:hidden;text-overflow:ellipsis}
-.slot.ready{border-color:var(--brass);box-shadow:0 0 10px var(--brass) inset}
-.slot.fired{animation:fired .35s ease-out}
+#toast{bottom:calc(var(--hud-h) + 56px);left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--brass);color:var(--text);padding:6px 12px;border-radius:4px;font-size:13px;white-space:nowrap;max-width:calc(100vw - 32px);overflow:hidden;text-overflow:ellipsis}
+.sw.fired{animation:fired .35s ease-out}
 @keyframes fired{from{border-color:var(--brass);box-shadow:0 0 14px var(--brass)}to{box-shadow:none}}
 canvas:focus{outline:none}
-#help{bottom:calc(12px + env(safe-area-inset-bottom,0px));right:max(12px,env(safe-area-inset-right,0px));font-size:11.5px;color:var(--muted);text-align:right;line-height:1.4;pointer-events:none;max-width:210px}
+#help{bottom:calc(var(--hud-h) + 12px);right:max(12px,env(safe-area-inset-right,0px));font-size:11.5px;color:var(--muted);text-align:right;line-height:1.4;pointer-events:none;max-width:210px}
 #help a{color:var(--muted);pointer-events:auto}
 #loading{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--f-display);font-size:18px;color:var(--brass);background:var(--ink)}
-@media (max-width:620px){#target{top:calc(118px + env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));transform:none;width:min(230px,60vw)} #help{display:none} .slot{width:56px;height:56px}}
+@media (max-width:620px){#target{top:calc(60px + env(safe-area-inset-top,0px))} #help{display:none}}
 @media (prefers-reduced-motion:reduce){.bar i{transition:none}}
 
 #login{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(ellipse at center,rgba(13,16,14,.55),rgba(13,16,14,.95));z-index:5}
@@ -126,15 +185,14 @@ canvas:focus{outline:none}
 #classes .cls small{color:var(--muted);font-size:12px}
 #classes .cls.on{outline:2px solid var(--brass);background:#1d231e}
 #login .err{color:#ff8a6b;min-height:1.2em}
-#chat{bottom:calc(12px + env(safe-area-inset-bottom,0px));left:max(12px,env(safe-area-inset-left,0px));width:min(320px,70vw)}
+#chat{bottom:calc(var(--hud-h) + 12px);left:max(12px,env(safe-area-inset-left,0px));width:min(320px,70vw)}
 #chat input{width:100%;box-sizing:border-box;font:inherit;font-size:13px;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:6px 8px}
 #chat input:focus{outline:1px solid var(--brass)}
-#log{bottom:calc(50px + env(safe-area-inset-bottom,0px));width:min(320px,70vw)}
+#log{bottom:calc(var(--hud-h) + 50px);width:min(320px,70vw)}
 #log p.chat{color:#e9dfc0}
 #log p.chat b{color:var(--brass);font-weight:600}
 #log p.sys{color:#8fb6f0}
-@media (max-width:620px){#log{bottom:calc(128px + env(safe-area-inset-bottom,0px))} #chat{bottom:calc(92px + env(safe-area-inset-bottom,0px))} #pots{left:max(12px,env(safe-area-inset-left,0px));bottom:calc(168px + env(safe-area-inset-bottom,0px))}}
-#net{top:calc(10px + env(safe-area-inset-top,0px));right:calc(max(12px,env(safe-area-inset-right,0px)) + 92px);font-size:12px;color:var(--muted);padding:9px 10px;pointer-events:none}
+#net{top:calc(10px + env(safe-area-inset-top,0px));right:calc(max(12px,env(safe-area-inset-right,0px)) + 190px);font-size:12px;color:var(--muted);padding:9px 10px;pointer-events:none}
 #net.off{color:#ff8a6b}
 </style>
 </head>
@@ -142,13 +200,6 @@ canvas:focus{outline:none}
 <div id="game">
   <canvas id="cv" tabindex="0" aria-label="Mundo del juego"></canvas>
   <div id="toast" class="hud" role="status" hidden></div>
-
-  <div id="me" class="hud box">
-    <div class="name"><span id="meName">Viajero de Solmar</span><small id="meLvl">Nv 1</small></div>
-    <div class="bar hp"><i id="hpI"></i><span id="hpT"></span></div>
-    <div class="bar mp"><i id="mpI"></i><span id="mpT"></span></div>
-    <div class="bar xp"><i id="xpI"></i></div>
-  </div>
 
   <div id="target" class="hud box" hidden>
     <div class="name"><span id="tName"></span><small id="tLvl"></small></div>
@@ -182,8 +233,93 @@ canvas:focus{outline:none}
   <div id="quest" class="hud box" hidden></div>
 
   <div id="buffs" class="hud"></div>
-  <div id="pots" class="hud"><button id="pothp" class="pot" type="button"></button><button id="potmp" class="pot" type="button"></button></div>
-  <div id="bar" class="hud box"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+<defs>
+<linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f8de94"/><stop offset=".5" stop-color="#c9954a"/><stop offset="1" stop-color="#6a3f16"/></linearGradient>
+<radialGradient id="gem" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#fff4c0"/><stop offset=".45" stop-color="#ffa81f"/><stop offset="1" stop-color="#8a2a08"/></radialGradient>
+<filter id="nz" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".8" numOctaves="2" seed="4"/><feColorMatrix type="saturate" values="0"/></filter>
+<g id="rr"><path d="M100 6L105 25H95Z"/></g>
+<path id="scr" d="M0 38C34 38 56 12 94 12C124 12 134 34 114 38C100 40 94 26 106 24"/>
+<path id="scr2" d="M94 12C140 12 160 30 214 30C246 30 266 22 300 24"/>
+<symbol id="gemS" viewBox="0 0 20 20"><path d="M10 1L18 10L10 19L2 10Z" fill="url(#gem)" stroke="#2b1710" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+<symbol id="scroll" viewBox="0 0 300 44"><g fill="none" stroke-linecap="round"><g stroke="#2b1710" stroke-width="7"><use href="#scr"/><use href="#scr2"/></g><g stroke="url(#gold)" stroke-width="3.5"><use href="#scr"/><use href="#scr2"/></g></g><g fill="url(#gold)" stroke="#2b1710" stroke-width="1.4"><path d="M150 20C156 8 170 8 174 15C166 15 158 17 150 20Z"/><path d="M196 30C202 40 216 40 220 33C212 33 204 31 196 30Z"/><path d="M52 24C54 12 66 8 74 12C68 17 60 20 52 24Z"/></g></symbol>
+</defs>
+</svg>
+<div id="hudroot">
+  <div class="hrow">
+    <div class="orb hp" role="img" id="orbHpBox" aria-label="Vida">
+      <div class="aura"></div>
+      <div class="embers"><span class="em" style="left:6px;background:#ff6a5a;box-shadow:0 0 8px #ff3a2a"></span><span class="em" style="left:34px;background:#ffb36a;box-shadow:0 0 8px #ff7a1a;animation-delay:1.2s"></span><span class="em" style="left:62px;background:#ff6a5a;box-shadow:0 0 8px #ff3a2a;animation-delay:2.1s"></span><span class="em" style="left:90px;background:#ffd08a;box-shadow:0 0 8px #ff7a1a;animation-delay:.6s"></span></div>
+      <div class="ring"></div>
+      <div class="glass">
+        <div class="liq" id="liqHp">
+          <div class="wv" style="top:2%;background:rgba(120,8,20,.9);animation:spin 8s linear infinite"></div>
+          <div class="wv" style="top:0;background:rgba(226,36,46,.75);animation:spinr 6s linear infinite"></div>
+          <div class="body" style="background:linear-gradient(180deg,rgba(255,110,90,0) 0%,rgba(255,90,70,.45) 40%,rgba(90,4,12,.55) 100%)"></div>
+          <span class="bb" style="left:22%;width:6px;height:6px"></span><span class="bb" style="left:48%;width:4px;height:4px;animation-delay:1.4s"></span><span class="bb" style="left:70%;width:7px;height:7px;animation-delay:2.6s"></span><span class="bb" style="left:36%;width:3px;height:3px;animation-delay:3.2s"></span>
+        </div>
+        <div class="hl"></div><div class="shade" style="box-shadow:inset 0 -16px 26px rgba(0,0,0,.6),inset 0 0 14px rgba(255,140,120,.35)"></div>
+        <div class="otxt"><span class="ol">VIDA</span><span class="on" id="hpT">0</span><span class="om" id="hpM"></span></div>
+      </div>
+      <svg class="g1" width="22" height="22" aria-hidden="true"><use href="#gemS"/></svg><svg class="g2" width="18" height="18" aria-hidden="true"><use href="#gemS"/></svg>
+    </div>
+
+    <div class="hcenter">
+      <div class="crest" aria-hidden="true">
+        <div class="cglow"></div>
+        <svg viewBox="0 0 200 88" width="200" height="88">
+          <g fill="url(#gold)" stroke="#2b1710" stroke-width="1.6" stroke-linejoin="round" style="animation:ray 2.6s ease-in-out infinite">
+            <use href="#rr" transform="rotate(0 100 44)"/><use href="#rr" transform="rotate(30 100 44)"/><use href="#rr" transform="rotate(60 100 44)"/><use href="#rr" transform="rotate(90 100 44)"/><use href="#rr" transform="rotate(120 100 44)"/><use href="#rr" transform="rotate(150 100 44)"/><use href="#rr" transform="rotate(180 100 44)"/><use href="#rr" transform="rotate(210 100 44)"/><use href="#rr" transform="rotate(240 100 44)"/><use href="#rr" transform="rotate(270 100 44)"/><use href="#rr" transform="rotate(300 100 44)"/><use href="#rr" transform="rotate(330 100 44)"/>
+          </g>
+          <g fill="url(#gold)" stroke="#2b1710" stroke-width="1.4">
+            <ellipse cx="52" cy="66" rx="9" ry="3.6" transform="rotate(-25 52 66)"/><ellipse cx="41" cy="57" rx="9" ry="3.6" transform="rotate(-50 41 57)"/><ellipse cx="34" cy="46" rx="9" ry="3.6" transform="rotate(-72 34 46)"/><ellipse cx="31" cy="35" rx="8" ry="3.4" transform="rotate(-88 31 35)"/>
+            <ellipse cx="148" cy="66" rx="9" ry="3.6" transform="rotate(25 148 66)"/><ellipse cx="159" cy="57" rx="9" ry="3.6" transform="rotate(50 159 57)"/><ellipse cx="166" cy="46" rx="9" ry="3.6" transform="rotate(72 166 46)"/><ellipse cx="169" cy="35" rx="8" ry="3.4" transform="rotate(88 169 35)"/>
+          </g>
+          <circle cx="100" cy="44" r="22" fill="url(#gold)" stroke="#2b1710" stroke-width="2.5"/>
+          <circle cx="100" cy="44" r="16" fill="#1a0f0a" stroke="#f6d98a" stroke-width="1.5"/>
+          <circle cx="100" cy="44" r="11" fill="url(#gem)" stroke="#2b1710" stroke-width="1.5"/>
+          <path d="M94 40C96 37 100 36 103 37" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".8"/>
+        </svg>
+        <span class="em" style="left:60px;top:50px;background:#ffe08a;box-shadow:0 0 8px #ffb21e;animation:spark 2.8s ease-out infinite"></span>
+        <span class="em" style="left:140px;top:46px;background:#ffe08a;box-shadow:0 0 8px #ffb21e;animation:spark 3.4s ease-out infinite 1s"></span>
+        <span class="em" style="left:100px;top:8px;background:#fff3c0;box-shadow:0 0 8px #ffb21e;animation:spark 3s ease-out infinite 1.8s"></span>
+      </div>
+      <svg class="scrl" viewBox="0 0 300 44" width="300" height="44" aria-hidden="true"><use href="#scroll"/></svg>
+      <svg class="scrr" viewBox="0 0 300 44" width="300" height="44" aria-hidden="true"><use href="#scroll"/></svg>
+
+      <div class="wood">
+        <svg class="grain" width="100%" height="100%" aria-hidden="true"><rect width="100%" height="100%" filter="url(#nz)" opacity=".32"/></svg>
+        <span class="rv tl"></span><span class="rv tr"></span><span class="rv bl"></span><span class="rv br"></span>
+        <div class="tray" id="bar" role="toolbar" aria-label="Hechizos"></div>
+        <div class="gemsep" aria-hidden="true"><i></i><svg width="16" height="16"><use href="#gemS"/></svg><i></i></div>
+        <div class="tray" id="quick" role="toolbar" aria-label="Hechizos rápidos"></div>
+      </div>
+      <div class="xpbar" role="progressbar" aria-label="Experiencia" aria-valuemin="0" aria-valuemax="100" id="xpBox">
+        <div class="xpf" id="xpI"><i></i></div><div class="ticks"></div><div class="xgl"></div><div class="xpt" id="xpT">EXP 0%</div>
+      </div>
+    </div>
+
+    <div class="orb mp" role="img" id="orbMpBox" aria-label="Maná">
+      <div class="aura"></div>
+      <div class="embers"><span class="em" style="left:10px;background:#7ab8ff;box-shadow:0 0 8px #2a6aff;animation-delay:.4s"></span><span class="em" style="left:38px;background:#c0e0ff;box-shadow:0 0 8px #4a8aff;animation-delay:1.6s"></span><span class="em" style="left:66px;background:#7ab8ff;box-shadow:0 0 8px #2a6aff;animation-delay:2.4s"></span><span class="em" style="left:94px;background:#a0d0ff;box-shadow:0 0 8px #4a8aff;animation-delay:1s"></span></div>
+      <div class="ring"></div>
+      <div class="glass" style="background:#050a1a">
+        <div class="liq" id="liqMp">
+          <div class="wv" style="top:2%;background:rgba(10,30,120,.9);animation:spinr 8s linear infinite"></div>
+          <div class="wv" style="top:0;background:rgba(50,110,240,.75);animation:spin 6s linear infinite"></div>
+          <div class="body" style="background:linear-gradient(180deg,rgba(130,190,255,0) 0%,rgba(90,150,255,.45) 40%,rgba(5,12,90,.55) 100%)"></div>
+          <span class="bb" style="left:28%;width:6px;height:6px;animation-delay:.7s"></span><span class="bb" style="left:52%;width:4px;height:4px;animation-delay:2s"></span><span class="bb" style="left:72%;width:7px;height:7px;animation-delay:3s"></span><span class="bb" style="left:40%;width:3px;height:3px;animation-delay:1.5s"></span>
+        </div>
+        <div class="hl"></div><div class="shade" style="box-shadow:inset 0 -16px 26px rgba(0,0,0,.6),inset 0 0 14px rgba(130,180,255,.4)"></div>
+        <div class="otxt"><span class="ol">MANÁ</span><span class="on" id="mpT">0</span><span class="om" id="mpM"></span></div>
+      </div>
+      <svg class="g1" width="22" height="22" aria-hidden="true"><use href="#gemS"/></svg><svg class="g2" width="18" height="18" aria-hidden="true"><use href="#gemS"/></svg>
+    </div>
+
+    <div id="pots"><button id="pothp" class="pot" type="button"></button><button id="potmp" class="pot" type="button"></button></div>
+  </div>
+  <div id="chips" aria-label="Estadísticas"></div>
+</div>
   <div id="log" class="hud"></div>
   <div id="chat" class="hud"><input id="chatIn" maxlength="200" autocomplete="off" placeholder="Enter para chatear" aria-label="Chat"></div>
   <div id="net" class="hud" aria-live="polite"></div>

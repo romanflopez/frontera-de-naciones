@@ -577,7 +577,8 @@ function usePotion(k: 'hp' | 'mp') {
     else { const m = Math.max(40, Math.round(maxMp() * 0.5)); P.mp = Math.min(maxMp(), P.mp + m); mpLocalAt = now(); float(P.x, P.y - 0.2, '+' + m + ' maná', '#7fb7ff'); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#4a8fe0' }); }
     syncHp(); efx('sphere', P.x, P.y); renderPots();
 }
-function renderPots() { for (const k of ['hp', 'mp'] as const) { const el = $('pot' + k); el.title = `${POTS[k].name} (${POTS[k].key})`; el.innerHTML = `<kbd>${POTS[k].key}</kbd><b>${POTS[k].name.replace('Poción de ', '')}</b><em>${pots[k]}</em>`; } }
+const POT_ART = { hp: 'curar', mp: 'burbuja-arcana' };
+function renderPots() { for (const k of ['hp', 'mp'] as const) { const el = $('pot' + k); el.title = `${POTS[k].name} (${POTS[k].key}): quedan ${pots[k]}`; el.setAttribute('aria-label', `${POTS[k].name}, tecla ${POTS[k].key}, quedan ${pots[k]}`); el.classList.toggle('none', pots[k] <= 0); el.innerHTML = `<span class="sq"><img alt="" src="assets/spells/${POT_ART[k]}.png"></span><kbd>${POTS[k].key}</kbd><em>${pots[k]}</em>`; } }
 // ---------- /meditar: quieto, el maná sube rápido; se corta si te movés, casteás o te pegan ----------
 function stopMeditating(msg?: string) { if (!P.med) return; P.med = false; if (msg) log(msg, true); syncHp(); }
 function toggleMeditate() {
@@ -1184,7 +1185,11 @@ function setClass(id: string) {
     P.eq.arma = mk(CLS.weapon); P.eq.armadura = CLS.armor ? mk(CLS.armor) : null; P.eq.cabeza = null; P.bag = [];
     refreshLook();
     P.lvl = 1; P.exp = 0; P.hp = maxHp(); P.mp = maxMp();
-    $('bar').innerHTML = SPELLS.map((s, i) => `<button class="slot box" id="sp${i}" type="button" title="${s.name} (${s.mp} maná)"><kbd>${s.key}</kbd><img class="ico" alt="${s.name}" src="${spellIcon(s.id ?? '', s.col)}"><em>${s.mp}</em><div class="cd" id="cd${i}"></div></button>`).join('');
+    // 10 slots grandes (teclas 1..0) + los que sobran en los chicos (teclas reales: -, =, R, F, G...)
+    const slotHtml = (s: Spell, i: number, q: boolean) => `<button class="sw${q ? ' q' : ''}" id="sp${i}" type="button" title="${s.name} (${s.mp} maná)" aria-label="${s.name}, tecla ${s.key}, ${s.mp} de maná"><span class="sq"><img alt="" src="${spellIcon(s.id ?? '', s.col)}"><span class="cdo" id="cd${i}"></span><span class="kb">${s.key}</span><span class="mpc">${s.mp}</span></span></button>`;
+    const emptyHtml = (k: string, q: boolean) => `<div class="sw${q ? ' q' : ''} empty" aria-hidden="true"><span class="sq"><span class="kb">${k}</span></span></div>`;
+    $('bar').innerHTML = Array.from({ length: 10 }, (_, i) => SPELLS[i] ? slotHtml(SPELLS[i], i, false) : emptyHtml(KEYS[i], false)).join('');
+    const rest = SPELLS.slice(10); $('quick').innerHTML = Array.from({ length: Math.max(4, rest.length) }, (_, j) => rest[j] ? slotHtml(rest[j], 10 + j, true) : emptyHtml('F' + (j + 1), true)).join('');
     SPELLS.forEach((_, i) => $('sp' + i).addEventListener('click', () => { cast(i); cv.focus({ preventScroll: true }); }));
     $('helpKeys').textContent = `Click o mantener: caminar · Click en mob: atacar · teclas 1–0 usar habilidad (las de objetivo: esperá que cargue y click en el blanco) · Click derecho: cancelar · ${SPELLS.map((x) => x.key + ' ' + x.name).join(' · ')} · I Bolsa · Enter chat`;
 }
@@ -1204,11 +1209,22 @@ function renderBuffs() {
 function hud() {
     renderBuffs(); tickLogout();
     const T = now(), mh = maxHp(), mm = maxMp();
-    $('meLvl').textContent = 'Nv ' + P.lvl;
-    $('hpI').style.width = (P.hp / mh) * 100 + '%'; $('hpT').textContent = `${Math.ceil(P.hp)} / ${mh}`;
-    $('mpI').style.width = (P.mp / mm) * 100 + '%'; $('mpT').textContent = `${Math.floor(P.mp)} / ${mm}`;
-    $('xpI').style.width = (P.exp / expNeed()) * 100 + '%';
-    SPELLS.forEach((s, i) => { const left = Math.max(0, cds[i] - T); $('cd' + i).style.height = (left / s.cd) * 100 + '%'; $('sp' + i).hidden = !!s.fury && P.fury <= T; $('sp' + i).classList.toggle('nomp', P.mp < s.mp); $('sp' + i).classList.toggle('ready', !!(P.ready && P.ready.i === i)); });
+    const hf = clamp(P.hp / mh, 0, 1), mf = clamp(P.mp / mm, 0, 1);
+    $('liqHp').style.transform = `translateY(${(1 - hf) * 100}%)`; $('liqMp').style.transform = `translateY(${(1 - mf) * 100}%)`;
+    $('hpT').textContent = String(Math.ceil(P.hp)); $('hpM').textContent = '/ ' + mh; $('mpT').textContent = String(Math.floor(P.mp)); $('mpM').textContent = '/ ' + mm;
+    $('orbHpBox').setAttribute('aria-label', `Vida ${Math.ceil(P.hp)} de ${mh}`); $('orbMpBox').setAttribute('aria-label', `Maná ${Math.floor(P.mp)} de ${mm}`);
+    const xp = clamp(P.exp / expNeed(), 0, 1), xpp = Math.floor(xp * 100);
+    $('xpI').style.width = xp * 100 + '%'; $('xpT').textContent = `EXP ${xpp}%`; $('xpBox').setAttribute('aria-valuenow', String(xpp));
+    SPELLS.forEach((s, i) => {
+        const left = Math.max(0, cds[i] - T), el = $('sp' + i), cd = $('cd' + i);
+        if (left > 0) { cd.style.display = 'flex'; cd.style.background = `conic-gradient(rgba(0,0,0,0) 0 ${(1 - left / s.cd) * 100}%, rgba(5,3,8,.74) 0 100%)`; const t = left >= 10 ? String(Math.ceil(left)) : left.toFixed(1); if (cd.textContent !== t) cd.textContent = t; }
+        else if (cd.style.display) { cd.style.display = ''; cd.textContent = ''; }
+        el.hidden = !!s.fury && P.fury <= T; el.classList.toggle('nomp', P.mp < s.mp); el.classList.toggle('ready', !!(P.ready && P.ready.i === i));
+    });
+    const tt = totals(), wd: [number, number] = tt.wdmg[1] > 0 ? tt.wdmg : CLS.melee;
+    const chips: [string, string][] = [['Nv.', String(P.lvl)], ['Exp', `${Math.floor(P.exp).toLocaleString('es-AR')} / ${expNeed().toLocaleString('es-AR')}`], ['Ataque', `${wd[0]}–${wd[1]}`], ['Defensa', String(tt.def)], ['Vel. mov.', Math.round((270 / P.stepMs) * 100) + '%'], ['Crítico', tt.crit + '%']];
+    const ch = chips.map(([k, v]) => `<div class="chp"><u>◆</u><span>${k}</span><b>${v}</b></div>`).join('');
+    if ($('chips').dataset.h !== ch) { $('chips').dataset.h = ch; $('chips').innerHTML = ch; layoutHud(); }
     const m = P.target && mobs.includes(P.target) ? P.target : null;
     $('target').hidden = !m;
     if (m) {
@@ -1226,6 +1242,13 @@ function hud() {
     netEl.textContent = connected ? `En línea · ${playersOnline || 1} ${playersOnline === 1 ? 'jugador' : 'jugadores'}` : 'Sin conexión';
     netEl.classList.toggle('off', !connected);
 }
+
+/** Escala del HUD según el viewport (diseño de 1162 px de ancho; no tapa de más el mundo). */
+function layoutHud() {
+    const root = $('hudroot'), sc = clamp(Math.min(innerWidth / 1360, innerHeight / 900), 0.4, 1);
+    const st = document.documentElement.style; st.setProperty('--hud-scale', sc.toFixed(3)); st.setProperty('--hud-h', Math.round((root.offsetHeight + 8) * sc) + 'px');
+}
+addEventListener('resize', layoutHud); layoutHud();
 
 // ---------- bolsa ----------
 let sel: { it: Item; from: 'bag' | 'eq' } | null = null;
@@ -1534,7 +1557,7 @@ $('loginForm').addEventListener('submit', async (e) => {
     catch (err) { $('loginErr').textContent = `${(err as Error).message} ¿Está corriendo el server (pnpm dev)?`; btn.disabled = false; }
 });
 function enterWorld(name: string) {
-    setClass(selectedClass); if (pendingSave) applySave(pendingSave); refreshUnlocks(false); connected = true; P.name = name; lookKey = ''; refreshLook(); sendProfile(); $('meName').textContent = name;
+    setClass(selectedClass); if (pendingSave) applySave(pendingSave); refreshUnlocks(false); connected = true; P.name = name; lookKey = ''; refreshLook(); sendProfile();
     $('login').hidden = true; ($('loginForm').querySelector('button') as HTMLButtonElement).disabled = false;
     cv.focus({ preventScroll: true });
     saver.start();
