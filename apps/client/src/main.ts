@@ -303,6 +303,7 @@ function onServer(m: ServerPayload) {
         case 'lootRoll': lootRolls.set(m.value.mobId, { rarity: m.value.rarity, baseSeed: m.value.baseSeed, attrs: m.value.attrs }); break;
         case 'statusUpdate': onStatusUpdate(m.value); break;
         case 'vitals': onVitals(m.value); break;
+        case 'logoutResponse': if (logout) { logout.at = now() + m.value.wait; logout.asked = true; if (m.value.wait <= 0) { logout.at = now(); } } break;
         case 'playerVitals': { const o = others.get(m.value.playerId); if (o) { o.hp = m.value.hp; o.maxHp = m.value.maxHp; } break; }
         case 'pvpKill': { const v = m.value; if (v.playerId !== myId) log(v.killerName ? `<b>${esc(v.killerName)}</b> derrotó a <b>${esc(v.victimName)}</b>.` : `<b>${esc(v.victimName)}</b> cayó.`, true); else if (v.killerName) log(`Te derrotó <b>${esc(v.killerName)}</b>.`, true); break; }
         case 'playerProfileChanged': { const o = others.get(m.value.playerId); if (o) o.profile = m.value.profile; break; }
@@ -1201,7 +1202,7 @@ function renderBuffs() {
     if (el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; }
 }
 function hud() {
-    renderBuffs();
+    renderBuffs(); tickLogout();
     const T = now(), mh = maxHp(), mm = maxMp();
     $('meLvl').textContent = 'Nv ' + P.lvl;
     $('hpI').style.width = (P.hp / mh) * 100 + '%'; $('hpT').textContent = `${Math.ceil(P.hp)} / ${mh}`;
@@ -1230,6 +1231,21 @@ function hud() {
 let sel: { it: Item; from: 'bag' | 'eq' } | null = null;
 function toggleBag() { $('bag').hidden = !$('bag').hidden; renderBag(); }
 $('openBag').addEventListener('click', toggleBag);
+/** Salir: en zona segura es inmediato; en zona insegura hay que aguantar quieto unos segundos (se cancela si te movés o te pegan). */
+let logout: { at: number; cell: Cell; hp: number; asked: boolean } | null = null;
+function cancelLogout(why: string) { if (!logout) return; logout = null; net.send({ $case: 'logoutCancelledRequest', value: {} }); toast(why); }
+function tickLogout() {
+    if (!logout) return;
+    if (!logout.asked) return;
+    if (P.cell.x !== logout.cell.x || P.cell.y !== logout.cell.y || P.path.length || P.casting) { cancelLogout('Salida cancelada: te moviste.'); return; }
+    if (P.hp < logout.hp - 0.5 || P.dead) { cancelLogout('Salida cancelada: te atacaron.'); return; }
+    logout.hp = Math.max(logout.hp, P.hp);
+    const left = logout.at - now();
+    if (left <= 0) { logout = null; leaving = true; saver.tick(true); setTimeout(() => net.close(), 400); return; }
+    toast(`Saliendo en ${Math.ceil(left)} s… (no te muevas)`);
+}
+let leaving = false;
+$('exitBtn').addEventListener('click', () => { if (!connected || logout) return; logout = { at: 0, cell: { ...P.cell }, hp: P.hp, asked: false }; net.send({ $case: 'logoutRequest', value: {} }); });
 function renderBag() {
     if ($('bag').hidden) return;
     $('equip').innerHTML = SLOTS.map((s) => { const it = P.eq[s]; return `<button type="button" class="cell${sel && it && sel.it === it ? ' sel' : ''}" data-eq="${s}" style="${it ? `color:${it.rar.c}` : ''}"><span>${s}</span>${it ? ico(it) : '—'}</button>`; }).join('');
@@ -1506,6 +1522,7 @@ $('loginForm').addEventListener('submit', async (e) => {
     let tries = 0;
     net.onClose = (reason) => {
         const was = connected; saver.stop(); others.clear();
+        if (leaving) { leaving = false; connected = false; showLogin('Saliste del juego.'); btn.disabled = false; return; }
         // si se cortó sin querer, reintenta solo unos segundos (el server te guarda el lugar 60 s)
         if (was && tries < 6 && !/ya está conectado|autentic|contraseña|incorrect/i.test(reason)) {
             tries++; connected = false; $('login').hidden = false; $('loginErr').textContent = `Se cortó la conexión. Reconectando (${tries}/6)…`;

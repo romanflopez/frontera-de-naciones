@@ -203,6 +203,13 @@ export class GameWorld {
         this.broadcastNear(p, m);
     }
 
+    /** Segundos de espera para salir: en zona segura es inmediato, en zona insegura hay que aguantar quieto. */
+    logoutWait(sessionId: string): number {
+        const p = this.players.get(sessionId);
+        if (!p) return 0;
+        return this.map?.safe[Math.floor(p.posY)]?.[Math.floor(p.posX)] ? 0 : 10;
+    }
+
     /** Se cortó la conexión. Si queda en gracia, el personaje sigue en el mundo y se puede atacar. */
     playerDisconnected(sessionId: string, remainsActive: boolean): void {
         const p = this.players.get(sessionId);

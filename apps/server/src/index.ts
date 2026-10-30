@@ -182,7 +182,7 @@ wss.on('connection', (ws, req) => {
                 disconnect('La autenticación se manda una sola vez por conexión.');
                 return;
             case 'logoutRequest': {
-                const wait = settings.logoutTime;
+                const wait = worlds.get(session.worldId)?.logoutWait(session.sessionId) ?? settings.logoutTime;
                 session.logoutAllowedAt = wait > 0 ? Date.now() + wait * 1000 - 500 : Date.now();
                 send(M.logoutResponse(wait));
                 return;
