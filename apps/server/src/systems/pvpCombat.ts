@@ -66,6 +66,19 @@ export function statsFromCharacter(json: string | undefined): CombatStats {
     } catch { return { ...DEFAULT_STATS }; }
 }
 
+/** Progreso para los portales (misiones entregadas, nivel, llaves, portales abiertos) a partir del JSON ya validado. */
+export function progressFromCharacter(json: string | undefined): { qi: number; lvl: number; keys: Record<string, number>; unlocked: string[] } {
+    const out = { qi: 0, lvl: 1, keys: {} as Record<string, number>, unlocked: [] as string[] };
+    if (!json) return out;
+    try {
+        const o = JSON.parse(json) as { lvl?: number; q?: { i?: number; keys?: Record<string, number> }; u?: unknown };
+        out.lvl = Math.max(1, Math.min(60, Number(o.lvl) || 1)); out.qi = Math.max(0, Number(o.q?.i) || 0);
+        for (const [k, v] of Object.entries(o.q?.keys ?? {})) out.keys[k] = Math.max(0, Number(v) || 0);
+        out.unlocked = Array.isArray(o.u) ? o.u.filter((x): x is string => typeof x === 'string') : [];
+    } catch { /* se queda con lo básico */ }
+    return out;
+}
+
 /** Daño que realmente recibe un jugador: resistencia a fuego/hielo (hasta 75 %) y después la defensa; mínimo 1. */
 export function damageAfterDefense(raw: number, s: CombatStats, fx: string): number {
     const fire = ['sphere', 'eruption', 'cataclysm', 'flamme'], ice = ['blizz', 'tidal'];

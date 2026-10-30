@@ -10,7 +10,9 @@
 import { extendSolmar } from './frontier';
 import { extendAshlands } from './ashlands';
 import { extendCities } from './cities';
+import { extendTraining, type TrainingStep } from './training';
 export { CITIES, HUBS, cityAt, type City } from './cities';
+export { TRAINING, TRAINING_IDS, TRAINING_PADS, trainingUnlocked, portalGate, type TrainingStep, type PortalProgress } from './training';
 import type { MobType } from './mobs';
 export * from './mobs';
 
@@ -21,6 +23,14 @@ export interface Prop { id: number; x: number; y: number; /** profundidad al ord
 export interface Building { id: string; x: number; y: number; w: number; h: number }
 /** Personaje no jugador quieto; ocupa su celda. dir: 0 = oeste, en sentido horario (6 = sur). */
 export interface Npc { id: string; name: string; x: number; y: number; dir: number }
+/** Escalera o portal entre zonas del mismo mapa: al terminar de pisar (x, y) se pasa a (tx, ty). */
+export interface Portal {
+    x: number; y: number; tx: number; ty: number; msg: string;
+    /** id de la llave que pide para pasar (la escalera está sellada sin ella) */
+    key?: string;
+    /** Portal de entrenamiento de una ciudad: se abre con la cadena de misiones o con un nivel mínimo (ver training.ts). */
+    train?: TrainingStep;
+}
 export interface Zone { type: MobType; x: number; y: number; r: number; n: number; name: string }
 
 export interface WorldMap {
@@ -40,7 +50,7 @@ export interface WorldMap {
     /** Celda de la fogata, para la luz. */
     fire: { x: number; y: number };
     /** Escaleras entre zonas del mismo mapa: al terminar de pisar (x, y) se pasa a (tx, ty). */
-    portals?: { x: number; y: number; tx: number; ty: number; msg: string; /** id de la llave que pide para pasar (la escalera está sellada sin ella) */ key?: string }[];
+    portals?: Portal[];
     /** Rectángulo de la cripta (el cliente la oscurece). */
     dungeon?: { x0: number; y0: number; x1: number; y1: number };
     /** Otras mazmorras (Cámara del foso): el cliente las oscurece igual. */
@@ -127,7 +137,7 @@ export function buildSolmar(): WorldMap {
     for (const b of buildings) for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) blocked[y][x] = true;
     const npcs: Npc[] = [{ id: 'mercader', name: 'Mercader', x: 9, y: 7, dir: 6 }, { id: 'capitan', name: 'Capitán Aldric', x: 6, y: 10, dir: 2 }];
     for (const n of npcs) blocked[n.y][n.x] = true;
-    return extendCities(extendAshlands(extendSolmar({ size: N, tiles, blocked, safe, props, decals, zones, buildings, npcs, spawn: { x: 6, y: 7 }, fire: { x: 8, y: 8 } })));
+    return extendTraining(extendCities(extendAshlands(extendSolmar({ size: N, tiles, blocked, safe, props, decals, zones, buildings, npcs, spawn: { x: 6, y: 7 }, fire: { x: 8, y: 8 } }))));
 }
 
 /** Mapas por nombre (el que figura en worlds.json del server). */

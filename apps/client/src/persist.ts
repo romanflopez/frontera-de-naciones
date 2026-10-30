@@ -9,6 +9,8 @@ export interface CharSave {
     bag: SavedItem[]; eq: Record<string, SavedItem | null>;
     q: { i: number; st: 'new' | 'active' | 'ready'; prog: number; keys: Record<string, number>; shards: Record<string, number> };
     pots: { hp: number; mp: number };
+    /** ids de los portales de entrenamiento ya abiertos */
+    u?: string[];
 }
 
 export function parseSave(data: string): CharSave | null {

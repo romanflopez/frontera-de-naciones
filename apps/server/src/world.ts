@@ -6,8 +6,8 @@
  * tick (cada 50 ms) solo dispara los temporizadores. Más adelante, si hace falta escalar,
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
-import { damageAfterDefense, FURY_MS, PVP_SPELLS, rollSpellDamage, statsFromCharacter } from './systems/pvpCombat.ts';
-import { HUBS } from '@fdn/world';
+import { damageAfterDefense, FURY_MS, progressFromCharacter, PVP_SPELLS, rollSpellDamage, statsFromCharacter } from './systems/pvpCombat.ts';
+import { HUBS, portalGate } from '@fdn/world';
 import { applyParalysis, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import type { Catalogs, GameWorldConfig, Settings } from './config.ts';
@@ -425,7 +425,30 @@ export class GameWorld {
         this.syncVisibilityAfterMovement(p, fromX, fromY, toX, toY, dashAttack, teleport);
     }
 
-    private handleTeleport(p: Player, x: number, y: number): void {        if (p.isDead || (x === p.posX && y === p.posY) || !this.occupancy.isFree(x, y)) return;
+    /**
+     * Teletransporte pedido por el cliente. Solo se acepta (a) cruzar un portal del mapa parado sobre él y con el progreso
+     * del personaje que lo permite (misión/nivel/llave), o (b) ir al punto de aparición de la propia facción justo al entrar.
+     * Con FDN_DEBUG_WARP=1 vale cualquier celda libre (solo para pruebas).
+     */
+    private handleTeleport(p: Player, reqX: number, reqY: number): void {
+        if (p.isDead || (reqX === p.posX && reqY === p.posY)) return;
+        let x = reqX, y = reqY;
+        if (process.env.FDN_DEBUG_WARP !== '1') {
+            const portal = this.map?.portals?.find((q) => q.tx === reqX && q.ty === reqY && distance(p.posX, p.posY, q.x, q.y) <= 1);
+            if (portal) {
+                const why = portalGate(portal, p.prog);
+                if (why) { p.send(M.sendMessage(why)); return; }
+            } else {
+                const hub = HUBS[this.factionOf(p)];
+                const toHub = !!hub && reqX === hub.x && reqY === hub.y && Date.now() - p.joinedAt < 30000;
+                if (!toHub) { console.log(`[Mundo:${this.id}] ${p.characterName} pidió un teletransporte sin portal a (${reqX}, ${reqY}); lo ignoro`); return; }
+            }
+            // si alguien ocupa justo la celda de llegada, va a la libre más cercana
+            const free = findNearestFreeLocation((cx, cy) => this.occupancy.isFree(cx, cy), reqX, reqY, 3);
+            if (!free) return;
+            x = free.x; y = free.y;
+            if (portal?.key) p.prog.keys[portal.key] = Math.max(0, (p.prog.keys[portal.key] ?? 0) - 1);
+        } else if (!this.occupancy.isFree(x, y)) return;
         this.moveTo(p, p.posX, p.posY, x, y, false, true);
         p.send(M.playerTeleported(x, y));
     }
@@ -435,6 +458,7 @@ export class GameWorld {
         const p = this.players.get(sessionId); if (!p) return;
         const prevMax = p.combat.maxHp, prevLvl = p.combat.lvl;
         p.combat = statsFromCharacter(characterJson);
+        p.prog = progressFromCharacter(characterJson);
         if (login) p.hp = p.combat.savedHp;
         else if (p.combat.lvl > prevLvl) p.hp = p.combat.maxHp;
         else if (p.hp > p.combat.maxHp) p.hp = p.combat.maxHp;
