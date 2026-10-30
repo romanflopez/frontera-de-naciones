@@ -109,12 +109,12 @@ export function buildSolmar(): WorldMap {
 
     // zonas temáticas
     const zones: Zone[] = [
-        { type: 'goblin', x: 16, y: 18, r: 5, n: 3, name: 'Campamento goblin' },
+        { type: 'goblin', x: 26, y: 21, r: 4, n: 3, name: 'Campamento goblin' },
         { type: 'zombie', x: 28, y: 11, r: 5, n: 3, name: 'Pantano muerto' },
         { type: 'skeleton', x: 29, y: 29, r: 5, n: 2, name: 'Cementerio viejo' },
         { type: 'barbaro', x: 34, y: 20, r: 2, n: 1, name: 'Guarida del bárbaro' },
         { type: 'goblin_elite', x: 22, y: 5, r: 3, n: 3, name: 'Avanzada goblin' },
-        { type: 'antlion', x: 6, y: 20, r: 4, n: 3, name: 'Hoyos de hormiga león' },
+        { type: 'antlion', x: 6, y: 27, r: 3, n: 3, name: 'Hoyos de hormiga león' },
         { type: 'skeleton_mage', x: 8, y: 33, r: 4, n: 2, name: 'Ruinas del nigromante' },
         { type: 'fire_ant', x: 34, y: 6, r: 3, n: 3, name: 'Hormiguero ardiente' },
         { type: 'wyvern', x: 20, y: 35, r: 3, n: 2, name: 'Nido de wyverns' },

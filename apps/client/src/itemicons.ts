@@ -75,9 +75,21 @@ function helm(c: Ctx, m: [string, string, string], kind: string) {
     else if (kind === 'mage_hood') { c.beginPath(); c.moveTo(14, 54); c.quadraticCurveTo(10, 24, 30, 4); c.quadraticCurveTo(36, 12, 40, 20); c.quadraticCurveTo(54, 30, 50, 54); c.lineTo(42, 46); c.lineTo(42, 32); c.lineTo(22, 32); c.lineTo(22, 46); c.closePath(); c.fill(); outline(c); c.fillStyle = MAT.gold[1]; c.fillRect(22, 30, 20, 2.5); }
     else { c.beginPath(); c.moveTo(14, 54); c.lineTo(14, 30); c.quadraticCurveTo(14, 10, 32, 10); c.quadraticCurveTo(50, 10, 50, 30); c.lineTo(50, 54); c.lineTo(42, 46); c.lineTo(42, 32); c.lineTo(22, 32); c.lineTo(22, 46); c.closePath(); c.fill(); outline(c); c.strokeStyle = 'rgba(0,0,0,.4)'; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(32, 12); c.lineTo(32, 30); c.stroke(); c.setLineDash([]); }
 }
-function ring(c: Ctx) {
-    c.strokeStyle = MAT.gold[1]; c.lineWidth = 7; c.beginPath(); c.arc(32, 36, 14, 0, 7); c.stroke(); c.strokeStyle = MAT.gold[0]; c.lineWidth = 2; c.beginPath(); c.arc(32, 36, 14, 3.6, 5.2); c.stroke();
-    const g = c.createRadialGradient(31, 18, 1, 32, 20, 8); g.addColorStop(0, '#fff'); g.addColorStop(0.5, '#8fb6f0'); g.addColorStop(1, '#3f5fa8'); c.fillStyle = g; poly(c, [[32, 8], [40, 16], [32, 26], [24, 16]]); c.fill(); outline(c, 1.2);
+/** Anillos y amuletos: el `look` elige el metal y la piedra. */
+const JEWEL: Record<string, { band: [string, string]; gem: [string, string, string] }> = {
+    ring_copper: { band: ['#e0a070', '#a8602f'], gem: ['#fff', '#e5b080', '#8a4a20'] }, ring_silver: { band: ['#eef2f5', '#a9b3bb'], gem: ['#fff', '#8fb6f0', '#3f5fa8'] },
+    ring_jade: { band: ['#ffe9a0', '#d6a445'], gem: ['#fff', '#7fe0a0', '#2a8a52'] }, ring_ruby: { band: ['#eef2f5', '#a9b3bb'], gem: ['#fff', '#ff7a7a', '#a02020'] },
+    ring_gold: { band: ['#ffe9a0', '#d6a445'], gem: ['#fff', '#ffe27a', '#c08a10'] },
+};
+function ring(c: Ctx, look?: string) {
+    const j = JEWEL[look ?? ''] ?? { band: [MAT.gold[0], MAT.gold[1]], gem: ['#fff', '#8fb6f0', '#3f5fa8'] as [string, string, string] };
+    c.strokeStyle = j.band[1]; c.lineWidth = 7; c.beginPath(); c.arc(32, 36, 14, 0, 7); c.stroke(); c.strokeStyle = j.band[0]; c.lineWidth = 2; c.beginPath(); c.arc(32, 36, 14, 3.6, 5.2); c.stroke();
+    const g = c.createRadialGradient(31, 18, 1, 32, 20, 8); g.addColorStop(0, j.gem[0]); g.addColorStop(0.5, j.gem[1]); g.addColorStop(1, j.gem[2]); c.fillStyle = g; poly(c, [[32, 8], [40, 16], [32, 26], [24, 16]]); c.fill(); outline(c, 1.2);
+}
+function amulet(c: Ctx) {
+    c.strokeStyle = '#8d5a33'; c.lineWidth = 3; c.beginPath(); c.moveTo(14, 8); c.quadraticCurveTo(32, 40, 50, 8); c.stroke();
+    c.fillStyle = grad(c, [ '#f4efe2', '#cfc3a4', '#7d7355'], 20, 30, 44, 56); c.beginPath(); c.moveTo(32, 28); c.quadraticCurveTo(46, 30, 44, 44); c.quadraticCurveTo(40, 58, 32, 56); c.quadraticCurveTo(24, 58, 20, 44); c.quadraticCurveTo(18, 30, 32, 28); c.fill(); outline(c);
+    c.strokeStyle = 'rgba(60,50,30,.6)'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(32, 34); c.lineTo(32, 50); c.moveTo(26, 40); c.lineTo(38, 40); c.stroke();
 }
 function shield(c: Ctx, m: [string, string, string]) {
     c.fillStyle = grad(c, m, 12, 8, 52, 56); poly(c, [[32, 8], [52, 14], [50, 38], [32, 56], [14, 38], [12, 14]]); c.fill(); outline(c);
@@ -101,7 +113,7 @@ export function itemIcon(look: string | undefined, slot: string, rarCol: string,
         else sword(c, m, false, false);
     } else if (slot === 'armadura') armor(c, m, l);
     else if (slot === 'cabeza') helm(c, m, l);
-    else if (slot === 'anillo') ring(c);
+    else if (slot === 'anillo') { if (l.startsWith('amulet')) amulet(c); else ring(c, l); }
     else shield(c, m);
     c.restore();
     c.strokeStyle = rarK ? rarCol : '#3a423a'; c.lineWidth = rarK ? 2.5 : 1.5; c.beginPath(); c.roundRect(2, 2, S - 4, S - 4, 8); c.stroke();

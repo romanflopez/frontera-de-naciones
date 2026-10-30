@@ -117,6 +117,13 @@ const BASES: Base[] = [
     { name: 'Capucha de mago', slot: 'cabeza', def: 0, mag: 3, look: 'mage_hood' },
     { name: 'Anillo opaco', slot: 'anillo' },
 ];
+/** Bases que solo venden los comerciantes (no caen de los mobs: así no se mueve el reparto de BASES que usa el server). El nombre es la clave del guardado. */
+const SHOP_BASES: Base[] = [
+    { name: 'Anillo de cobre', slot: 'anillo', look: 'ring_copper' }, { name: 'Anillo de plata', slot: 'anillo', look: 'ring_silver' }, { name: 'Anillo de jade', slot: 'anillo', look: 'ring_jade' },
+    { name: 'Anillo del filo', slot: 'anillo', look: 'ring_ruby' }, { name: 'Sello del veloz', slot: 'anillo', look: 'ring_gold' },
+    { name: 'Amuleto del cazador', slot: 'anillo', look: 'amulet_bone' },
+];
+const ALL_BASES = [...BASES, ...SHOP_BASES];
 const SLOTS: Slot[] = ['arma', 'armadura', 'cabeza', 'anillo'];
 interface Item extends Base { id: number; rar: Rarity; attrs: { id: AttrId; v: number }[] }
 let uid = 1;
@@ -973,6 +980,22 @@ function animFor(e: Ent, T: number): [string, number] {
     if (e.one && T < e.one.until) return [e.one.anim, T - e.one.t];
     return e.moving ? ['run', (e.phase || 0) + (e.t0 || 0)] : ['stance', T + (e.t0 || 0)];
 }
+/** Marca de rol sobre la cabeza del NPC: una insignia redonda con un símbolo simple (frasco, espada, escudo, gema, estrella, bandera, yelmo). */
+function drawRoleMark(role: string, x: number, y: number) {
+    const col = SHOPS[role]?.col ?? '#e9dfc0';
+    ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = 'rgba(14,18,14,.88)'; ctx.strokeStyle = col; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineWidth = 1.8; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath();
+    if (role === 'mercader') { ctx.moveTo(-1.8, -6); ctx.lineTo(1.8, -6); ctx.lineTo(1.8, -2.5); ctx.lineTo(5, 3); ctx.quadraticCurveTo(5.5, 6, 2.5, 6); ctx.lineTo(-2.5, 6); ctx.quadraticCurveTo(-5.5, 6, -5, 3); ctx.lineTo(-1.8, -2.5); ctx.closePath(); ctx.fill(); }
+    else if (role === 'armero') { ctx.moveTo(-5, 5); ctx.lineTo(4, -4); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-1, 3); ctx.lineTo(3, 0); ctx.moveTo(-6, 6); ctx.lineTo(-4, 4); ctx.stroke(); ctx.beginPath(); ctx.moveTo(2.5, -6.5); ctx.lineTo(6.5, -6.5); ctx.lineTo(6.5, -2.5); ctx.closePath(); ctx.fill(); }
+    else if (role === 'armadurero') { ctx.moveTo(0, -6.5); ctx.lineTo(5.5, -4.5); ctx.lineTo(5, 1); ctx.quadraticCurveTo(4, 5, 0, 7); ctx.quadraticCurveTo(-4, 5, -5, 1); ctx.lineTo(-5.5, -4.5); ctx.closePath(); ctx.fill(); ctx.fillStyle = 'rgba(14,18,14,.85)'; ctx.fillRect(-0.9, -4, 1.8, 8); }
+    else if (role === 'joyero') { ctx.moveTo(0, -6.5); ctx.lineTo(5.5, -1); ctx.lineTo(0, 6.5); ctx.lineTo(-5.5, -1); ctx.closePath(); ctx.fill(); ctx.strokeStyle = 'rgba(14,18,14,.85)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-5.5, -1); ctx.lineTo(5.5, -1); ctx.moveTo(-2, -1); ctx.lineTo(0, 6.5); ctx.moveTo(2, -1); ctx.lineTo(0, 6.5); ctx.stroke(); }
+    else if (role === 'alquimista') { for (let i = 0; i < 8; i++) { const r = i % 2 ? 2.2 : 6.5, a = (i * Math.PI) / 4 - Math.PI / 2; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.closePath(); ctx.fill(); }
+    else if (role === 'capitan') { ctx.moveTo(-4, -6.5); ctx.lineTo(-4, 7); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-3.5, -6); ctx.lineTo(5.5, -3.5); ctx.lineTo(-3.5, -0.5); ctx.closePath(); ctx.fill(); }
+    else { ctx.moveTo(-5, 3); ctx.lineTo(-5, -1); ctx.quadraticCurveTo(-5, -6.5, 0, -6.5); ctx.quadraticCurveTo(5, -6.5, 5, -1); ctx.lineTo(5, 3); ctx.closePath(); ctx.fill(); ctx.fillStyle = 'rgba(14,18,14,.85)'; ctx.fillRect(-3.5, -1.2, 7, 1.8); ctx.fillRect(-0.8, -1.2, 1.6, 6); }
+    ctx.restore();
+}
 function nameTag(name: string, x: number, y: number, col: string, alpha = 1, size = 11) {
     ctx.globalAlpha = alpha; ctx.textAlign = 'center'; ctx.font = `600 ${size}px 'Alegreya Sans', system-ui, sans-serif`;
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.strokeText(name, x, y); ctx.fillStyle = col; ctx.fillText(name, x, y); ctx.globalAlpha = 1;
@@ -1082,7 +1105,11 @@ function render() {
     for (const o of others.values()) { if (unseen(o)) continue; const p = iso(o.x, o.y); nameTag(o.name, p.x, p.y - 70, factionCol(o.profile.split(';')[0]), o.gone ? 0.5 : 1); if (o.maxHp && o.hp !== undefined && o.hp < o.maxHp) { const f = Math.max(0, o.hp / o.maxHp); ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - 17, p.y - 66, 34, 5); ctx.fillStyle = isEnemy(o) ? '#d9443a' : '#58b85a'; ctx.fillRect(p.x - 16, p.y - 65, 32 * f, 3); } }
     { const p = iso(P.x, P.y); nameTag(P.name, p.x, p.y - 70, factionCol(selectedFaction)); }
     drawPortalLabels();
-    for (const n of MAP.npcs) { const p = iso(n.x + 0.5, n.y + 0.5); nameTag(n.name, p.x, p.y - 70, '#9fd36b'); if (n.id === 'capitan' && questMark()) { ctx.font = "700 22px 'Alegreya SC', Georgia, serif"; ctx.textAlign = 'center'; ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#2a1a00'; ctx.lineWidth = 3; ctx.strokeText(questMark(), p.x, p.y - 90 + Math.sin(now() * 4) * 2); ctx.fillText(questMark(), p.x, p.y - 90 + Math.sin(now() * 4) * 2); } }
+    for (const n of MAP.npcs) {
+        const p = iso(n.x + 0.5, n.y + 0.5);
+        nameTag(n.name, p.x, p.y - 70, '#9fd36b'); drawRoleMark(roleOf(n), p.x, p.y - 95);
+        if (roleOf(n) === 'capitan' && questMark()) { ctx.font = "700 22px 'Alegreya SC', Georgia, serif"; ctx.textAlign = 'center'; ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#2a1a00'; ctx.lineWidth = 3; ctx.strokeText(questMark(), p.x, p.y - 118 + Math.sin(now() * 4) * 2); ctx.fillText(questMark(), p.x, p.y - 118 + Math.sin(now() * 4) * 2); }
+    }
     for (const p of projs) {
         const s = iso(p.x, p.y); s.y -= p.arc || 0;
         (p.trail ||= []).push({ x: s.x, y: s.y - 24 }); if (p.trail.length > 8) p.trail.shift();
@@ -1389,13 +1416,28 @@ function drawBuilding(b: { id: string; x: number; y: number; w: number; h: numbe
 type Npc = (typeof MAP.npcs)[number];
 /** Piezas de avatar (las mismas del muñeco por capas) de cada NPC. */
 const NPC_LOOKS: Record<string, string[]> = {
-    mercader: ['leather_boots', 'cloth_pants', 'cloth_gloves', 'cloth_shirt', 'head_short', 'leather_hood'],
-    capitan: ['leather_boots', 'cloth_pants', 'cloth_gloves', 'cloth_shirt', 'head_short', 'plate_helm'],
+    mercader_s: ['leather_boots', 'cloth_pants', 'cloth_gloves', 'cloth_shirt', 'head_short', 'leather_hood'],
+    mercader_v: ['cloth_sandals', 'leather_pants', 'leather_gloves', 'cloth_shirt', 'head_bald'],
+    armero_s: ['leather_boots', 'leather_pants', 'leather_gloves', 'leather_chest', 'head_bald', 'maul'],
+    armero_v: ['chain_boots', 'leather_pants', 'chain_gloves', 'leather_chest', 'head_short', 'mace'],
+    armadurero_s: ['chain_boots', 'chain_greaves', 'chain_gloves', 'chain_cuirass', 'head_bald', 'chain_coif'],
+    armadurero_v: ['leather_boots', 'chain_greaves', 'plate_gauntlets', 'plate_cuirass', 'head_bald'],
+    joyero_s: ['cloth_sandals', 'mage_skirt', 'cloth_gloves', 'mage_vest', 'head_short'],
+    joyero_v: ['leather_boots', 'cloth_pants', 'cloth_gloves', 'leather_chest', 'head_short', 'leather_hood'],
+    alquimista_s: ['mage_boots', 'mage_skirt', 'mage_sleeves', 'mage_vest', 'head_short', 'mage_hood', 'staff'],
+    alquimista_v: ['mage_boots', 'mage_skirt', 'mage_sleeves', 'mage_vest', 'head_bald', 'wand'],
+    capitan_s: ['leather_boots', 'cloth_pants', 'cloth_gloves', 'cloth_shirt', 'head_short', 'plate_helm'],
+    capitan_v: ['plate_boots', 'plate_greaves', 'plate_gauntlets', 'plate_cuirass', 'head_short', 'plate_helm', 'longsword'],
+    guardia_s: ['chain_boots', 'chain_greaves', 'chain_gloves', 'chain_cuirass', 'head_short', 'plate_helm', 'longsword', 'kite_shield'],
+    guardia_v: ['plate_boots', 'chain_greaves', 'plate_gauntlets', 'chain_cuirass', 'head_bald', 'chain_coif', 'battle_axe'],
 };
+/** Rol del NPC (mercader, armero, ...): el id es `rol_s` / `rol_v` (o `rol_s1`...). */
+const roleOf = (n: { id: string }) => n.id.split('_')[0];
+const lookOfNpc = (n: { id: string }) => NPC_LOOKS[n.id] ?? NPC_LOOKS[n.id.replace(/\d+$/, '')];
 function refreshNpcLook() {
     if (!PAPER) return;
     for (const n of MAP.npcs) {
-        const names = NPC_LOOKS[n.id], key = 'npc_' + n.id;
+        const names = lookOfNpc(n), key = 'npc_' + n.id;
         if (!names || IMG[key]) continue;
         const c = composeLook(names); if (c) { IMG[key] = c; SPR[key] = SPR.hero; }
     }
@@ -1490,9 +1532,57 @@ function openQuestDlg(n: Npc) {
 /** "!" amarillo sobre el Capitán cuando tiene misión para vos; "?" cuando podés entregar. */
 const questMark = () => (!QUESTS[Q.i] ? '' : Q.st === 'new' ? '!' : Q.st === 'ready' ? '?' : '');
 
-// ---------- mercader: vender items de la bolsa ----------
-const SELL_PRICE = [4, 15, 50, 150]; // oro por rareza (Común, Mágico, Raro, Épico)
-const sellPrice = (it: Item) => SELL_PRICE[it.rar.k] ?? 1;
+// ---------- vendedores y servicios de las ciudades: cada NPC tiene un rol (ver roleOf) ----------
+/** Una línea del stock fijo de un vendedor: un item común de la base `base` (con atributos fijos si los hay) o pociones sueltas / en pack. */
+interface Stock { base?: string; attrs?: [AttrId, number][]; price: number; lvl: number; pot?: 'hp' | 'mp'; qty?: number }
+interface ShopDef { label: string; col: string; greet: string; stock: Stock[] }
+const SHOPS: Record<string, ShopDef> = {
+    mercader: {
+        label: 'Mercader de pociones', col: '#e0524a', greet: 'Pociones frescas: una de vida te salva el pellejo, una de maná te da otro hechizo.',
+        stock: [{ pot: 'hp', qty: 1, price: POTS.hp.price, lvl: 1 }, { pot: 'mp', qty: 1, price: POTS.mp.price, lvl: 1 }],
+    },
+    armero: {
+        label: 'Armero', col: '#c8d2da', greet: 'Acero bien templado. Si buscás algo para romper cráneos, llegaste al lugar.',
+        stock: [
+            { base: 'Espada corta', price: 45, lvl: 1 }, { base: 'Hacha de leñador', price: 80, lvl: 1 }, { base: 'Maza', price: 130, lvl: 3 }, { base: 'Espada larga', price: 190, lvl: 4 },
+            { base: 'Hacha de guerra', price: 320, lvl: 6 }, { base: 'Martillo pesado', price: 420, lvl: 8 }, { base: 'Mandoble', price: 600, lvl: 10 },
+        ],
+    },
+    armadurero: {
+        label: 'Armadurero', col: '#8fb6d8', greet: 'Una buena armadura vale más que un buen brazo. Probate lo que quieras.',
+        stock: [
+            { base: 'Ropas de tela', price: 20, lvl: 1 }, { base: 'Capucha de cuero', price: 30, lvl: 1 }, { base: 'Coraza de cuero', price: 70, lvl: 2 }, { base: 'Cofia de malla', price: 90, lvl: 4 },
+            { base: 'Yelmo de hierro', price: 190, lvl: 6 }, { base: 'Cota de malla', price: 230, lvl: 5 }, { base: 'Armadura de placas', price: 520, lvl: 9 },
+        ],
+    },
+    joyero: {
+        label: 'Joyero', col: '#e8c34a', greet: 'Piedras, plata y un poco de magia: nada que no se pueda llevar en un dedo.',
+        stock: [
+            { base: 'Anillo opaco', price: 15, lvl: 1 },
+            { base: 'Anillo de cobre', attrs: [['hp', 12]], price: 85, lvl: 2 }, { base: 'Anillo de plata', attrs: [['mp', 10]], price: 95, lvl: 2 },
+            { base: 'Anillo de jade', attrs: [['fres', 8]], price: 120, lvl: 3 }, { base: 'Amuleto del cazador', attrs: [['exp', 5]], price: 150, lvl: 3 },
+            { base: 'Anillo del filo', attrs: [['crit', 3]], price: 210, lvl: 5 }, { base: 'Sello del veloz', attrs: [['aspd', 6]], price: 240, lvl: 6 },
+        ],
+    },
+    alquimista: {
+        label: 'Alquimista', col: '#7fe0b0', greet: 'Pociones al por mayor y lo necesario para quien vive de la magia.',
+        stock: [
+            { pot: 'hp', qty: 5, price: 110, lvl: 1 }, { pot: 'mp', qty: 5, price: 135, lvl: 1 },
+            { base: 'Capucha de mago', price: 95, lvl: 3 }, { base: 'Báculo de fresno', price: 70, lvl: 1 }, { base: 'Varita', price: 140, lvl: 4 }, { base: 'Túnica de mago', price: 150, lvl: 4 },
+        ],
+    },
+    capitan: { label: 'Capitán', col: '#ffd24a', greet: '', stock: [] },
+    guardia: { label: 'Guardia', col: '#9fa8b0', greet: '', stock: [] },
+};
+const GUARD_LINES: Record<string, string[]> = {
+    s: ['La empalizada aguanta, pero los goblins del sureste no se cansan. Si vas a salir, llevate pociones.', 'Dentro de las murallas no pelea nadie: en la ciudad se descansa y se comercia.', 'El Capitán Aldric tiene encargos para quien sepa pelear. Hablá con él en la plaza.', 'Armero, armadurero, joyero... todo lo que necesitás está a unos pasos de la plaza.'],
+    v: ['Vhar no se rinde: las murallas son de hierro y de paciencia. Pasá, pero sin armar lío.', 'Más allá de la puerta sur empieza el páramo. No salgas sin armadura.', 'El Capitán Kharos recluta cazadores. Está en la plaza del noreste.', 'La forja no se apaga nunca. Si necesitás acero, el armero está al oeste.'],
+};
+/** Valor base de cada item de tienda (precio de lista): el precio de venta es una fracción de esto. */
+const VALUE: Record<string, number> = {};
+for (const sh of Object.values(SHOPS)) for (const st of sh.stock) if (st.base && VALUE[st.base] == null) VALUE[st.base] = st.price;
+const SELL_PRICE = [4, 15, 50, 150]; // oro por rareza (Común, Mágico, Raro, Épico), más un cuarto del valor de lista
+const sellPrice = (it: Item) => Math.round((SELL_PRICE[it.rar.k] ?? 1) + (VALUE[it.name] ?? 0) * 0.25);
 const TALK_RANGE = 2.6;
 let talkNpc: Npc | null = null, shopNpc: Npc | null = null;
 const npcDist = (n: Npc) => Math.hypot(n.x + 0.5 - P.x, n.y + 0.5 - P.y);
@@ -1501,21 +1591,64 @@ function talkTo(n: Npc) {
     if (npcDist(n) <= TALK_RANGE) { openShop(n); return; }
     if (moveTo(n.x + 0.5, n.y + 0.5)) talkNpc = n; else toast('No llegás hasta ahí.');
 }
+function stockItem(st: Stock): Item {
+    const b = ALL_BASES.find((x) => x.name === st.base)!;
+    return { id: uid++, ...b, rar: RAR[0], attrs: (st.attrs ?? []).map(([id, v]) => ({ id, v })) };
+}
+const stockLabel = (st: Stock) => {
+    if (st.pot) return `${POTS[st.pot].name}${st.qty! > 1 ? ` ×${st.qty}` : ''}`;
+    return st.base!;
+};
+function stockInfo(st: Stock): string {
+    if (st.pot) return st.qty! > 1 ? `Pack · tenés ${pots[st.pot]}` : `Tenés ${pots[st.pot]}`;
+    const b = ALL_BASES.find((x) => x.name === st.base)!, bits: string[] = [];
+    if (b.dmg) bits.push(`daño ${b.dmg[0]}–${b.dmg[1]}`); if (b.def) bits.push(`def ${b.def}`); if (b.mag) bits.push(`mag +${b.mag}`);
+    for (const a of st.attrs ?? []) bits.push(attrText({ id: a[0], v: a[1] }));
+    return `${bits.join(' · ') || b.slot} · Nv ${st.lvl}`;
+}
 function openShop(n: Npc = MAP.npcs[0]) {
-    if (n.id === 'capitan') { openQuestDlg(n); return; }
-    shopNpc = n; talkNpc = null; $('shopName').textContent = n.name; $('shop').hidden = false; renderShop();
-    log(`${n.name}: «Traeme lo que no uses y te lo pago en oro.»`);
+    const role = roleOf(n);
+    if (role === 'capitan') { openQuestDlg(n); return; }
+    if (role === 'guardia') { openTalk(n); return; }
+    const def = SHOPS[role]; if (!def) return;
+    shopNpc = n; talkNpc = null; $('qdlg').hidden = true; $('shopName').textContent = n.name; $('shopRole').textContent = def.label; $('shop').hidden = false; renderShop();
+    log(`${n.name}: «${def.greet}»`);
+}
+/** Guardias y otros NPC de ambiente: una charla corta, sin tienda. */
+function openTalk(n: Npc) {
+    const lines = GUARD_LINES[n.id.endsWith('_v') || n.id.includes('_v') ? 'v' : 's'];
+    shopNpc = n; talkNpc = null; $('shop').hidden = true;
+    $('qdName').textContent = n.name; $('qdlg').hidden = false; $('qdForges').innerHTML = ''; $('qdBtn').hidden = true;
+    $('qdBody').innerHTML = `<small>${SHOPS.guardia.label}</small><br>${lines[Math.floor(R() * lines.length)]}`;
 }
 function closeShop() { shopNpc = null; $('shop').hidden = true; $('qdlg').hidden = true; }
 function renderShop() {
-    if ($('shop').hidden) return;
+    if ($('shop').hidden || !shopNpc) return;
+    const def = SHOPS[roleOf(shopNpc)];
     $('shopGold').textContent = P.gold + ' oro';
-    const buy = (['hp', 'mp'] as const).map((k) => `<button type="button" class="srow" data-buy="${k}"><span style="color:${POTS[k].col}">${POTS[k].name}<small>Tenés ${pots[k]}</small></span><em>${POTS[k].price} oro</em></button>`).join('');
+    const buy = def.stock.map((st, i) => {
+        const it = st.base ? stockItem(st) : null, poor = P.gold < st.price;
+        const icon = it ? ico(it) : `<span class="pico" style="background:${POTS[st.pot!].col}"></span>`;
+        return `<button type="button" class="srow${poor ? ' poor' : ''}" data-buy="${i}" title="${esc(stockInfo(st))}">${icon}<span style="color:${it ? '#e7e2d3' : POTS[st.pot!].col}">${esc(stockLabel(st))}<small>${esc(stockInfo(st))}</small></span><em>${st.price} oro</em></button>`;
+    }).join('');
     $('shopList').innerHTML = `<div class="label">Comprar</div>${buy}<div class="label">Tu bolsa · tocá un item para venderlo</div>` + (P.bag.length
         ? P.bag.map((it, i) => `<button type="button" class="srow" data-sell="${i}">${ico(it)}<span style="color:${it.rar.c}">${esc(it.name)}<small>${it.rar.n} · ${it.slot}</small></span><em>${sellPrice(it)} oro</em></button>`).join('')
         : `<div class="label">La bolsa está vacía</div>`);
-    document.querySelectorAll<HTMLElement>('[data-buy]').forEach((b) => (b.onclick = () => { const k = b.dataset.buy as 'hp' | 'mp'; if (P.gold < POTS[k].price) { toast('No te alcanza el oro.'); return; } P.gold -= POTS[k].price; pots[k]++; renderPots(); renderShop(); }));
+    document.querySelectorAll<HTMLElement>('[data-buy]').forEach((b) => (b.onclick = () => buyStock(def.stock[+b.dataset.buy!])));
     document.querySelectorAll<HTMLElement>('[data-sell]').forEach((b) => (b.onclick = () => sellItem(+b.dataset.sell!)));
+}
+function buyStock(st: Stock) {
+    if (P.gold < st.price) { toast('No te alcanza el oro.'); return; }
+    if (st.pot) {
+        if (pots[st.pot] >= 99) { toast('Ya llevás el máximo de pociones.'); return; }
+        P.gold -= st.price; pots[st.pot] = Math.min(99, pots[st.pot] + st.qty!); renderPots();
+        log(`Compraste ${st.qty! > 1 ? st.qty + ' ' : 'una '}${POTS[st.pot].name.toLowerCase()}${st.qty! > 1 ? 's' : ''} por ${st.price} de oro.`);
+    } else {
+        if (P.bag.length >= 18) { toast('La bolsa está llena.'); return; }
+        const it = stockItem(st); P.gold -= st.price; P.bag.push(it);
+        log(`Compraste <span style="color:${it.rar.c}">${esc(it.name)}</span> por ${st.price} de oro.`); renderBag();
+    }
+    renderShop();
 }
 function sellItem(i: number) {
     const it = P.bag[i]; if (!it) return;
@@ -1651,7 +1784,7 @@ const flow = initLoginUI({
 let pendingSave: CharSave | null = null, welcomeBack = false;
 const saveItem = (it: Item): SavedItem => ({ n: it.name, r: it.rar.k, a: it.attrs.map((a) => ({ id: a.id, v: a.v })) });
 function loadItem(v: SavedItem | null | undefined): Item | null {
-    const b = v && BASES.find((x) => x.name === v.n); if (!v || !b) return null;
+    const b = v && ALL_BASES.find((x) => x.name === v.n); if (!v || !b) return null;
     return { id: uid++, ...b, rar: RAR[Math.min(3, Math.max(0, v.r))], attrs: v.a.filter((a) => ATTRS.some((t) => t.id === a.id)).map((a) => ({ id: a.id as AttrId, v: a.v })) };
 }
 function buildSave(): CharSave {
