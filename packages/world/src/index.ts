@@ -149,3 +149,6 @@ export function buildSolmar(): WorldMap {
     return extendTraining(extendCities(extendAshlands(extendSolmar({ size: N, tiles, blocked, safe, props, decals, zones, buildings, npcs, spawn: { x: 6, y: 7 }, fire: { x: 8, y: 8 } }))));
 }
 
+export * from './town';
+export { VILLA, VILLA_ID, VILLA_BUILDINGS, villaDoor, type VillaBuilding } from './solmar/villa';
+export { INTERIORS, TEMPLE_RESPAWN, roomOf } from './solmar/interiors';

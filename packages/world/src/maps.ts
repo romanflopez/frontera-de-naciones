@@ -7,7 +7,9 @@
 import { buildSolmar, type WorldMap } from './index';
 import { HUBS } from './cities';
 import { buildPruebaCaza, buildPruebaMazmorra, PRUEBA_CAZA, PRUEBA_MAZMORRA } from './testmaps';
-import type { PortalProgress } from './training';
+import { TRAINING, type PortalProgress } from './training';
+import { buildSolmarVilla, VILLA, VILLA_BUILDINGS, VILLA_ID, VILLA_N, villaDoor, type VillaBuilding } from './solmar/villa';
+import { buildInterior, INTERIORS, roomOf, TEMPLE_RESPAWN } from './solmar/interiors';
 
 /** Rectángulo de celdas con los dos extremos incluidos (igual que `WorldMap.dungeon`). */
 export interface MapRect { x0: number; y0: number; x1: number; y1: number }
@@ -17,9 +19,10 @@ export const inMapRect = (r: MapRect, x: number, y: number): boolean => x >= r.x
 /**
  * Tipo de vínculo (cambia el dibujo y el requisito, no el mecanismo):
  * `walk` camino (franja al borde del mapa), `portal` portal de piedra (ida y vuelta), `oneway` solo de ida,
- * `door` puerta con requisito (`gate`), `npc` teletransporte de un NPC.
+ * `door` puerta con requisito (`gate`), `npc` teletransporte de un NPC, `enter` puerta de un edificio (entrar/salir de un interior,
+ * sin requisito y sin portal dibujado).
  */
-export type LinkKind = 'walk' | 'portal' | 'oneway' | 'door' | 'npc';
+export type LinkKind = 'walk' | 'portal' | 'oneway' | 'door' | 'npc' | 'enter';
 /** Requisitos para cruzar: nivel mínimo, misiones entregadas (índice en QUESTS: `qi >= quest`) y/o una llave que se consume al cruzar. */
 export interface LinkGate { lvl?: number; quest?: number; key?: string }
 /** Vínculo entre mapas: pisar (x, y) en `map` lleva a `to`. El cliente lo pide por `id`, nunca por coordenadas. */
@@ -69,13 +72,42 @@ export const canonicalMapId = (id: string | undefined): string | undefined => (i
 
 const ARENA: MapRect = { x0: 46, y0: 26, x1: 60, y1: 38 };
 
+/** Camino entre la Villa de Solmar y el mapa viejo: sale por el portón este de la villa y llega a la puerta sur de la ciudad vieja. */
+export const LEGACY_VILLA_LINK = { x: 8, y: 26 }, LEGACY_FROM_VILLA = { x: 8, y: 24 };
+
+/** Mapas de la Villa de Solmar (Fase 2): la villa exterior y un interior por edificio, unidos por puertas `enter`. */
+function solmarMaps(): Record<string, MapDef> {
+    const out: Record<string, MapDef> = {};
+    const villaLinks: Link[] = [
+        { id: 'villa_a_legacy', map: VILLA_ID, ...VILLA.toLegacy, to: { map: 'solmar_legacy', ...LEGACY_FROM_VILLA }, kind: 'walk', msg: 'Tomás el Camino de la Marea hacia las tierras de caza.' },
+    ];
+    for (const it of INTERIORS) {
+        const d = villaDoor(it.building as VillaBuilding), r = roomOf(it);
+        villaLinks.push({ id: `villa_a_${it.building}`, map: VILLA_ID, ...d.door, to: { map: it.id, ...r.arrive }, kind: 'enter', msg: `Entrás: ${it.name}.` });
+        out[it.id] = {
+            id: it.id, name: it.name, region: 'solmar', size: r.N, lvl: null, pvp: 'off', safe: true,
+            spawn: { ...r.arrive }, respawn: 'faction_home',
+            links: [{ id: `${it.building}_a_villa`, map: it.id, ...r.exit, to: { map: VILLA_ID, ...d.out }, kind: 'enter', msg: 'Salís a la Villa de Solmar.' }],
+            build: () => buildInterior(it),
+        };
+    }
+    out[VILLA_ID] = {
+        id: VILLA_ID, name: 'Villa de Solmar', region: 'solmar', size: VILLA_N, lvl: null, pvp: 'off', safe: true,
+        spawn: { ...VILLA.spawn }, respawn: 'faction_home', links: villaLinks, build: buildSolmarVilla,
+    };
+    return out;
+}
+void VILLA_BUILDINGS;
+
 export const MAPS: Record<string, MapDef> = {
     solmar_legacy: {
-        id: 'solmar_legacy', name: 'Solmar', region: 'solmar', size: 96, lvl: [1, 12], pvp: 'faction', safe: false,
+        id: 'solmar_legacy', name: 'Tierras de Solmar', region: 'solmar', size: 96, lvl: [1, 12], pvp: 'faction', safe: false,
         spawn: { x: HUBS.solmar.x, y: HUBS.solmar.y }, respawn: 'faction_home', tempRects: [ARENA], ffaRect: ARENA,
         links: [
             // Portal de prueba junto a la plaza de Solmar: lleva al claro de caza (Fase 1 de docs/MUNDO.md)
             { id: 'solmar_a_caza', map: 'solmar_legacy', x: 11, y: 11, to: { map: PRUEBA_CAZA.id, ...PRUEBA_CAZA.fromLegacy }, kind: 'portal', msg: 'Cruzás el portal hacia el Claro de prueba.' },
+            // camino a la Villa de Solmar (Fase 2): por la puerta sur de la ciudad vieja
+            { id: 'legacy_a_villa', map: 'solmar_legacy', ...LEGACY_VILLA_LINK, to: { map: VILLA_ID, ...VILLA.fromLegacy }, kind: 'walk', msg: 'Tomás el Camino de la Marea hacia la Villa de Solmar.' },
         ],
         build: () => buildSolmar(),
     },
@@ -99,6 +131,7 @@ export const MAPS: Record<string, MapDef> = {
         ],
         build: buildPruebaMazmorra,
     },
+    ...solmarMaps(),
 };
 
 export const getMapDef = (id: string | undefined): MapDef | undefined => { const c = canonicalMapId(id); return c ? MAPS[c] : undefined; };
@@ -110,15 +143,36 @@ export function buildMap(id: string): WorldMap {
 export const mapLinks = (id: string): Link[] => getMapDef(id)?.links ?? [];
 export const findLink = (id: string, portalId: string): Link | undefined => mapLinks(id).find((l) => l.id === portalId);
 
-/** Hogar de cada facción (hoy en el mapa original): destino del respawn 'faction_home'. */
+/**
+ * Hogar de cada facción: dónde aparece un personaje nuevo y a dónde lleva "volver a la ciudad" del Portal de Frontera.
+ * Solmar vive en la Villa de Solmar (Fase 2); Vhar sigue en su ciudad del mapa original.
+ */
 export function factionHome(faction: string): { map: string; x: number; y: number } | null {
+    if (faction === 'solmar') return { map: VILLA_ID, ...VILLA.spawn };
     const h = HUBS[faction]; return h ? { map: DEFAULT_MAP, x: h.x, y: h.y } : null;
+}
+/** Punto de reaparición de cada facción al morir en un mapa con respawn 'faction_home': Solmar reaparece en el Templo de la villa. */
+export function factionRespawn(faction: string): { map: string; x: number; y: number } | null {
+    if (faction === 'solmar') return { map: 'solmar_templo', ...TEMPLE_RESPAWN };
+    return factionHome(faction);
 }
 /** Dónde reaparece quien muere en `def`. */
 export function respawnTarget(def: MapDef, faction: string): { map: string; x: number; y: number } {
     const r = def.respawn;
-    if (r === 'faction_home') return factionHome(faction) ?? { map: def.id, ...def.spawn };
+    if (r === 'faction_home') return factionRespawn(faction) ?? { map: def.id, ...def.spawn };
     return { map: r.map ?? def.id, x: r.x, y: r.y };
+}
+let legacyArrivals: Record<string, { x: number; y: number }> | null = null;
+/**
+ * Destino de un pedido del menú del Portal de Frontera, en cualquier mapa: 'city' = hogar de la facción, o el id de una zona de
+ * entrenamiento (todas siguen en el mapa original; las celdas de llegada las calcula training.ts al armarlo).
+ */
+export function waypointTarget(id: string, faction: string): { map: string; x: number; y: number; step?: number } | null {
+    if (id === 'city') return factionHome(faction);
+    const t = TRAINING.find((q) => q.id === id); if (!t) return null;
+    legacyArrivals ??= buildMap(DEFAULT_MAP).waypointArrivals ?? {};
+    const a = legacyArrivals[id];
+    return a ? { map: DEFAULT_MAP, x: a.x, y: a.y, step: t.step } : null;
 }
 /** ¿La posición (x, y) de `def` es temporal (no se guarda; al reconectar se usa `rest` o el spawn)? */
 export function isTemporaryCell(def: MapDef, map: WorldMap | undefined, x: number, y: number): boolean {
