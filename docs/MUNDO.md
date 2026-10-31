@@ -1,6 +1,6 @@
 # El mundo: de un mapa único a mapas separados
 
-Estado: **Fases 0 y 1 implementadas** (infraestructura multi-mapa con 3 mapas de prueba) y **Fase 2 en curso: Villa de Solmar hecha** (villa exterior + 8 interiores; Vhar pendiente). Ver «Estado de la implementación» al final de la sección 4. El resto sigue en diseño. Diagrama: [`mundo-grafo.html`](mundo-grafo.html) (SVG autocontenido; se abre en el navegador).
+Estado: **Fases 0 y 1 implementadas** (infraestructura multi-mapa con 3 mapas de prueba) **Fase 2 en curso: Villa de Solmar hecha** (villa exterior + 8 interiores; Vhar pendiente) y **Fase 3 hecha: núcleo de caza** (Llanos del Alba, La Frontera, Camposanto Viejo y Páramo Reseco con pits de 45-60 mobs). Ver «Estado de la implementación» al final de la sección 4. El resto sigue en diseño. Diagrama: [`mundo-grafo.html`](mundo-grafo.html) (SVG autocontenido; se abre en el navegador).
 Base que se mantiene: la curva de niveles y mobs de [`ZONAS.md`](ZONAS.md) (niveles 1-12), la cadena de misiones del Capitán y los portales de `packages/world/src/training.ts`.
 
 Decisión del usuario: **mapas separados**. Cada zona es su propio mapa grande; se conectan con caminos, portales y puertas, con pantalla de carga. La idea de organizar el mundo como un grafo (naciones enfrentadas, zona de principiantes, tierra compartida, mazmorras en cadena, zonas por evento) viene de un diagrama de referencia; los nombres, el lore y el contenido son nuestros.
@@ -180,10 +180,10 @@ Reglas de lectura: **Nv** = nivel del mob (de `ZONAS.md`; los jefes no se reesca
 | `vhar_forja` | Forja de Hierro | 72 | - | - | no | espejo del puerto: joyero, alquimista, mercado |
 | `vhar_cuartel` | Cuartel de la Muralla | 48 | - | - | no | armero, armadurero, patio de armas |
 | `vhar_huerto` | Huerto de Brasas | 64 | - | - | no | espejo del jardín |
-| `albores` | Llanos del Alba | 128 | 1-2 | goblin Nv1 (8 x 3), goblin_elite Nv2 (8 x 2) = 40 | no | zona de principiantes; las dos villas llegan aquí. Un puesto seguro con mercader. Portales 1 y 2. |
-| `frontera` | La Frontera | 160 | 3-4 | zombie Nv3 (10 x 2), antlion Nv4 (10 x 2) = 40 | facción | cruce de caminos compartido; Pantano muerto (este) y Hoyos de hormiga león (oeste). Portales 3 (hoyos) y 4 (pantano). Posta segura. |
-| `camposanto` | Camposanto Viejo | 144 | 5 | skeleton Nv5 (10 x 2), skeleton_mage Nv5 (8 x 2) = 36 | facción | Cementerio viejo + Ruinas del nigromante. Portales 5 y 6. |
-| `paramo` | Páramo Reseco | 160 | 5 | antlion Nv5 (10 x 3) = 30 | facción | oasis seguro; escalera sellada a la Cripta; corredor a las Tierras de ceniza |
+| `llanos_alba` | Llanos del Alba | 128 | 1-2 | **hecho (Fase 3)**: goblin Nv1 (50-55 x 2 pits), goblin_elite Nv2 (45-60 x 2 pits) = 230 | no | zona de principiantes; las dos villas llegan aquí. Un puesto seguro con mercader. Portales 1 y 2. |
+| `la_frontera` | La Frontera | 160 | 3-4 | **hecho (Fase 3)**: antlion Nv4 (50-60 x 2 pits), zombie Nv3 (50-60 x 2 pits) = 240 | facción | cruce de caminos compartido; Pantano muerto (este) y Hoyos de hormiga león (oeste). Portales 3 (hoyos) y 4 (pantano). Posta segura. |
+| `camposanto` | Camposanto Viejo | 144 | 5 | **hecho (Fase 3)**: skeleton Nv5 (45-60 x 2 pits), skeleton_mage Nv5 (45-55 x 2 pits) = 225 | facción | Cementerio viejo + Ruinas del nigromante. Portales 5 y 6. |
+| `paramo` | Páramo Reseco | 160 | 5 | **hecho (Fase 3)**: antlion Nv5 (45-60 x 4 pits) = 230 | facción | Oasis del Páramo seguro; escalera sellada a la Cripta (sigue en el mapa viejo); el corredor a las Tierras de ceniza queda para la Fase 4 |
 | `hormiguero` | Hormiguero Ardiente | 128 | 6 | fire_ant Nv6 (10 x 3) = 30 | facción | portal 7; puerta a la Guarida del bárbaro |
 | `riscos` | Riscos del Wyvern | 128 | 7 | wyvern Nv7 (6 x 4) = 24 | facción | puertas al Laberinto y a la Cueva del gólem |
 | `nido_arana` | Nido de la Reina Araña | 64 | 7 | **arana** (boss) + 6 zombie (escolta) | no | desde La Frontera, Nv >= 6; suelta esquirla de la cripta |
@@ -212,11 +212,11 @@ Cambios respecto de `ZONAS.md`: (1) el Foso del demonio del núcleo (Nv12) **des
 |---|---|---|---|
 | `solmar_villa` | `solmar_puerto`, `solmar_cuartel`, `solmar_jardin` | camino ambos sentidos | puertas de la villa |
 | `vhar_ciudadela` | `vhar_forja`, `vhar_cuartel`, `vhar_huerto` | camino | |
-| `solmar_villa` | `albores` | camino | "Camino de la Marea" (portón este) |
-| `vhar_ciudadela` | `albores` | camino | "Camino del Yunque" (puerta sur) |
-| `albores` | `frontera` | camino | "Paso de la Frontera" |
-| `frontera` | `camposanto`, `hormiguero`, `riscos` | camino | |
-| `frontera` | `nido_arana` | puerta | Nv >= 6 |
+| `solmar_villa` | `llanos_alba` | camino | "Camino de la Marea" (portón este) |
+| `vhar_ciudadela` | `llanos_alba` | camino | "Camino del Yunque" (puerta sur) |
+| `llanos_alba` | `la_frontera` | camino | "Paso de la Frontera" |
+| `la_frontera` | `camposanto`, `hormiguero`, `riscos` | camino | |
+| `la_frontera` | `nido_arana` | puerta | Nv >= 6 |
 | `hormiguero` | `guarida_barbaro` | puerta | Nv >= 7 |
 | `riscos` | `laberinto` / `cueva_golem` | puerta | Nv >= 8 / Nv >= 9 |
 | `camposanto` | `paramo` | camino | portón sur (el actual) |
@@ -238,12 +238,12 @@ Cambios respecto de `ZONAS.md`: (1) el Foso del demonio del núcleo (Nv12) **des
 
 | Paso | Zona (TRAINING) | Mapa | Nivel de desbloqueo alt. (hoy) |
 |---|---|---|---|
-| 1 `goblins` | Campamento goblin | `albores` | 1 |
-| 2 `avanzada` | Avanzada goblin | `albores` | 3 |
-| 3 `hoyos` | Hoyos de hormiga león | `frontera` | 5 |
-| 4 `pantano` | Pantano muerto | `frontera` | 7 |
-| 5 `cementerio` | Cementerio viejo | `camposanto` | 9 |
-| 6 `nigromante` | Ruinas del nigromante | `camposanto` | 11 |
+| 1 `goblins` | Campamento goblin | `llanos_alba` (hecho) | 1 |
+| 2 `avanzada` | Avanzada goblin | `llanos_alba` (hecho) | 3 |
+| 3 `hoyos` | Hoyos de hormiga león | `la_frontera` (hecho) | 5 |
+| 4 `pantano` | Pantano muerto | `la_frontera` (hecho) | 7 |
+| 5 `cementerio` | Cementerio viejo | `camposanto` (hecho) | 9 |
+| 6 `nigromante` | Ruinas del nigromante | `camposanto` (hecho) | 11 |
 | 7 `hormiguero` | Hormiguero ardiente | `hormiguero` | 13 |
 | 8 `nidal` | Nidal de ceniza | `ceniza_brasas` | 15 |
 | 9 `osario` | Osario ardiente | `ceniza_osario` | 17 |
@@ -338,6 +338,26 @@ Estrategia "estrangulador": el mapa actual sigue existiendo (con id propio, `sol
 **Desvíos y límites**: (1) la villa reemplaza a los cuatro mapas de Solmar de la tabla 3.1 (`solmar_villa` + puerto, cuartel y jardín) por **un** mapa exterior de 128 con todo adentro + interiores; (2) la ciudad vieja de Solmar del mapa original queda como está (con sus NPC) hasta que se muevan las zonas de caza (Fase 3); (3) las celdas de llegada de las zonas siguen en el mapa viejo (ya sin portal de regreso: se vuelve con H); (4) el sanador no cura (dentro de la ciudad ya se regenera rápido) y la Torre de Magia es un NPC "Próximamente".
 
 **Falta**: Ciudadela de Vhar (misma receta con otro estilo de muros), sacar la ciudad vieja de Solmar del mapa original cuando se muevan las zonas, función del sanador y de la Torre.
+
+### Estado de la implementación (Fase 3: núcleo de caza)
+
+**Hecho** (`packages/world/src/hunt/`: `kit.ts` y un archivo por mapa; enganche en `maps.ts` con `huntMaps()` de `hunt/index.ts`):
+- **Kit de terreno** (`HuntMap`): grilla determinista, ruido, `border()` natural (bosque o peñascos), `thicket()`, `pond()` con espuma, `path()` (caminos con curva y borde gastado), `camp()` (campamento seguro con cerco, fogata, tiendas y círculo de reaparición), `pit()` (zona densa con núcleo despejado), `palisade()`, `decorate()` y `finish()` (bloquea lo que no se alcanza a pie: ningún mob nace en un bolsillo cerrado).
+- **`llanos_alba`** (128, Nv 1-2, sin PvP): praderas, granjas (campos, cercos, casas del kit de ciudad), laguna, bosquecillos y borde de bosque. Puesto del Alba (campamento, respawn) al oeste, junto al portón de la villa. Pits: Campamento goblin (55), Granjas tomadas (50), Avanzada goblin (60 élites) y Empalizada goblin (45), con empalizada, tiendas y cajas. Goblins sueltos por los caminos.
+- **`la_frontera`** (160, Nv 3-4, PvP de facción): bosque cerrado y cruce de caminos; arenales de los Hoyos de hormiga león (oeste, 2 pits con hondonadas y piedras), Pantano muerto y Ciénaga honda (este, 2 pits con barro, charcas y árboles secos), camino al sur hacia el Camposanto. Posta de la Frontera (seguro) junto al Paso.
+- **`camposanto`** (144, Nv 5, PvP de facción, con niebla): Cementerio viejo (muro bajo con portones y lápidas en hileras), Mausoleos (6 criptas), Ruinas del nigromante y Capilla en ruinas (muros rotos, columnas). Capilla del guardián (seguro) junto a la entrada norte; portón sur al Páramo. La niebla es solo visual (`WorldMap.fog`; el cliente dibuja bancos de niebla con parallax).
+- **`paramo`** (160, Nv 5, PvP de facción): arcilla agrietada, arena y roca con peñascos y árboles secos; 4 pits de hormiga león Nv5. Oasis del Páramo (seguro, con charca) al norte. Escalera de caracol **sellada** al sur: `paramo_a_cripta` (puerta con llave `cripta`, se consume al cruzar) lleva a la sala de entrada de la Cripta **del mapa viejo**, celda (46, 18); en el mapa viejo, el portal `legacy_a_paramo` (celda (44, 50)) vuelve al Páramo Reseco. Es un placeholder: la Cripta se mueve a sus mapas en la Fase 5.
+- **Vínculos**: el portón este de la villa va ahora a los Llanos (`villa_a_llanos` / `llanos_a_villa`, tipo `walk`); los Llanos conservan el camino al mapa viejo por el norte (`llanos_a_legacy` / `legacy_a_llanos`: Tierras de Solmar y desde ahí Vhar); `llanos_a_frontera`, `frontera_a_camposanto`, `camposanto_a_paramo` y sus vueltas. Todos con reciprocidad (lo verifica `validateMapGraph`, que ahora también sigue las escaleras del mismo mapa al calcular alcanzabilidad).
+- **Menú del Portal de Frontera**: `HUNT_ARRIVALS` (`hunt/index.ts`) manda goblins y avanzada a los Llanos, hoyos y pantano a La Frontera, cementerio y nigromante al Camposanto; `waypointTarget()` lo consulta primero. Ids, orden y bloqueos de `TRAINING` no cambian; las celdas de llegada están a 0-8 celdas del borde de su pit y fuera de los campamentos. Hormiguero, Nidal, Osario y Cantera siguen llegando al mapa viejo (Fase 4). Las zonas del mapa viejo **no se borraron** (Fase 8); por eso el validador tolera nombres de zona repetidos entre `solmar_legacy` y un mapa de caza.
+- **Mobs** (`Zone.respawn`, `Zone.aggro`, `zoneRespawnSecs()`): reaparición por zona (pits: 8 s goblins, 10 s antlion, zombi y élite, 12 s esqueletos y páramo; los mapas viejos siguen en 22 s), aggro de 3 celdas en los pits (4,5 por defecto; el contagio es 0,7 x el aggro) para que acercarse no arrastre medio pit. Exp por kill: la de `mobDef` según el nivel de la zona (sin tocar la curva). Mobs sueltos por los caminos: zonas de 5 mobs con reaparición de 15 s.
+- **IA y rendimiento** (`apps/server/src/mobs.ts`): celdas de nacimiento precalculadas por zona, un spawn evita nacer encima de otro mob, los mobs quietos a más de 26 celdas de todo jugador **no se simulan** y el empuje entre perseguidores recorre solo la lista de los que persiguen. Sigue sin haber pathfinding: los pits se arman con un núcleo despejado (`pit(zone, clear)`) y sin obstáculos densos adentro.
+- **Mediciones** (contenedor Linux de desarrollo):
+  - Reloj del server (`WorldRegistry.tickStats`; con `FDN_TICK_STATS=1` se loguea cada 30 s): los 4 mapas despiertos, **925 mobs** y 48 jugadores parados en los pits (test de rendimiento de `caza.test.ts`): vuelta del reloj **prom 0,64 ms, p95 0,99 ms, máx 1,83 ms** (presupuesto 50 ms). En vivo con 1 jugador: prom 0,3-0,4 ms, p95 0,6 ms.
+  - Armado de mapa (`tools/src/town/check.ts`; Node, primera vez / mejor de 4): Llanos 115 / 64 ms, Frontera 107 / 89 ms, Camposanto 74 / 71 ms, Páramo 109 / 101 ms (villa 33 / 19 ms). En el cliente (Chromium headless, `__fdn.perf()`): 29-45 ms de `loadMap` y 8-21 ms de minimapa (el primer mapa de la sesión tardó 1,1 s por JIT en frío y atlas). Bajo el tope de ~300 ms: no hizo falta precalcular.
+  - FPS parado en un pit lleno (Chromium headless con render por software, 1600x900, 40-55 mobs a la vista): 28-42 fps. Es un piso (una GPU real rinde más); con mobs peleando encima hubo una caída puntual a 16 fps.
+- **Tests** (`apps/server/test/caza.test.ts`, 10): grafo, pits (3-5 por mapa, 30-60 mobs, 150-300 en total, respawn 8-15 s), niveles de `mobDef`, pits despejados y lejos del campamento, ida y vuelta de los vínculos, escalera de la Cripta (llave), llegadas del menú, nacimiento de cada pit, respawn por zona y rendimiento.
+
+**Límites y falta**: (1) sin pathfinding: los mobs que persiguen se deslizan por los lados pero pueden trabarse con los árboles densos del borde; (2) Vhar todavía no llega a los Llanos a pie (solo por el mapa viejo y el portal de su ciudad); (3) la Cripta y el corredor a las Tierras de ceniza siguen en el mapa viejo; (4) las llegadas del Hormiguero y siguientes siguen en el mapa viejo; (5) los mapas de caza no tienen NPC (la ciudad queda a una H de distancia).
 
 ### Qué se puede paralelizar
 - Sí: F2 (Solmar/Vhar), mapas de F3-F5 una vez listo el kit, F6, F7. Cada uno en archivos nuevos.
