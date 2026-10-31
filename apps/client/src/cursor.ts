@@ -100,9 +100,9 @@ function reticle(c: CanvasRenderingContext2D, ok: boolean, pulse: number) {
 const CSS = `
 #cv.cur-own{cursor:none}
 .game-cursor{position:fixed;left:0;top:0;width:${S}px;height:${S}px;pointer-events:none;z-index:2147483000;will-change:transform;contain:strict}
-.sw.cur-cast::after,.sw.cur-ready::after{content:'';position:absolute;inset:-5px;border-radius:14px;pointer-events:none;padding:3px;
+.sw.cur-cast::after,.sw.cur-ready::after,.pot.cur-cast::after{content:'';position:absolute;inset:-5px;border-radius:14px;pointer-events:none;padding:3px;
  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
-.sw.cur-cast::after{background:conic-gradient(${BLUE} calc(var(--ck,0) * 1turn),rgba(20,30,60,.75) 0)}
+.sw.cur-cast::after,.pot.cur-cast::after{background:conic-gradient(${BLUE} calc(var(--ck,0) * 1turn),rgba(20,30,60,.75) 0)}
 .sw.cur-ready::after{background:${RED};box-shadow:0 0 10px ${RED};animation:curPulse 1s ease-in-out infinite}
 @keyframes curPulse{50%{opacity:.55}}
 @media (prefers-reduced-motion:reduce){.sw.cur-ready::after{animation:none}}

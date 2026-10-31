@@ -31,9 +31,19 @@ const GLYPHS: Record<string, Glyph> = {
     spiral(c, col) { c.strokeStyle = '#fff'; c.lineWidth = 4; c.lineCap = 'round'; c.beginPath(); for (let t = 0; t < 14; t += 0.2) { const r = 2 + t * 1.5, a = t; const x = 32 + Math.cos(a) * r, y = 32 + Math.sin(a) * r; t ? c.lineTo(x, y) : c.moveTo(x, y); } c.stroke(); c.strokeStyle = shade(col, 0.4); c.lineWidth = 2; c.beginPath(); c.arc(32, 32, 24, 0.4, 2.4); c.stroke(); },
     cracks(c, col) { c.strokeStyle = '#fff'; c.lineWidth = 4; c.lineJoin = 'round'; c.beginPath(); c.moveTo(32, 32); c.lineTo(20, 22); c.lineTo(22, 10); c.moveTo(32, 32); c.lineTo(46, 26); c.lineTo(54, 34); c.moveTo(32, 32); c.lineTo(36, 46); c.lineTo(28, 56); c.moveTo(32, 32); c.lineTo(14, 40); c.stroke(); c.fillStyle = shade(col, 0.3); c.beginPath(); c.arc(32, 32, 6, 0, 7); c.fill(); },
     rage(c, col) { c.fillStyle = '#fff'; poly(c, [[32, 8], [38, 24], [54, 22], [42, 34], [48, 52], [32, 42], [16, 52], [22, 34], [10, 22], [26, 24]]); c.fill(); c.fillStyle = shade(col, -0.05); poly(c, [[32, 20], [36, 30], [46, 30], [38, 37], [41, 46], [32, 40], [23, 46], [26, 37], [18, 30], [28, 30]]); c.fill(); },
+    // Volver a la ciudad: casita con techo a dos aguas dentro de un remolino de portal
+    home(c, col) {
+        c.lineCap = 'round';
+        for (const [r, a0, w] of [[23, 0.3, 3], [18, 2.4, 2.4]] as const) { c.strokeStyle = shade(col, 0.55); c.lineWidth = w; c.globalAlpha = 0.85; c.beginPath(); c.arc(32, 33, r, a0, a0 + 4.2); c.stroke(); }
+        c.globalAlpha = 1;
+        c.fillStyle = '#fff'; poly(c, [[17, 33], [32, 19], [47, 33], [43, 33], [43, 47], [21, 47], [21, 33]]); c.fill();
+        c.fillStyle = shade(col, -0.35); c.fillRect(29, 37, 6, 10);
+        c.strokeStyle = shade(col, -0.45); c.lineWidth = 2; c.lineJoin = 'round'; poly(c, [[17, 33], [32, 19], [47, 33], [43, 33], [43, 47], [21, 47], [21, 33]]); c.stroke();
+    },
 };
 
 const ICON_OF: Record<string, string> = {
+    recall: 'home',
     proyectil: 'orb', paralisis: 'ring', aturdir: 'stars', curar: 'cross', curar2: 'cross', vendar: 'bandage', bola: 'fireball', golpe: 'slash', tajo: 'claws', torbellino: 'spiral',
     hoja: 'crescent', lanza: 'spike', lluvia: 'drops', ventisca: 'flake', marejada: 'wave', luz: 'pillar', sismo: 'cracks', furia: 'rage', invisibilidad: 'stars', detectar: 'ring',
 };

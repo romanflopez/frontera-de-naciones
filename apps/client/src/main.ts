@@ -6,7 +6,7 @@
  * mobs, combate, hechizos, loot y experiencia (pasan al server en la fase 1b).
  */
 import { drawPortalFloor, drawPortalFx, PORTAL_CITY, PORTAL_ZONE } from './portal';
-import { DEFAULT_MAP, expToLevel, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
+import { DEFAULT_MAP, RECALL, expToLevel, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
 import { ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Quest, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
@@ -281,6 +281,7 @@ function onServer(m: ServerPayload) {
         case 'groundItemRemoved': { const i = drops.findIndex((d) => d.gid === m.value.id); if (i >= 0) { if (P.pickup === drops[i]) P.pickup = null; drops.splice(i, 1); } break; }
         case 'auctionSearchResult': case 'auctionMyState': case 'auctionHistory': auction.onMessage(m); break;
         case 'depositState': deposit.onMessage(m); break;
+        case 'recallState': onRecallState(m.value); break;
         case 'econResult': deposit.onResult(m.value.ok, m.value.text); if (m.value.ok) log(esc(m.value.text)); else { toast(m.value.text); log(esc(m.value.text)); } break;
         case 'killReward': onKillReward(m.value); break;
         case 'statusUpdate': onStatusUpdate(m.value); break;
@@ -618,6 +619,62 @@ function potCdTick() {
 }
 ($('goldIco') as HTMLImageElement).src = coinIcon();
 function renderPots() { for (const k of ['hp', 'mp'] as const) { const el = $('pot' + k); el.title = `${POTS[k].name} (${POTS[k].key}): quedan ${pots[k]}`; el.setAttribute('aria-label', `${POTS[k].name}, tecla ${POTS[k].key}, quedan ${pots[k]}`); el.classList.toggle('none', pots[k] <= 0); el.innerHTML = `<span class="sq"><img alt="" src="${potionIcon(k)}"></span><kbd>${POTS[k].key}</kbd><em>${pots[k]}</em><i class="cdv" data-gcd></i>`; } potCdTick(); }
+// ---------- Volver a la ciudad (recall, tecla H): el server lleva el canal de 8 s, lo corta y hace el viaje; acá solo se pide y se muestra ----------
+const RECALL_COL = '#4aa8ff';
+/** Canal en curso según el server (en segundos de `now()`), y fin del enfriamiento. */
+let recall: { start: number; end: number } | null = null, recallCdEnd = 0;
+function toggleRecall() {
+    if (!connected || mapLoading) return;
+    if (recall) { net.send({ $case: 'recallRequest', value: { cancel: true } }); return; }
+    if (P.dead) { toast('No podés volver a la ciudad muerto.'); return; }
+    const cd = recallCdEnd - now();
+    if (cd > 0) { toast(`Volver a la ciudad: faltan ${Math.ceil(cd)} s.`); return; }
+    // quieto: el server corta el canal apenas recibe un paso, un ataque o un hechizo
+    P.path = []; P.target = null; P.engage = false; P.pickup = null; P.queued = null; cancelCast(); closeWp();
+    net.send({ $case: 'recallRequest', value: { cancel: false } });
+}
+function onRecallState(v: { state: number; channelMs: number; remainingMs: number; cooldownMs: number; reason: string }) {
+    const T = now();
+    if (v.state === 1) { const len = (v.channelMs || RECALL.channelMs) / 1000; recall = { start: T - (len - v.remainingMs / 1000), end: T + v.remainingMs / 1000 }; log('Volviendo a la ciudad… (no te muevas: se corta si te pegan, atacás o lanzás algo)', true); }
+    else {
+        const was = !!recall; recall = null;
+        recallCdEnd = T + v.cooldownMs / 1000;
+        if (v.reason) { toast(v.reason); log(esc(v.reason), true); }
+        else if (was && v.cooldownMs > 0) log('Volvés a la ciudad.', true);
+    }
+    renderRecall();
+}
+function renderRecall() {
+    const el = $('recallBtn');
+    el.innerHTML = `<span class="sq"><img alt="" src="${spellIcon('recall', RECALL_COL)}"></span><kbd>H</kbd><i class="cdv" id="recallCd"></i>`;
+    recallTick();
+}
+function recallTick() {
+    const el = $('recallBtn'), cdEl = document.getElementById('recallCd'); if (!cdEl) return;
+    el.classList.toggle('on', !!recall);
+    const left = Math.max(0, recallCdEnd - now()), t = left > 0 ? String(Math.ceil(left)) : '';
+    if (left > 0 && !recall) { cdEl.style.display = 'flex'; cdEl.style.background = `conic-gradient(rgba(0,0,0,0) 0 ${(1 - left / (RECALL.cooldownMs / 1000)) * 100}%, rgba(5,3,8,.74) 0 100%)`; if (cdEl.textContent !== t) cdEl.textContent = t; }
+    else if (cdEl.style.display) { cdEl.style.display = ''; cdEl.textContent = ''; }
+    const tip = recall ? 'Volviendo a la ciudad… (H para cancelar)' : left > 0 ? `Volver a la ciudad (H): faltan ${Math.ceil(left)} s` : 'Volver a la ciudad (H)';
+    if (el.title !== tip) el.title = tip;
+}
+const recallK = (T: number) => (recall ? clamp((T - recall.start) / (recall.end - recall.start), 0, 1) : 0);
+/** Barra sobre el personaje y remolino azul en el piso mientras canaliza. */
+function drawRecall(T: number) {
+    if (!recall) return;
+    const k = recallK(T), p = iso(P.x, P.y);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 3; i++) { const a = T * 3 + (i * Math.PI * 2) / 3; ctx.strokeStyle = `rgba(90,170,255,${0.45 - i * 0.1})`; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(p.x, p.y, 26 + i * 6, 13 + i * 3, 0, a, a + 2.2); ctx.stroke(); }
+    const g = ctx.createRadialGradient(p.x, p.y - 30, 0, p.x, p.y - 30, 30 + k * 16); g.addColorStop(0, `rgba(200,230,255,${0.25 + k * 0.35})`); g.addColorStop(1, 'rgba(40,120,255,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y - 30, 30 + k * 16, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    const w = 76, y = p.y - 92;
+    ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(p.x - w / 2 - 2, y - 2, w + 4, 9);
+    ctx.fillStyle = '#123a66'; ctx.fillRect(p.x - w / 2, y, w, 5);
+    ctx.fillStyle = RECALL_COL; ctx.fillRect(p.x - w / 2, y, w * k, 5);
+    nameTag(`Volviendo a la ciudad ${Math.max(0, recall.end - T).toFixed(1)} s`, p.x, y - 5, '#bfe0ff', 1, 10);
+}
+$('recallBtn').addEventListener('click', () => { toggleRecall(); cv.focus({ preventScroll: true }); });
+renderRecall();
 // ---------- /meditar: quieto, el maná sube rápido; se corta si te movés, casteás o te pegan ----------
 function stopMeditating(msg?: string) { if (!P.med) return; P.med = false; if (msg) log(msg, true); syncHp(); }
 function toggleMeditate() {
@@ -906,6 +963,7 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); chatIn.focus(); return; }
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'q' || e.key === 'Q')) { usePotion('hp'); return; }
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'e' || e.key === 'E')) { usePotion('mp'); return; }
+    if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'h' || e.key === 'H')) { toggleRecall(); return; }
     const hk = SPELLS.findIndex((x) => SPECIAL_KEY[x.id ?? ''] === e.key.toLowerCase()) >= 0 ? SPELLS.findIndex((x) => SPECIAL_KEY[x.id ?? ''] === e.key.toLowerCase()) : KEYS.indexOf(e.key), dm = /^(?:Digit|Numpad)([0-9])$/.exec(e.code), k = hk >= 0 ? hk : dm ? KEYS.indexOf(dm[1]) : null;
     if (k != null && k < SPELLS.length && !e.repeat) { e.preventDefault(); cast(k); }
     if (e.code === 'Space' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); pickupNearest(); return; }
@@ -1041,7 +1099,7 @@ function cursorTick() {
     }
     gameCursor.update({
         hover: !on ? 'ground' : hover ? 'mob' : pickNpc(mx, my) ? 'npc' : portal ? 'portal' : en ? 'enemy' : hoverDrop ? 'drop' : 'ground',
-        cast: P.casting ? { ...sp(P.casting.i), k: clamp((now() - P.casting.start) / (P.casting.end - P.casting.start), 0, 1) } : null,
+        cast: P.casting ? { ...sp(P.casting.i), k: clamp((now() - P.casting.start) / (P.casting.end - P.casting.start), 0, 1) } : recall ? { icon: spellIcon('recall', RECALL_COL), k: recallK(now()), slot: document.getElementById('recallBtn') } : null,
         ready,
     });
 }
@@ -1080,7 +1138,7 @@ function nameTag(name: string, x: number, y: number, col: string, alpha = 1, siz
 }
 // ---------- Portal de Frontera (waypoint estilo Diablo): pad rúnico, arco de piedra y cartel (todo dibujado acá) ----------
 let WAYPOINTS: Waypoint[] = MAP.waypoints ?? [];
-const MY_WPS = () => WAYPOINTS.filter((q) => q.kind === 'zone' || q.faction === selectedFaction);
+const MY_WPS = () => WAYPOINTS.filter((q) => q.kind === 'city' && q.faction === selectedFaction);
 const wpCol = (q: Waypoint) => (q.kind === 'city' ? '#e2b04a' : TRAINING[q.step!].col);
 const portalAct = new Map<string, { a: number; t: number }>();
 /** Activación suave (0..1, ~0.3 s): el portal se enciende cuando el jugador está dentro de su radio. */
@@ -1094,12 +1152,14 @@ function portalActivation(q: Waypoint, T: number) {
 const portalStyle = (q: Waypoint) => (q.kind === 'city' ? PORTAL_CITY : PORTAL_ZONE);
 function drawPortalPad(q: Waypoint, T: number) { const c0 = iso(q.x + 0.5, q.y + 0.5); drawPortalFloor(ctx, c0.x, c0.y, portalStyle(q), portalActivation(q, T), T, reduce, q.x * 0.7 + q.y); }
 function drawPortalArch(q: Waypoint, T: number) { const c0 = iso(q.x + 0.5, q.y + 0.5); drawPortalFx(ctx, c0.x, c0.y, portalStyle(q), portalActivation(q, T), T, reduce, q.x * 0.7 + q.y); }
-/** Cartel de cada portal: "Portal de Frontera" en la plaza; los chicos de las zonas dicen "Portal de regreso" cerca. */
+/** Cartel del Portal de Frontera de cada plaza (las zonas no tienen portal: se vuelve con H). */
 function drawPortalLabels() {
     for (const q of WAYPOINTS) {
-        const d = Math.hypot(q.x + 0.5 - P.x, q.y + 0.5 - P.y), c = iso(q.x + 0.5, q.y + 0.5);
-        if (q.kind === 'city') { if (d > 18) continue; nameTag('Portal de Frontera', c.x, c.y - 185, wpCol(q), 1, 14); if (d < 7) nameTag('Tocá el portal para viajar', c.x, c.y - 168, '#d9d2b8', 1, 10); }
-        else if (d < 9) { nameTag('Portal de regreso', c.x, c.y - 52, wpCol(q), 1, 10); if (d < 4) nameTag(q.name, c.x, c.y - 40, '#d9d2b8', 1, 9); }
+        if (q.kind !== 'city') continue;
+        const d = Math.hypot(q.x + 0.5 - P.x, q.y + 0.5 - P.y), c = iso(q.x + 0.5, q.y + 0.5); if (d > 18) continue;
+        const mine = q.faction === selectedFaction;
+        nameTag('Portal de Frontera', c.x, c.y - 185, wpCol(q), 1, 14);
+        if (d < 7) nameTag(mine ? 'Tocá el portal para viajar' : 'Portal de otra facción', c.x, c.y - 168, '#d9d2b8', 1, 10);
     }
 }
 /** Cartel de los portales entre mapas: a dónde llevan y, si no cumplís el requisito, qué falta. */
@@ -1195,6 +1255,7 @@ function render() {
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(p.x, p.y - 34, 0, p.x, p.y - 34, 8 + k * 10); g.addColorStop(0, '#fff'); g.addColorStop(0.3, s.col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y - 34, 8 + k * 10, 0, Math.PI * 2); ctx.fill(); ctx.restore();
         const w = 34; ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - w / 2 - 1, p.y + 8, w + 2, 5); ctx.fillStyle = s.col; ctx.fillRect(p.x - w / 2, p.y + 9, w * k, 3);
     }
+    drawRecall(T);
     for (const f of fx) if (f.k === 'boom') {
         const p = iso(f.x, f.y), k = f.t / 0.6, R2 = f.r! * TW * 0.5;
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1 - k;
@@ -1294,7 +1355,7 @@ function setClass(id: string) {
     $('bar').innerHTML = Array.from({ length: 10 }, (_, i) => SPELLS[i] ? slotHtml(SPELLS[i], i, false) : emptyHtml(KEYS[i], false)).join('');
     const rest = SPELLS.slice(10); $('quick').innerHTML = Array.from({ length: Math.max(4, rest.length) }, (_, j) => rest[j] ? slotHtml(rest[j], 10 + j, true) : emptyHtml('F' + (j + 1), true)).join('');
     SPELLS.forEach((_, i) => $('sp' + i).addEventListener('click', () => { cast(i); cv.focus({ preventScroll: true }); }));
-    $('helpKeys').textContent = `Click o mantener: caminar · Click en mob: atacar · teclas 1–0 usar habilidad (las de objetivo: esperá que cargue y click en el blanco) · Click derecho: cancelar · ${SPELLS.map((x) => x.key + ' ' + x.name).join(' · ')} · I Bolsa · Enter chat`;
+    $('helpKeys').textContent = `Click o mantener: caminar · Click en mob: atacar · teclas 1–0 usar habilidad (las de objetivo: esperá que cargue y click en el blanco) · Click derecho: cancelar · ${SPELLS.map((x) => x.key + ' ' + x.name).join(' · ')} · I Bolsa · H Volver a la ciudad (tarda 8 s y se corta si te pegan) · Enter chat`;
 }
 /** Cuadraditos de estado con cuenta regresiva (Furia, invisible, detectar, parálisis, inmunidad), como en HB. */
 const BUFFS: { k: string; n: string; c: string; end: () => number; on: () => boolean }[] = [
@@ -1312,7 +1373,7 @@ function renderBuffs() {
     if (el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; }
 }
 function hud() {
-    renderBuffs(); tickLogout(); potCdTick();
+    renderBuffs(); tickLogout(); potCdTick(); recallTick();
     const T = now(), mh = maxHp(), mm = maxMp();
     const hf = clamp(P.hp / mh, 0, 1), mf = clamp(P.mp / mm, 0, 1);
     $('liqHp').style.transform = `translateY(${(1 - hf) * 100}%)`; $('liqMp').style.transform = `translateY(${(1 - mf) * 100}%)`;
@@ -1811,8 +1872,8 @@ const lockMsg = (t: TrainingStep) => `Portal bloqueado (${t.zone}): ${t.after ? 
 function renderWp() {
     if (!wpOpen) return;
     const city = selectedFaction === 'solmar' ? { name: 'Villa de Solmar' } : MAP.cities?.find((c) => c.faction === selectedFaction), inCity = inHomeCity(), cur = inCity ? -1 : currentTrainStep();
-    $('wpTitle').textContent = wpOpen.kind === 'city' ? 'Portal de Frontera' : 'Portal de regreso';
-    $('wpSub').textContent = wpOpen.kind === 'city' ? `${city?.name ?? 'Tu ciudad'} · zonas de entrenamiento` : `${wpOpen.name} · volvé a tu ciudad o viajá a otra zona`;
+    $('wpTitle').textContent = 'Portal de Frontera';
+    $('wpSub').textContent = `${city?.name ?? 'Tu ciudad'} · zonas de entrenamiento · para volver apretá H`;
     const rows = [`<button type="button" class="wprow home${inCity ? ' cur' : ''}" data-wp="city"${inCity ? ' disabled' : ''}><i class="wpn">&#8962;</i><span class="wpt"><b>${inCity ? 'Estás en ' : 'Volver a '}${esc(city?.name ?? 'la ciudad')}</b><small>${inCity ? 'Zona segura' : 'Zona segura · tu facción'}</small></span>${inCity ? '<em class="wptag">Estás aquí</em>' : ''}</button>`];
     for (const t of TRAINING) {
         const open = trainOpen(t), here = t.step === cur, qq = QUESTS[t.step], lv = qq ? questLevel(qq) : '';
@@ -2019,7 +2080,7 @@ function enterWorld(name: string) {
     const home = factionHome(selectedFaction), here = cityAt(P.cell.x, P.cell.y);
     if (home && (!welcomeBack || (here && here.faction !== selectedFaction))) net.send({ $case: 'playerTeleportRequested', value: { x: home.x, y: home.y } });
     log(selectedFaction === 'vhar' ? 'Bienvenido a la Ciudad de Vhar. La puerta del sur lleva a las tierras de Solmar.' : 'Bienvenido a la Villa de Solmar. Los edificios tienen interior: entrá por las puertas.', true);
-    log('En la plaza está el Portal de Frontera: un menú con las zonas de entrenamiento. La primera ya está abierta; las demás se abren al entregar las misiones del Capitán (o subiendo de nivel). En cada zona hay un portal de regreso.', true);
+    log('En la plaza está el Portal de Frontera: un menú con las zonas de entrenamiento. La primera ya está abierta; las demás se abren al entregar las misiones del Capitán (o subiendo de nivel). Para volver a la ciudad apretá H (tarda 8 s y se corta si te pegan).', true);
     log('Tocá un mob para atacarlo. Apretá un hechizo (1–4), esperá que cargue y hacé clic en el objetivo. Enter para chatear.');
 }
 
@@ -2046,7 +2107,7 @@ async function boot() {
     refreshLook();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, toScreen, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading });
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5) });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5), recall: () => ({ on: !!recall, k: recallK(now()), cd: Math.max(0, recallCdEnd - now()) }) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();
     requestAnimationFrame(frame);
