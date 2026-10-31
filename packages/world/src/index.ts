@@ -37,7 +37,15 @@ export interface Portal {
     train?: TrainingStep;
 }
 /** `lvl` (opcional) fija el nivel de los mobs de la zona; si no está, vale el del tipo. Ver `mobDef`. */
-export interface Zone { type: MobType; x: number; y: number; r: number; n: number; name: string; lvl?: number; /** Esquirla que suelta el boss de esta zona (si no, se decide por el nombre: ver Economy.reward). */ drops?: { shard?: 'cripta' | 'foso' } }
+export interface Zone {
+    type: MobType; x: number; y: number; r: number; n: number; name: string; lvl?: number;
+    /** Esquirla que suelta el boss de esta zona (si no, se decide por el nombre: ver Economy.reward). */
+    drops?: { shard?: 'cripta' | 'foso' };
+    /** Segundos hasta que reaparece un mob muerto de esta zona (pits de caza: 8-15 s). Sin él vale `mobRespawnSecs(tipo)`. */
+    respawn?: number;
+    /** Radio (celdas) en el que un mob quieto ve al jugador y lo persigue (por defecto 4,5). En los pits densos se achica para que acercarse no arrastre medio pit. */
+    aggro?: number;
+}
 
 export interface WorldMap {
     size: number;
@@ -68,6 +76,8 @@ export interface WorldMap {
     /** Punto de aparición de cada facción y rectángulo de cada ciudad (zona segura con nombre). */
     hubs?: Record<string, { x: number; y: number }>;
     cities?: { faction: string; name: string; x0: number; y0: number; x1: number; y1: number }[];
+    /** Niebla del mapa (0..1): el cliente dibuja bancos de niebla que se mueven (Camposanto Viejo). Solo visual. */
+    fog?: number;
 }
 
 const GRASS = [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31];
@@ -153,3 +163,4 @@ export function buildSolmar(): WorldMap {
 export * from './town';
 export { VILLA, VILLA_ID, VILLA_BUILDINGS, villaDoor, type VillaBuilding } from './solmar/villa';
 export { INTERIORS, TEMPLE_RESPAWN, roomOf } from './solmar/interiors';
+export { HUNT_ARRIVALS, LLANOS, FRONTERA, CAMPOSANTO, PARAMO, HuntMap } from './hunt';
