@@ -5,12 +5,18 @@
  *   (c) dos pociones dentro del delay global de 1,75 s: solo cuenta una;
  *   (d) la poción de vida cura 20 % al instante y el resto en 4 ticks de 0,5 s (total exacto).
  *
- * Uso:  DATA_DIR=<carpeta vacía> PORT=8111 pnpm --filter @fdn/server start   (en otra terminal)
- *       cd apps/server && npx tsx scripts/test-combat.ts [ws://localhost:8111/ws]
+ * Uso (server NUEVO y con carpeta de datos vacía en cada corrida; los bots quedan 60 s en el mundo y ocupan celdas):
+ *   cd apps/server
+ *   DATA_DIR=<carpeta vacía> PORT=8213 FDN_DEBUG_TRUST_SAVE=1 FDN_DEBUG_WARP=1 npx tsx src/index.ts   (en otra terminal)
+ *   npx tsx scripts/test-combat.ts ws://localhost:8213/ws
+ *
+ * FDN_DEBUG_TRUST_SAVE=1 es imprescindible: sin él el server ignora los guardados del cliente (la economía es autoritativa)
+ * y todos los bots quedan con el kit inicial (nivel 1), así que ningún rango de daño calza. Los bots entran en el mapa inicial
+ * 'solmar_legacy' (donde se arma la prueba); si el server los manda a otro mapa, el script lo avisa y corta.
  */
 import { WebSocket } from 'ws';
 import { ClientMessage, ServerMessage } from '@fdn/proto';
-import { buildMap } from '@fdn/world';
+import { buildMap, mapLinks } from '@fdn/world';
 
 const URL = process.argv[2] ?? 'ws://localhost:8111/ws';
 const RUN = Math.random().toString(36).slice(2, 6);
@@ -24,7 +30,7 @@ interface Item { n: string; r: number; a: { id: string; v: number }[] }
 
 class Bot {
     ws!: WebSocket;
-    id = 0n; x = 0; y = 0; ms = 270;
+    id = 0n; x = 0; y = 0; ms = 270; mapName = '';
     vitals = { hp: 0, maxHp: 0, mp: 0, maxMp: 0, dead: false };
     vitalsLog: { t: number; hp: number; mp: number }[] = [];
     hits: { casterId: bigint; fx: string; targetId: bigint; dmg: number; secs: number }[] = [];
@@ -39,7 +45,7 @@ class Bot {
             const p = ServerMessage.decode(new Uint8Array(d)).payload as Srv | undefined; if (!p) return;
             switch (p.$case) {
                 case 'initialState': this.id = p.value.playerId; this.ms = p.value.movementSpeedMs || 270; break;
-                case 'initialGameWorldState': this.x = p.value.playerX; this.y = p.value.playerY; ready(); break;
+                case 'initialGameWorldState': this.mapName = p.value.mapName; this.x = p.value.playerX; this.y = p.value.playerY; ready(); break;
                 case 'vitals': this.vitals = { hp: p.value.hp, maxHp: p.value.maxHp, mp: p.value.mp, maxMp: p.value.maxMp, dead: p.value.dead }; this.vitalsLog.push({ t: Date.now(), hp: p.value.hp, mp: p.value.mp }); break;
                 case 'pvpHit': this.hits.push({ casterId: p.value.casterId, fx: p.value.fx, targetId: p.value.targetId, dmg: p.value.dmg, secs: p.value.secs }); break;
                 case 'resetPosition': case 'positionCorrected': this.bad.push(p.$case); break;
@@ -48,6 +54,7 @@ class Bot {
         await new Promise<void>((r, j) => { this.ws.once('open', () => r()); this.ws.once('error', j); });
         this.send({ $case: 'authenticateRequest', value: { id: '', characterName: this.name, password: 'test1234' } });
         await Promise.race([got, sleep(5000).then(() => { throw new Error(`${this.name}: no entró al mundo`); })]);
+        if (this.mapName && this.mapName !== 'solmar_legacy') throw new Error(`${this.name}: entró en el mapa '${this.mapName}', la prueba se arma en 'solmar_legacy'`);
     }
     send(p: Payload) { this.ws.send(ClientMessage.encode({ payload: p } as ClientMessage).finish()); }
     close() { this.ws.close(); }
@@ -78,7 +85,11 @@ class Bot {
 // ---------- mapa: celdas de pasto fuera de las zonas seguras, cerca del spawn ----------
 const map = buildMap('solmar_legacy');
 const N = map.size, dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]] as const;
-const free = (x: number, y: number) => x >= 0 && y >= 0 && x < N && y < N && !map.blocked[y][x];
+/** Celdas que no se pisan: portales/escaleras, vínculos entre mapas, waypoints y NPC, por si pisarlas teletransporta o el server las ocupa. */
+const avoidCells = new Set<string>();
+for (const c of [...(map.portals ?? []).flatMap((q) => [q, { x: q.tx, y: q.ty }]), ...(map.waypoints ?? []), ...map.npcs, ...mapLinks('solmar_legacy')])
+    avoidCells.add(`${Math.floor(c.x)},${Math.floor(c.y)}`);
+const free = (x: number, y: number) => x >= 0 && y >= 0 && x < N && y < N && !map.blocked[y][x] && !avoidCells.has(`${x},${y}`);
 /** Camino (BFS, 8 direcciones sin cortar esquinas) de `from` a `to` evitando celdas ocupadas. */
 function route(from: [number, number], to: [number, number], avoid: Set<string>): [number, number][] {
     const key = (x: number, y: number) => `${x},${y}`, prev = new Map<string, string>(), q = [from]; prev.set(key(...from), '');
@@ -102,7 +113,7 @@ function openCells(n: number): [number, number][] {
     const sp = map.spawn, seen = new Set<string>(), q: [number, number][] = [[sp.x, sp.y]], out: [number, number][] = []; seen.add(`${sp.x},${sp.y}`);
     while (q.length && out.length < n) {
         const [x, y] = q.shift()!;
-        if (!map.safe[y][x] && !map.safe[y - 1]?.[x] && !map.safe[y + 1]?.[x] && !map.safe[y][x - 1] && !map.safe[y][x + 1]) out.push([x, y]);
+        if (free(x, y) && !map.safe[y][x] && !map.safe[y - 1]?.[x] && !map.safe[y + 1]?.[x] && !map.safe[y][x - 1] && !map.safe[y][x + 1]) out.push([x, y]);
         for (const [dx, dy] of dirs) { const nx = x + dx, ny = y + dy, k = `${nx},${ny}`; if (!seen.has(k) && free(nx, ny)) { seen.add(k); q.push([nx, ny]); } }
     }
     return out;
