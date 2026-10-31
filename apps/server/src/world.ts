@@ -84,6 +84,8 @@ export class GameWorld {
     get playerCount(): number { return this.players.size; }
     get isHibernated(): boolean { return this.hibernated; }
     get mobCount(): number { return this.mobSim?.count ?? 0; }
+    /** El simulador de mobs (tests y mediciones); undefined si el mundo duerme o no tiene mapa. */
+    get mobs(): MobSim | undefined { return this.mobSim; }
     playerOf(sessionId: string): Player | undefined { return this.players.get(sessionId); }
 
     /** Duerme el mundo vacío: se tiran los temporizadores y los mobs (al despertar nacen de nuevo con la vida llena). */
