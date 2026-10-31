@@ -61,10 +61,10 @@ export function buildFrontera(): WorldMap {
     for (const c of [F.toLlanos, F.fromLlanos, F.toCamposanto, F.fromCamposanto, ...Object.values(F.arrivals)]) t.reserveDisc(c.x, c.y, 1.5);
     // 5) pits
     const zones: Zone[] = [
-        { type: 'antlion', x: 40, y: 36, r: 13, n: 50, name: 'Hoyos de hormiga león', respawn: 10, aggro: 3 },
-        { type: 'antlion', x: 40, y: 124, r: 12, n: 40, name: 'Arenal de los hoyos', respawn: 10, aggro: 3 },
-        { type: 'zombie', x: 121, y: 42, r: 13, n: 50, name: 'Pantano muerto', respawn: 10, aggro: 3 },
-        { type: 'zombie', x: 122, y: 120, r: 12, n: 40, name: 'Ciénaga honda', respawn: 10, aggro: 3 },
+        { type: 'antlion', x: 40, y: 36, r: 12, n: 60, name: 'Hoyos de hormiga león', respawn: 10, aggro: 3 },
+        { type: 'antlion', x: 40, y: 124, r: 11, n: 50, name: 'Arenal de los hoyos', respawn: 10, aggro: 3 },
+        { type: 'zombie', x: 121, y: 42, r: 12, n: 60, name: 'Pantano muerto', respawn: 10, aggro: 3 },
+        { type: 'zombie', x: 122, y: 120, r: 11, n: 50, name: 'Ciénaga honda', respawn: 10, aggro: 3 },
     ];
     const pits = [t.pit(zones[0], 10), t.pit(zones[1], 9), t.pit(zones[2], 10), t.pit(zones[3], 9)];
     // hoyos: hondonadas de arena en el piso y rocas en el borde del arenal

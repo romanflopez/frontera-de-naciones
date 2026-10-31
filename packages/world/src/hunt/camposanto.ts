@@ -24,7 +24,7 @@ const FOREST = Array.from({ length: 18 }, (_, i) => townTile('forest', i)).filte
 const ROAD = [1226, 1218, 1237, 1226];
 const ROAD_EDGE = [townTile('terrain1', 4), townTile('terrain1', 7), 1193];
 const GRAVEL = [1218, 1237, 1235, townTile('terrain2', 0), townTile('terrain2', 14)];
-const RUIN_FLOOR = [1226, 1218, 1237, 1194, 1205, 1226];
+const RUIN_FLOOR = [1218, 1237, 1235, 1218, 1226];
 const STONE = [32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43];
 const DEAD = [244, 245, 246, 247];
 const PINES = [248, 249, 250, 251];
@@ -54,10 +54,10 @@ export function buildCamposanto(): WorldMap {
     for (const c of [C.toFrontera, C.fromFrontera, C.toParamo, C.fromParamo, ...Object.values(C.arrivals)]) t.reserveDisc(c.x, c.y, 1.5);
     // 5) pits
     const zones: Zone[] = [
-        { type: 'skeleton', x: 38, y: 44, r: 13, n: 50, name: 'Cementerio viejo', respawn: 12, aggro: 3 },
-        { type: 'skeleton', x: 104, y: 42, r: 11, n: 35, name: 'Mausoleos', respawn: 12, aggro: 3 },
-        { type: 'skeleton_mage', x: 38, y: 104, r: 13, n: 45, name: 'Ruinas del nigromante', respawn: 12, aggro: 3 },
-        { type: 'skeleton_mage', x: 106, y: 106, r: 11, n: 35, name: 'Capilla en ruinas', respawn: 12, aggro: 3 },
+        { type: 'skeleton', x: 38, y: 44, r: 12, n: 60, name: 'Cementerio viejo', respawn: 12, aggro: 3 },
+        { type: 'skeleton', x: 104, y: 42, r: 11, n: 45, name: 'Mausoleos', respawn: 12, aggro: 3 },
+        { type: 'skeleton_mage', x: 38, y: 104, r: 12, n: 55, name: 'Ruinas del nigromante', respawn: 12, aggro: 3 },
+        { type: 'skeleton_mage', x: 106, y: 106, r: 11, n: 45, name: 'Capilla en ruinas', respawn: 12, aggro: 3 },
     ];
     // el cementerio tiene lápidas en hileras (pasillos de 2 celdas): el claro sin lápidas es chico
     const pits = [t.pit(zones[0], 4, GRAVEL), t.pit(zones[1], 7, GRAVEL), t.pit(zones[2], 8, RUIN_FLOOR), t.pit(zones[3], 7, RUIN_FLOOR)];

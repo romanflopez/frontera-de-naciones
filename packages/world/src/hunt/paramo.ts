@@ -20,7 +20,7 @@ export const PARAMO = {
 
 const flat = (set: readonly (readonly [number, readonly number[]])[]) => set.flatMap(([s, cells]) => cells.map((c) => sbs(s, c)));
 const T_DRY = flat(DRY), T_ROCKY = flat(ROCKY);
-const T_SAND = [1000, 1006, 1022, 1018, 1006], T_CLAY = [1012, 1017, 1003, 1017];
+const T_SAND = [1000, 1006, 1022, 1006], T_CLAY = [1012, 1017, 1003, 1017];
 void SAND; void CLAY;
 const CRACKED = [1016, 1012, 1017, townTile('terrain1', 17), 1003];
 const OASIS = [townTile('terrain1', 9), townTile('terrain1', 10), townTile('terrain1', 2), 1108, 1109];
@@ -66,10 +66,10 @@ export function buildParamo(): WorldMap {
     for (const [dx, dy] of [[-3, -2], [3, 2], [-2, 3], [3, -3]] as const) if (t.free(P.crypt.x + dx, P.crypt.y + dy)) t.prop(kenney(pick(['stoneWallBroken', 'stoneWallHalf', 'stoneColumn'])), P.crypt.x + dx, P.crypt.y + dy);
     // 5) pits de hormigas león Nv5
     const zones: Zone[] = [
-        { type: 'antlion', x: 40, y: 56, r: 13, n: 50, name: 'Páramo reseco', lvl: 5, respawn: 12, aggro: 3 },
-        { type: 'antlion', x: 120, y: 56, r: 13, n: 45, name: 'Grietas del páramo', lvl: 5, respawn: 12, aggro: 3 },
-        { type: 'antlion', x: 54, y: 124, r: 12, n: 40, name: 'Hondonada de los huesos', lvl: 5, respawn: 12, aggro: 3 },
-        { type: 'antlion', x: 112, y: 125, r: 11, n: 35, name: 'Llano de las calaveras', lvl: 5, respawn: 12, aggro: 3 },
+        { type: 'antlion', x: 40, y: 56, r: 12, n: 60, name: 'Páramo reseco', lvl: 5, respawn: 12, aggro: 3 },
+        { type: 'antlion', x: 120, y: 56, r: 12, n: 55, name: 'Grietas del páramo', lvl: 5, respawn: 12, aggro: 3 },
+        { type: 'antlion', x: 54, y: 124, r: 11, n: 50, name: 'Hondonada de los huesos', lvl: 5, respawn: 12, aggro: 3 },
+        { type: 'antlion', x: 112, y: 125, r: 11, n: 45, name: 'Llano de las calaveras', lvl: 5, respawn: 12, aggro: 3 },
     ];
     const pits = [t.pit(zones[0], 10, T_SAND), t.pit(zones[1], 10, CRACKED), t.pit(zones[2], 9, T_CLAY), t.pit(zones[3], 8, T_SAND)];
     // hondonadas: restos de columnas y lápidas viejas en el borde de los pits

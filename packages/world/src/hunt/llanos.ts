@@ -27,7 +27,7 @@ const GRASS = [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31];
 const MEADOW = [townTile('terrain1', 0), townTile('terrain1', 1), townTile('terrain1', 2), townTile('terrain1', 9), townTile('terrain1', 10)];
 const ROAD = [townTile('terrain1', 11), townTile('terrain1', 16), townTile('terrain1', 11)];
 const ROAD_EDGE = [townTile('terrain1', 4), townTile('terrain1', 7), townTile('terrain1', 8)];
-const DIRT = [townTile('terrain1', 11), townTile('terrain1', 16), townTile('terrain1', 5), townTile('terrain1', 6), 1001];
+const DIRT = [townTile('terrain1', 11), townTile('terrain1', 11), townTile('terrain1', 16), townTile('terrain1', 8)];
 const FIELD = [townTile('terrain1', 3), townTile('terrain1', 12), townTile('terrain1', 7), townTile('terrain1', 12)];
 const STONE = [32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43];
 const FOREST = Array.from({ length: 18 }, (_, i) => townTile('forest', i)).filter((_, i) => i !== 5 && i !== 15 && i !== 16);
@@ -64,10 +64,10 @@ export function buildLlanos(): WorldMap {
     for (const c of [L.toVilla, L.fromVilla, L.toLegacy, L.fromLegacy, L.toFrontera, L.fromFrontera, ...Object.values(L.arrivals)]) t.reserveDisc(c.x, c.y, 1.5);
     // 5) pits (zonas densas, reaparición rápida, aggro corto)
     const zones: Zone[] = [
-        { type: 'goblin', x: 40, y: 94, r: 12, n: 45, name: 'Campamento goblin', respawn: 8, aggro: 3 },
-        { type: 'goblin', x: 31, y: 30, r: 12, n: 40, name: 'Granjas tomadas', respawn: 8, aggro: 3 },
-        { type: 'goblin_elite', x: 98, y: 34, r: 13, n: 50, name: 'Avanzada goblin', respawn: 10, aggro: 3 },
-        { type: 'goblin_elite', x: 100, y: 101, r: 11, n: 35, name: 'Empalizada goblin', respawn: 10, aggro: 3 },
+        { type: 'goblin', x: 40, y: 94, r: 11, n: 55, name: 'Campamento goblin', respawn: 8, aggro: 3 },
+        { type: 'goblin', x: 31, y: 30, r: 11, n: 50, name: 'Granjas tomadas', respawn: 8, aggro: 3 },
+        { type: 'goblin_elite', x: 98, y: 34, r: 12, n: 60, name: 'Avanzada goblin', respawn: 10, aggro: 3 },
+        { type: 'goblin_elite', x: 100, y: 101, r: 11, n: 45, name: 'Empalizada goblin', respawn: 10, aggro: 3 },
     ];
     const pits = [t.pit(zones[0], 9, DIRT), t.pit(zones[1], 9, MEADOW), t.pit(zones[2], 10, DIRT), t.pit(zones[3], 8, DIRT)];
     // granjas: campos arados alrededor, casas y cercos

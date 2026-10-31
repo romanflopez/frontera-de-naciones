@@ -135,7 +135,7 @@ test('menú del Portal de Frontera: cada zona mudada llega a su celda en el mapa
         assert.ok(!m.blocked[a.y][a.x] && !m.safe[a.y][a.x], `${id}: (${a.x}, ${a.y})`);
         assert.ok(reachableFrom(m, m.spawn.x, m.spawn.y)[a.y][a.x], `${id}: no se llega a pie`);
         const z = m.zones.find((q) => q.name === t.zone)!; assert.ok(z, `${id}: el mapa no tiene la zona ${t.zone}`);
-        const d = Math.hypot(a.x - z.x, a.y - z.y); assert.ok(d >= z.r && d <= z.r + 6, `${id}: a ${d.toFixed(1)} del centro del pit (r ${z.r})`);
+        const d = Math.hypot(a.x - z.x, a.y - z.y); assert.ok(d >= z.r && d <= z.r + 8, `${id}: a ${d.toFixed(1)} del centro del pit (r ${z.r})`);
     }
     // el orden y los bloqueos de la cadena no cambian
     assert.deepEqual(TRAINING.map((t) => t.id), ['goblins', 'avanzada', 'hoyos', 'pantano', 'cementerio', 'nigromante', 'hormiguero', 'nidal', 'osario', 'cantera']);

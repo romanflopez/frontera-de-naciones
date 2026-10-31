@@ -12,9 +12,9 @@ import { makeRnd, noise2 } from '../solmar/kit';
 export interface Cell { x: number; y: number }
 export type Tiles = readonly number[];
 
-/** Elige un tile del conjunto: mayormente por ruido (manchones parejos) y un 30 % al azar (que no se vea repetido). */
+/** Elige un tile del conjunto: mayormente por ruido (manchones parejos) y un 12 % al azar (que no se vea repetido). */
 export function tileBy(set: Tiles, n: number, r: number, r2: number): number {
-    return r < 0.3 ? set[Math.floor(r2 * set.length)] : set[Math.min(set.length - 1, Math.floor(n * set.length))];
+    return r < 0.12 ? set[Math.floor(r2 * set.length)] : set[Math.min(set.length - 1, Math.floor(n * set.length))];
 }
 
 /** Pit de caza: una zona de mobs densa. `zone` es lo que simula el server; `clear` el radio que se mantiene sin obstáculos densos. */
