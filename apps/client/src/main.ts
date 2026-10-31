@@ -17,6 +17,7 @@ import { initLoginUI } from './loginui.ts';
 import { createMinimap, type Minimap } from './minimap.ts';
 import { createAuctionUI } from './auction.ts';
 import { createDepositUI } from './deposit.ts';
+import { createCursor } from './cursor.ts';
 const ico = (it: { look?: string; slot: string; rar: { c: string; k: number } }) => `<img class="iico" alt="" src="${itemIcon(it.look, it.slot, it.rar.c, it.rar.k)}">`;
 
 // ---------- utilidades ----------
@@ -799,6 +800,7 @@ function drawWorld(id: number, x: number, y: number) { const e = EXT[id]; if (e)
 
 // ---------- canvas ----------
 const cv = $('cv') as HTMLCanvasElement, ctx = cv.getContext('2d')!;
+const gameCursor = createCursor(cv, reduce);
 let W = 0, H = 0, DPR = 1, Z = 1;
 function resize() { DPR = Math.min(2, window.devicePixelRatio || 1); W = cv.clientWidth; H = cv.clientHeight; cv.width = W * DPR; cv.height = H * DPR; Z = clamp(Math.min(W, H) / 520, 0.9, 1.45); }
 window.addEventListener('resize', resize); resize();
@@ -1025,7 +1027,23 @@ function update(dt: number) {
 function updateHover() {
     hover = mouse.x >= 0 ? pickMob(mouse.x, mouse.y) : null;
     hoverDrop = mouse.x >= 0 && !hover ? pickDrop(mouse.x, mouse.y) : null;
-    cv.style.cursor = !hover && !P.ready && mouse.x >= 0 && pickNpc(mouse.x, mouse.y) ? 'pointer' : P.ready ? 'cell' : hover ? 'pointer' : mouse.x >= 0 && pickDrop(mouse.x, mouse.y) ? 'grab' : 'crosshair';
+    cursorTick();
+}
+/** Cursor propio (cursor.ts): qué hay bajo el mouse (mismo orden que el clic) y el estado del hechizo. Solo visual. */
+function cursorTick() {
+    const on = mouse.x >= 0, mx = mouse.x, my = mouse.y, en = on && !hover ? pickEnemy(mx, my) : null, g = on ? toGrid(mx, my) : null;
+    const portal = !!g && (!!pickWaypoint(mx, my) || LINK_WPS.some((q) => Math.hypot(q.x + 0.5 - g.x, q.y + 0.5 - g.y) <= 1.1) || !!MAP.portals?.some((q) => Math.floor(g.x) === q.x && Math.floor(g.y) === q.y));
+    const sp = (i: number) => ({ icon: spellIcon(SPELLS[i].id ?? '', SPELLS[i].col), slot: document.getElementById('sp' + i) });
+    let ready = null;
+    if (P.ready && !P.dead) { // muerto no se puede lanzar (el clic se ignora). Mismo criterio que pointerdown/release: mob, jugador enemigo o suelo (área); en rango y sin inmunidad al control
+        const s = SPELLS[P.ready.i], tgt: { x: number; y: number } | null = hover ?? en ?? (s.aoe && g ? g : null);
+        ready = { ...sp(P.ready.i), ok: !!tgt && Math.hypot(tgt.x - P.x, tgt.y - P.y) <= s.range && !(hover && s.ctrl && hover.imm > now()) };
+    }
+    gameCursor.update({
+        hover: !on ? 'ground' : hover ? 'mob' : pickNpc(mx, my) ? 'npc' : portal ? 'portal' : en ? 'enemy' : hoverDrop ? 'drop' : 'ground',
+        cast: P.casting ? { ...sp(P.casting.i), k: clamp((now() - P.casting.start) / (P.casting.end - P.casting.start), 0, 1) } : null,
+        ready,
+    });
 }
 function updateCam(dt: number) {
     const pt = iso(P.x, P.y); const k = 1 - Math.exp(-dt * 7); cam.x += (pt.x - cam.x) * k; cam.y += (pt.y - cam.y) * k;
