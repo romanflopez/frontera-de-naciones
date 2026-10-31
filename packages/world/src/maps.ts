@@ -11,6 +11,9 @@ import { TRAINING, type PortalProgress } from './training';
 import { buildSolmarVilla, VILLA, VILLA_BUILDINGS, VILLA_ID, VILLA_N, villaDoor, type VillaBuilding } from './solmar/villa';
 import { buildInterior, INTERIORS, roomOf, TEMPLE_RESPAWN } from './solmar/interiors';
 import { HUNT_ARRIVALS, huntMaps, LLANOS, PARAMO } from './hunt';
+import { buildVharCiudadela, VHAR, VHAR_CITADEL_ID, VHAR_N, vharDoor, type VharBuilding } from './vhar/citadel';
+import { LEGACY_FROM_VHAR, LEGACY_VHAR_LINK } from './vhar/legacy';
+import { buildVharInterior, VHAR_INTERIORS, VHAR_RESPAWN } from './vhar/interiors';
 
 /** Rectángulo de celdas con los dos extremos incluidos (igual que `WorldMap.dungeon`). */
 export interface MapRect { x0: number; y0: number; x1: number; y1: number }
@@ -86,6 +89,32 @@ export const LEGACY_VILLA_LINK = { x: 8, y: 26 }, LEGACY_FROM_VILLA = { x: 8, y:
 /** En el páramo viejo, junto a la salida de la Cripta: portal de vuelta al Páramo Reseco (Fase 3). Llegada a la Cripta desde el páramo nuevo. */
 export const LEGACY_PARAMO_LINK = { x: 44, y: 50 }, LEGACY_CRYPT_ARRIVAL = { x: 46, y: 18 };
 
+/** Camino entre la Ciudadela de Vhar y el mapa viejo: sale por el portón sur y llega junto a la puerta de la ciudad vieja de Vhar. */
+export { LEGACY_VHAR_LINK, LEGACY_FROM_VHAR };
+
+/** Mapas de la Ciudadela de Vhar (Fase 2): la ciudadela exterior y un interior por edificio, unidos por puertas `enter`. */
+function vharMaps(): Record<string, MapDef> {
+    const out: Record<string, MapDef> = {};
+    const links: Link[] = [
+        { id: 'ciudadela_a_legacy', map: VHAR_CITADEL_ID, ...VHAR.toLegacy, to: { map: 'solmar_legacy', ...LEGACY_FROM_VHAR }, kind: 'walk', msg: 'Tomás el Camino de Ceniza hacia las tierras de caza.' },
+    ];
+    for (const it of VHAR_INTERIORS) {
+        const d = vharDoor(it.building as VharBuilding), r = roomOf(it);
+        links.push({ id: `ciudadela_a_${it.building}`, map: VHAR_CITADEL_ID, ...d.door, to: { map: it.id, ...r.arrive }, kind: 'enter', msg: `Entrás: ${it.name}.` });
+        out[it.id] = {
+            id: it.id, name: it.name, region: 'vhar', size: r.N, lvl: null, pvp: 'off', safe: true,
+            spawn: { ...r.arrive }, respawn: 'faction_home',
+            links: [{ id: `${it.building}_a_ciudadela`, map: it.id, ...r.exit, to: { map: VHAR_CITADEL_ID, ...d.out }, kind: 'enter', msg: 'Salís a la Ciudadela de Vhar.' }],
+            build: () => buildVharInterior(it),
+        };
+    }
+    out[VHAR_CITADEL_ID] = {
+        id: VHAR_CITADEL_ID, name: 'Ciudadela de Vhar', region: 'vhar', size: VHAR_N, lvl: null, pvp: 'off', safe: true,
+        spawn: { ...VHAR.spawn }, respawn: 'faction_home', links, build: buildVharCiudadela,
+    };
+    return out;
+}
+
 /** Mapas de la Villa de Solmar (Fase 2): la villa exterior y un interior por edificio, unidos por puertas `enter`. */
 function solmarMaps(): Record<string, MapDef> {
     const out: Record<string, MapDef> = {};
@@ -119,6 +148,8 @@ export const MAPS: Record<string, MapDef> = {
             { id: 'legacy_a_llanos', map: 'solmar_legacy', ...LEGACY_VILLA_LINK, to: { map: LLANOS.id, ...LLANOS.fromLegacy }, kind: 'walk', msg: 'Tomás el camino del sur hacia los Llanos del Alba.' },
             // del páramo viejo (salida de la Cripta) al Páramo Reseco nuevo
             { id: 'legacy_a_paramo', map: 'solmar_legacy', ...LEGACY_PARAMO_LINK, to: { map: PARAMO.id, x: PARAMO.crypt.x, y: PARAMO.crypt.y - 3 }, kind: 'portal', msg: 'Cruzás al Páramo Reseco.' },
+            // camino a la Ciudadela de Vhar: junto a la puerta de la ciudad vieja de Vhar
+            { id: 'legacy_a_ciudadela', map: 'solmar_legacy', ...LEGACY_VHAR_LINK, to: { map: VHAR_CITADEL_ID, ...VHAR.fromLegacy }, kind: 'walk', msg: 'Tomás el Camino de Ceniza hacia la Ciudadela de Vhar.' },
         ],
         build: () => buildSolmar(),
     },
@@ -149,6 +180,7 @@ export const MAPS: Record<string, MapDef> = {
         villa: { id: VILLA_ID, toLlanos: VILLA.toLegacy, fromLlanos: VILLA.fromLegacy },
         legacy: { id: 'solmar_legacy', toLlanos: LEGACY_VILLA_LINK, fromLlanos: LEGACY_FROM_VILLA, toParamo: LEGACY_PARAMO_LINK, crypt: LEGACY_CRYPT_ARRIVAL },
     }),
+    ...vharMaps(),
 };
 
 export const getMapDef = (id: string | undefined): MapDef | undefined => { const c = canonicalMapId(id); return c ? MAPS[c] : undefined; };
@@ -162,15 +194,17 @@ export const findLink = (id: string, portalId: string): Link | undefined => mapL
 
 /**
  * Hogar de cada facción: dónde aparece un personaje nuevo, a dónde lleva "volver a la ciudad" del Portal de Frontera y el recall (H).
- * Solmar vive en la Villa de Solmar (Fase 2); Vhar sigue en su ciudad del mapa original.
+ * Solmar vive en la Villa de Solmar y Vhar en la Ciudadela de Vhar (Fase 2).
  */
 export function factionHome(faction: string): { map: string; x: number; y: number } | null {
     if (faction === 'solmar') return { map: VILLA_ID, ...VILLA.spawn };
+    if (faction === 'vhar') return { map: VHAR_CITADEL_ID, ...VHAR.spawn };
     const h = HUBS[faction]; return h ? { map: DEFAULT_MAP, x: h.x, y: h.y } : null;
 }
-/** Punto de reaparición de cada facción al morir en un mapa con respawn 'faction_home': Solmar reaparece en el Templo de la villa. */
+/** Punto de reaparición de cada facción al morir en un mapa con respawn 'faction_home': Solmar reaparece en el Templo de la villa y Vhar en el Santuario de Ceniza. */
 export function factionRespawn(faction: string): { map: string; x: number; y: number } | null {
     if (faction === 'solmar') return { map: 'solmar_templo', ...TEMPLE_RESPAWN };
+    if (faction === 'vhar') return { map: 'vhar_santuario', ...VHAR_RESPAWN };
     return factionHome(faction);
 }
 /** Dónde reaparece quien muere en `def`. */

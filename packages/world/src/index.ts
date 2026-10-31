@@ -11,6 +11,7 @@ import { extendSolmar } from './frontier';
 import { extendAshlands } from './ashlands';
 import { extendCities } from './cities';
 import { extendTraining, type TrainingStep } from './training';
+import { extendVharGate } from './vhar/legacy';
 export { CITIES, HUBS, cityAt, type City } from './cities';
 export { TRAINING, TRAINING_IDS, WAYPOINT_RANGE, CITY_PORTAL_OFFSET, LEGACY_CITY_PORTALS, waypointDest, trainingUnlocked, portalGate, type TrainingStep, type PortalProgress, type Waypoint } from './training';
 import type { MobType } from './mobs';
@@ -157,10 +158,12 @@ export function buildSolmar(): WorldMap {
     for (const b of buildings) for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) blocked[y][x] = true;
     const npcs: Npc[] = [{ id: 'mercader', name: 'Mercader', x: 9, y: 7, dir: 6 }, { id: 'capitan', name: 'Capitán Aldric', x: 6, y: 10, dir: 2 }];
     for (const n of npcs) blocked[n.y][n.x] = true;
-    return extendTraining(extendCities(extendAshlands(extendSolmar({ size: N, tiles, blocked, safe, props, decals, zones, buildings, npcs, spawn: { x: 6, y: 7 }, fire: { x: 8, y: 8 } }))));
+    return extendVharGate(extendTraining(extendCities(extendAshlands(extendSolmar({ size: N, tiles, blocked, safe, props, decals, zones, buildings, npcs, spawn: { x: 6, y: 7 }, fire: { x: 8, y: 8 } })))));
 }
 
 export * from './town';
 export { VILLA, VILLA_ID, VILLA_BUILDINGS, villaDoor, type VillaBuilding } from './solmar/villa';
 export { INTERIORS, TEMPLE_RESPAWN, roomOf } from './solmar/interiors';
 export { HUNT_ARRIVALS, LLANOS, FRONTERA, CAMPOSANTO, PARAMO, HuntMap } from './hunt';
+export { VHAR, VHAR_CITADEL_ID, VHAR_BUILDINGS, vharDoor, type VharBuilding } from './vhar/citadel';
+export { VHAR_INTERIORS, VHAR_RESPAWN } from './vhar/interiors';

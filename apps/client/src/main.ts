@@ -1597,6 +1597,8 @@ const NPC_LOOKS: Record<string, string[]> = {
     subastador_v: ['leather_boots', 'leather_pants', 'cloth_gloves', 'mage_vest', 'head_bald', 'mage_hood'],
     depositario_s: ['leather_boots', 'cloth_pants', 'leather_gloves', 'leather_chest', 'head_short'],
     depositario_v: ['chain_boots', 'leather_pants', 'leather_gloves', 'cloth_shirt', 'head_bald', 'leather_hood'],
+    sanador_v: ['mage_boots', 'mage_skirt', 'mage_sleeves', 'mage_vest', 'head_bald', 'mage_hood'],
+    mago_v: ['mage_boots', 'mage_skirt', 'mage_sleeves', 'mage_vest', 'head_bald', 'mage_hood', 'wand'],
     sanador_s: ['mage_boots', 'mage_skirt', 'mage_sleeves', 'mage_vest', 'head_short', 'mage_hood'],
     mago_s: ['mage_boots', 'mage_skirt', 'mage_sleeves', 'mage_vest', 'head_short', 'mage_hood', 'staff'],
 };
@@ -1668,12 +1670,14 @@ const questMark = () => (!QUESTS[Q.i] ? '' : Q.st === 'new' ? '!' : Q.st === 're
 // el stock, los precios y los vendedores viven en @fdn/world (economy.ts): el server valida las compras con la misma tabla
 const GUARD_LINES: Record<string, string[]> = {
     s: ['El portón del este lleva a las tierras de caza. Si vas a salir, llevate pociones.', 'Dentro de las murallas no pelea nadie: en la villa se descansa y se comercia.', 'El Capitán Aldric tiene encargos para quien sepa pelear. Está en el Ayuntamiento, al norte de la plaza.', 'Herrería, Tienda, Joyería... todo está a unos pasos de la plaza. La subasta es en el Ayuntamiento.'],
-    v: ['Vhar no se rinde: las murallas son de hierro y de paciencia. Pasá, pero sin armar lío.', 'Más allá de la puerta sur empieza el páramo. No salgas sin armadura.', 'El Capitán Kharos recluta cazadores. Está en la plaza del noreste.', 'La forja no se apaga nunca. Si necesitás acero, el armero está al oeste.'],
+    v: ['Vhar no se rinde: las murallas son de hierro y de paciencia. Pasá, pero sin armar lío.', 'Más allá del portón sur, pasando el foso, empieza el páramo. No salgas sin armadura.', 'El Capitán Kharos recluta cazadores. Está en la Casa de Concejo, al norte de la plaza.', 'La fragua no se apaga nunca. Forja, Bazar, Orfebrería... todo está a unos pasos de la plaza. La subasta es en el Concejo.'],
 };
 /** NPC de servicio sin tienda todavía (charla corta). */
 const ROLE_LINES: Record<string, string[]> = {
     sanador: ['Que la marea te devuelva las fuerzas. Si caés en la Frontera, despertarás acá, en el templo.', 'Dentro de la villa las heridas sanan solas. Descansá antes de volver a salir.'],
     mago: ['Próximamente: la Torre abrirá sus puertas a los aprendices de magia.', 'Las runas del piso todavía no están listas. Volvé más adelante.'],
+    sanador_v: ['Que el hierro te sostenga. Si caés en la Frontera, despertarás acá, entre las brasas del santuario.', 'Dentro de la ciudadela las heridas cierran solas. Descansá antes de volver a salir.'],
+    mago_v: ['Próximamente: la Torre de las Brasas abrirá sus puertas a los aprendices de magia.', 'Las runas del piso todavía no están encendidas. Volvé más adelante.'],
 };
 let talkNpc: Npc | null = null, shopNpc: Npc | null = null;
 const npcDist = (n: Npc) => Math.hypot(n.x + 0.5 - P.x, n.y + 0.5 - P.y);
@@ -1713,7 +1717,7 @@ function openShop(n: Npc = MAP.npcs[0]) {
 }
 /** Guardias y otros NPC de ambiente: una charla corta, sin tienda. */
 function openTalk(n: Npc) {
-    const role = roleOf(n), lines = ROLE_LINES[role] ?? GUARD_LINES[n.id.endsWith('_v') || n.id.includes('_v') ? 'v' : 's'];
+    const role = roleOf(n), lines = (n.id.includes('_v') ? ROLE_LINES[role + '_v'] : undefined) ?? ROLE_LINES[role] ?? GUARD_LINES[n.id.endsWith('_v') || n.id.includes('_v') ? 'v' : 's'];
     shopNpc = n; talkNpc = null; $('shop').hidden = true;
     $('qdName').textContent = n.name; $('qdlg').hidden = false; $('qdForges').innerHTML = ''; $('qdBtn').hidden = true;
     $('qdBody').innerHTML = `<small>${(SHOPS[role] ?? SHOPS.guardia).label}</small><br>${lines[Math.floor(R() * lines.length)]}`;
@@ -1878,7 +1882,7 @@ const inHomeCity = () => cityAt(P.cell.x, P.cell.y)?.faction === selectedFaction
 const lockMsg = (t: TrainingStep) => `Portal bloqueado (${t.zone}): ${t.after ? `entregá «${t.after}» al Capitán` : 'todavía no'} o llegá al nivel ${t.lvl}.`;
 function renderWp() {
     if (!wpOpen) return;
-    const city = selectedFaction === 'solmar' ? { name: 'Villa de Solmar' } : MAP.cities?.find((c) => c.faction === selectedFaction), inCity = inHomeCity(), cur = inCity ? -1 : currentTrainStep();
+    const city = selectedFaction === 'solmar' ? { name: 'Villa de Solmar' } : selectedFaction === 'vhar' ? { name: 'Ciudadela de Vhar' } : MAP.cities?.find((c) => c.faction === selectedFaction), inCity = inHomeCity(), cur = inCity ? -1 : currentTrainStep();
     $('wpTitle').textContent = 'Portal de Frontera';
     $('wpSub').textContent = `${city?.name ?? 'Tu ciudad'} · zonas de entrenamiento · para volver apretá H`;
     const rows = [`<button type="button" class="wprow home${inCity ? ' cur' : ''}" data-wp="city"${inCity ? ' disabled' : ''}><i class="wpn">&#8962;</i><span class="wpt"><b>${inCity ? 'Estás en ' : 'Volver a '}${esc(city?.name ?? 'la ciudad')}</b><small>${inCity ? 'Zona segura' : 'Zona segura · tu facción'}</small></span>${inCity ? '<em class="wptag">Estás aquí</em>' : ''}</button>`];
@@ -1972,7 +1976,7 @@ try { const c = localStorage.getItem('fdn:class'); if (CLASSES.some((x) => x.id 
 // pantallas de login / selección / clase / facción / creación (ver loginui.ts)
 const flow = initLoginUI({
     classes: CLASSES.filter((c) => !c.hidden), factions: FACTIONS, spellName: (id) => LIB[id]?.name ?? id,
-    cityName: (f) => f === 'solmar' ? 'Villa de Solmar' : HUBS[f] ? (cityAt(HUBS[f].x, HUBS[f].y)?.name ?? 'Ciudad de ' + f) : f,
+    cityName: (f) => f === 'solmar' ? 'Villa de Solmar' : f === 'vhar' ? 'Ciudadela de Vhar' : HUBS[f] ? (cityAt(HUBS[f].x, HUBS[f].y)?.name ?? 'Ciudad de ' + f) : f,
     get: () => ({ cls: selectedClass, faction: selectedFaction }),
     set: (p) => {
         if (p.cls) { selectedClass = p.cls; try { localStorage.setItem('fdn:class', selectedClass); } catch { /* sin almacenamiento */ } }
@@ -2100,7 +2104,7 @@ function enterWorld(name: string) {
     // cada facción arranca en su ciudad (también si el guardado te dejó dentro de la del otro bando)
     const home = factionHome(selectedFaction), here = cityAt(P.cell.x, P.cell.y);
     if (home && (!welcomeBack || (here && here.faction !== selectedFaction))) net.send({ $case: 'playerTeleportRequested', value: { x: home.x, y: home.y } });
-    log(selectedFaction === 'vhar' ? 'Bienvenido a la Ciudad de Vhar. La puerta del sur lleva a las tierras de Solmar.' : 'Bienvenido a la Villa de Solmar. Los edificios tienen interior: entrá por las puertas.', true);
+    log(selectedFaction === 'vhar' ? 'Bienvenido a la Ciudadela de Vhar. El portón del sur lleva a las tierras de caza; los edificios tienen interior.' : 'Bienvenido a la Villa de Solmar. Los edificios tienen interior: entrá por las puertas.', true);
     log('En la plaza está el Portal de Frontera: un menú con las zonas de entrenamiento. La primera ya está abierta; las demás se abren al entregar las misiones del Capitán (o subiendo de nivel). Para volver a la ciudad apretá H (tarda 8 s y se corta si te pegan).', true);
     log('Tocá un mob para atacarlo. Apretá un hechizo (1–4), esperá que cargue y hacé clic en el objetivo. Enter para chatear.');
 }

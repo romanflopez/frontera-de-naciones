@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_MAP, MAPS, buildMap, canonicalMapId, factionHome, linkGateReason, mapHash, respawnTarget, validateMapGraph, type MapDef } from '@fdn/world';
+import { VHAR_RESPAWN, DEFAULT_MAP, MAPS, buildMap, canonicalMapId, factionHome, linkGateReason, mapHash, respawnTarget, validateMapGraph, type MapDef } from '@fdn/world';
 
 const clone = (): Record<string, MapDef> => Object.fromEntries(Object.entries(MAPS).map(([k, d]) => [k, { ...d, links: d.links.map((l) => ({ ...l, to: { ...l.to } })) }]));
 
@@ -76,7 +76,8 @@ test('los requisitos de los vínculos', () => {
     assert.ok(linkGateReason({ ...door, gate: { quest: 3 } }, prog(9)));
 });
 test('respawn por mapa', () => {
-    assert.deepEqual(respawnTarget(MAPS.solmar_legacy, 'vhar'), factionHome('vhar'));
+    assert.deepEqual(respawnTarget(MAPS.solmar_legacy, 'vhar'), { map: 'vhar_santuario', ...VHAR_RESPAWN });
+    assert.equal(factionHome('vhar')!.map, 'vhar_ciudadela');
     assert.equal(respawnTarget(MAPS.prueba_mazmorra, 'solmar').map, 'prueba_mazmorra');
     assert.equal(respawnTarget(MAPS.prueba_caza, 'vhar').map, 'prueba_caza');
 });

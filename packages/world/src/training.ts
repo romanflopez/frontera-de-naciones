@@ -51,8 +51,8 @@ export interface Waypoint {
 export const WAYPOINT_RANGE = 3;
 /** Celda del portal grande de cada ciudad respecto del punto de aparición (HUBS). */
 export const CITY_PORTAL_OFFSET = { x: 3, y: 0 };
-/** Ciudades del mapa viejo que conservan su Portal de Frontera (Solmar se mudó a la Villa de Solmar, que tiene el suyo). */
-export const LEGACY_CITY_PORTALS: readonly string[] = ['vhar'];
+/** Ciudades del mapa viejo que conservan su Portal de Frontera: ninguna (Solmar y Vhar tienen el suyo en la Villa y en la Ciudadela). */
+export const LEGACY_CITY_PORTALS: readonly string[] = [];
 
 /** ¿Está abierto el portal del paso `step` para alguien que entregó `qi` misiones y tiene nivel `lvl`? */
 export const trainingUnlocked = (step: number, qi: number, lvl: number): boolean => { const t = TRAINING[step]; return !!t && (qi >= step || lvl >= t.lvl); };
