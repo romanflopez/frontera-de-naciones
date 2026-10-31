@@ -8,6 +8,7 @@ import { WorldRegistry, type TransferSession } from '../src/registry.ts';
 import { resolveSaved, restPosition } from '../src/persist.ts';
 import type { PersistedPlayer, Player } from '../src/player.ts';
 import type { GameWorld } from '../src/world.ts';
+import { LEGACY_VILLA_LINK, PRUEBA_CAZA, PRUEBA_MAZMORRA } from '@fdn/world';
 
 const settings = loadSettings(), catalogs = loadCatalogs();
 class MemStorage implements Storage {
@@ -41,6 +42,9 @@ const fresh = (o: Partial<ConstructorParameters<typeof WorldRegistry>[0]> = {}) 
     return { eco, reg };
 };
 const saves: PersistedPlayer[] = [];
+// Los mapas de prueba no tienen entrada desde el mundo (el mapa viejo ya no tiene el portal al claro): los cruces se prueban
+// desde la escalera de la mazmorra de prueba ('mazmorra_a_caza'), que lleva al claro.
+const EXIT = PRUEBA_MAZMORRA.exit, ARRIVE = PRUEBA_CAZA.fromMazmorra;
 const save = (s: PersistedPlayer) => { saves.push(s); };
 
 test('el registro crea los mundos a pedido y comparte el mapa', () => {
@@ -59,29 +63,29 @@ test('el registro crea los mundos a pedido y comparte el mapa', () => {
 
 test('cruce de portal en dos fases: el jugador conserva su estado y no queda en dos mundos', () => {
     const { reg, eco } = fresh(); saves.length = 0;
-    const legacy = reg.ensure('solmar_legacy');
-    const J = join(reg, eco, legacy, 'ana', { x: 11, y: 11 });
-    const O = join(reg, eco, legacy, 'beto', { x: 12, y: 12 });
+    const src = reg.ensure('prueba_mazmorra');
+    const J = join(reg, eco, src, 'ana', EXIT);
+    const O = join(reg, eco, src, 'beto', { x: EXIT.x + 1, y: EXIT.y + 1 });
     O.log.length = 0;
     J.p.hp = 77; J.p.mp = 9; J.p.econ!.gold = 1234;
     const playerId = J.p.playerId;
 
-    assert.equal(reg.handlePortal(J.session, 'solmar_a_caza', save), null);
+    assert.equal(reg.handlePortal(J.session, 'mazmorra_a_caza', save), null);
     // fase 1: fuera del mundo viejo, sin mundo nuevo todavía
-    assert.equal(legacy.playerCount, 1);
-    assert.equal(legacy.playerOf(J.session.sessionId), undefined);
+    assert.equal(src.playerCount, 1);
+    assert.equal(src.playerOf(J.session.sessionId), undefined);
     assert.equal(reg.pendingOf(J.session.sessionId)?.map, 'prueba_caza');
     assert.equal(J.session.worldId, 'prueba_caza');
     assert.ok(kinds(O.log).includes('playersLeftRange'), 'el vecino ve que se fue');
     assert.deepEqual(find(J.log, 'mapTransfer').value.mapId, 'prueba_caza');
     assert.equal(find(J.log, 'mapTransfer').value.gameWorldId, 'prueba_caza');
     assert.equal(find(J.log, 'mapTransfer').value.mapHash, reg.hashOf('prueba_caza'));
-    assert.equal(saves.at(-1)!.mapId, 'prueba_caza'); assert.equal(saves.at(-1)!.x, 6); assert.equal(saves.at(-1)!.y, 57);
+    assert.equal(saves.at(-1)!.mapId, 'prueba_caza'); assert.equal(saves.at(-1)!.x, ARRIVE.x); assert.equal(saves.at(-1)!.y, ARRIVE.y);
     const dest = reg.get('prueba_caza')!;
     assert.equal(dest.playerCount, 0);
     // un segundo pedido (doble portal) mientras cruza se ignora
     const n = J.log.length;
-    assert.equal(reg.handlePortal(J.session, 'solmar_a_caza', save), null);
+    assert.equal(reg.handlePortal(J.session, 'mazmorra_a_caza', save), null);
     assert.equal(J.log.length, n);
     // la celda del portal quedó libre: otro jugador puede pararse ahí
     assert.ok(!kinds(J.log).includes('initialGameWorldState') || J.log.filter((m) => m.payload?.$case === 'initialGameWorldState').length === 1);
@@ -92,17 +96,18 @@ test('cruce de portal en dos fases: el jugador conserva su estado y no queda en 
     const p2 = dest.playerOf(J.session.sessionId)!;
     assert.equal(p2.playerId, playerId, 'es el mismo jugador (mismo id)');
     assert.equal(p2.hp, 77); assert.equal(p2.mp, 9); assert.equal(p2.econ!.gold, 1234); assert.equal(p2.accountKey, 'acc-ana');
-    assert.deepEqual([p2.posX, p2.posY], [6, 57]);
+    assert.deepEqual([p2.posX, p2.posY], [ARRIVE.x, ARRIVE.y]);
     assert.equal(p2.world, dest);
     const ig = find(J.log, 'initialGameWorldState').value;
-    assert.equal(ig.mapName, 'prueba_caza'); assert.equal(ig.gameWorldId, 'prueba_caza'); assert.equal(ig.playerX, 6);
+    assert.equal(ig.mapName, 'prueba_caza'); assert.equal(ig.gameWorldId, 'prueba_caza'); assert.equal(ig.playerX, ARRIVE.x);
     assert.ok(!kinds(J.log).includes('initialState'), 'no se reenvía el catálogo entero en cada cruce');
     assert.equal(reg.pendingOf(J.session.sessionId), undefined);
     // ya no hay nada pendiente: un MapReady repetido no hace nada
     assert.equal(reg.completeTransfer(J.session.sessionId, 'prueba_caza', reg.hashOf('prueba_caza')), false);
-    // ida y vuelta
-    p2.setPosition(3, 57);
+    // y a otro mapa: la salida de una vía del claro lleva al mapa viejo
+    p2.setPosition(PRUEBA_CAZA.toLegacy.x, PRUEBA_CAZA.toLegacy.y);
     assert.equal(reg.handlePortal(J.session, 'caza_a_solmar', save), null);
+    const legacy = reg.get('solmar_legacy')!;
     assert.equal(reg.completeTransfer(J.session.sessionId, 'solmar_legacy', reg.hashOf('solmar_legacy')), true);
     assert.deepEqual([legacy.playerOf(J.session.sessionId)!.posX, legacy.playerOf(J.session.sessionId)!.posY], [11, 12]);
     assert.equal(legacy.playerOf(J.session.sessionId)!.econ!.gold, 1234);
@@ -113,7 +118,7 @@ test('portales: id inexistente, lejos, requisito de nivel y hash distinto', () =
     const caza = reg.ensure('prueba_caza');
     const J = join(reg, eco, caza, 'carla', { x: 57, y: 6 });
     // id que no existe en este mapa y vínculo de otro mapa: se ignoran
-    assert.equal(reg.handlePortal(J.session, 'solmar_a_caza', save), null);
+    assert.equal(reg.handlePortal(J.session, 'legacy_a_villa', save), null);
     assert.equal(reg.handlePortal(J.session, 'no_existe', save), null);
     assert.equal(reg.pendingOf(J.session.sessionId), undefined);
     // puerta con requisito de nivel 2: nivel 1 no pasa y se le avisa
@@ -138,11 +143,11 @@ test('portales: id inexistente, lejos, requisito de nivel y hash distinto', () =
 test('muerto no cruza; cruzar sin estar en un mundo se ignora', () => {
     const { reg, eco } = fresh();
     const legacy = reg.ensure('solmar_legacy');
-    const J = join(reg, eco, legacy, 'dani', { x: 11, y: 11 });
+    const J = join(reg, eco, legacy, 'dani', LEGACY_VILLA_LINK);
     J.p.hp = 0;
-    assert.equal(reg.handlePortal(J.session, 'solmar_a_caza', save), null);
+    assert.equal(reg.handlePortal(J.session, 'legacy_a_villa', save), null);
     assert.equal(reg.pendingOf(J.session.sessionId), undefined);
-    assert.equal(reg.handlePortal({ sessionId: 'nadie', worldId: 'solmar_legacy' }, 'solmar_a_caza', save), null);
+    assert.equal(reg.handlePortal({ sessionId: 'nadie', worldId: 'solmar_legacy' }, 'legacy_a_villa', save), null);
 });
 
 test('la llave del requisito se descuenta al cruzar', () => {
@@ -156,14 +161,14 @@ test('la llave del requisito se descuenta al cruzar', () => {
 
 test('los temporizadores del jugador lo siguen al mundo nuevo (nada fantasma en el viejo)', () => {
     const { reg, eco } = fresh();
-    const legacy = reg.ensure('solmar_legacy');
-    const J = join(reg, eco, legacy, 'fran', { x: 11, y: 11 });
+    const src = reg.ensure('prueba_mazmorra');
+    const J = join(reg, eco, src, 'fran', EXIT);
     const ran: string[] = [];
     J.p.timers.push({ at: Date.now() + 5, fn: (w) => ran.push(w.id) });
-    reg.handlePortal(J.session, 'solmar_a_caza', save);
+    reg.handlePortal(J.session, 'mazmorra_a_caza', save);
     reg.completeTransfer(J.session.sessionId, 'prueba_caza', reg.hashOf('prueba_caza'));
     const t = Date.now() + 50;
-    legacy.tick(); assert.deepEqual(ran, []);
+    src.tick(); assert.deepEqual(ran, []);
     const origNow = Date.now; Date.now = () => t;
     try { reg.get('prueba_caza')!.tick(); } finally { Date.now = origNow; }
     assert.deepEqual(ran, ['prueba_caza']);
@@ -189,9 +194,9 @@ test('hibernación: los mundos vacíos se duermen, no corren y despiertan con lo
 
 test('un cruce pendiente mantiene despierto el mundo de destino y vence por tiempo', () => {
     const { reg, eco } = fresh({ hibernateAfterMs: 1000, transferTimeoutMs: 5000 });
-    const legacy = reg.ensure('solmar_legacy');
-    const J = join(reg, eco, legacy, 'hugo', { x: 11, y: 11 });
-    reg.handlePortal(J.session, 'solmar_a_caza', save);
+    const src = reg.ensure('prueba_mazmorra');
+    const J = join(reg, eco, src, 'hugo', EXIT);
+    reg.handlePortal(J.session, 'mazmorra_a_caza', save);
     const caza = reg.get('prueba_caza')!;
     const now = Date.now();
     reg.sweep(now + 1); reg.sweep(now + 3000);
@@ -204,9 +209,9 @@ test('un cruce pendiente mantiene despierto el mundo de destino y vence por tiem
 
 test('si se corta la conexión entre MapTransfer y MapReady, queda en el mundo nuevo', () => {
     const { reg, eco } = fresh();
-    const legacy = reg.ensure('solmar_legacy');
-    const J = join(reg, eco, legacy, 'ines', { x: 11, y: 11 });
-    reg.handlePortal(J.session, 'solmar_a_caza', save);
+    const src = reg.ensure('prueba_mazmorra');
+    const J = join(reg, eco, src, 'ines', EXIT);
+    reg.handlePortal(J.session, 'mazmorra_a_caza', save);
     assert.equal(reg.flushPending(J.session.sessionId), true);
     const caza = reg.get('prueba_caza')!;
     assert.equal(caza.playerCount, 1);

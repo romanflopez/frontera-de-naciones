@@ -145,6 +145,9 @@ export interface ClientMessage {
     | //
     /** Depósito por cuenta (ver docs/DEPOSITO.md). Rango propio de tags desde 400. */
     { $case: "depositRequest"; value: DepositRequest }
+    | //
+    /** Volver a la ciudad (recall). Rango propio de tags desde 500. */
+    { $case: "recallRequest"; value: RecallRequest }
     | undefined;
 }
 
@@ -551,6 +554,9 @@ export interface ServerMessage {
     | //
     /** Depósito por cuenta (ver docs/DEPOSITO.md). Rango propio de tags desde 400; el resultado de cada acción va en EconResult. */
     { $case: "depositState"; value: DepositState }
+    | //
+    /** Volver a la ciudad (recall). Rango propio de tags desde 500. */
+    { $case: "recallState"; value: RecallState }
     | undefined;
 }
 
@@ -1631,6 +1637,27 @@ export interface DepositState {
   stackMax: number;
 }
 
+/**
+ * Volver a la ciudad (recall estilo MMO clásico): el cliente pide empezar o cancelar; el server lleva el canal (8 s), lo corta si
+ * te movés, recibís daño, atacás o lanzás algo, y al terminar te lleva al hogar de tu facción. Enfriamiento de 60 s.
+ */
+export interface RecallRequest {
+  cancel: boolean;
+}
+
+/**
+ * Estado del recall para el que lo usa. state: 0 = nada (cancelado o terminado), 1 = canalizando.
+ * channel_ms = duración total del canal y remaining_ms lo que falta; cooldown_ms = cuánto falta para poder usarlo de nuevo.
+ * reason: por qué se cortó o se rechazó ('' si no hay nada que avisar).
+ */
+export interface RecallState {
+  state: number;
+  channelMs: number;
+  remainingMs: number;
+  cooldownMs: number;
+  reason: string;
+}
+
 function createBaseClientMessage(): ClientMessage {
   return { payload: undefined };
 }
@@ -1838,6 +1865,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         break;
       case "depositRequest":
         DepositRequest.encode(message.payload.value, writer.uint32(3202).fork()).join();
+        break;
+      case "recallRequest":
+        RecallRequest.encode(message.payload.value, writer.uint32(4002).fork()).join();
         break;
     }
     return writer;
@@ -2509,6 +2539,14 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "depositRequest", value: DepositRequest.decode(reader, reader.uint32()) };
             continue;
           }
+          case 500: {
+            if (tag !== 4002) {
+              break;
+            }
+
+            message.payload = { $case: "recallRequest", value: RecallRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -3043,6 +3081,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "depositRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "depositRequest", value: DepositRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "recallRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "recallRequest", value: RecallRequest.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -7167,6 +7211,9 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "depositState":
         DepositState.encode(message.payload.value, writer.uint32(3202).fork()).join();
         break;
+      case "recallState":
+        RecallState.encode(message.payload.value, writer.uint32(4002).fork()).join();
+        break;
     }
     return writer;
   },
@@ -7959,6 +8006,14 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "depositState", value: DepositState.decode(reader, reader.uint32()) };
             continue;
           }
+          case 500: {
+            if (tag !== 4002) {
+              break;
+            }
+
+            message.payload = { $case: "recallState", value: RecallState.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -8577,6 +8632,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "depositState": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "depositState", value: DepositState.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "recallState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "recallState", value: RecallState.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -21245,6 +21306,164 @@ export const DepositState: MessageFns<DepositState> = {
     message.stacks = object.stacks?.map((e) => DepositStack.fromPartial(e)) || [];
     message.capacity = object.capacity ?? 0;
     message.stackMax = object.stackMax ?? 0;
+    return message;
+  },
+};
+
+function createBaseRecallRequest(): RecallRequest {
+  return { cancel: false };
+}
+
+export const RecallRequest: MessageFns<RecallRequest> = {
+  encode(message: RecallRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.cancel !== false) {
+      writer.uint32(8).bool(message.cancel);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): RecallRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseRecallRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.cancel = reader.bool();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<RecallRequest>, I>>(base?: I): RecallRequest {
+    return RecallRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<RecallRequest>, I>>(object: I): RecallRequest {
+    const message = createBaseRecallRequest();
+    message.cancel = object.cancel ?? false;
+    return message;
+  },
+};
+
+function createBaseRecallState(): RecallState {
+  return { state: 0, channelMs: 0, remainingMs: 0, cooldownMs: 0, reason: "" };
+}
+
+export const RecallState: MessageFns<RecallState> = {
+  encode(message: RecallState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.state !== 0) {
+      writer.uint32(8).int32(message.state);
+    }
+    if (message.channelMs !== 0) {
+      writer.uint32(16).int32(message.channelMs);
+    }
+    if (message.remainingMs !== 0) {
+      writer.uint32(24).int32(message.remainingMs);
+    }
+    if (message.cooldownMs !== 0) {
+      writer.uint32(32).int32(message.cooldownMs);
+    }
+    if (message.reason !== "") {
+      writer.uint32(42).string(message.reason);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): RecallState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseRecallState();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.state = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.channelMs = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.remainingMs = reader.int32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.cooldownMs = reader.int32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.reason = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<RecallState>, I>>(base?: I): RecallState {
+    return RecallState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<RecallState>, I>>(object: I): RecallState {
+    const message = createBaseRecallState();
+    message.state = object.state ?? 0;
+    message.channelMs = object.channelMs ?? 0;
+    message.remainingMs = object.remainingMs ?? 0;
+    message.cooldownMs = object.cooldownMs ?? 0;
+    message.reason = object.reason ?? "";
     return message;
   },
 };

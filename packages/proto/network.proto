@@ -124,6 +124,8 @@ message ClientMessage {
     AuctionRequest auction_request = 300;
     // Depósito por cuenta (ver docs/DEPOSITO.md). Rango propio de tags desde 400.
     DepositRequest deposit_request = 400;
+    // Volver a la ciudad (recall). Rango propio de tags desde 500.
+    RecallRequest recall_request = 500;
   }
 }
 
@@ -513,6 +515,8 @@ message ServerMessage {
     AuctionHistory auction_history = 302;
     // Depósito por cuenta (ver docs/DEPOSITO.md). Rango propio de tags desde 400; el resultado de cada acción va en EconResult.
     DepositState deposit_state = 400;
+    // Volver a la ciudad (recall). Rango propio de tags desde 500.
+    RecallState recall_state = 500;
   }
 }
 
@@ -1432,4 +1436,21 @@ message DepositState {
   repeated DepositStack stacks = 3;
   int32 capacity = 4;
   int32 stack_max = 5;
+}
+
+// Volver a la ciudad (recall estilo MMO clásico): el cliente pide empezar o cancelar; el server lleva el canal (8 s), lo corta si
+// te movés, recibís daño, atacás o lanzás algo, y al terminar te lleva al hogar de tu facción. Enfriamiento de 60 s.
+message RecallRequest {
+  bool cancel = 1;
+}
+
+// Estado del recall para el que lo usa. state: 0 = nada (cancelado o terminado), 1 = canalizando.
+// channel_ms = duración total del canal y remaining_ms lo que falta; cooldown_ms = cuánto falta para poder usarlo de nuevo.
+// reason: por qué se cortó o se rechazó ('' si no hay nada que avisar).
+message RecallState {
+  int32 state = 1;
+  int32 channel_ms = 2;
+  int32 remaining_ms = 3;
+  int32 cooldown_ms = 4;
+  string reason = 5;
 }

@@ -59,6 +59,11 @@ export interface MapDef {
     /** Zona de todos contra todos dentro de un mapa `faction` (el Coliseo del mapa original). */
     ffaRect?: MapRect;
     music?: string;
+    /**
+     * Mapa de pruebas sin entrada desde el mundo (los de la Fase 1): no hace falta alcanzarlo desde el mapa inicial; los tests
+     * llegan con `WorldRegistry.beginTransfer`. Sus vínculos se validan igual que los demás.
+     */
+    debugOnly?: boolean;
     links: Link[];
     /** Constructor determinista: cliente y server tienen que armar exactamente lo mismo (sin Math.random ni hora). */
     build(): WorldMap;
@@ -104,24 +109,23 @@ export const MAPS: Record<string, MapDef> = {
         id: 'solmar_legacy', name: 'Tierras de Solmar', region: 'solmar', size: 96, lvl: [1, 12], pvp: 'faction', safe: false,
         spawn: { x: HUBS.solmar.x, y: HUBS.solmar.y }, respawn: 'faction_home', tempRects: [ARENA], ffaRect: ARENA,
         links: [
-            // Portal de prueba junto a la plaza de Solmar: lleva al claro de caza (Fase 1 de docs/MUNDO.md)
-            { id: 'solmar_a_caza', map: 'solmar_legacy', x: 11, y: 11, to: { map: PRUEBA_CAZA.id, ...PRUEBA_CAZA.fromLegacy }, kind: 'portal', msg: 'Cruzás el portal hacia el Claro de prueba.' },
             // camino a la Villa de Solmar (Fase 2): por la puerta sur de la ciudad vieja
             { id: 'legacy_a_villa', map: 'solmar_legacy', ...LEGACY_VILLA_LINK, to: { map: VILLA_ID, ...VILLA.fromLegacy }, kind: 'walk', msg: 'Tomás el Camino de la Marea hacia la Villa de Solmar.' },
         ],
         build: () => buildSolmar(),
     },
     [PRUEBA_CAZA.id]: {
-        id: PRUEBA_CAZA.id, name: 'Claro de prueba', region: 'prueba', size: PRUEBA_CAZA.size, lvl: [1, 5], pvp: 'faction', safe: false,
+        id: PRUEBA_CAZA.id, name: 'Claro de prueba', region: 'prueba', size: PRUEBA_CAZA.size, lvl: [1, 5], pvp: 'faction', safe: false, debugOnly: true,
         spawn: { ...PRUEBA_CAZA.fromLegacy }, respawn: { ...PRUEBA_CAZA.respawn },
         links: [
-            { id: 'caza_a_solmar', map: PRUEBA_CAZA.id, ...PRUEBA_CAZA.toLegacy, to: { map: 'solmar_legacy', x: 11, y: 12 }, kind: 'portal', msg: 'Volvés a Solmar.' },
+            // el mapa viejo ya no tiene portal hacia acá (un solo portal por ciudad): la salida del claro es de una sola vía
+            { id: 'caza_a_solmar', map: PRUEBA_CAZA.id, ...PRUEBA_CAZA.toLegacy, to: { map: 'solmar_legacy', x: 11, y: 12 }, kind: 'oneway', msg: 'Volvés a Solmar.' },
             { id: 'caza_a_mazmorra', map: PRUEBA_CAZA.id, ...PRUEBA_CAZA.door, to: { map: PRUEBA_MAZMORRA.id, ...PRUEBA_MAZMORRA.fromCaza }, kind: 'door', gate: { lvl: 2 }, msg: 'Bajás a la Mazmorra de prueba.' },
         ],
         build: buildPruebaCaza,
     },
     [PRUEBA_MAZMORRA.id]: {
-        id: PRUEBA_MAZMORRA.id, name: 'Mazmorra de prueba', region: 'prueba', size: PRUEBA_MAZMORRA.size, lvl: [3, 5], pvp: 'off', safe: false,
+        id: PRUEBA_MAZMORRA.id, name: 'Mazmorra de prueba', region: 'prueba', size: PRUEBA_MAZMORRA.size, lvl: [3, 5], pvp: 'off', safe: false, debugOnly: true,
         spawn: { ...PRUEBA_MAZMORRA.fromCaza }, respawn: { ...PRUEBA_MAZMORRA.respawn },
         // temporal: si te desconectás adentro, al volver aparecés en la puerta del claro
         temporary: true, rest: { map: PRUEBA_CAZA.id, ...PRUEBA_CAZA.fromMazmorra },
@@ -144,7 +148,7 @@ export const mapLinks = (id: string): Link[] => getMapDef(id)?.links ?? [];
 export const findLink = (id: string, portalId: string): Link | undefined => mapLinks(id).find((l) => l.id === portalId);
 
 /**
- * Hogar de cada facción: dónde aparece un personaje nuevo y a dónde lleva "volver a la ciudad" del Portal de Frontera.
+ * Hogar de cada facción: dónde aparece un personaje nuevo, a dónde lleva "volver a la ciudad" del Portal de Frontera y el recall (H).
  * Solmar vive en la Villa de Solmar (Fase 2); Vhar sigue en su ciudad del mapa original.
  */
 export function factionHome(faction: string): { map: string; x: number; y: number } | null {
@@ -161,6 +165,13 @@ export function respawnTarget(def: MapDef, faction: string): { map: string; x: n
     const r = def.respawn;
     if (r === 'faction_home') return factionRespawn(faction) ?? { map: def.id, ...def.spawn };
     return { map: r.map ?? def.id, x: r.x, y: r.y };
+}
+/** Volver a la ciudad (recall, tecla H): canal de 8 s que corta moverse, recibir daño, atacar o lanzar; 60 s de enfriamiento. Lo valida el server. */
+export const RECALL = { channelMs: 8000, cooldownMs: 60000 } as const;
+/** Motivo por el que no se puede empezar el recall en `def` en (x, y), o null. El Coliseo (todos contra todos) y los mapas `ffa` no lo permiten. */
+export function recallBlockedReason(def: MapDef | undefined, x: number, y: number): string | null {
+    if (def?.pvp === 'ffa' || (def?.ffaRect && inMapRect(def.ffaRect, x, y))) return 'No podés volver a la ciudad desde la arena.';
+    return null;
 }
 let legacyArrivals: Record<string, { x: number; y: number }> | null = null;
 /**
@@ -276,9 +287,10 @@ export function validateMapGraph(defs: Record<string, MapDef> = MAPS, start: str
     // nombres de zona únicos entre mapas (dentro de un mapa se repiten: varios campamentos de la misma zona)
     const zoneMap = new Map<string, string>();
     for (const [id, m] of built) for (const z of m.zones) { const o = zoneMap.get(z.name); if (o && o !== id) errs.push(`zona '${z.name}' repetida en '${o}' y '${id}'`); else zoneMap.set(z.name, id); }
-    // todos los mapas se alcanzan desde el inicial
+    // todos los mapas se alcanzan desde el inicial (los de prueba, desde cualquiera de ellos: no tienen entrada desde el mundo)
     if (defs[start]) {
-        const seen = new Set([start]), q = [start];
+        const roots = [start, ...ids.filter((id) => defs[id].debugOnly)];
+        const seen = new Set(roots), q = [...roots];
         for (let i = 0; i < q.length; i++) for (const l of defs[q[i]]?.links ?? []) if (defs[l.to.map] && !seen.has(l.to.map)) { seen.add(l.to.map); q.push(l.to.map); }
         for (const id of ids) if (!seen.has(id)) errs.push(`'${id}' no se alcanza desde '${start}'`);
     }

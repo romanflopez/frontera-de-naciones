@@ -7,7 +7,7 @@
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
 import { damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionMp, POTION_GCD_MS, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, progressFromEcon, PVP_SPELLS, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
-import { HUBS, QUESTS, TRAINING, WAYPOINT_RANGE, factionHome, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef } from '@fdn/world';
+import { HUBS, QUESTS, RECALL, TRAINING, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef } from '@fdn/world';
 import { applyParalysis, applySlow, applyWarcry, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, hasWarcry, isSlowed, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import type { Catalogs, GameWorldConfig, Settings } from './config.ts';
@@ -30,6 +30,13 @@ interface Timer { at: number; fn: () => void }
  */
 const PING_JOIN_GRACE_MS = 15_000;
 
+/** Paquetes que cortan el recall (volver a la ciudad): moverse, atacar, lanzar o usar otro portal. */
+const RECALL_BREAKERS: Record<string, string> = {
+    requestMovement: 'Te moviste', playerTeleportRequested: 'Te moviste', waypointRequest: 'Usaste el portal',
+    pvpHitRequest: 'Atacaste', mobHitRequest: 'Atacaste', skillRequest: 'Usaste una habilidad', blinkRequest: 'Usaste una habilidad',
+    invisibilityRequest: 'Lanzaste un hechizo', detectInvisibleRequest: 'Lanzaste un hechizo', removerRequest: 'Lanzaste un hechizo',
+};
+
 export class GameWorld {
     private readonly players = new Map<string, Player>();
     private readonly playersById = new Map<bigint, Player>();
@@ -38,7 +45,7 @@ export class GameWorld {
     /** Dormido: sin jugadores, el registro dejó de llamar a tick(). Al despertar los mobs vuelven a empezar. */
     private hibernated = false;
     /** Lo setea el registro de mundos: saca al jugador de este mundo y lo manda a otro mapa (portal, respawn). */
-    transferHook?: (sessionId: string, dest: { map: string; x: number; y: number }, why: 'respawn' | 'waypoint' | 'home') => void;
+    transferHook?: (sessionId: string, dest: { map: string; x: number; y: number }, why: 'respawn' | 'waypoint' | 'home' | 'recall') => void;
     /** Botín en el suelo de este mundo (solo en memoria). */
     private readonly loot = new GroundLoot();
     private lastGroundSync = 0;
@@ -294,6 +301,7 @@ export class GameWorld {
             this.sendTo(o, left);
         }
         p.playersInRange.clear(); p.groundSeen.clear(); p.world = null; p.lastDamager = null;
+        this.cancelRecall(p, ''); // cruzar de mapa corta el recall (si es el propio recall, ya terminó)
         console.log(`[Mundo:${this.id}] Se fue ${p.characterName} (cruza de mapa). Jugadores: ${this.players.size}`);
         return p;
     }
@@ -355,6 +363,7 @@ export class GameWorld {
         if (!p) return;
         if (!remainsActive) { this.removePlayer(sessionId); return; }
         p.disconnected = true;
+        this.cancelRecall(p, '');
         p.resetConnectionState();
         p.send = () => {};
         this.broadcastNear(p, M.playerDisconnected(p.playerId));
@@ -406,6 +415,10 @@ export class GameWorld {
         const payload = message.payload;
         if (!payload) return;
         this.safe(payload.$case, () => {
+            if (p.recallUntil) {
+                const why = RECALL_BREAKERS[payload.$case] ?? (payload.$case === 'hpReport' && Number(payload.value.mpSpent) > 0 ? 'Lanzaste un hechizo' : '');
+                if (why) this.cancelRecall(p, `${why}: se cortó el regreso a la ciudad.`);
+            }
             switch (payload.$case) {
                 case 'pingRequest':
                     p.send(M.pingResponse(payload.value.sequence, 0, this.players.size, p.pingVariance));
@@ -523,6 +536,10 @@ export class GameWorld {
                     break;
                 case 'waypointRequest':
                     this.handleWaypoint(p, payload.value.id);
+                    break;
+                case 'recallRequest':
+                    if (payload.value.cancel) this.cancelRecall(p, 'Cancelaste el regreso a la ciudad.');
+                    else this.startRecall(p);
                     break;
                 case 'changePlayerAttackStunDurationRequest': p.attackStunDurationMs = clampInt(payload.value.attackStunDurationMs, 100, 2000); break;
                 case 'changePlayerAttackSpeedRequest': p.attackSpeedMs = clampInt(payload.value.attackSpeedMs, 100, 2000); break;
@@ -796,7 +813,9 @@ export class GameWorld {
      */
     private handleWaypoint(p: Player, id: string): void {
         if (p.isDead || !this.map) return;
-        if (!this.map.waypoints?.some((q) => distance(p.posX, p.posY, q.x, q.y) <= WAYPOINT_RANGE)) { p.send(M.sendMessage('Tenés que estar junto a un portal.')); return; }
+        // solo el Portal de Frontera de la propia ciudad (las zonas no tienen portal: para volver está el recall)
+        const fac = this.factionOf(p);
+        if (!this.map.waypoints?.some((q) => q.kind === 'city' && q.faction === fac && distance(p.posX, p.posY, q.x, q.y) <= WAYPOINT_RANGE)) { p.send(M.sendMessage('Tenés que estar junto al Portal de Frontera de tu ciudad.')); return; }
         // el destino puede estar en otro mapa (las zonas siguen en el mapa original; la ciudad de Solmar es la villa)
         const dest = waypointTarget(id, this.factionOf(p));
         if (!dest) return;
@@ -809,6 +828,51 @@ export class GameWorld {
         }
         if (dest.map !== this.mapId) { this.transferHook?.(p.sessionId, dest, 'waypoint'); return; }
         const free = findNearestFreeLocation((cx, cy) => this.occupancy.isFree(cx, cy), dest.x, dest.y, 3);
+        if (!free || (free.x === p.posX && free.y === p.posY)) return;
+        this.moveTo(p, p.posX, p.posY, free.x, free.y, false, true);
+        p.send(M.playerTeleported(free.x, free.y));
+    }
+
+    // ---------- volver a la ciudad (recall, tecla H): el server lleva el canal, lo corta y hace el viaje ----------
+    /**
+     * Empieza a canalizar el regreso al hogar de la facción (RECALL.channelMs). Se rechaza muerto, desconectado, paralizado, en
+     * enfriamiento, en la arena o si ya estás en la plaza de tu ciudad. Mientras se cruza de mapa el jugador no está en ningún mundo,
+     * así que el pedido ni llega acá (se ignora).
+     */
+    private startRecall(p: Player): void {
+        const now = Date.now();
+        const deny = (why: string) => p.send(M.recallState(false, RECALL.channelMs, 0, Math.max(0, p.recallCdUntil - now), why));
+        if (p.recallUntil) { p.send(M.recallState(true, RECALL.channelMs, p.recallUntil - now, 0)); return; }
+        if (p.isDead) return deny('No podés volver a la ciudad muerto.');
+        if (p.disconnected || p.world !== this) return;
+        if (now < p.recallCdUntil) return deny(`Todavía no podés volver a la ciudad (faltan ${Math.ceil((p.recallCdUntil - now) / 1000)} s).`);
+        const arena = recallBlockedReason(this.def, p.posX, p.posY); if (arena) return deny(arena);
+        if (p.isParalyzed(now)) return deny('Estás paralizado.');
+        const home = factionHome(this.factionOf(p));
+        if (!home) return deny('No tenés ciudad a la que volver.');
+        if (home.map === this.mapId && Math.hypot(home.x - p.posX, home.y - p.posY) <= 6) return deny('Ya estás en tu ciudad.');
+        p.recallUntil = now + RECALL.channelMs; const epoch = ++p.recallEpoch;
+        p.meditating = false;
+        p.send(M.recallState(true, RECALL.channelMs, RECALL.channelMs, 0));
+        this.playerTimer(p, RECALL.channelMs, (w) => w.finishRecall(p, epoch));
+    }
+    /** Corta el recall en curso (sin enfriamiento). `why` = aviso para el jugador ('' = en silencio). */
+    private cancelRecall(p: Player, why: string): void {
+        if (!p.recallUntil) return;
+        p.recallUntil = 0; p.recallEpoch++;
+        p.send(M.recallState(false, RECALL.channelMs, 0, Math.max(0, p.recallCdUntil - Date.now()), why));
+    }
+    /** Fin del canal (lo corre el mundo donde esté el jugador): arranca el enfriamiento y lo lleva al hogar de su facción. */
+    private finishRecall(p: Player, epoch: number): void {
+        if (p.recallEpoch !== epoch || !p.recallUntil || p.world !== this) return;
+        const now = Date.now();
+        p.recallUntil = 0; p.recallEpoch++;
+        if (p.isDead || p.disconnected) return;
+        p.recallCdUntil = now + RECALL.cooldownMs;
+        p.send(M.recallState(false, RECALL.channelMs, 0, RECALL.cooldownMs, ''));
+        const home = factionHome(this.factionOf(p)); if (!home) return;
+        if (home.map !== this.mapId) { this.transferHook?.(p.sessionId, home, 'recall'); return; }
+        const free = findNearestFreeLocation((cx, cy) => this.occupancy.isFree(cx, cy), home.x, home.y, 6);
         if (!free || (free.x === p.posX && free.y === p.posY)) return;
         this.moveTo(p, p.posX, p.posY, free.x, free.y, false, true);
         p.send(M.playerTeleported(free.x, free.y));
@@ -850,6 +914,7 @@ export class GameWorld {
         if (p.isDead || p.spawnProtection || raw <= 0) return 0;
         const dmg = damageAfterDefense(raw, hasWarcry(p.status, Date.now()) ? { ...p.combat, def: p.combat.def + WARCRY_DEF } : p.combat, kind); // el Grito de guerra suma a la defensa antes de la fórmula
         p.hp = Math.max(0, p.hp - dmg); p.meditating = false;
+        if (dmg > 0) this.cancelRecall(p, 'Te pegaron: se cortó el regreso a la ciudad.');
         if (killer) p.lastDamager = { id: killer.playerId, name: killer.characterName, t: Date.now() };
         else if (source) p.lastDamager = { id: 0n, name: source, t: Date.now() };
         this.sendVitals(p, true);
@@ -858,6 +923,7 @@ export class GameWorld {
     }
     private killPlayer(p: Player): void {
         p.hp = 0; p.deadAt = Date.now(); p.potionEpoch++; this.econ?.onDeath(p); // corta la curación en el tiempo de pociones
+        this.cancelRecall(p, '');
         this.changeStatus(p, () => breakInvisibility(p.status));
         p.status.isParalyzed = false;
         const k = p.lastDamager && Date.now() - p.lastDamager.t < 15000 ? p.lastDamager : null;

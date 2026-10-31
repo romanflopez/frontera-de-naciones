@@ -90,6 +90,10 @@ export class Player {
     healLog: [number, number][] = [];
     meditating = false;
     medX = 0; medY = 0;
+    /** Volver a la ciudad (recall): fin del canal en curso (0 = no canaliza), fin del enfriamiento y época (invalida el temporizador al cortar). */
+    recallUntil = 0;
+    recallCdUntil = 0;
+    recallEpoch = 0;
     maxHp = 1000;
     gender = 0;
     skinColor = 0;

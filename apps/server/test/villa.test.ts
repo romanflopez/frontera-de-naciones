@@ -132,11 +132,11 @@ test('el Portal de Frontera de la villa lleva a las zonas del mapa viejo y de vu
     const legacy = reg.get('solmar_legacy')!, arr = buildMap('solmar_legacy').waypointArrivals!.goblins;
     const [x, y] = pos(legacy, J.session.sessionId);
     assert.ok(Math.abs(x - arr.x) + Math.abs(y - arr.y) <= 3);
-    // desde el waypoint de la zona, "volver a la ciudad" lleva a la villa
-    const wp = buildMap('solmar_legacy').waypoints!.find((q) => q.id === 'zone:goblins')!;
-    legacy.playerOf(J.session.sessionId)!.setPosition(wp.x, wp.y);
+    // la zona no tiene portal de regreso: "volver a la ciudad" desde ahí se rechaza (para eso está el recall, ver recall.test.ts)
+    assert.equal(buildMap('solmar_legacy').waypoints!.find((q) => q.id === 'zone:goblins'), undefined);
     legacy.handleClientPacket(J.session.sessionId, { payload: { $case: 'waypointRequest', value: { id: 'city' } } } as never);
-    assert.equal(reg.pendingOf(J.session.sessionId)?.map, 'solmar_villa');
+    assert.equal(reg.pendingOf(J.session.sessionId), undefined);
+    assert.match(find(J.log, 'sendMessage').value.message, /Portal de Frontera/);
 });
 
 test('camino entre la villa y el mapa viejo, ida y vuelta', () => {

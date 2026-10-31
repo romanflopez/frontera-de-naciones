@@ -12,13 +12,14 @@ import { extendAshlands } from './ashlands';
 import { extendCities } from './cities';
 import { extendTraining, type TrainingStep } from './training';
 export { CITIES, HUBS, cityAt, type City } from './cities';
-export { TRAINING, TRAINING_IDS, WAYPOINT_RANGE, CITY_PORTAL_OFFSET, waypointDest, trainingUnlocked, portalGate, type TrainingStep, type PortalProgress, type Waypoint } from './training';
+export { TRAINING, TRAINING_IDS, WAYPOINT_RANGE, CITY_PORTAL_OFFSET, LEGACY_CITY_PORTALS, waypointDest, trainingUnlocked, portalGate, type TrainingStep, type PortalProgress, type Waypoint } from './training';
 import type { MobType } from './mobs';
 export * from './mobs';
 export * from './economy';
 export * from './auction';
 export * from './deposit';
 export * from './maps';
+export { PRUEBA_CAZA, PRUEBA_MAZMORRA } from './testmaps';
 
 export const MAP_SIZE = 40;
 
@@ -56,9 +57,9 @@ export interface WorldMap {
     fire: { x: number; y: number };
     /** Escaleras entre zonas del mismo mapa: al terminar de pisar (x, y) se pasa a (tx, ty). */
     portals?: Portal[];
-    /** Waypoints del menú de viaje (portal grande de cada ciudad + uno por zona de entrenamiento). Ver training.ts. */
+    /** Portales de Frontera (uno por ciudad) que abren el menú de viaje. Las zonas no tienen portal. Ver training.ts. */
     waypoints?: import('./training').Waypoint[];
-    /** Celda de llegada de cada zona de entrenamiento (por id de TRAINING). */
+    /** Celda de llegada de cada zona de entrenamiento (por id de TRAINING): destino del menú del Portal de Frontera. */
     waypointArrivals?: Record<string, { x: number; y: number }>;
     /** Rectángulo de la cripta (el cliente la oscurece). */
     dungeon?: { x0: number; y0: number; x1: number; y1: number };
