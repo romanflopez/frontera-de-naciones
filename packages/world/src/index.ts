@@ -16,6 +16,9 @@ export { TRAINING, TRAINING_IDS, WAYPOINT_RANGE, CITY_PORTAL_OFFSET, waypointDes
 import type { MobType } from './mobs';
 export * from './mobs';
 export * from './economy';
+export * from './auction';
+export * from './deposit';
+export * from './maps';
 
 export const MAP_SIZE = 40;
 
@@ -33,7 +36,7 @@ export interface Portal {
     train?: TrainingStep;
 }
 /** `lvl` (opcional) fija el nivel de los mobs de la zona; si no está, vale el del tipo. Ver `mobDef`. */
-export interface Zone { type: MobType; x: number; y: number; r: number; n: number; name: string; lvl?: number }
+export interface Zone { type: MobType; x: number; y: number; r: number; n: number; name: string; lvl?: number; /** Esquirla que suelta el boss de esta zona (si no, se decide por el nombre: ver Economy.reward). */ drops?: { shard?: 'cripta' | 'foso' } }
 
 export interface WorldMap {
     size: number;
@@ -146,5 +149,6 @@ export function buildSolmar(): WorldMap {
     return extendTraining(extendCities(extendAshlands(extendSolmar({ size: N, tiles, blocked, safe, props, decals, zones, buildings, npcs, spawn: { x: 6, y: 7 }, fire: { x: 8, y: 8 } }))));
 }
 
-/** Mapas por nombre (el que figura en worlds.json del server). */
-export const MAPS: Record<string, () => WorldMap> = { solmar: buildSolmar };
+export * from './town';
+export { VILLA, VILLA_ID, VILLA_BUILDINGS, villaDoor, type VillaBuilding } from './solmar/villa';
+export { INTERIORS, TEMPLE_RESPAWN, roomOf } from './solmar/interiors';

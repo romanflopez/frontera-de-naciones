@@ -76,7 +76,9 @@ export interface ClientMessage {
     | { $case: "authenticateRequest"; value: AuthenticateRequest }
     | { $case: "logoutRequest"; value: LogoutRequest }
     | { $case: "logoutCancelledRequest"; value: LogoutCancelledRequest }
-    | { $case: "worldChangeRequest"; value: WorldChangeRequest }
+    | //
+    /** En desuso (reservado): el cambio de mapa va por PortalRequest / MapTransfer / MapReady. */
+    { $case: "worldChangeRequest"; value: WorldChangeRequest }
     | { $case: "playerAttackModeChangeRequest"; value: PlayerAttackModeChangeRequest }
     | { $case: "changePlayerIdleDirectionRequest"; value: ChangePlayerIdleDirectionRequest }
     | { $case: "summonMonsterRequested"; value: SummonMonsterRequested }
@@ -133,6 +135,16 @@ export interface ClientMessage {
     | { $case: "mobHitRequest"; value: MobHitRequest }
     | { $case: "pveStatusRequest"; value: PveStatusRequest }
     | { $case: "waypointRequest"; value: WaypointRequest }
+    | //
+    /** Cambio de mapa (ver docs/MUNDO.md 2.3): el cliente pisa un vínculo y pide cruzar por su id estable; cuando terminó de armar el mapa nuevo avisa MapReady. */
+    { $case: "portalRequest"; value: PortalRequest }
+    | { $case: "mapReady"; value: MapReady }
+    | //
+    /** Casa de subastas (ver docs/SUBASTAS.md). Rango propio de tags desde 300. */
+    { $case: "auctionRequest"; value: AuctionRequest }
+    | //
+    /** Depósito por cuenta (ver docs/DEPOSITO.md). Rango propio de tags desde 400. */
+    { $case: "depositRequest"; value: DepositRequest }
     | undefined;
 }
 
@@ -211,7 +223,17 @@ export interface SpellCastRequest {
   monsterId?: bigint | undefined;
 }
 
-/** Viaje por el menú de waypoints: id = 'city' (volver a la ciudad de tu facción) o el id de una zona de entrenamiento. */
+/** Cruzar un vínculo entre mapas. El id es estable (no depende de coordenadas); el server valida distancia, requisitos y estado. */
+export interface PortalRequest {
+  portalId: string;
+}
+
+/** El cliente terminó de armar el mapa `map_id` (con el hash que calculó). El server recién ahí mete al jugador en el mundo nuevo. */
+export interface MapReady {
+  mapId: string;
+  mapHash: string;
+}
+
 export interface WaypointRequest {
   id: string;
 }
@@ -518,6 +540,17 @@ export interface ServerMessage {
     | { $case: "killReward"; value: KillReward }
     | { $case: "groundItemSpawned"; value: GroundItemSpawned }
     | { $case: "groundItemRemoved"; value: GroundItemRemoved }
+    | //
+    /** Cambio de mapa: el server sacó al jugador del mundo viejo y espera MapReady para meterlo en el nuevo. */
+    { $case: "mapTransfer"; value: MapTransfer }
+    | //
+    /** Casa de subastas (ver docs/SUBASTAS.md). Rango propio de tags desde 300; el resultado de cada acción va en EconResult. */
+    { $case: "auctionSearchResult"; value: AuctionSearchResult }
+    | { $case: "auctionMyState"; value: AuctionMyState }
+    | { $case: "auctionHistory"; value: AuctionHistory }
+    | //
+    /** Depósito por cuenta (ver docs/DEPOSITO.md). Rango propio de tags desde 400; el resultado de cada acción va en EconResult. */
+    { $case: "depositState"; value: DepositState }
     | undefined;
 }
 
@@ -1255,6 +1288,27 @@ export interface InitialGameWorldState {
   weather: WeatherMode;
 }
 
+/**
+ * El server sacó al jugador del mundo anterior: el cliente muestra la pantalla de carga, arma el mapa `map_id`,
+ * verifica que `map_hash` coincida con el que generó y contesta MapReady. Después llega InitialGameWorldState.
+ */
+export interface MapTransfer {
+  mapId: string;
+  name: string;
+  /** Celda de llegada y dirección (misma convención que InitialGameWorldState). */
+  x: number;
+  y: number;
+  direction: number;
+  /** Hash del mapa (FNV-1a de tamaño, bloqueos y zonas): detecta un cliente desactualizado. */
+  mapHash: string;
+  musicFile: string;
+  /** Id del mundo (mapa + instancia) donde va a aparecer: es el que el cliente manda en RequestMovement.game_world_id. */
+  gameWorldId: string;
+  /** Rango de nivel recomendado (0 = sin dato) para la pantalla de carga. */
+  lvlMin: number;
+  lvlMax: number;
+}
+
 export interface PingRequest {
   sequence: number;
 }
@@ -1463,6 +1517,120 @@ export interface GroundItemRemoved {
   id: number;
 }
 
+/** Filtros de búsqueda. 0 / vacío = sin filtro. rarity: 0 = todas, 1..4 = Común..Épico. sort: price_asc | price_desc | time_asc | time_desc. */
+export interface AuctionQuery {
+  slot: string;
+  rarity: number;
+  text: string;
+  lvlMin: number;
+  lvlMax: number;
+  maxPrice: number;
+  sort: string;
+  page: number;
+}
+
+/**
+ * Pedido al Subastador (npc_id: el NPC con el que se habla; el server valida la distancia).
+ * action = open | search | post | cancel | buy | claim | history (pide el historial propio). post usa uid + price; cancel y buy, listing_id; claim, mail_id (0 = todo).
+ */
+export interface AuctionRequest {
+  npcId: string;
+  action: string;
+  query: AuctionQuery | undefined;
+  uid: number;
+  price: number;
+  listingId: number;
+  mailId: number;
+}
+
+export interface AuctionListing {
+  id: number;
+  item: InvItem | undefined;
+  price: number;
+  seller: string;
+  /** Milisegundos hasta que vence. */
+  expiresInMs: number;
+  /** La publicó quien recibe el mensaje. */
+  mine: boolean;
+  /** Nivel del item (el de su base en las tiendas). */
+  lvl: number;
+}
+
+export interface AuctionSearchResult {
+  listings: AuctionListing[];
+  page: number;
+  pages: number;
+  total: number;
+}
+
+/** Un reclamo del buzón: un item (vuelto o comprado) o el oro de una venta. */
+export interface AuctionMail {
+  id: number;
+  item: InvItem | undefined;
+  gold: number;
+  text: string;
+  ageMs: number;
+}
+
+/** Mis publicaciones activas y mi buzón. */
+export interface AuctionMyState {
+  listings: AuctionListing[];
+  mail: AuctionMail[];
+  maxListings: number;
+}
+
+/**
+ * Una transacción del historial propio. kind = post | buy | sell | cancel | expire | claim.
+ * amount: oro que entró (+) o salió (-) en esa transacción (0 si fue solo un item); price: precio de la publicación;
+ * fee: tasa o comisión cobrada; other: la otra parte (comprador o vendedor), si hay.
+ */
+export interface AuctionHistoryEntry {
+  id: number;
+  kind: string;
+  item: InvItem | undefined;
+  amount: number;
+  price: number;
+  fee: number;
+  other: string;
+  /** Milisegundos desde que pasó (el cliente calcula la fecha con su reloj). */
+  ageMs: number;
+}
+
+/** Historial de transacciones del que recibe el mensaje, del más nuevo al más viejo (máximo 200). */
+export interface AuctionHistory {
+  entries: AuctionHistoryEntry[];
+}
+
+/**
+ * Pedido al Depositario (npc_id: el NPC con el que se habla; el server valida rol y distancia).
+ * action = open | put | take | gold_in | gold_out | stack_in | stack_out | sort.
+ * put: uid de la bolsa; take: uid del depósito; gold_in/gold_out: amount; stack_in/stack_out: stack + amount.
+ * stack = pot_hp | pot_mp | key_cripta | key_foso | shard_cripta | shard_foso.
+ * op_id: número de pedido elegido por el cliente (distinto de 0): si llega dos veces, la segunda no se aplica.
+ */
+export interface DepositRequest {
+  npcId: string;
+  action: string;
+  uid: number;
+  amount: number;
+  stack: string;
+  opId: number;
+}
+
+export interface DepositStack {
+  id: string;
+  qty: number;
+}
+
+/** Contenido del depósito de la cuenta (se manda al abrir y después de cada acción). */
+export interface DepositState {
+  items: InvItem[];
+  gold: number;
+  stacks: DepositStack[];
+  capacity: number;
+  stackMax: number;
+}
+
 function createBaseClientMessage(): ClientMessage {
   return { payload: undefined };
 }
@@ -1658,6 +1826,18 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         break;
       case "waypointRequest":
         WaypointRequest.encode(message.payload.value, writer.uint32(978).fork()).join();
+        break;
+      case "portalRequest":
+        PortalRequest.encode(message.payload.value, writer.uint32(986).fork()).join();
+        break;
+      case "mapReady":
+        MapReady.encode(message.payload.value, writer.uint32(994).fork()).join();
+        break;
+      case "auctionRequest":
+        AuctionRequest.encode(message.payload.value, writer.uint32(2402).fork()).join();
+        break;
+      case "depositRequest":
+        DepositRequest.encode(message.payload.value, writer.uint32(3202).fork()).join();
         break;
     }
     return writer;
@@ -2297,6 +2477,38 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "waypointRequest", value: WaypointRequest.decode(reader, reader.uint32()) };
             continue;
           }
+          case 123: {
+            if (tag !== 986) {
+              break;
+            }
+
+            message.payload = { $case: "portalRequest", value: PortalRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 124: {
+            if (tag !== 994) {
+              break;
+            }
+
+            message.payload = { $case: "mapReady", value: MapReady.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 300: {
+            if (tag !== 2402) {
+              break;
+            }
+
+            message.payload = { $case: "auctionRequest", value: AuctionRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 400: {
+            if (tag !== 3202) {
+              break;
+            }
+
+            message.payload = { $case: "depositRequest", value: DepositRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -2807,6 +3019,30 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "waypointRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "waypointRequest", value: WaypointRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "portalRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "portalRequest", value: PortalRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "mapReady": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "mapReady", value: MapReady.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "auctionRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "auctionRequest", value: AuctionRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "depositRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "depositRequest", value: DepositRequest.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -3801,6 +4037,128 @@ export const SpellCastRequest: MessageFns<SpellCastRequest> = {
     message.monsterId = (object.monsterId !== undefined && object.monsterId !== null)
       ? BigInt(object.monsterId)
       : undefined;
+    return message;
+  },
+};
+
+function createBasePortalRequest(): PortalRequest {
+  return { portalId: "" };
+}
+
+export const PortalRequest: MessageFns<PortalRequest> = {
+  encode(message: PortalRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.portalId !== "") {
+      writer.uint32(10).string(message.portalId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PortalRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBasePortalRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.portalId = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<PortalRequest>, I>>(base?: I): PortalRequest {
+    return PortalRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PortalRequest>, I>>(object: I): PortalRequest {
+    const message = createBasePortalRequest();
+    message.portalId = object.portalId ?? "";
+    return message;
+  },
+};
+
+function createBaseMapReady(): MapReady {
+  return { mapId: "", mapHash: "" };
+}
+
+export const MapReady: MessageFns<MapReady> = {
+  encode(message: MapReady, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mapId !== "") {
+      writer.uint32(10).string(message.mapId);
+    }
+    if (message.mapHash !== "") {
+      writer.uint32(18).string(message.mapHash);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MapReady {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseMapReady();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.mapId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.mapHash = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<MapReady>, I>>(base?: I): MapReady {
+    return MapReady.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MapReady>, I>>(object: I): MapReady {
+    const message = createBaseMapReady();
+    message.mapId = object.mapId ?? "";
+    message.mapHash = object.mapHash ?? "";
     return message;
   },
 };
@@ -6794,6 +7152,21 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "groundItemRemoved":
         GroundItemRemoved.encode(message.payload.value, writer.uint32(1154).fork()).join();
         break;
+      case "mapTransfer":
+        MapTransfer.encode(message.payload.value, writer.uint32(1202).fork()).join();
+        break;
+      case "auctionSearchResult":
+        AuctionSearchResult.encode(message.payload.value, writer.uint32(2402).fork()).join();
+        break;
+      case "auctionMyState":
+        AuctionMyState.encode(message.payload.value, writer.uint32(2410).fork()).join();
+        break;
+      case "auctionHistory":
+        AuctionHistory.encode(message.payload.value, writer.uint32(2418).fork()).join();
+        break;
+      case "depositState":
+        DepositState.encode(message.payload.value, writer.uint32(3202).fork()).join();
+        break;
     }
     return writer;
   },
@@ -7543,6 +7916,49 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "groundItemRemoved", value: GroundItemRemoved.decode(reader, reader.uint32()) };
             continue;
           }
+          case 150: {
+            if (tag !== 1202) {
+              break;
+            }
+
+            message.payload = { $case: "mapTransfer", value: MapTransfer.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 300: {
+            if (tag !== 2402) {
+              break;
+            }
+
+            message.payload = {
+              $case: "auctionSearchResult",
+              value: AuctionSearchResult.decode(reader, reader.uint32()),
+            };
+            continue;
+          }
+          case 301: {
+            if (tag !== 2410) {
+              break;
+            }
+
+            message.payload = { $case: "auctionMyState", value: AuctionMyState.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 302: {
+            if (tag !== 2418) {
+              break;
+            }
+
+            message.payload = { $case: "auctionHistory", value: AuctionHistory.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 400: {
+            if (tag !== 3202) {
+              break;
+            }
+
+            message.payload = { $case: "depositState", value: DepositState.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -8128,6 +8544,39 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "groundItemRemoved": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "groundItemRemoved", value: GroundItemRemoved.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "mapTransfer": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "mapTransfer", value: MapTransfer.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "auctionSearchResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "auctionSearchResult",
+            value: AuctionSearchResult.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "auctionMyState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "auctionMyState", value: AuctionMyState.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "auctionHistory": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "auctionHistory", value: AuctionHistory.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "depositState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "depositState", value: DepositState.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -17005,6 +17454,180 @@ export const InitialGameWorldState: MessageFns<InitialGameWorldState> = {
   },
 };
 
+function createBaseMapTransfer(): MapTransfer {
+  return {
+    mapId: "",
+    name: "",
+    x: 0,
+    y: 0,
+    direction: 0,
+    mapHash: "",
+    musicFile: "",
+    gameWorldId: "",
+    lvlMin: 0,
+    lvlMax: 0,
+  };
+}
+
+export const MapTransfer: MessageFns<MapTransfer> = {
+  encode(message: MapTransfer, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mapId !== "") {
+      writer.uint32(10).string(message.mapId);
+    }
+    if (message.name !== "") {
+      writer.uint32(18).string(message.name);
+    }
+    if (message.x !== 0) {
+      writer.uint32(24).int32(message.x);
+    }
+    if (message.y !== 0) {
+      writer.uint32(32).int32(message.y);
+    }
+    if (message.direction !== 0) {
+      writer.uint32(40).int32(message.direction);
+    }
+    if (message.mapHash !== "") {
+      writer.uint32(50).string(message.mapHash);
+    }
+    if (message.musicFile !== "") {
+      writer.uint32(58).string(message.musicFile);
+    }
+    if (message.gameWorldId !== "") {
+      writer.uint32(66).string(message.gameWorldId);
+    }
+    if (message.lvlMin !== 0) {
+      writer.uint32(72).int32(message.lvlMin);
+    }
+    if (message.lvlMax !== 0) {
+      writer.uint32(80).int32(message.lvlMax);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MapTransfer {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseMapTransfer();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.mapId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.name = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.x = reader.int32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.y = reader.int32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.direction = reader.int32();
+            continue;
+          }
+          case 6: {
+            if (tag !== 50) {
+              break;
+            }
+
+            message.mapHash = reader.string();
+            continue;
+          }
+          case 7: {
+            if (tag !== 58) {
+              break;
+            }
+
+            message.musicFile = reader.string();
+            continue;
+          }
+          case 8: {
+            if (tag !== 66) {
+              break;
+            }
+
+            message.gameWorldId = reader.string();
+            continue;
+          }
+          case 9: {
+            if (tag !== 72) {
+              break;
+            }
+
+            message.lvlMin = reader.int32();
+            continue;
+          }
+          case 10: {
+            if (tag !== 80) {
+              break;
+            }
+
+            message.lvlMax = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<MapTransfer>, I>>(base?: I): MapTransfer {
+    return MapTransfer.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MapTransfer>, I>>(object: I): MapTransfer {
+    const message = createBaseMapTransfer();
+    message.mapId = object.mapId ?? "";
+    message.name = object.name ?? "";
+    message.x = object.x ?? 0;
+    message.y = object.y ?? 0;
+    message.direction = object.direction ?? 0;
+    message.mapHash = object.mapHash ?? "";
+    message.musicFile = object.musicFile ?? "";
+    message.gameWorldId = object.gameWorldId ?? "";
+    message.lvlMin = object.lvlMin ?? 0;
+    message.lvlMax = object.lvlMax ?? 0;
+    return message;
+  },
+};
+
 function createBasePingRequest(): PingRequest {
   return { sequence: 0 };
 }
@@ -19475,6 +20098,1153 @@ export const GroundItemRemoved: MessageFns<GroundItemRemoved> = {
   fromPartial<I extends Exact<DeepPartial<GroundItemRemoved>, I>>(object: I): GroundItemRemoved {
     const message = createBaseGroundItemRemoved();
     message.id = object.id ?? 0;
+    return message;
+  },
+};
+
+function createBaseAuctionQuery(): AuctionQuery {
+  return { slot: "", rarity: 0, text: "", lvlMin: 0, lvlMax: 0, maxPrice: 0, sort: "", page: 0 };
+}
+
+export const AuctionQuery: MessageFns<AuctionQuery> = {
+  encode(message: AuctionQuery, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.slot !== "") {
+      writer.uint32(10).string(message.slot);
+    }
+    if (message.rarity !== 0) {
+      writer.uint32(16).int32(message.rarity);
+    }
+    if (message.text !== "") {
+      writer.uint32(26).string(message.text);
+    }
+    if (message.lvlMin !== 0) {
+      writer.uint32(32).int32(message.lvlMin);
+    }
+    if (message.lvlMax !== 0) {
+      writer.uint32(40).int32(message.lvlMax);
+    }
+    if (message.maxPrice !== 0) {
+      writer.uint32(49).double(message.maxPrice);
+    }
+    if (message.sort !== "") {
+      writer.uint32(58).string(message.sort);
+    }
+    if (message.page !== 0) {
+      writer.uint32(64).int32(message.page);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionQuery {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseAuctionQuery();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.slot = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.rarity = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.text = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.lvlMin = reader.int32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.lvlMax = reader.int32();
+            continue;
+          }
+          case 6: {
+            if (tag !== 49) {
+              break;
+            }
+
+            message.maxPrice = reader.double();
+            continue;
+          }
+          case 7: {
+            if (tag !== 58) {
+              break;
+            }
+
+            message.sort = reader.string();
+            continue;
+          }
+          case 8: {
+            if (tag !== 64) {
+              break;
+            }
+
+            message.page = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<AuctionQuery>, I>>(base?: I): AuctionQuery {
+    return AuctionQuery.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionQuery>, I>>(object: I): AuctionQuery {
+    const message = createBaseAuctionQuery();
+    message.slot = object.slot ?? "";
+    message.rarity = object.rarity ?? 0;
+    message.text = object.text ?? "";
+    message.lvlMin = object.lvlMin ?? 0;
+    message.lvlMax = object.lvlMax ?? 0;
+    message.maxPrice = object.maxPrice ?? 0;
+    message.sort = object.sort ?? "";
+    message.page = object.page ?? 0;
+    return message;
+  },
+};
+
+function createBaseAuctionRequest(): AuctionRequest {
+  return { npcId: "", action: "", query: undefined, uid: 0, price: 0, listingId: 0, mailId: 0 };
+}
+
+export const AuctionRequest: MessageFns<AuctionRequest> = {
+  encode(message: AuctionRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.npcId !== "") {
+      writer.uint32(10).string(message.npcId);
+    }
+    if (message.action !== "") {
+      writer.uint32(18).string(message.action);
+    }
+    if (message.query !== undefined) {
+      AuctionQuery.encode(message.query, writer.uint32(26).fork()).join();
+    }
+    if (message.uid !== 0) {
+      writer.uint32(32).int32(message.uid);
+    }
+    if (message.price !== 0) {
+      writer.uint32(41).double(message.price);
+    }
+    if (message.listingId !== 0) {
+      writer.uint32(48).int32(message.listingId);
+    }
+    if (message.mailId !== 0) {
+      writer.uint32(56).int32(message.mailId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseAuctionRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.npcId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.action = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.query = AuctionQuery.decode(reader, reader.uint32());
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.uid = reader.int32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 41) {
+              break;
+            }
+
+            message.price = reader.double();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.listingId = reader.int32();
+            continue;
+          }
+          case 7: {
+            if (tag !== 56) {
+              break;
+            }
+
+            message.mailId = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<AuctionRequest>, I>>(base?: I): AuctionRequest {
+    return AuctionRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionRequest>, I>>(object: I): AuctionRequest {
+    const message = createBaseAuctionRequest();
+    message.npcId = object.npcId ?? "";
+    message.action = object.action ?? "";
+    message.query = (object.query !== undefined && object.query !== null)
+      ? AuctionQuery.fromPartial(object.query)
+      : undefined;
+    message.uid = object.uid ?? 0;
+    message.price = object.price ?? 0;
+    message.listingId = object.listingId ?? 0;
+    message.mailId = object.mailId ?? 0;
+    return message;
+  },
+};
+
+function createBaseAuctionListing(): AuctionListing {
+  return { id: 0, item: undefined, price: 0, seller: "", expiresInMs: 0, mine: false, lvl: 0 };
+}
+
+export const AuctionListing: MessageFns<AuctionListing> = {
+  encode(message: AuctionListing, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== 0) {
+      writer.uint32(8).int32(message.id);
+    }
+    if (message.item !== undefined) {
+      InvItem.encode(message.item, writer.uint32(18).fork()).join();
+    }
+    if (message.price !== 0) {
+      writer.uint32(25).double(message.price);
+    }
+    if (message.seller !== "") {
+      writer.uint32(34).string(message.seller);
+    }
+    if (message.expiresInMs !== 0) {
+      writer.uint32(41).double(message.expiresInMs);
+    }
+    if (message.mine !== false) {
+      writer.uint32(48).bool(message.mine);
+    }
+    if (message.lvl !== 0) {
+      writer.uint32(56).int32(message.lvl);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionListing {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseAuctionListing();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.id = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.item = InvItem.decode(reader, reader.uint32());
+            continue;
+          }
+          case 3: {
+            if (tag !== 25) {
+              break;
+            }
+
+            message.price = reader.double();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.seller = reader.string();
+            continue;
+          }
+          case 5: {
+            if (tag !== 41) {
+              break;
+            }
+
+            message.expiresInMs = reader.double();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.mine = reader.bool();
+            continue;
+          }
+          case 7: {
+            if (tag !== 56) {
+              break;
+            }
+
+            message.lvl = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<AuctionListing>, I>>(base?: I): AuctionListing {
+    return AuctionListing.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionListing>, I>>(object: I): AuctionListing {
+    const message = createBaseAuctionListing();
+    message.id = object.id ?? 0;
+    message.item = (object.item !== undefined && object.item !== null) ? InvItem.fromPartial(object.item) : undefined;
+    message.price = object.price ?? 0;
+    message.seller = object.seller ?? "";
+    message.expiresInMs = object.expiresInMs ?? 0;
+    message.mine = object.mine ?? false;
+    message.lvl = object.lvl ?? 0;
+    return message;
+  },
+};
+
+function createBaseAuctionSearchResult(): AuctionSearchResult {
+  return { listings: [], page: 0, pages: 0, total: 0 };
+}
+
+export const AuctionSearchResult: MessageFns<AuctionSearchResult> = {
+  encode(message: AuctionSearchResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.listings) {
+      AuctionListing.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.page !== 0) {
+      writer.uint32(16).int32(message.page);
+    }
+    if (message.pages !== 0) {
+      writer.uint32(24).int32(message.pages);
+    }
+    if (message.total !== 0) {
+      writer.uint32(32).int32(message.total);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionSearchResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseAuctionSearchResult();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.listings.push(AuctionListing.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.page = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.pages = reader.int32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.total = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<AuctionSearchResult>, I>>(base?: I): AuctionSearchResult {
+    return AuctionSearchResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionSearchResult>, I>>(object: I): AuctionSearchResult {
+    const message = createBaseAuctionSearchResult();
+    message.listings = object.listings?.map((e) => AuctionListing.fromPartial(e)) || [];
+    message.page = object.page ?? 0;
+    message.pages = object.pages ?? 0;
+    message.total = object.total ?? 0;
+    return message;
+  },
+};
+
+function createBaseAuctionMail(): AuctionMail {
+  return { id: 0, item: undefined, gold: 0, text: "", ageMs: 0 };
+}
+
+export const AuctionMail: MessageFns<AuctionMail> = {
+  encode(message: AuctionMail, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== 0) {
+      writer.uint32(8).int32(message.id);
+    }
+    if (message.item !== undefined) {
+      InvItem.encode(message.item, writer.uint32(18).fork()).join();
+    }
+    if (message.gold !== 0) {
+      writer.uint32(25).double(message.gold);
+    }
+    if (message.text !== "") {
+      writer.uint32(34).string(message.text);
+    }
+    if (message.ageMs !== 0) {
+      writer.uint32(41).double(message.ageMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionMail {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseAuctionMail();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.id = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.item = InvItem.decode(reader, reader.uint32());
+            continue;
+          }
+          case 3: {
+            if (tag !== 25) {
+              break;
+            }
+
+            message.gold = reader.double();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.text = reader.string();
+            continue;
+          }
+          case 5: {
+            if (tag !== 41) {
+              break;
+            }
+
+            message.ageMs = reader.double();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<AuctionMail>, I>>(base?: I): AuctionMail {
+    return AuctionMail.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionMail>, I>>(object: I): AuctionMail {
+    const message = createBaseAuctionMail();
+    message.id = object.id ?? 0;
+    message.item = (object.item !== undefined && object.item !== null) ? InvItem.fromPartial(object.item) : undefined;
+    message.gold = object.gold ?? 0;
+    message.text = object.text ?? "";
+    message.ageMs = object.ageMs ?? 0;
+    return message;
+  },
+};
+
+function createBaseAuctionMyState(): AuctionMyState {
+  return { listings: [], mail: [], maxListings: 0 };
+}
+
+export const AuctionMyState: MessageFns<AuctionMyState> = {
+  encode(message: AuctionMyState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.listings) {
+      AuctionListing.encode(v!, writer.uint32(10).fork()).join();
+    }
+    for (const v of message.mail) {
+      AuctionMail.encode(v!, writer.uint32(18).fork()).join();
+    }
+    if (message.maxListings !== 0) {
+      writer.uint32(24).int32(message.maxListings);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionMyState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseAuctionMyState();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.listings.push(AuctionListing.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.mail.push(AuctionMail.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.maxListings = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<AuctionMyState>, I>>(base?: I): AuctionMyState {
+    return AuctionMyState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionMyState>, I>>(object: I): AuctionMyState {
+    const message = createBaseAuctionMyState();
+    message.listings = object.listings?.map((e) => AuctionListing.fromPartial(e)) || [];
+    message.mail = object.mail?.map((e) => AuctionMail.fromPartial(e)) || [];
+    message.maxListings = object.maxListings ?? 0;
+    return message;
+  },
+};
+
+function createBaseAuctionHistoryEntry(): AuctionHistoryEntry {
+  return { id: 0, kind: "", item: undefined, amount: 0, price: 0, fee: 0, other: "", ageMs: 0 };
+}
+
+export const AuctionHistoryEntry: MessageFns<AuctionHistoryEntry> = {
+  encode(message: AuctionHistoryEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== 0) {
+      writer.uint32(8).int32(message.id);
+    }
+    if (message.kind !== "") {
+      writer.uint32(18).string(message.kind);
+    }
+    if (message.item !== undefined) {
+      InvItem.encode(message.item, writer.uint32(26).fork()).join();
+    }
+    if (message.amount !== 0) {
+      writer.uint32(33).double(message.amount);
+    }
+    if (message.price !== 0) {
+      writer.uint32(41).double(message.price);
+    }
+    if (message.fee !== 0) {
+      writer.uint32(49).double(message.fee);
+    }
+    if (message.other !== "") {
+      writer.uint32(58).string(message.other);
+    }
+    if (message.ageMs !== 0) {
+      writer.uint32(65).double(message.ageMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionHistoryEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseAuctionHistoryEntry();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.id = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.kind = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.item = InvItem.decode(reader, reader.uint32());
+            continue;
+          }
+          case 4: {
+            if (tag !== 33) {
+              break;
+            }
+
+            message.amount = reader.double();
+            continue;
+          }
+          case 5: {
+            if (tag !== 41) {
+              break;
+            }
+
+            message.price = reader.double();
+            continue;
+          }
+          case 6: {
+            if (tag !== 49) {
+              break;
+            }
+
+            message.fee = reader.double();
+            continue;
+          }
+          case 7: {
+            if (tag !== 58) {
+              break;
+            }
+
+            message.other = reader.string();
+            continue;
+          }
+          case 8: {
+            if (tag !== 65) {
+              break;
+            }
+
+            message.ageMs = reader.double();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<AuctionHistoryEntry>, I>>(base?: I): AuctionHistoryEntry {
+    return AuctionHistoryEntry.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionHistoryEntry>, I>>(object: I): AuctionHistoryEntry {
+    const message = createBaseAuctionHistoryEntry();
+    message.id = object.id ?? 0;
+    message.kind = object.kind ?? "";
+    message.item = (object.item !== undefined && object.item !== null) ? InvItem.fromPartial(object.item) : undefined;
+    message.amount = object.amount ?? 0;
+    message.price = object.price ?? 0;
+    message.fee = object.fee ?? 0;
+    message.other = object.other ?? "";
+    message.ageMs = object.ageMs ?? 0;
+    return message;
+  },
+};
+
+function createBaseAuctionHistory(): AuctionHistory {
+  return { entries: [] };
+}
+
+export const AuctionHistory: MessageFns<AuctionHistory> = {
+  encode(message: AuctionHistory, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.entries) {
+      AuctionHistoryEntry.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AuctionHistory {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseAuctionHistory();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.entries.push(AuctionHistoryEntry.decode(reader, reader.uint32()));
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<AuctionHistory>, I>>(base?: I): AuctionHistory {
+    return AuctionHistory.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AuctionHistory>, I>>(object: I): AuctionHistory {
+    const message = createBaseAuctionHistory();
+    message.entries = object.entries?.map((e) => AuctionHistoryEntry.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseDepositRequest(): DepositRequest {
+  return { npcId: "", action: "", uid: 0, amount: 0, stack: "", opId: 0 };
+}
+
+export const DepositRequest: MessageFns<DepositRequest> = {
+  encode(message: DepositRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.npcId !== "") {
+      writer.uint32(10).string(message.npcId);
+    }
+    if (message.action !== "") {
+      writer.uint32(18).string(message.action);
+    }
+    if (message.uid !== 0) {
+      writer.uint32(24).int32(message.uid);
+    }
+    if (message.amount !== 0) {
+      writer.uint32(33).double(message.amount);
+    }
+    if (message.stack !== "") {
+      writer.uint32(42).string(message.stack);
+    }
+    if (message.opId !== 0) {
+      writer.uint32(48).uint32(message.opId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DepositRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseDepositRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.npcId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.action = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.uid = reader.int32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 33) {
+              break;
+            }
+
+            message.amount = reader.double();
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.stack = reader.string();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.opId = reader.uint32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<DepositRequest>, I>>(base?: I): DepositRequest {
+    return DepositRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<DepositRequest>, I>>(object: I): DepositRequest {
+    const message = createBaseDepositRequest();
+    message.npcId = object.npcId ?? "";
+    message.action = object.action ?? "";
+    message.uid = object.uid ?? 0;
+    message.amount = object.amount ?? 0;
+    message.stack = object.stack ?? "";
+    message.opId = object.opId ?? 0;
+    return message;
+  },
+};
+
+function createBaseDepositStack(): DepositStack {
+  return { id: "", qty: 0 };
+}
+
+export const DepositStack: MessageFns<DepositStack> = {
+  encode(message: DepositStack, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    if (message.qty !== 0) {
+      writer.uint32(16).int32(message.qty);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DepositStack {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseDepositStack();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.id = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.qty = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<DepositStack>, I>>(base?: I): DepositStack {
+    return DepositStack.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<DepositStack>, I>>(object: I): DepositStack {
+    const message = createBaseDepositStack();
+    message.id = object.id ?? "";
+    message.qty = object.qty ?? 0;
+    return message;
+  },
+};
+
+function createBaseDepositState(): DepositState {
+  return { items: [], gold: 0, stacks: [], capacity: 0, stackMax: 0 };
+}
+
+export const DepositState: MessageFns<DepositState> = {
+  encode(message: DepositState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.items) {
+      InvItem.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.gold !== 0) {
+      writer.uint32(17).double(message.gold);
+    }
+    for (const v of message.stacks) {
+      DepositStack.encode(v!, writer.uint32(26).fork()).join();
+    }
+    if (message.capacity !== 0) {
+      writer.uint32(32).int32(message.capacity);
+    }
+    if (message.stackMax !== 0) {
+      writer.uint32(40).int32(message.stackMax);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DepositState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseDepositState();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.items.push(InvItem.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 2: {
+            if (tag !== 17) {
+              break;
+            }
+
+            message.gold = reader.double();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.stacks.push(DepositStack.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.capacity = reader.int32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.stackMax = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<DepositState>, I>>(base?: I): DepositState {
+    return DepositState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<DepositState>, I>>(object: I): DepositState {
+    const message = createBaseDepositState();
+    message.items = object.items?.map((e) => InvItem.fromPartial(e)) || [];
+    message.gold = object.gold ?? 0;
+    message.stacks = object.stacks?.map((e) => DepositStack.fromPartial(e)) || [];
+    message.capacity = object.capacity ?? 0;
+    message.stackMax = object.stackMax ?? 0;
     return message;
   },
 };

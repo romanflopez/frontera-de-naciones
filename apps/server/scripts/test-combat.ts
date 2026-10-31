@@ -10,7 +10,7 @@
  */
 import { WebSocket } from 'ws';
 import { ClientMessage, ServerMessage } from '@fdn/proto';
-import { MAPS } from '@fdn/world';
+import { buildMap } from '@fdn/world';
 
 const URL = process.argv[2] ?? 'ws://localhost:8111/ws';
 const RUN = Math.random().toString(36).slice(2, 6);
@@ -76,7 +76,7 @@ class Bot {
 }
 
 // ---------- mapa: celdas de pasto fuera de las zonas seguras, cerca del spawn ----------
-const map = MAPS.solmar!()!;
+const map = buildMap('solmar_legacy');
 const N = map.size, dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]] as const;
 const free = (x: number, y: number) => x >= 0 && y >= 0 && x < N && y < N && !map.blocked[y][x];
 /** Camino (BFS, 8 direcciones sin cortar esquinas) de `from` a `to` evitando celdas ocupadas. */

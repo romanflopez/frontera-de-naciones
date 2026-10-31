@@ -191,6 +191,7 @@ button.sl:not(.dis):hover,.cl:hover{border-color:#e0b765;filter:brightness(1.15)
 .ifoot{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .fb{display:flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 10px;font:600 12px/1 var(--f-cinzel);color:#d9c79a;background:linear-gradient(#1c1612,#0b0908);border:1px solid #6a5028;border-radius:3px;box-shadow:inset 0 0 0 1px #000}
 .fb:disabled{opacity:.4;cursor:default}.fb:disabled:hover{border-color:#6a5028}
+.gico{display:block;width:24px;height:24px;object-fit:cover;transform:scale(1.55);clip-path:circle(32% at 50% 52%)}
 .gold{margin-left:auto;flex:0 0 auto;white-space:nowrap;display:flex;align-items:center;gap:6px;height:32px;padding:0 10px;background:#070605;border:1px solid #4d3b20;border-radius:3px;box-shadow:inset 0 0 8px #000;font:600 13px/1 var(--f-inter);color:#f0dca4;font-variant-numeric:tabular-nums}
 .cap{font-size:11px;color:#8d7a52;text-align:center;letter-spacing:.04em}
 /* tooltip del ítem seleccionado */
@@ -253,6 +254,20 @@ canvas:focus{outline:none}
 #help{bottom:calc(var(--hud-h) + 12px);right:max(12px,env(safe-area-inset-right,0px));font-size:11.5px;color:var(--muted);text-align:right;line-height:1.4;pointer-events:none;max-width:210px}
 #help a{color:var(--muted);pointer-events:auto}
 #loading{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--f-display);font-size:18px;color:var(--brass);background:var(--ink)}
+#maploading{position:fixed;inset:0;z-index:6;display:grid;place-items:center;text-align:center;background:radial-gradient(ellipse at 50% 45%,#2a0f4d 0%,#12062a 55%,#0a0418 100%);color:#eadfe8;opacity:0;transition:opacity .3s;font-family:var(--f-inter,system-ui,sans-serif)}
+#maploading.on{opacity:1}
+#maploading[hidden]{display:none}
+#maploading .mlbox{display:grid;gap:10px;justify-items:center;padding:0 20px}
+#maploading .mlt{font:600 12px var(--f-inter,system-ui,sans-serif);letter-spacing:.34em;text-transform:uppercase;color:#d9b8f0}
+#maploading h2{margin:0;font:600 28px var(--f-cinzel,Georgia,serif);letter-spacing:.14em;color:#f4e9f6;text-shadow:0 0 18px rgba(190,90,255,.55)}
+#maploading .mll{font-size:13px;color:#d9b8f0;min-height:1.2em}
+#maploading .mlbar{width:min(280px,70vw);height:3px;border-radius:2px;background:rgba(194,91,255,.2);overflow:hidden;margin-top:8px}
+#maploading .mlbar i{display:block;width:40%;height:100%;background:linear-gradient(90deg,transparent,#c25bff,transparent);animation:mlslide 1.4s ease-in-out infinite}
+#maploading .mlm{font-size:12px;color:#b9a3d6}
+#maploading.err .mlbar i{animation:none;width:100%;background:#ff6b8a}
+#maploading.err .mlm{color:#ff9aae;font-size:14px}
+@keyframes mlslide{from{transform:translateX(-120%)}to{transform:translateX(320%)}}
+@media (prefers-reduced-motion:reduce){#maploading .mlbar i{animation:none;width:100%}}
 @media (max-width:620px){#target{top:calc(60px + env(safe-area-inset-top,0px))} #help{display:none}}
 @media (prefers-reduced-motion:reduce){.bar i{transition:none}}
 
@@ -308,7 +323,7 @@ canvas:focus{outline:none}
       <div class="ifoot">
         <button type="button" class="fb" id="sortBtn" aria-label="Ordenar bolsa por tipo y rareza"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M7 2L12 10H2Z" fill="currentColor"/></svg>Ordenar</button>
         <button type="button" class="fb" id="dropBtn" aria-label="Tirar el ítem seleccionado al suelo" title="Tira el ítem al suelo: es tuyo 30 s y después lo puede recoger cualquiera" disabled><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 3.5H12M5 3.5V2H9V3.5M3.5 3.5L4 12H10L10.5 3.5M6 5.5V10M8 5.5V10" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>Tirar</button>
-        <div class="gold" role="img" aria-label="Oro"><svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="url(#gold)" stroke="#2b1710" stroke-width="1.4"/><circle cx="10" cy="10" r="5.4" fill="none" stroke="#6a3f16" stroke-width="1.2"/><path d="M10 6.5V13.5M8 8.2C8 7 12 7 12 8.4C12 10 8 9.8 8 11.6C8 13 12 13 12 11.7" fill="none" stroke="#6a3f16" stroke-width="1.1"/></svg><span id="gold">0</span></div>
+        <div class="gold" role="img" aria-label="Oro"><img id="goldIco" class="gico" alt="" width="24" height="24"><span id="gold">0</span></div>
       </div>
       <div class="cap" id="cap"></div>
     </div>
@@ -450,12 +465,12 @@ canvas:focus{outline:none}
   <div id="net" class="hud" aria-live="polite"></div>
   <div id="help" class="hud"><span id="helpKeys"></span><br>Arte: <a href="https://github.com/flareteam/flare-game" target="_blank" rel="noopener">Flare</a> (CC-BY-SA 3.0) · Efectos: TOMAS de Miradin (CC-BY-SA)</div>
   <div id="loading">Cargando el mundo…</div>
+  <div id="maploading" hidden role="status" aria-live="polite"><div class="mlbox"><div class="mlt">Viajando a</div><h2 id="mlName"></h2><div class="mll" id="mlLvl"></div><div class="mlbar" aria-hidden="true"><i></i></div><div class="mlm" id="mlMsg">Cargando…</div></div></div>
   <div id="login" hidden data-screen="login">
     <div class="lbg" aria-hidden="true"><div id="lbgScene"></div><canvas id="lbgFx"></canvas><div class="fog f1"></div><div class="fog f2"></div><div class="vig"></div><div class="aura"></div></div>
     <div class="stage" id="lstage">
       <header class="brand">
-        <div class="emblem" id="lEmblem" aria-hidden="true"></div>
-        <h1 class="gname">FRONTERA DE NACIONES</h1>
+        <h1 class="gname"><img src="assets/logo-eris.webp" alt="ERIS" width="940" height="550" decoding="async"></h1>
         <div class="tagl" id="lTagl"><p>Un nuevo mundo te espera</p><p class="s2">Crea tu leyenda</p></div>
       </header>
 

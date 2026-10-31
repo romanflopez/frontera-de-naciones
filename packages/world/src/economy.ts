@@ -102,6 +102,13 @@ export const SHOPS: Record<string, ShopDef> = {
     },
     capitan: { label: 'Capitán', col: '#ffd24a', greet: '', stock: [] },
     guardia: { label: 'Guardia', col: '#9fa8b0', greet: '', stock: [] },
+    /** Casa de subastas compartida entre facciones (no compra ni vende: ver docs/SUBASTAS.md). */
+    subastador: { label: 'Subastador', col: '#d6a445', greet: 'La casa de subastas es una sola para Solmar y Vhar: publicá, comprá y retirá lo tuyo acá.', stock: [] },
+    /** Depósito por cuenta: guarda equipo, oro, pociones y llaves (no compra ni vende: ver docs/DEPOSITO.md). */
+    depositario: { label: 'Depositario', col: '#9fc48a', greet: 'Lo que dejes acá queda a tu nombre, a salvo, en cualquier depósito del reino.', stock: [] },
+    // servicios de la Villa de Solmar sin tienda todavía (charla corta en el cliente)
+    sanador: { label: 'Sanadora del Templo', col: '#9fe0ff', greet: '', stock: [] },
+    mago: { label: 'Torre de Magia', col: '#c78bff', greet: '', stock: [] },
 };
 /** Rol del NPC (mercader, armero, ...): el id es `rol_s` / `rol_v` (o `rol_s1`...). */
 export const roleOf = (n: { id: string }): string => n.id.split('_')[0];

@@ -5,23 +5,32 @@
  * quién ve a quién y el chat. Lo que todavía corre solo en este navegador, como en el prototipo:
  * mobs, combate, hechizos, loot y experiencia (pasan al server en la fase 1b).
  */
-import { buildSolmar, HUBS, cityAt, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, WAYPOINT_RANGE } from '@fdn/world';
+import { drawPortalFloor, drawPortalFx, PORTAL_CITY, PORTAL_ZONE } from './portal';
+import { DEFAULT_MAP, expToLevel, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
 import { ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Quest, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
 import { spellIcon } from './icons.ts';
 import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
-import { itemIcon } from './itemicons.ts';
+import { coinIcon, itemIcon, keyIcon, potionIcon, shardIcon } from './itemicons.ts';
 import { initLoginUI } from './loginui.ts';
+import { createMinimap, type Minimap } from './minimap.ts';
+import { createAuctionUI } from './auction.ts';
+import { createDepositUI } from './deposit.ts';
+import { createCursor } from './cursor.ts';
 const ico = (it: { look?: string; slot: string; rar: { c: string; k: number } }) => `<img class="iico" alt="" src="${itemIcon(it.look, it.slot, it.rar.c, it.rar.k)}">`;
 
 // ---------- utilidades ----------
 const TW = 96, TH = 48;
-const MAP = buildSolmar();
-const N = MAP.size;
-const { tiles, blocked, safe, props, decals } = MAP;
-const ZONES = MAP.zones;
-type Zone = (typeof ZONES)[number];
+// El mapa cargado es estado mutable: loadMap() lo reemplaza al cruzar un portal entre mapas (ver más abajo).
+let MAP_DEF: MapDef = MAPS[DEFAULT_MAP];
+let MAP: WorldMap = MAP_DEF.build();
+let N = MAP.size;
+let { tiles, blocked, safe, props, decals } = MAP;
+let ZONES = MAP.zones;
+type Zone = (typeof MAP.zones)[number];
+/** Ciudad (rectángulo con nombre) que contiene la celda, en el mapa cargado. */
+const cityAt = (x: number, y: number) => MAP.cities?.find((c) => x >= c.x0 && x < c.x1 + 1 && y >= c.y0 && y < c.y1 + 1);
 
 const R = Math.random;
 const rint = (a: number, b: number) => a + Math.floor(R() * (b - a + 1));
@@ -179,7 +188,7 @@ const CLASSES: ClassDef[] = [
 let CLS: ClassDef = CLASSES[0];
 const maxHp = () => CLS.hp + (P.lvl - 1) * CLS.hpL + totals().hp;
 const maxMp = () => CLS.mp + (P.lvl - 1) * CLS.mpL + totals().mp;
-const expNeed = () => Math.round(60 * Math.pow(P.lvl, 1.5));
+const expNeed = () => expToLevel(P.lvl);
 
 // ---------- log ----------
 const logEl = $('log'); const lines: { t: string; cls: string }[] = [];
@@ -219,12 +228,17 @@ function onServer(m: ServerPayload) {
             myId = m.value.playerId;
             P.stepMs = m.value.movementSpeedMs || 270;
             break;
+        case 'mapTransfer': onMapTransfer(m.value); break;
         case 'initialGameWorldState': {
+            // al conectar puedo estar en un mapa distinto del que armé al arrancar (el guardado me deja donde salí): armarlo antes de ubicarme
+            if (m.value.mapName && m.value.mapName !== MAP_DEF.id && getMapDef(m.value.mapName)) loadMap(getMapDef(m.value.mapName)!);
+            MAP_WORLD_ID = m.value.gameWorldId;
             snapTo(m.value.playerX, m.value.playerY);
             const [dx, dy] = GRID_VEC[m.value.playerDirection] ?? [0, 1];
             turnTo(P, dx, dy, 0, true);
             const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
             others.clear(); drops.length = 0; P.pickup = null; // el server vuelve a mandar el suelo cercano
+            hideMapLoading();
             break;
         }
         case 'playersEnteredRange':
@@ -265,7 +279,9 @@ function onServer(m: ServerPayload) {
             break;
         }
         case 'groundItemRemoved': { const i = drops.findIndex((d) => d.gid === m.value.id); if (i >= 0) { if (P.pickup === drops[i]) P.pickup = null; drops.splice(i, 1); } break; }
-        case 'econResult': if (m.value.ok) log(esc(m.value.text)); else { toast(m.value.text); log(esc(m.value.text)); } break;
+        case 'auctionSearchResult': case 'auctionMyState': case 'auctionHistory': auction.onMessage(m); break;
+        case 'depositState': deposit.onMessage(m); break;
+        case 'econResult': deposit.onResult(m.value.ok, m.value.text); if (m.value.ok) log(esc(m.value.text)); else { toast(m.value.text); log(esc(m.value.text)); } break;
         case 'killReward': onKillReward(m.value); break;
         case 'statusUpdate': onStatusUpdate(m.value); break;
         case 'skillEffect': onSkillEffect(m.value); break;
@@ -446,14 +462,14 @@ function hurtPlayer(d: number, kind: 'phys' | 'magic' = 'phys', applied = false)
 function die() {
     if (P.dead) return;
     P.dead = true; potEpoch++; pots.cd = 0; P.deadT = now(); P.hp = 0; P.path = []; P.casting = null; P.target = null; P.med = false; const lost = Math.round(expNeed() * 0.05); // la pérdida de exp la aplica el server (llega en inventoryState)
-    log(`Moriste. Perdiste ${lost} de exp y volvés a tu ciudad.`, true);
+    log(`Moriste. Perdiste ${lost} de exp y ${MAP_DEF.id === DEFAULT_MAP ? 'volvés a tu ciudad' : 'reaparecés en el punto de reaparición de este mapa'}.`, true);
     const ask = (n: number) => { if (!P.dead || n > 10) return; net.send({ $case: 'respawnRequest', value: {} }); later(1, () => ask(n + 1)); };
     later(2.2, () => ask(0));
 }
 /** Mi vida según el server: es la que vale. */
 function onVitals(v: { hp: number; maxHp: number; dead: boolean; mp: number; maxMp: number }) {
     if (v.dead) { if (!P.dead) die(); P.hp = 0; return; }
-    if (P.dead) { P.dead = false; P.one = null; P.mp = maxMp(); mpLocalAt = 0; log('Revivís en tu ciudad.', true); }
+    if (P.dead) { P.dead = false; P.one = null; P.mp = maxMp(); mpLocalAt = 0; log(MAP_DEF.id === DEFAULT_MAP ? 'Revivís en tu ciudad.' : 'Revivís en el punto de reaparición.', true); }
     P.hp = Math.min(maxHp(), v.hp);
     // el maná también es del server; si recién gasté/tomé algo local (el aviso todavía viaja), no me pisa para arriba
     const smp = Math.min(maxMp(), v.mp);
@@ -600,8 +616,8 @@ function potCdTick() {
         else if (el.style.display) { el.style.display = ''; el.textContent = ''; }
     });
 }
-const POT_ART = { hp: 'curar', mp: 'burbuja-arcana' };
-function renderPots() { for (const k of ['hp', 'mp'] as const) { const el = $('pot' + k); el.title = `${POTS[k].name} (${POTS[k].key}): quedan ${pots[k]}`; el.setAttribute('aria-label', `${POTS[k].name}, tecla ${POTS[k].key}, quedan ${pots[k]}`); el.classList.toggle('none', pots[k] <= 0); el.innerHTML = `<span class="sq"><img alt="" src="assets/spells/${POT_ART[k]}.png"></span><kbd>${POTS[k].key}</kbd><em>${pots[k]}</em><i class="cdv" data-gcd></i>`; } potCdTick(); }
+($('goldIco') as HTMLImageElement).src = coinIcon();
+function renderPots() { for (const k of ['hp', 'mp'] as const) { const el = $('pot' + k); el.title = `${POTS[k].name} (${POTS[k].key}): quedan ${pots[k]}`; el.setAttribute('aria-label', `${POTS[k].name}, tecla ${POTS[k].key}, quedan ${pots[k]}`); el.classList.toggle('none', pots[k] <= 0); el.innerHTML = `<span class="sq"><img alt="" src="${potionIcon(k)}"></span><kbd>${POTS[k].key}</kbd><em>${pots[k]}</em><i class="cdv" data-gcd></i>`; } potCdTick(); }
 // ---------- /meditar: quieto, el maná sube rápido; se corta si te movés, casteás o te pegan ----------
 function stopMeditating(msg?: string) { if (!P.med) return; P.med = false; if (msg) log(msg, true); syncHp(); }
 function toggleMeditate() {
@@ -679,11 +695,10 @@ const efxLocal = (n: string, x: number, y: number, dy = 0) => { if (FXM?.rows[n]
 /** Efecto de mis hechizos: lo veo yo y los jugadores cercanos. */
 const efx = (n: string, x: number, y: number, dy = 0) => { efxLocal(n, x, y, dy); if (connected) pvpSend(n, x, y); };
 // ---------- PvP: bandos enemigos (y todos contra todos en la arena) ----------
-const ARENA = { x0: 46, y0: 26, x1: 61, y1: 39 };
-const inArena = (x: number, y: number) => x >= ARENA.x0 && x < ARENA.x1 && y >= ARENA.y0 && y < ARENA.y1;
+const inArena = (x: number, y: number) => !!MAP_DEF.ffaRect && inMapRect(MAP_DEF.ffaRect, Math.floor(x), Math.floor(y));
 const facOf = (profile: string) => profile.split(';')[0];
 const unseen = (o: Other) => !!o.inv && !P.det && facOf(o.profile) !== selectedFaction;
-const isEnemy = (o: Other) => !o.gone && !unseen(o) && !isSafe(o.x, o.y) && !isSafe(P.x, P.y) && (facOf(o.profile) !== selectedFaction || (inArena(P.x, P.y) && inArena(o.x, o.y)));
+const isEnemy = (o: Other) => MAP_DEF.pvp !== 'off' && !o.gone && !unseen(o) && !isSafe(o.x, o.y) && !isSafe(P.x, P.y) && (MAP_DEF.pvp === 'ffa' || facOf(o.profile) !== selectedFaction || (inArena(P.x, P.y) && inArena(o.x, o.y)));
 const enemiesNear = (x: number, y: number, r: number) => [...others.values()].filter((o) => isEnemy(o) && Math.hypot(o.x - x, o.y - y) <= r);
 /** Avisa al server qué hechizo lancé y sobre quién; el daño lo calcula el server (el campo dmg ya no se usa). */
 function pvpSend(fx: string, x: number, y: number, targetId = 0n, spell = '', secs = 0, r = 0) { net.send({ $case: 'pvpHitRequest', value: { fx, x, y, targetId, dmg: 0, secs, r, spell } }); }
@@ -785,6 +800,7 @@ function drawWorld(id: number, x: number, y: number) { const e = EXT[id]; if (e)
 
 // ---------- canvas ----------
 const cv = $('cv') as HTMLCanvasElement, ctx = cv.getContext('2d')!;
+const gameCursor = createCursor(cv, reduce);
 let W = 0, H = 0, DPR = 1, Z = 1;
 function resize() { DPR = Math.min(2, window.devicePixelRatio || 1); W = cv.clientWidth; H = cv.clientHeight; cv.width = W * DPR; cv.height = H * DPR; Z = clamp(Math.min(W, H) / 520, 0.9, 1.45); }
 window.addEventListener('resize', resize); resize();
@@ -1011,7 +1027,23 @@ function update(dt: number) {
 function updateHover() {
     hover = mouse.x >= 0 ? pickMob(mouse.x, mouse.y) : null;
     hoverDrop = mouse.x >= 0 && !hover ? pickDrop(mouse.x, mouse.y) : null;
-    cv.style.cursor = !hover && !P.ready && mouse.x >= 0 && pickNpc(mouse.x, mouse.y) ? 'pointer' : P.ready ? 'cell' : hover ? 'pointer' : mouse.x >= 0 && pickDrop(mouse.x, mouse.y) ? 'grab' : 'crosshair';
+    cursorTick();
+}
+/** Cursor propio (cursor.ts): qué hay bajo el mouse (mismo orden que el clic) y el estado del hechizo. Solo visual. */
+function cursorTick() {
+    const on = mouse.x >= 0, mx = mouse.x, my = mouse.y, en = on && !hover ? pickEnemy(mx, my) : null, g = on ? toGrid(mx, my) : null;
+    const portal = !!g && (!!pickWaypoint(mx, my) || LINK_WPS.some((q) => Math.hypot(q.x + 0.5 - g.x, q.y + 0.5 - g.y) <= 1.1) || !!MAP.portals?.some((q) => Math.floor(g.x) === q.x && Math.floor(g.y) === q.y));
+    const sp = (i: number) => ({ icon: spellIcon(SPELLS[i].id ?? '', SPELLS[i].col), slot: document.getElementById('sp' + i) });
+    let ready = null;
+    if (P.ready && !P.dead) { // muerto no se puede lanzar (el clic se ignora). Mismo criterio que pointerdown/release: mob, jugador enemigo o suelo (área); en rango y sin inmunidad al control
+        const s = SPELLS[P.ready.i], tgt: { x: number; y: number } | null = hover ?? en ?? (s.aoe && g ? g : null);
+        ready = { ...sp(P.ready.i), ok: !!tgt && Math.hypot(tgt.x - P.x, tgt.y - P.y) <= s.range && !(hover && s.ctrl && hover.imm > now()) };
+    }
+    gameCursor.update({
+        hover: !on ? 'ground' : hover ? 'mob' : pickNpc(mx, my) ? 'npc' : portal ? 'portal' : en ? 'enemy' : hoverDrop ? 'drop' : 'ground',
+        cast: P.casting ? { ...sp(P.casting.i), k: clamp((now() - P.casting.start) / (P.casting.end - P.casting.start), 0, 1) } : null,
+        ready,
+    });
 }
 function updateCam(dt: number) {
     const pt = iso(P.x, P.y); const k = 1 - Math.exp(-dt * 7); cam.x += (pt.x - cam.x) * k; cam.y += (pt.y - cam.y) * k;
@@ -1037,6 +1069,7 @@ function drawRoleMark(role: string, x: number, y: number) {
     else if (role === 'armadurero') { ctx.moveTo(0, -6.5); ctx.lineTo(5.5, -4.5); ctx.lineTo(5, 1); ctx.quadraticCurveTo(4, 5, 0, 7); ctx.quadraticCurveTo(-4, 5, -5, 1); ctx.lineTo(-5.5, -4.5); ctx.closePath(); ctx.fill(); ctx.fillStyle = 'rgba(14,18,14,.85)'; ctx.fillRect(-0.9, -4, 1.8, 8); }
     else if (role === 'joyero') { ctx.moveTo(0, -6.5); ctx.lineTo(5.5, -1); ctx.lineTo(0, 6.5); ctx.lineTo(-5.5, -1); ctx.closePath(); ctx.fill(); ctx.strokeStyle = 'rgba(14,18,14,.85)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-5.5, -1); ctx.lineTo(5.5, -1); ctx.moveTo(-2, -1); ctx.lineTo(0, 6.5); ctx.moveTo(2, -1); ctx.lineTo(0, 6.5); ctx.stroke(); }
     else if (role === 'alquimista') { for (let i = 0; i < 8; i++) { const r = i % 2 ? 2.2 : 6.5, a = (i * Math.PI) / 4 - Math.PI / 2; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.closePath(); ctx.fill(); }
+    else if (role === 'depositario') { ctx.fillRect(-6, -2, 12, 7.5); ctx.beginPath(); ctx.moveTo(-6, -2.6); ctx.quadraticCurveTo(0, -8, 6, -2.6); ctx.closePath(); ctx.fill(); ctx.fillStyle = 'rgba(14,18,14,.85)'; ctx.fillRect(-6, -2.2, 12, 1.4); ctx.fillRect(-1.2, -1.2, 2.4, 3); } // baúl
     else if (role === 'capitan') { ctx.moveTo(-4, -6.5); ctx.lineTo(-4, 7); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-3.5, -6); ctx.lineTo(5.5, -3.5); ctx.lineTo(-3.5, -0.5); ctx.closePath(); ctx.fill(); }
     else { ctx.moveTo(-5, 3); ctx.lineTo(-5, -1); ctx.quadraticCurveTo(-5, -6.5, 0, -6.5); ctx.quadraticCurveTo(5, -6.5, 5, -1); ctx.lineTo(5, 3); ctx.closePath(); ctx.fill(); ctx.fillStyle = 'rgba(14,18,14,.85)'; ctx.fillRect(-3.5, -1.2, 7, 1.8); ctx.fillRect(-0.8, -1.2, 1.6, 6); }
     ctx.restore();
@@ -1046,53 +1079,43 @@ function nameTag(name: string, x: number, y: number, col: string, alpha = 1, siz
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.strokeText(name, x, y); ctx.fillStyle = col; ctx.fillText(name, x, y); ctx.globalAlpha = 1;
 }
 // ---------- Portal de Frontera (waypoint estilo Diablo): pad rúnico, arco de piedra y cartel (todo dibujado acá) ----------
-const WAYPOINTS: Waypoint[] = MAP.waypoints ?? [];
+let WAYPOINTS: Waypoint[] = MAP.waypoints ?? [];
 const MY_WPS = () => WAYPOINTS.filter((q) => q.kind === 'zone' || q.faction === selectedFaction);
 const wpCol = (q: Waypoint) => (q.kind === 'city' ? '#e2b04a' : TRAINING[q.step!].col);
-const wpScale = (q: Waypoint) => (q.kind === 'city' ? 2.7 : 0.62);
-const ell = (x: number, y: number, rx: number, ry: number) => { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.stroke(); };
-const ellF = (x: number, y: number, rx: number, ry: number) => { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); };
-function drawPortalPad(q: Waypoint, T: number) {
-    const col = wpCol(q), k = wpScale(q), c0 = iso(q.x + 0.5, q.y + 0.5), pulse = 0.5 + 0.5 * Math.sin(T * 2.2 + q.x * 0.7), lw = 1 / Math.sqrt(k);
-    ctx.save(); ctx.translate(c0.x, c0.y); ctx.scale(k, k);
-    ctx.fillStyle = 'rgba(14,16,24,.62)'; ellF(0, 0, 36, 18);
-    ctx.strokeStyle = col; ctx.lineWidth = 3 * lw; ctx.globalAlpha = 0.9; ell(0, 0, 36, 18); ctx.globalAlpha = 1;
-    // runas en el borde: giran
-    for (let j = 0; j < 12; j++) {
-        const a = (j / 12) * Math.PI * 2 + (reduce ? 0 : T * 0.5), cx = Math.cos(a), cy = Math.sin(a);
-        ctx.strokeStyle = col; ctx.lineWidth = 2 * lw; ctx.beginPath(); ctx.moveTo(cx * 29, cy * 14.5); ctx.lineTo(cx * 34, cy * 17); ctx.stroke();
-    }
-    ctx.globalCompositeOperation = 'lighter';
-    const g = ctx.createRadialGradient(0, 0, 2, 0, 0, 36); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.35 + pulse * 0.25; ctx.fillStyle = g; ellF(0, 0, 34, 17);
-    ctx.globalAlpha = 0.8; ctx.strokeStyle = col; ctx.lineWidth = 1.5 * lw; ctx.setLineDash([7, 6]); ctx.lineDashOffset = -T * 18; ell(0, 0, 22, 11);
-    ctx.setLineDash([]);
-    if (q.kind === 'city') { ell(0, 0, 12, 6); ctx.beginPath(); for (let j = 0; j < 6; j++) { const a = (j / 6) * Math.PI * 2 + T * 0.3; ctx.lineTo(Math.cos(a) * 17, Math.sin(a) * 8.5); } ctx.closePath(); ctx.stroke(); }
-    const bg = ctx.createLinearGradient(0, 0, 0, -78); bg.addColorStop(0, col); bg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.16 + pulse * 0.1; ctx.fillStyle = bg;
-    ctx.beginPath(); ctx.moveTo(-26, 0); ctx.lineTo(-20, -78); ctx.lineTo(20, -78); ctx.lineTo(26, 0); ctx.closePath(); ctx.fill();
-    if (!reduce) for (let j = 0; j < 6; j++) { const t = (T * 0.45 + j * 0.17) % 1; ctx.globalAlpha = (1 - t) * 0.9; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(Math.sin(j * 5.1 + T) * 16, -4 - t * 60, 1.6 * lw, 0, Math.PI * 2); ctx.fill(); }
-    ctx.restore();
+const portalAct = new Map<string, { a: number; t: number }>();
+/** Activación suave (0..1, ~0.3 s): el portal se enciende cuando el jugador está dentro de su radio. */
+function portalActivation(q: Waypoint, T: number) {
+    let s = portalAct.get(q.id); if (!s) portalAct.set(q.id, s = { a: 0, t: T });
+    const dt = Math.min(0.1, Math.max(0, T - s.t)); s.t = T;
+    const on = !P.dead && Math.hypot(q.x + 0.5 - P.x, q.y + 0.5 - P.y) <= (q.kind === 'city' ? 1.7 : 1.1);
+    s.a = clamp(s.a + (on ? 1 : -1) * dt / 0.3, 0, 1);
+    return s.a * s.a * (3 - 2 * s.a);
 }
-function drawPortalArch(q: Waypoint, T: number) {
-    const col = wpCol(q), k = wpScale(q), c0 = iso(q.x + 0.5, q.y + 0.5);
-    ctx.save(); ctx.translate(c0.x, c0.y); ctx.scale(k, k);
-    for (const sx of [-1, 1]) { // dos pilares de piedra con una gema rúnica arriba
-        const px = sx * 31, py = -2;
-        ctx.fillStyle = '#5d626b'; ctx.fillRect(px - 5, py - 46, 10, 46); ctx.fillStyle = sx < 0 ? '#7a808a' : '#464b53'; ctx.fillRect(px - (sx < 0 ? 5 : 0), py - 46, 5, 46);
-        ctx.fillStyle = '#6f7580'; ctx.fillRect(px - 7, py - 50, 14, 5); ctx.fillRect(px - 7, py - 2, 14, 4);
-        ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(px, py - 62); ctx.lineTo(px + 5, py - 55); ctx.lineTo(px, py - 49); ctx.lineTo(px - 5, py - 55); ctx.closePath(); ctx.fill();
-        ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(px, py - 55, 0, px, py - 55, 14); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.5 + 0.3 * Math.sin(T * 3 + sx); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px, py - 55, 14, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-    }
-    ctx.strokeStyle = '#6a707a'; ctx.lineWidth = 6; ctx.beginPath(); ctx.ellipse(0, -48, 31, 11, 0, Math.PI, Math.PI * 2); ctx.stroke();
-    ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.ellipse(0, -48, 31, 11, 0, Math.PI, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
-    if (q.kind === 'city') { ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, -66); ctx.lineTo(5, -58); ctx.lineTo(0, -51); ctx.lineTo(-5, -58); ctx.closePath(); ctx.fill(); }
-    ctx.restore();
-}
+const portalStyle = (q: Waypoint) => (q.kind === 'city' ? PORTAL_CITY : PORTAL_ZONE);
+function drawPortalPad(q: Waypoint, T: number) { const c0 = iso(q.x + 0.5, q.y + 0.5); drawPortalFloor(ctx, c0.x, c0.y, portalStyle(q), portalActivation(q, T), T, reduce, q.x * 0.7 + q.y); }
+function drawPortalArch(q: Waypoint, T: number) { const c0 = iso(q.x + 0.5, q.y + 0.5); drawPortalFx(ctx, c0.x, c0.y, portalStyle(q), portalActivation(q, T), T, reduce, q.x * 0.7 + q.y); }
 /** Cartel de cada portal: "Portal de Frontera" en la plaza; los chicos de las zonas dicen "Portal de regreso" cerca. */
 function drawPortalLabels() {
     for (const q of WAYPOINTS) {
         const d = Math.hypot(q.x + 0.5 - P.x, q.y + 0.5 - P.y), c = iso(q.x + 0.5, q.y + 0.5);
         if (q.kind === 'city') { if (d > 18) continue; nameTag('Portal de Frontera', c.x, c.y - 185, wpCol(q), 1, 14); if (d < 7) nameTag('Tocá el portal para viajar', c.x, c.y - 168, '#d9d2b8', 1, 10); }
         else if (d < 9) { nameTag('Portal de regreso', c.x, c.y - 52, wpCol(q), 1, 10); if (d < 4) nameTag(q.name, c.x, c.y - 40, '#d9d2b8', 1, 9); }
+    }
+}
+/** Cartel de los portales entre mapas: a dónde llevan y, si no cumplís el requisito, qué falta. */
+function drawLinkLabels() {
+    for (const l of LINKS) {
+        const d = Math.hypot(l.x + 0.5 - P.x, l.y + 0.5 - P.y); if (d > (l.kind === 'enter' || l.kind === 'walk' ? 12 : 9)) continue;
+        const c = iso(l.x + 0.5, l.y + 0.5), dest = getMapDef(l.to.map)?.name ?? l.to.map, why = linkGateReason(l, portalProgress(), (i) => QUESTS[i]?.name);
+        // puertas de edificios: el nombre arriba de la puerta y una flecha en el piso; caminos: hacia dónde llevan
+        if (l.kind === 'enter' || l.kind === 'walk') {
+            const k = clamp(1.4 - d / 10, 0.35, 1), up = l.kind === 'enter' ? 30 : 40;
+            ctx.save(); ctx.globalAlpha = 0.55 * k; ctx.fillStyle = LINK_COL[l.kind]; ctx.beginPath(); ctx.ellipse(c.x, c.y, 22, 11, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+            nameTag(l.kind === 'walk' ? `→ ${dest}` : dest, c.x, c.y - up, LINK_COL[l.kind], k, 12);
+            continue;
+        }
+        nameTag(l.kind === 'oneway' ? `${dest} (solo ida)` : dest, c.x, c.y - 52, why ? '#ff9a8a' : LINK_COL[l.kind], 1, 11);
+        if (d < 4 && why) nameTag(why, c.x, c.y - 40, '#d9d2b8', 1, 9);
     }
 }
 function render() {
@@ -1106,6 +1129,7 @@ function render() {
     for (let y = minY; y <= maxY; y++) for (let x = minX; x <= maxX; x++) { const p = iso(x + 0.5, y + 0.5); drawWorld(tiles[y][x], p.x, p.y); }
     for (const d of decals) { const p = iso(d.x, d.y); drawWorld(d.id, p.x, p.y); }
     for (const q of WAYPOINTS) if (q.x >= minX - 3 && q.x <= maxX + 3 && q.y >= minY - 3 && q.y <= maxY + 3) drawPortalPad(q, T);
+    for (const q of LINK_WPS) if (q.x >= minX - 3 && q.x <= maxX + 3 && q.y >= minY - 3 && q.y <= maxY + 3) drawPortalPad(q, T);
     for (const f of fx) if (f.k === 'click') { const p = iso(f.x, f.y); ctx.globalAlpha = 1 - f.t / 0.6; ctx.strokeStyle = '#d6a445'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(p.x, p.y, 10 + f.t * 30, (10 + f.t * 30) / 2, 0, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
     for (const sc of scorch.slice()) { const age = T - sc.t; if (age > 5) { scorch.splice(scorch.indexOf(sc), 1); continue; } const p = iso(sc.x, sc.y); ctx.globalAlpha = Math.min(1, (5 - age) / 2) * 0.55; const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, sc.r * TW * 0.45); g.addColorStop(0, '#120a05'); g.addColorStop(0.7, 'rgba(30,15,5,.6)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(p.x, p.y, sc.r * TW * 0.45, sc.r * TW * 0.225, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
     if (P.casting) {
@@ -1129,7 +1153,8 @@ function render() {
     const objs: { d: number; f: () => void }[] = [];
     for (const o of props) if (o.x > minX - 3 && o.x < maxX + 3 && o.y > minY - 3 && o.y < maxY + 3) objs.push({ d: o.d ?? o.x + o.y, f: () => { const p = iso(o.x, o.y); drawWorld(o.id, p.x, p.y); } });
     for (const q of WAYPOINTS) if (q.x >= minX - 3 && q.x <= maxX + 3 && q.y >= minY - 3 && q.y <= maxY + 3) objs.push({ d: q.x + q.y + 0.5, f: () => drawPortalArch(q, T) });
-    for (const b of MAP.buildings) objs.push({ d: b.x + b.y + (b.w + b.h) / 2, f: () => drawBuilding(b) });
+    for (const q of LINK_WPS) if (q.x >= minX - 3 && q.x <= maxX + 3 && q.y >= minY - 3 && q.y <= maxY + 3) objs.push({ d: q.x + q.y + 0.5, f: () => drawPortalArch(q, T) });
+    for (const b of MAP.buildings) pushBuilding(objs, b, minX, maxX, minY, maxY);
     for (const n of MAP.npcs) objs.push({ d: n.x + n.y + 1, f: () => drawNpc(n, T) });
     for (const d of drops) objs.push({ d: d.x + d.y - 0.2, f: () => drawDrop(d, T) });
     for (const c of corpses) objs.push({ d: c.x + c.y - 0.3, f: () => { const p = iso(c.x, c.y), age = T - c.t; drawSprite(c.sprite, 'die', age, c.dir, p.x, p.y, null, age > 2 ? 3 - age : 1); } });
@@ -1149,7 +1174,7 @@ function render() {
     // nombres arriba de todo
     for (const o of others.values()) { if (unseen(o)) continue; const p = iso(o.x, o.y); nameTag(o.name, p.x, p.y - 70, factionCol(o.profile.split(';')[0]), o.gone ? 0.5 : 1); if (o.maxHp && o.hp !== undefined && o.hp < o.maxHp) { const f = Math.max(0, o.hp / o.maxHp); ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - 17, p.y - 66, 34, 5); ctx.fillStyle = isEnemy(o) ? '#d9443a' : '#58b85a'; ctx.fillRect(p.x - 16, p.y - 65, 32 * f, 3); } }
     { const p = iso(P.x, P.y); nameTag(P.name, p.x, p.y - 70, factionCol(selectedFaction)); }
-    drawPortalLabels();
+    drawPortalLabels(); drawLinkLabels();
     for (const n of MAP.npcs) {
         const p = iso(n.x + 0.5, n.y + 0.5);
         nameTag(n.name, p.x, p.y - 70, '#9fd36b'); drawRoleMark(roleOf(n), p.x, p.y - 95);
@@ -1399,12 +1424,12 @@ function renderBag() {
     document.querySelectorAll<HTMLElement>('#char [data-eq]').forEach((b) => (b.onclick = () => { const it = P.eq[b.dataset.eq as Slot]; sel = it ? { it, from: 'eq' } : null; selX = null; renderBag(); }));
     // celdas del inventario según la pestaña
     const gear: InvEnt[] = P.bag.map((it, i) => ({ key: 'g' + i, html: `<button type="button" class="cl${sel && sel.it === it ? ' sel' : ''}" data-bag="${i}" data-r="${it.rar.k}" aria-label="${esc(it.name)}, ${it.rar.n}" title="${esc(it.name)}" style="--rc:${rarCol(it)}">${ico(it)}</button>` }));
-    const cons: InvEnt[] = (['hp', 'mp'] as const).filter((k) => pots[k] > 0).map((k) => ({ key: 'p' + k, html: `<button type="button" class="cl${selX && selX.id === k ? ' sel' : ''}" data-pot="${k}" aria-label="${POTS[k].name}, ${pots[k]}" title="${POTS[k].name}" style="--rc:${k === 'hp' ? '#8a3a34' : '#345a8a'}"><img class="iimg" alt="" src="assets/spells/${POT_ART[k]}.png"><span class="q">${pots[k]}</span><i class="cdv" data-gcd></i></button>` }));
+    const cons: InvEnt[] = (['hp', 'mp'] as const).filter((k) => pots[k] > 0).map((k) => ({ key: 'p' + k, html: `<button type="button" class="cl${selX && selX.id === k ? ' sel' : ''}" data-pot="${k}" aria-label="${POTS[k].name}, ${pots[k]}" title="${POTS[k].name}" style="--rc:${k === 'hp' ? '#8a3a34' : '#345a8a'}"><img class="iico" alt="" src="${potionIcon(k)}"><span class="q">${pots[k]}</span><i class="cdv" data-gcd></i></button>` }));
     const mats: InvEnt[] = [];
     for (const kid of ['cripta', 'foso'] as KeyId[]) {
         const kd = KEYDEFS[kid];
-        if (Q.shards[kid] > 0) mats.push({ key: 's' + kid, html: `<button type="button" class="cl${selX && selX.id === 's' + kid ? ' sel' : ''}" data-mat="s${kid}" aria-label="${kd.shard}, ${Q.shards[kid]}" title="${kd.shard}" style="--rc:#6a4aa0"><svg class="iimg" viewBox="0 0 20 20" aria-hidden="true"><use href="#gemS"/></svg><span class="q">${Q.shards[kid]}</span></button>` });
-        if (Q.keys[kid] > 0) mats.push({ key: 'k' + kid, html: `<button type="button" class="cl${selX && selX.id === 'k' + kid ? ' sel' : ''}" data-mat="k${kid}" aria-label="${kd.name}, ${Q.keys[kid]}" title="${kd.name}" style="--rc:#c9a227"><img class="iimg" alt="" src="assets/spells/sello-arcano.png"><span class="q">${Q.keys[kid]}</span></button>` });
+        if (Q.shards[kid] > 0) mats.push({ key: 's' + kid, html: `<button type="button" class="cl${selX && selX.id === 's' + kid ? ' sel' : ''}" data-mat="s${kid}" aria-label="${kd.shard}, ${Q.shards[kid]}" title="${kd.shard}" style="--rc:#6a4aa0"><img class="iico" alt="" src="${shardIcon(kid)}"><span class="q">${Q.shards[kid]}</span></button>` });
+        if (Q.keys[kid] > 0) mats.push({ key: 'k' + kid, html: `<button type="button" class="cl${selX && selX.id === 'k' + kid ? ' sel' : ''}" data-mat="k${kid}" aria-label="${kd.name}, ${Q.keys[kid]}" title="${kd.name}" style="--rc:#c9a227"><img class="iico" alt="" src="${keyIcon(kid)}"><span class="q">${Q.keys[kid]}</span></button>` });
     }
     const list = invTab === 'gear' ? gear : invTab === 'cons' ? cons : invTab === 'mat' ? mats : [...gear, ...cons, ...mats];
     const total = Math.max(25, Math.ceil(list.length / 5) * 5), cells = list.map((e) => e.html);
@@ -1462,11 +1487,31 @@ let BUILD: Record<string, BuildMeta> = {};
 function loadBuildingImages() {
     for (const id of Object.keys(BUILD)) load(`assets/${id}.webp`).then((im) => { IMG[id] = im; }).catch(() => { /* sin imagen */ });
 }
-/** El edificio se apoya en la esquina sur de su huella. */
-function drawBuilding(b: { id: string; x: number; y: number; w: number; h: number }) {
+/**
+ * El edificio se apoya en la esquina sur de su huella y se dibuja en tiras verticales de media celda: cada tira lleva la profundidad
+ * de la celda de la huella más cercana a la cámara en esa columna. Así un personaje parado delante de la fachada (al sur o al este)
+ * se dibuja encima y uno que pasa por detrás queda tapado. Si el edificio tapa al jugador, se dibuja translúcido.
+ */
+type Bld = { id: string; x: number; y: number; w: number; h: number };
+function pushBuilding(objs: { d: number; f: () => void }[], b: Bld, minX: number, maxX: number, minY: number, maxY: number) {
     const M = BUILD[b.id], im = IMG[b.id]; if (!M || !im) return;
-    const p = iso(b.x + b.w, b.y + b.h);
-    ctx.drawImage(im, p.x - M.ax, p.y - M.ay, M.w, M.h);
+    if (b.x > maxX + 4 || b.y > maxY + 4 || b.x + b.w < minX - 8 || b.y + b.h < minY - 8) return;
+    const p = iso(b.x + b.w, b.y + b.h), left = iso(b.x, b.y + b.h).x, x0 = p.x - M.ax, y0 = p.y - M.ay, n = b.w + b.h;
+    const depthAt = (k: number) => (k < b.w ? b.x + k + b.y + b.h - 1 : b.x + b.w - 1 + b.y + b.h - 1 - (k - b.w));
+    // ¿tapa al jugador? en su columna de pantalla hay fachada más cerca de la cámara que él, y sus pies quedan detrás de esa fachada
+    const pp = iso(P.x, P.y), kp = Math.floor((pp.x - left) / 48);
+    let hides = false;
+    if (kp >= 0 && kp < n && P.x + P.y < depthAt(kp) + 0.25) {
+        const foot = kp < b.w ? iso(b.x + kp + 0.5, b.y + b.h).y : iso(b.x + b.w, b.y + b.h - (kp - b.w) - 0.5).y;
+        hides = pp.y < foot && pp.y > y0 + 10;
+    }
+    for (let k = 0; k < n; k++) {
+        const D = depthAt(k);
+        let s0 = Math.round(left + k * 48 - x0), s1 = Math.round(left + (k + 1) * 48 - x0) + 1; // +1: sin costuras entre tiras
+        if (k === 0) s0 = 0; if (k === n - 1) s1 = M.w;
+        s0 = Math.max(0, s0); s1 = Math.min(M.w, s1); if (s1 <= s0) continue;
+        objs.push({ d: D + 0.25, f: () => { if (hides) ctx.globalAlpha = 0.45; ctx.drawImage(im, s0, 0, s1 - s0, M.h, x0 + s0, y0, s1 - s0, M.h); ctx.globalAlpha = 1; } });
+    }
 }
 
 type Npc = (typeof MAP.npcs)[number];
@@ -1486,8 +1531,14 @@ const NPC_LOOKS: Record<string, string[]> = {
     capitan_v: ['plate_boots', 'plate_greaves', 'plate_gauntlets', 'plate_cuirass', 'head_short', 'plate_helm', 'longsword'],
     guardia_s: ['chain_boots', 'chain_greaves', 'chain_gloves', 'chain_cuirass', 'head_short', 'plate_helm', 'longsword', 'kite_shield'],
     guardia_v: ['plate_boots', 'chain_greaves', 'plate_gauntlets', 'chain_cuirass', 'head_bald', 'chain_coif', 'battle_axe'],
+    subastador_s: ['mage_boots', 'cloth_pants', 'cloth_gloves', 'mage_vest', 'head_short'],
+    subastador_v: ['leather_boots', 'leather_pants', 'cloth_gloves', 'mage_vest', 'head_bald', 'mage_hood'],
+    depositario_s: ['leather_boots', 'cloth_pants', 'leather_gloves', 'leather_chest', 'head_short'],
+    depositario_v: ['chain_boots', 'leather_pants', 'leather_gloves', 'cloth_shirt', 'head_bald', 'leather_hood'],
+    sanador_s: ['mage_boots', 'mage_skirt', 'mage_sleeves', 'mage_vest', 'head_short', 'mage_hood'],
+    mago_s: ['mage_boots', 'mage_skirt', 'mage_sleeves', 'mage_vest', 'head_short', 'mage_hood', 'staff'],
 };
-const lookOfNpc = (n: { id: string }) => NPC_LOOKS[n.id] ?? NPC_LOOKS[n.id.replace(/\d+$/, '')];
+const lookOfNpc = (n: { id: string }) => NPC_LOOKS[n.id] ?? NPC_LOOKS[n.id.replace(/\d+$/, '')] ?? NPC_LOOKS[roleOf(n) + '_s'];
 function refreshNpcLook() {
     if (!PAPER) return;
     for (const n of MAP.npcs) {
@@ -1524,7 +1575,7 @@ function renderQuest() {
     if (!q || Q.st === 'new') { el.innerHTML = `<b>Mazmorras</b>${keyLines()}`; return; }
     el.innerHTML = `<b>${q.name}</b><span>${Q.st === 'ready' ? 'Volvé con el Capitán' : `${q.zone}: ${Q.prog}/${q.n}`}</span>${keyLines()}`;
 }
-function questLevel(q: Quest) { const l = mobDef(q.type, ZONES.find((z) => z.name === q.zone && z.type === q.type)).lvl; return `Nv ${Math.max(1, l - 1)}–${l + 1}`; }
+function questLevel(q: Quest) { const l = mobDef(q.type, zoneByName(q.zone, q.type)).lvl; return `Nv ${Math.max(1, l - 1)}–${l + 1}`; }
 function openQuestDlg(n: Npc) {
     const q = QUESTS[Q.i], d = $('qdlg'); shopNpc = n; talkNpc = null;
     $('qdName').textContent = n.name; d.hidden = false;
@@ -1554,8 +1605,13 @@ const questMark = () => (!QUESTS[Q.i] ? '' : Q.st === 'new' ? '!' : Q.st === 're
 // ---------- vendedores y servicios de las ciudades: cada NPC tiene un rol (ver roleOf) ----------
 // el stock, los precios y los vendedores viven en @fdn/world (economy.ts): el server valida las compras con la misma tabla
 const GUARD_LINES: Record<string, string[]> = {
-    s: ['La empalizada aguanta, pero los goblins del sureste no se cansan. Si vas a salir, llevate pociones.', 'Dentro de las murallas no pelea nadie: en la ciudad se descansa y se comercia.', 'El Capitán Aldric tiene encargos para quien sepa pelear. Hablá con él en la plaza.', 'Armero, armadurero, joyero... todo lo que necesitás está a unos pasos de la plaza.'],
+    s: ['El portón del este lleva a las tierras de caza. Si vas a salir, llevate pociones.', 'Dentro de las murallas no pelea nadie: en la villa se descansa y se comercia.', 'El Capitán Aldric tiene encargos para quien sepa pelear. Está en el Ayuntamiento, al norte de la plaza.', 'Herrería, Tienda, Joyería... todo está a unos pasos de la plaza. La subasta es en el Ayuntamiento.'],
     v: ['Vhar no se rinde: las murallas son de hierro y de paciencia. Pasá, pero sin armar lío.', 'Más allá de la puerta sur empieza el páramo. No salgas sin armadura.', 'El Capitán Kharos recluta cazadores. Está en la plaza del noreste.', 'La forja no se apaga nunca. Si necesitás acero, el armero está al oeste.'],
+};
+/** NPC de servicio sin tienda todavía (charla corta). */
+const ROLE_LINES: Record<string, string[]> = {
+    sanador: ['Que la marea te devuelva las fuerzas. Si caés en la Frontera, despertarás acá, en el templo.', 'Dentro de la villa las heridas sanan solas. Descansá antes de volver a salir.'],
+    mago: ['Próximamente: la Torre abrirá sus puertas a los aprendices de magia.', 'Las runas del piso todavía no están listas. Volvé más adelante.'],
 };
 let talkNpc: Npc | null = null, shopNpc: Npc | null = null;
 const npcDist = (n: Npc) => Math.hypot(n.x + 0.5 - P.x, n.y + 0.5 - P.y);
@@ -1579,29 +1635,35 @@ function stockInfo(st: Stock): string {
     for (const a of st.attrs ?? []) bits.push(attrText({ id: a[0], v: a[1] }));
     return `${bits.join(' · ') || b.slot} · Nv ${st.lvl}`;
 }
+/** Casa de subastas (ventana propia en auction.ts; el server valida todo). */
+const auction = createAuctionUI({ send: (p) => net.send(p), bag: () => P.bag, gold: () => P.gold, fromInv: itemFromInv, icon: ico, attrText, esc, fmt: fmtNum, toast });
+/** Depósito por cuenta (ventana propia en deposit.ts; el server valida todo, ver docs/DEPOSITO.md). */
+const deposit = createDepositUI({ send: (p) => net.send(p), bag: () => P.bag, gold: () => P.gold, pots: () => pots, keys: () => Q.keys, shards: () => Q.shards, fromInv: itemFromInv, icon: ico, attrText, esc, fmt: fmtNum, requestClose: () => closeShop() });
 function openShop(n: Npc = MAP.npcs[0]) {
     const role = roleOf(n);
+    if (role === 'subastador') { closeShop(); shopNpc = n; talkNpc = null; auction.open(n); return; }
+    if (role === 'depositario') { if (shopNpc !== n) closeShop(); shopNpc = n; talkNpc = null; deposit.open(n); return; }
     if (role === 'capitan') { openQuestDlg(n); return; }
-    if (role === 'guardia') { openTalk(n); return; }
+    if (role === 'guardia' || ROLE_LINES[role]) { openTalk(n); return; }
     const def = SHOPS[role]; if (!def) return;
     shopNpc = n; talkNpc = null; $('qdlg').hidden = true; $('shopName').textContent = n.name; $('shopRole').textContent = def.label; $('shop').hidden = false; renderShop();
     log(`${n.name}: «${def.greet}»`);
 }
 /** Guardias y otros NPC de ambiente: una charla corta, sin tienda. */
 function openTalk(n: Npc) {
-    const lines = GUARD_LINES[n.id.endsWith('_v') || n.id.includes('_v') ? 'v' : 's'];
+    const role = roleOf(n), lines = ROLE_LINES[role] ?? GUARD_LINES[n.id.endsWith('_v') || n.id.includes('_v') ? 'v' : 's'];
     shopNpc = n; talkNpc = null; $('shop').hidden = true;
     $('qdName').textContent = n.name; $('qdlg').hidden = false; $('qdForges').innerHTML = ''; $('qdBtn').hidden = true;
-    $('qdBody').innerHTML = `<small>${SHOPS.guardia.label}</small><br>${lines[Math.floor(R() * lines.length)]}`;
+    $('qdBody').innerHTML = `<small>${(SHOPS[role] ?? SHOPS.guardia).label}</small><br>${lines[Math.floor(R() * lines.length)]}`;
 }
-function closeShop() { shopNpc = null; $('shop').hidden = true; $('qdlg').hidden = true; }
+function closeShop() { shopNpc = null; $('shop').hidden = true; $('qdlg').hidden = true; auction.close(); deposit.close(); }
 function renderShop() {
     if ($('shop').hidden || !shopNpc) return;
     const def = SHOPS[roleOf(shopNpc)];
     $('shopGold').textContent = fmtNum(P.gold) + ' oro';
     const buy = def.stock.map((st, i) => {
         const it = st.base ? stockItem(st) : null, poor = P.gold < st.price;
-        const icon = it ? ico(it) : `<span class="pico" style="background:${POTS[st.pot!].col}"></span>`;
+        const icon = it ? ico(it) : `<img class="iico" alt="" src="${potionIcon(st.pot!)}">`;
         return `<button type="button" class="srow${poor ? ' poor' : ''}" data-buy="${i}" title="${esc(stockInfo(st))}">${icon}<span style="color:${it ? '#e7e2d3' : POTS[st.pot!].col}">${esc(stockLabel(st))}<small>${esc(stockInfo(st))}</small></span><em>${st.price} oro</em></button>`;
     }).join('');
     $('shopList').innerHTML = `<div class="label">Comprar</div>${buy}<div class="label">Tu bolsa · tocá un item para venderlo</div>` + (P.bag.length
@@ -1629,6 +1691,82 @@ function npcTick() {
 $('shopClose').addEventListener('click', closeShop); $('pothp').addEventListener('click', () => { usePotion('hp'); cv.focus({ preventScroll: true }); }); $('potmp').addEventListener('click', () => { usePotion('mp'); cv.focus({ preventScroll: true }); }); renderPots(); $('qdClose').addEventListener('click', closeShop);
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && shopNpc) closeShop(); });
 
+// ---------- cambio de mapa: el mapa cargado se reemplaza entero (docs/MUNDO.md 2.3 y 2.4) ----------
+let LINKS: Link[] = MAP_DEF.links;
+/** Los vínculos entre mapas se dibujan con el portal de piedra de portal.ts (como un waypoint chico). */
+let LINK_WPS: Waypoint[] = [];
+const LINK_COL: Record<Link['kind'], string> = { walk: '#9fd18b', portal: '#c78bff', oneway: '#9fd0ff', door: '#e2b04a', npc: '#d9d2b8', enter: '#f3dfa6' };
+const linkWps = (links: Link[]): Waypoint[] => links.filter((l) => l.kind !== 'enter' && l.kind !== 'walk').map((l) => ({ id: `link:${l.id}`, x: l.x, y: l.y, kind: 'zone' as const, name: getMapDef(l.to.map)?.name ?? l.to.map, step: 0 }));
+LINK_WPS = linkWps(LINKS);
+let mapLoading = false;
+/**
+ * Arma el mapa `def` y todo lo que depende de él: grillas, props, zonas, edificios, NPCs, portales, luces. Cliente y server arman el
+ * mismo mapa con el mismo código; la comparación de `mapHash` lo verifica. Devuelve el hash del mapa armado.
+ */
+function loadMap(def: MapDef): string {
+    MAP_DEF = def; MAP = def.build(); N = MAP.size;
+    ({ tiles, blocked, safe, props, decals } = MAP);
+    ZONES = MAP.zones; WAYPOINTS = MAP.waypoints ?? []; LINKS = def.links; LINK_WPS = linkWps(LINKS);
+    // lo que era del mapa anterior: mobs, otros jugadores, suelo, efectos, estado de portales y diálogos
+    mobs.length = 0; mobMap.clear(); others.clear(); drops.length = 0; corpses.length = 0; projs.length = 0; scorch.length = 0; floats.length = 0; fx.length = 0;
+    portalAct.clear(); wpInside = ''; closeWp(); closeShop(); talkNpc = null; talkWpTarget = null;
+    P.target = null; P.engage = false; P.pickup = null; P.queued = null; P.foe = null; P.path = []; P.step = null; hover = null; hoverDrop = null;
+    cancelCast(); pveT = 0; // el server de este mapa todavía no sabe si estoy muerto ni mi nivel
+    portalLock = now() + 2.5; // llegás al lado del portal de vuelta: que no te rebote
+    refreshNpcLook(); // los NPC del mapa nuevo (por ejemplo los de un interior) arman su muñeco acá
+    return mapHash(MAP);
+}
+const loadEl = () => $('maploading');
+function showMapLoading(name: string, lvl: [number, number] | null) {
+    const el = loadEl(); el.classList.remove('err'); el.dataset.since = String(performance.now());
+    $('mlName').textContent = name; $('mlLvl').textContent = lvl ? `Nivel recomendado ${lvl[0]}–${lvl[1]}` : ''; $('mlMsg').textContent = 'Cargando…';
+    el.hidden = false; requestAnimationFrame(() => el.classList.add('on'));
+}
+function hideMapLoading() {
+    const el = loadEl(); if (el.hidden) return;
+    const wait = Math.max(0, 600 - (performance.now() - Number(el.dataset.since ?? 0)));
+    setTimeout(() => { el.classList.remove('on'); setTimeout(() => { el.hidden = true; }, 350); mapLoading = false; }, wait);
+}
+function failMapLoading(msg: string) {
+    mapLoading = true; const el = loadEl(); el.classList.add('err', 'on'); el.hidden = false; $('mlMsg').textContent = msg;
+    net.close();
+}
+/** El server me sacó del mundo anterior: pantalla de carga, armo el mapa, verifico el hash y aviso MapReady (recién ahí me mete en el nuevo). */
+function onMapTransfer(v: { mapId: string; name: string; x: number; y: number; direction: number; mapHash: string; gameWorldId: string; lvlMin: number; lvlMax: number }) {
+    mapLoading = true;
+    P.path = []; P.step = null; P.target = null; P.engage = false;
+    showMapLoading(v.name || v.mapId, v.lvlMax ? [v.lvlMin, v.lvlMax] : null);
+    // dejar que el navegador pinte la pantalla de carga antes de armar el mapa
+    requestAnimationFrame(() => setTimeout(() => {
+        const def = getMapDef(v.mapId);
+        if (!def) { failMapLoading(`Este juego no conoce el mapa «${v.mapId}». Recargá la página.`); return; }
+        const h = loadMap(def);
+        if (h !== v.mapHash) { failMapLoading('Tu juego está desactualizado y armó un mapa distinto al del server. Recargá la página.'); return; }
+        MAP_WORLD_ID = v.gameWorldId;
+        snapTo(v.x, v.y);
+        const [dx, dy] = GRID_VEC[v.direction] ?? [0, 1]; turnTo(P, dx, dy, 0, true);
+        const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
+        net.send({ $case: 'mapReady', value: { mapId: def.id, mapHash: h } });
+        $('mlMsg').textContent = 'Entrando…';
+    }, 30));
+}
+/** Cruce de un vínculo entre mapas: el cliente solo pide por id; el server valida distancia, requisitos y estado. */
+function checkLinks() {
+    if (!connected || P.dead || P.step || now() < portalLock) return;
+    const l = LINKS.find((q) => q.x === P.cell.x && q.y === P.cell.y); if (!l) return;
+    const why = linkGateReason(l, portalProgress(), (i) => QUESTS[i]?.name);
+    if (why) { portalLock = now() + 2; toast(why); log(why, true); return; }
+    portalLock = now() + 3; P.path = []; P.target = null; P.engage = false; P.pickup = null;
+    net.send({ $case: 'portalRequest', value: { portalId: l.id } });
+    log(l.msg, true);
+}
+/** Zona por nombre en cualquier mapa (para los textos de misiones que mencionan zonas de otros mapas): primero el cargado, después el resto, armados una sola vez. */
+let otherZones: Zone[] | null = null;
+function zoneByName(name: string, type: MobType): Zone | undefined {
+    const here = ZONES.find((z) => z.name === name && z.type === type); if (here) return here;
+    otherZones ??= Object.values(MAPS).filter((d) => d.id !== MAP_DEF.id).flatMap((d) => d.build().zones);
+    return otherZones.find((z) => z.name === name && z.type === type);
+}
 // ---------- escaleras entre zonas (el server valida el teletransporte; la celda de destino tiene que estar libre) ----------
 let portalLock = 0;
 function checkPortals() {
@@ -1668,10 +1806,11 @@ function currentTrainStep(): number {
     return best;
 }
 const LOCK_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4.5 7V5a3.5 3.5 0 017 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="7" width="10" height="7" rx="1.4" fill="currentColor"/></svg>';
+const inHomeCity = () => cityAt(P.cell.x, P.cell.y)?.faction === selectedFaction && factionHome(selectedFaction)?.map === MAP_DEF.id;
 const lockMsg = (t: TrainingStep) => `Portal bloqueado (${t.zone}): ${t.after ? `entregá «${t.after}» al Capitán` : 'todavía no'} o llegá al nivel ${t.lvl}.`;
 function renderWp() {
     if (!wpOpen) return;
-    const city = MAP.cities?.find((c) => c.faction === selectedFaction), inCity = !!cityAt(P.cell.x, P.cell.y), cur = inCity ? -1 : currentTrainStep();
+    const city = selectedFaction === 'solmar' ? { name: 'Villa de Solmar' } : MAP.cities?.find((c) => c.faction === selectedFaction), inCity = inHomeCity(), cur = inCity ? -1 : currentTrainStep();
     $('wpTitle').textContent = wpOpen.kind === 'city' ? 'Portal de Frontera' : 'Portal de regreso';
     $('wpSub').textContent = wpOpen.kind === 'city' ? `${city?.name ?? 'Tu ciudad'} · zonas de entrenamiento` : `${wpOpen.name} · volvé a tu ciudad o viajá a otra zona`;
     const rows = [`<button type="button" class="wprow home${inCity ? ' cur' : ''}" data-wp="city"${inCity ? ' disabled' : ''}><i class="wpn">&#8962;</i><span class="wpt"><b>${inCity ? 'Estás en ' : 'Volver a '}${esc(city?.name ?? 'la ciudad')}</b><small>${inCity ? 'Zona segura' : 'Zona segura · tu facción'}</small></span>${inCity ? '<em class="wptag">Estás aquí</em>' : ''}</button>`];
@@ -1688,7 +1827,7 @@ function closeWp() { wpOpen = null; talkWpTarget = null; $('wpmenu').hidden = tr
 function wpGo(id: string) {
     if (!wpOpen || !connected || P.dead) return;
     let dest = 'la ciudad';
-    if (id === 'city') { if (cityAt(P.cell.x, P.cell.y)) return; }
+    if (id === 'city') { if (inHomeCity()) return; }
     else {
         const t = TRAINING.find((q) => q.id === id); if (!t) return;
         if (!trainOpen(t)) { toast(`Portal bloqueado: ${t.zone}`); log(lockMsg(t), true); return; }
@@ -1713,13 +1852,28 @@ window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && wpOpen) cl
 const inDungeon = (gx: number, gy: number) => [MAP.dungeon, ...(MAP.dungeons ?? [])].some((d) => !!d && gx >= d.x0 && gx < d.x1 + 1 && gy >= d.y0 && gy < d.y1 + 1);
 
 // ---------- loop ----------
-const MAP_WORLD_ID = 'solmar';
+/** Clave del mundo donde estoy (mapa o mapa#instancia): la manda el server y va en cada requestMovement. */
+let MAP_WORLD_ID = '';
 let last = now(), lastCam = now();
+// ---------- minimapa (minimap.ts): se crea al entrar al mundo, se re-arma cuando loadMap() cambia MAP y los marcadores van a ~10 fps ----------
+let minimap: Minimap | null = null, minimapOf: WorldMap | null = null;
+function minimapTick() {
+    if (!connected) return;
+    minimap ??= createMinimap($('game'), { active: () => connected && !mapLoading });
+    if (minimapOf !== MAP) { minimapOf = MAP; minimap.setMap(MAP, { id: MAP_DEF.id, name: MAP_DEF.name }); }
+    minimap.tick(() => ({
+        player: { x: P.x, y: P.y, dir: P.dir },
+        party: [], // todavía no hay grupos en el cliente
+        others: [...others.values()].filter((o) => !o.gone && !unseen(o)).map((o) => ({ x: o.x, y: o.y, faction: facOf(o.profile) })),
+        mobs, npcs: MAP.npcs.map((n) => ({ x: n.x, y: n.y, role: roleOf(n) })),
+    }));
+}
 function frame() {
     const T = now(); let dt = Math.min(0.05, T - last); last = T;
     if (hitstop > 0) { hitstop -= dt; dt = 0; }
-    update(dt); checkPortals(); wpTick(); npcTick(); updateCam(Math.min(0.05, T - lastCam)); lastCam = T;
-    updateHover(); render(); hud(); winTick(T); requestAnimationFrame(frame);
+    if (!mapLoading) { update(dt); checkPortals(); checkLinks(); wpTick(); npcTick(); }
+    updateCam(Math.min(0.05, T - lastCam)); lastCam = T;
+    updateHover(); render(); hud(); winTick(T); minimapTick(); requestAnimationFrame(frame);
 }
 
 // ---------- entrada ----------
@@ -1736,7 +1890,7 @@ try { const c = localStorage.getItem('fdn:class'); if (CLASSES.some((x) => x.id 
 // pantallas de login / selección / clase / facción / creación (ver loginui.ts)
 const flow = initLoginUI({
     classes: CLASSES.filter((c) => !c.hidden), factions: FACTIONS, spellName: (id) => LIB[id]?.name ?? id,
-    cityName: (f) => HUBS[f] ? (cityAt(HUBS[f].x, HUBS[f].y)?.name ?? 'Ciudad de ' + f) : f,
+    cityName: (f) => f === 'solmar' ? 'Villa de Solmar' : HUBS[f] ? (cityAt(HUBS[f].x, HUBS[f].y)?.name ?? 'Ciudad de ' + f) : f,
     get: () => ({ cls: selectedClass, faction: selectedFaction }),
     set: (p) => {
         if (p.cls) { selectedClass = p.cls; try { localStorage.setItem('fdn:class', selectedClass); } catch { /* sin almacenamiento */ } }
@@ -1806,7 +1960,7 @@ function applyInventory(v: InventoryState) {
     if (prevSel >= 0) { const inBag = P.bag.find((x) => x.id === prevSel); const inEq = SLOTS.map((sl) => P.eq[sl]).find((x) => x && x.id === prevSel); sel = inBag ? { it: inBag, from: 'bag' } : inEq ? { it: inEq!, from: 'eq' } : null; }
     if (invApplied && v.lvl > lvlBefore) onLevelUp(); else { P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); }
     invApplied = true;
-    refreshLook(); renderBag(); renderQuest(); renderPots(); renderShop(); sendProfile();
+    refreshLook(); renderBag(); renderQuest(); renderPots(); renderShop(); auction.refresh(); deposit.refresh(); sendProfile();
     if (!$('qdlg').hidden && shopNpc && roleOf(shopNpc) === 'capitan') openQuestDlg(shopNpc);
 }
 const saver = new Saver(buildSave, (data) => net.send({ $case: 'saveCharacterRequest', value: { data } }));
@@ -1829,7 +1983,7 @@ $('loginForm').addEventListener('submit', async (e) => {
     net.onMessage = (m) => { if (m.$case === 'characterLoaded') { pendingSave = m.value.exists ? parseSave(m.value.data) : null; if (pendingSave) { selectedClass = pendingSave.cls; selectedFaction = pendingSave.faction; welcomeBack = true; } return; } onServer(m); if (m.$case === 'initialGameWorldState' && !connected && !inFlow) { if (auto) enterWorld(name); else startFlow(name); } };
     let tries = 0;
     net.onClose = (reason) => {
-        const was = connected; saver.stop(); others.clear(); drops.length = 0; lastInv = null;
+        const was = connected; saver.stop(); others.clear(); drops.length = 0; lastInv = null; mapLoading = false; loadEl().hidden = true;
         inFlow = false;
         if (backToLogin) { backToLogin = false; showLogin(); btn.disabled = false; return; }
         if (leaving) { leaving = false; connected = false; showLogin('Saliste del juego.'); btn.disabled = false; return; }
@@ -1862,9 +2016,9 @@ function enterWorld(name: string) {
     invApplied = false; if (lastInv) applyInventory(lastInv); invApplied = false; saver.start(); saver.tick(true); // el primer guardado le dice al server clase y bando si es un personaje nuevo
     if (welcomeBack) log(`Bienvenido de vuelta, ${name}. Nivel ${P.lvl}.`, true);
     // cada facción arranca en su ciudad (también si el guardado te dejó dentro de la del otro bando)
-    const hub = HUBS[selectedFaction], here = cityAt(P.cell.x, P.cell.y);
-    if (hub && (!welcomeBack || (here && here.faction !== selectedFaction))) net.send({ $case: 'playerTeleportRequested', value: { x: hub.x, y: hub.y } });
-    log(selectedFaction === 'vhar' ? 'Bienvenido a la Ciudad de Vhar. La puerta del sur lleva a las tierras de Solmar.' : 'Bienvenido a la Ciudad de Solmar.', true);
+    const home = factionHome(selectedFaction), here = cityAt(P.cell.x, P.cell.y);
+    if (home && (!welcomeBack || (here && here.faction !== selectedFaction))) net.send({ $case: 'playerTeleportRequested', value: { x: home.x, y: home.y } });
+    log(selectedFaction === 'vhar' ? 'Bienvenido a la Ciudad de Vhar. La puerta del sur lleva a las tierras de Solmar.' : 'Bienvenido a la Villa de Solmar. Los edificios tienen interior: entrá por las puertas.', true);
     log('En la plaza está el Portal de Frontera: un menú con las zonas de entrenamiento. La primera ya está abierta; las demás se abren al entregar las misiones del Capitán (o subiendo de nivel). En cada zona hay un portal de regreso.', true);
     log('Tocá un mob para atacarlo. Apretá un hechizo (1–4), esperá que cargue y hacé clic en el objetivo. Enter para chatear.');
 }
@@ -1876,7 +2030,7 @@ async function boot() {
         const meta = JSON.parse(metaTxt);
         WORLD = meta.world; delete meta.world;
         BUILD = meta.buildings ?? {}; delete meta.buildings;
-        for (const k of ['dungeon', 'terrain']) {
+        for (const k of ['dungeon', 'terrain', 'town']) {
             const m = meta[k]; delete meta[k]; if (!m) continue;
             try { const im = await load(`assets/${k}.webp`); for (const [id, p] of Object.entries(m.pos as Record<string, number[]>)) EXT[Number(id)] = { im, p }; } catch { /* sin ese atlas se ve el mapa sin esas piezas */ }
         }
@@ -1891,7 +2045,7 @@ async function boot() {
     loadBuildingImages();
     refreshLook();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, toScreen, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, openShop, toScreen });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading });
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();

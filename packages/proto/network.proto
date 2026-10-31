@@ -60,6 +60,7 @@ message ClientMessage {
     AuthenticateRequest authenticate_request = 6;
     LogoutRequest logout_request = 7;
     LogoutCancelledRequest logout_cancelled_request = 8;
+    // En desuso (reservado): el cambio de mapa va por PortalRequest / MapTransfer / MapReady.
     WorldChangeRequest world_change_request = 9;
     PlayerAttackModeChangeRequest player_attack_mode_change_request = 10;
     ChangePlayerIdleDirectionRequest change_player_idle_direction_request = 11;
@@ -116,6 +117,13 @@ message ClientMessage {
     MobHitRequest mob_hit_request = 120;
     PveStatusRequest pve_status_request = 121;
     WaypointRequest waypoint_request = 122;
+    // Cambio de mapa (ver docs/MUNDO.md 2.3): el cliente pisa un vínculo y pide cruzar por su id estable; cuando terminó de armar el mapa nuevo avisa MapReady.
+    PortalRequest portal_request = 123;
+    MapReady map_ready = 124;
+    // Casa de subastas (ver docs/SUBASTAS.md). Rango propio de tags desde 300.
+    AuctionRequest auction_request = 300;
+    // Depósito por cuenta (ver docs/DEPOSITO.md). Rango propio de tags desde 400.
+    DepositRequest deposit_request = 400;
   }
 }
 
@@ -195,6 +203,11 @@ message SpellCastRequest {
 }
 
 // Viaje por el menú de waypoints: id = 'city' (volver a la ciudad de tu facción) o el id de una zona de entrenamiento.
+/** Cruzar un vínculo entre mapas. El id es estable (no depende de coordenadas); el server valida distancia, requisitos y estado. */
+message PortalRequest { string portal_id = 1; }
+/** El cliente terminó de armar el mapa `map_id` (con el hash que calculó). El server recién ahí mete al jugador en el mundo nuevo. */
+message MapReady { string map_id = 1; string map_hash = 2; }
+
 message WaypointRequest {
   string id = 1;
 }
@@ -492,6 +505,14 @@ message ServerMessage {
     KillReward kill_reward = 142;
     GroundItemSpawned ground_item_spawned = 143;
     GroundItemRemoved ground_item_removed = 144;
+    // Cambio de mapa: el server sacó al jugador del mundo viejo y espera MapReady para meterlo en el nuevo.
+    MapTransfer map_transfer = 150;
+    // Casa de subastas (ver docs/SUBASTAS.md). Rango propio de tags desde 300; el resultado de cada acción va en EconResult.
+    AuctionSearchResult auction_search_result = 300;
+    AuctionMyState auction_my_state = 301;
+    AuctionHistory auction_history = 302;
+    // Depósito por cuenta (ver docs/DEPOSITO.md). Rango propio de tags desde 400; el resultado de cada acción va en EconResult.
+    DepositState deposit_state = 400;
   }
 }
 
@@ -1134,6 +1155,27 @@ message InitialGameWorldState {
   WeatherMode weather = 9;
 }
 
+/**
+ * El server sacó al jugador del mundo anterior: el cliente muestra la pantalla de carga, arma el mapa `map_id`,
+ * verifica que `map_hash` coincida con el que generó y contesta MapReady. Después llega InitialGameWorldState.
+ */
+message MapTransfer {
+  string map_id = 1;
+  string name = 2;
+  // Celda de llegada y dirección (misma convención que InitialGameWorldState).
+  int32 x = 3;
+  int32 y = 4;
+  int32 direction = 5;
+  // Hash del mapa (FNV-1a de tamaño, bloqueos y zonas): detecta un cliente desactualizado.
+  string map_hash = 6;
+  string music_file = 7;
+  // Id del mundo (mapa + instancia) donde va a aparecer: es el que el cliente manda en RequestMovement.game_world_id.
+  string game_world_id = 8;
+  // Rango de nivel recomendado (0 = sin dato) para la pantalla de carga.
+  int32 lvl_min = 9;
+  int32 lvl_max = 10;
+}
+
 message PingRequest {
   uint32 sequence = 1;
 }
@@ -1287,3 +1329,107 @@ message GroundItemSpawned {
 }
 /** El item del suelo ya no está (lo recogieron, venció o salió de tu rango). */
 message GroundItemRemoved { int32 id = 1; }
+
+// ---------- Casa de subastas (ver docs/SUBASTAS.md) ----------
+/** Filtros de búsqueda. 0 / vacío = sin filtro. rarity: 0 = todas, 1..4 = Común..Épico. sort: price_asc | price_desc | time_asc | time_desc. */
+message AuctionQuery {
+  string slot = 1;
+  int32 rarity = 2;
+  string text = 3;
+  int32 lvl_min = 4;
+  int32 lvl_max = 5;
+  double max_price = 6;
+  string sort = 7;
+  int32 page = 8;
+}
+/**
+ * Pedido al Subastador (npc_id: el NPC con el que se habla; el server valida la distancia).
+ * action = open | search | post | cancel | buy | claim | history (pide el historial propio). post usa uid + price; cancel y buy, listing_id; claim, mail_id (0 = todo).
+ */
+message AuctionRequest {
+  string npc_id = 1;
+  string action = 2;
+  AuctionQuery query = 3;
+  int32 uid = 4;
+  double price = 5;
+  int32 listing_id = 6;
+  int32 mail_id = 7;
+}
+message AuctionListing {
+  int32 id = 1;
+  InvItem item = 2;
+  double price = 3;
+  string seller = 4;
+  /** Milisegundos hasta que vence. */
+  double expires_in_ms = 5;
+  /** La publicó quien recibe el mensaje. */
+  bool mine = 6;
+  /** Nivel del item (el de su base en las tiendas). */
+  int32 lvl = 7;
+}
+message AuctionSearchResult {
+  repeated AuctionListing listings = 1;
+  int32 page = 2;
+  int32 pages = 3;
+  int32 total = 4;
+}
+/** Un reclamo del buzón: un item (vuelto o comprado) o el oro de una venta. */
+message AuctionMail {
+  int32 id = 1;
+  InvItem item = 2;
+  double gold = 3;
+  string text = 4;
+  double age_ms = 5;
+}
+/** Mis publicaciones activas y mi buzón. */
+message AuctionMyState {
+  repeated AuctionListing listings = 1;
+  repeated AuctionMail mail = 2;
+  int32 max_listings = 3;
+}
+/**
+ * Una transacción del historial propio. kind = post | buy | sell | cancel | expire | claim.
+ * amount: oro que entró (+) o salió (-) en esa transacción (0 si fue solo un item); price: precio de la publicación;
+ * fee: tasa o comisión cobrada; other: la otra parte (comprador o vendedor), si hay.
+ */
+message AuctionHistoryEntry {
+  int32 id = 1;
+  string kind = 2;
+  InvItem item = 3;
+  double amount = 4;
+  double price = 5;
+  double fee = 6;
+  string other = 7;
+  /** Milisegundos desde que pasó (el cliente calcula la fecha con su reloj). */
+  double age_ms = 8;
+}
+/** Historial de transacciones del que recibe el mensaje, del más nuevo al más viejo (máximo 200). */
+message AuctionHistory {
+  repeated AuctionHistoryEntry entries = 1;
+}
+
+// ---------- Depósito por cuenta (ver docs/DEPOSITO.md) ----------
+/**
+ * Pedido al Depositario (npc_id: el NPC con el que se habla; el server valida rol y distancia).
+ * action = open | put | take | gold_in | gold_out | stack_in | stack_out | sort.
+ * put: uid de la bolsa; take: uid del depósito; gold_in/gold_out: amount; stack_in/stack_out: stack + amount.
+ * stack = pot_hp | pot_mp | key_cripta | key_foso | shard_cripta | shard_foso.
+ * op_id: número de pedido elegido por el cliente (distinto de 0): si llega dos veces, la segunda no se aplica.
+ */
+message DepositRequest {
+  string npc_id = 1;
+  string action = 2;
+  int32 uid = 3;
+  double amount = 4;
+  string stack = 5;
+  uint32 op_id = 6;
+}
+message DepositStack { string id = 1; int32 qty = 2; }
+/** Contenido del depósito de la cuenta (se manda al abrir y después de cada acción). */
+message DepositState {
+  repeated InvItem items = 1;
+  double gold = 2;
+  repeated DepositStack stacks = 3;
+  int32 capacity = 4;
+  int32 stack_max = 5;
+}

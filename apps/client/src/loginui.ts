@@ -1,9 +1,10 @@
 /**
  * Pantallas de entrada: login, selección de personaje, clase, facción y creación.
- * Todo el arte (emblema, castillo, luna, brasas, siluetas, escudos) se dibuja por código.
+ * El fondo es assets/background-login.webp; el logo es assets/logo-eris.webp; el resto del arte (brasas, siluetas, escudos) se dibuja por código.
  * Este módulo es solo vista y flujo; la conexión, el guardado y enterWorld siguen en main.ts.
  */
 import './login.css';
+import { mountDoll } from './paperdoll.ts';
 
 export interface ClassInfo { id: string; name: string; desc: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; armor?: string; spells: string[] }
 export interface FactionInfo { id: string; name: string; col: string; desc: string }
@@ -33,120 +34,20 @@ const CLS_LORE: Record<string, string> = {
 const clsCol = (id: string) => CLS_COL[id] ?? '#d6a445';
 
 // ---------- arte ----------
-function emblem(): string {
-    let rays = '';
-    for (let i = 0; i < 13; i++) {
-        const a = -90 + (i - 6) * 11;
-        rays += `<path d="M120 62 L${(120 + Math.cos((a - 2.2) * Math.PI / 180) * 70).toFixed(1)} ${(62 + Math.sin((a - 2.2) * Math.PI / 180) * 70).toFixed(1)} L${(120 + Math.cos((a + 2.2) * Math.PI / 180) * 70).toFixed(1)} ${(62 + Math.sin((a + 2.2) * Math.PI / 180) * 70).toFixed(1)}Z" opacity="${(0.28 + 0.5 * Math.cos((i - 6) * 0.22)).toFixed(2)}"/>`;
-    }
-    return `<svg viewBox="0 0 240 124" width="240" height="124" role="presentation">
-  <defs>
-    <linearGradient id="emG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd2f4"/><stop offset=".35" stop-color="#c25bff"/><stop offset="1" stop-color="#4a1590"/></linearGradient>
-    <linearGradient id="emG2" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff9ad8"/><stop offset="1" stop-color="#7b27c9"/></linearGradient>
-    <linearGradient id="emL" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e8a0c0" stop-opacity="0"/><stop offset=".6" stop-color="#f4c9d8"/><stop offset="1" stop-color="#fff"/></linearGradient>
-    <linearGradient id="emGold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f8de94"/><stop offset=".5" stop-color="#c9954a"/><stop offset="1" stop-color="#6a3f16"/></linearGradient>
-    <radialGradient id="emGlow"><stop offset="0" stop-color="#d870ff" stop-opacity=".75"/><stop offset="1" stop-color="#d870ff" stop-opacity="0"/></radialGradient>
-  </defs>
-  <circle cx="120" cy="62" r="60" fill="url(#emGlow)" class="pulse"/>
-  <g fill="url(#emGold)" stroke="#2b1710" stroke-width=".8" opacity=".8">${rays}</g>
-  <path d="M12 82 H92 M148 82 H228" stroke="url(#emL)" stroke-width="1.4" fill="none"/><path d="M228 82 H148" stroke="url(#emL)" stroke-width="1.4"/>
-  <path d="M30 78 L36 82 L30 86 L24 82Z M210 78 L216 82 L210 86 L204 82Z" fill="#f4c9d8"/>
-  <path d="M96 70 Q70 74 44 64 Q74 90 108 84Z M144 70 Q170 74 196 64 Q166 90 132 84Z" fill="url(#emGold)" stroke="#2b1710" stroke-width="1"/>
-  <path d="M120 14 L148 62 L120 110 L92 62Z" fill="url(#emG)" stroke="#f6d98a" stroke-width="2.4" stroke-linejoin="round"/>
-  <path d="M120 14 L148 62 L120 62Z" fill="#fff" opacity=".22"/><path d="M120 62 L148 62 L120 110Z" fill="#2a0a55" opacity=".35"/>
-  <path d="M120 14 L120 110 M92 62 H148" stroke="#fff" stroke-opacity=".35" stroke-width="1"/>
-  <path d="M104 40 L112 28" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".85"/>
-  <path d="M120 6 L124 14 H116Z M120 118 L124 110 H116Z" fill="url(#emGold)" stroke="#2b1710" stroke-width=".8"/>
-</svg>`;
-}
-
-/** Fondo: cielo rojizo, luna roja, montañas y castillo en silueta. */
-function sceneSvg(): string {
-    let seed = 7;
-    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-    const ridge = (base: number, amp: number, step: number, from = 0, to = 1600) => {
-        let d = `M${from} 900 L${from} ${base}`;
-        let y = base;
-        for (let x = from; x <= to; x += step) { y = base - rnd() * amp + (Math.sin(x / 190) * amp) / 3; d += ` L${x} ${y.toFixed(0)}`; }
-        return d + ` L${to} 900Z`;
-    };
-    // castillo: cuerpo bajo + torres con techos en punta + almenas
-    let castle = '';
-    const tower = (x: number, w: number, h: number, spire: number) => {
-        castle += `<rect x="${x}" y="${690 - h}" width="${w}" height="${h + 20}"/><path d="M${x - 5} ${690 - h} L${x + w / 2} ${690 - h - spire} L${x + w + 5} ${690 - h}Z"/>`;
-        // almenas
-        for (let i = 0; i < w; i += 9) castle += `<rect x="${x + i - 1}" y="${690 - h - 7}" width="5" height="8"/>`;
-    };
-    castle += '<rect x="40" y="610" width="620" height="120"/>';
-    for (let i = 0; i < 70; i++) castle += `<rect x="${44 + i * 9}" y="604" width="5" height="8"/>`;
-    [[70, 34, 170, 70], [140, 24, 230, 90], [210, 40, 150, 60], [290, 28, 260, 120], [355, 46, 190, 80], [440, 26, 300, 150], [505, 36, 200, 70], [570, 30, 150, 60], [620, 22, 220, 80]].forEach(([x, w, h, sp]) => tower(x, w, h, sp));
-    // ventanitas encendidas
-    let win = '';
-    for (let i = 0; i < 16; i++) win += `<rect x="${80 + rnd() * 560 | 0}" y="${500 + rnd() * 150 | 0}" width="3" height="6" fill="#ff7a3a" opacity="${(0.25 + rnd() * 0.5).toFixed(2)}"/>`;
-    return `<svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice" width="100%" height="100%">
-  <defs>
-    <linearGradient id="skG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a0510"/><stop offset=".45" stop-color="#2a0c1c"/><stop offset=".75" stop-color="#5a1a1a"/><stop offset="1" stop-color="#1a0a10"/></linearGradient>
-    <radialGradient id="moonG" cx="42%" cy="38%" r="70%"><stop offset="0" stop-color="#ff8a5a"/><stop offset=".45" stop-color="#c9361e"/><stop offset="1" stop-color="#5a0e12"/></radialGradient>
-    <radialGradient id="moonHalo"><stop offset="0" stop-color="#ff4a2a" stop-opacity=".5"/><stop offset="1" stop-color="#ff4a2a" stop-opacity="0"/></radialGradient>
-    <linearGradient id="mt1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a1220"/><stop offset="1" stop-color="#1a0a14"/></linearGradient>
-    <linearGradient id="mt2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c0b14"/><stop offset="1" stop-color="#0a0509"/></linearGradient>
-  </defs>
-  <rect width="1600" height="900" fill="url(#skG)"/>
-  <circle cx="1230" cy="320" r="330" fill="url(#moonHalo)"/>
-  <circle cx="1230" cy="320" r="150" fill="url(#moonG)"/>
-  <g fill="#3a0a0e" opacity=".22"><circle cx="1190" cy="290" r="22"/><circle cx="1262" cy="352" r="28"/><circle cx="1218" cy="384" r="12"/><circle cx="1292" cy="272" r="10"/></g>
-  <path d="${ridge(560, 120, 70)}" fill="url(#mt1)" opacity=".85"/>
-  <g fill="#0d0610">${castle}</g>${win}
-  <path d="${ridge(690, 90, 55)}" fill="url(#mt2)"/>
-  <path d="${ridge(790, 70, 45)}" fill="#07040a"/>
-</svg>`;
-}
-
-/** Siluetas (retrato) dibujadas a mano: mago con báculo y guerrero con espada. */
-function silhouette(kind: string, col: string, uid: string): string {
-    const rim = `<filter id="${uid}f" x="-30%" y="-10%" width="160%" height="120%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="${col}" flood-opacity=".75"/></filter>`;
-    const body = `<linearGradient id="${uid}b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#241830"/><stop offset="1" stop-color="#07040a"/></linearGradient>`;
-    if (kind === 'mago') {
-        return `<svg viewBox="0 0 220 420" role="presentation"><defs>${rim}${body}<radialGradient id="${uid}o"><stop offset="0" stop-color="#fff"/><stop offset=".3" stop-color="${col}"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></radialGradient></defs>
-  <circle cx="168" cy="52" r="46" fill="url(#${uid}o)" class="pulse"/>
-  <g filter="url(#${uid}f)" fill="url(#${uid}b)" stroke="${col}" stroke-opacity=".55" stroke-width="1.2">
-    <path d="M168 62 L168 410" stroke="#120a1a" stroke-width="5" fill="none"/>
-    <path d="M154 40 Q150 20 164 14 M182 40 Q186 20 172 14" fill="none" stroke="${col}" stroke-width="3" stroke-linecap="round"/>
-    <path d="M100 26 C84 26 74 40 74 58 C74 71 80 82 88 88 C72 100 62 126 58 166 C54 218 46 300 36 412 L170 412 C160 300 150 218 146 166 C142 138 134 112 122 96 C130 88 136 76 136 58 C136 40 126 26 100 26Z"/>
-    <path d="M120 120 L156 150 L150 164 L116 140Z"/>
-    <path d="M88 88 C96 96 112 96 120 88" fill="none"/>
-  </g>
-  <ellipse cx="105" cy="62" rx="20" ry="23" fill="#030204"/>
-  <circle cx="97" cy="62" r="2.6" fill="${col}"/><circle cx="113" cy="62" r="2.6" fill="${col}"/>
-  <circle cx="168" cy="52" r="9" fill="#fff"/><circle cx="168" cy="52" r="6" fill="${col}"/>
-</svg>`;
-    }
-    return `<svg viewBox="0 0 220 420" role="presentation"><defs>${rim}${body}</defs>
-  <g filter="url(#${uid}f)" fill="url(#${uid}b)" stroke="${col}" stroke-opacity=".6" stroke-width="1.2">
-    <path d="M100 8 C108 -2 128 4 124 22 C122 12 110 10 104 20Z" fill="${col}" fill-opacity=".5"/>
-    <path d="M100 20 C86 20 80 32 80 46 L80 66 C80 76 88 84 100 84 C112 84 120 76 120 66 L120 46 C120 32 114 20 100 20Z"/>
-    <path d="M42 100 C42 84 64 82 76 92 L124 92 C136 82 158 84 158 100 C158 116 144 124 130 120 L70 120 C56 124 42 116 42 100Z"/>
-    <path d="M72 96 L128 96 L138 176 L130 214 L70 214 L62 176Z"/>
-    <path d="M66 214 L134 214 L130 250 L126 392 L104 392 L100 262 L96 392 L74 392 L70 250Z"/>
-    <path d="M56 160 L44 214 L58 220 L72 170Z M144 160 L156 214 L142 220 L128 170Z"/>
-    <path d="M178 40 L190 40 L190 316 L184 336 L178 316Z" fill="#150c1c"/>
-    <path d="M160 250 H208 L204 262 H164Z M180 262 H188 V300 H180Z"/>
-    <circle cx="184" cy="306" r="6"/>
-  </g>
-  <rect x="86" y="42" width="28" height="5" rx="2" fill="#030204"/><rect x="92" y="38" width="3" height="12" fill="#030204"/>
-  <circle cx="94" cy="53" r="2.2" fill="${col}"/><circle cx="106" cy="53" r="2.2" fill="${col}"/>
-  <path d="M184 44 L184 310" stroke="${col}" stroke-opacity=".75" stroke-width="1.4"/>
-</svg>`;
+/** Lienzo del muñeco real (sprites del juego) de una clase; mountDocs() lo pinta después de insertar el HTML. */
+const dollCv = (id: string, h = 0.82) => `<canvas class="doll" data-doll="${id}" data-h="${h}" aria-hidden="true"></canvas>`;
+function mountDolls(host: HTMLElement) {
+    host.querySelectorAll<HTMLCanvasElement>('canvas[data-doll]').forEach((cv) => { void mountDoll(cv, cv.dataset.doll!, clsCol(cv.dataset.doll!), Number(cv.dataset.h) || undefined); });
 }
 
 function clsIcon(id: string, col: string): string {
     const glyph = id === 'mago'
-        ? `<path d="M0 -17 L5 -4 L17 0 L5 4 L0 17 L-5 4 L-17 0 L-5 -4Z" fill="${col}" fill-opacity=".25" stroke="${col}" stroke-width="1.6" stroke-linejoin="round"/><path d="M0 -26 V26" stroke="${col}" stroke-width="2" opacity=".6"/><circle r="4" fill="#fff"/>`
-        : `<path d="M-14 -16 L16 14 M14 -16 L-16 14" stroke="${col}" stroke-width="3.2" stroke-linecap="round"/><path d="M-19 10 L-11 18 M19 10 L11 18" stroke="${col}" stroke-width="3" stroke-linecap="round"/><circle cx="0" cy="-2" r="3.2" fill="#fff"/>`;
+        ? `<path d="M0 -17 L4.5 -4.5 L17 0 L4.5 4.5 L0 17 L-4.5 4.5 L-17 0 L-4.5 -4.5Z" fill="${col}" fill-opacity=".3" stroke="${col}" stroke-width="1.8" stroke-linejoin="round"/><circle r="4.5" fill="#fff"/><path d="M12 -14 l1.6 3.4 3.4 1.6 -3.4 1.6 -1.6 3.4 -1.6 -3.4 -3.4 -1.6 3.4 -1.6z" fill="#fff" opacity=".85" transform="scale(.5) translate(24 -26)"/>`
+        : `<g stroke="${col}" stroke-linecap="round" stroke-linejoin="round"><path d="M-15 -17 L13 11 M15 -17 L-13 11" stroke-width="3.6"/><path d="M-19 7 L-9 17 M19 7 L9 17" stroke-width="3"/><path d="M-15 -17 L13 11 M15 -17 L-13 11" stroke="#fff" stroke-opacity=".55" stroke-width="1"/></g><path d="M-8 -5 H8 V4 C8 10 3 13 0 15 C-3 13 -8 10 -8 4Z" fill="#150a14" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>`;
     return badge(glyph, col);
 }
 function badge(glyph: string, col: string): string {
-    return `<svg viewBox="-34 -38 68 76" role="presentation"><path d="M0 -36 L30 -18 V18 L0 36 L-30 18 V-18Z" fill="#0c0610" stroke="${col}" stroke-width="2.2" stroke-linejoin="round"/><path d="M0 -30 L25 -15 V15 L0 30 L-25 15 V-15Z" fill="none" stroke="${col}" stroke-opacity=".4" stroke-width="1"/>${glyph}</svg>`;
+    return `<svg viewBox="-34 -34 68 68" role="presentation"><circle r="32" fill="#0c0610" stroke="${col}" stroke-width="2.4"/><circle r="27" fill="none" stroke="${col}" stroke-opacity=".4" stroke-width="1"/>${glyph}</svg>`;
 }
 function shield(id: string, col: string): string {
     const glyph = id === 'solmar'
@@ -199,8 +100,7 @@ function drawStatic() {
 // ---------- flujo ----------
 export function initLoginUI(ctx: FlowCtx) {
     const root = $('login');
-    $('lbgScene').innerHTML = sceneSvg();
-    $('lEmblem').innerHTML = emblem();
+    $('lbgScene').innerHTML = '<img src="assets/background-login.webp" alt="" decoding="async">';
 
     const fit = () => { const s = Math.min(innerWidth / 1280, innerHeight / 720); root.style.setProperty('--s', String(s)); };
     fit(); addEventListener('resize', fit);
@@ -230,10 +130,13 @@ export function initLoginUI(ctx: FlowCtx) {
     function renderSelect() {
         const sv = info?.saved; if (!info || !sv) return;
         const c = clsOf(sv.cls), f = facOf(sv.faction), col = clsCol(c.id);
-        $('slots').innerHTML = `<li><button type="button" class="slot on" aria-pressed="true"><span class="sbadge">${clsIcon(c.id, col)}</span><span class="stxt"><b>${esc(info.name)}</b><small>Nivel ${sv.lvl} · ${c.name}</small></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button></li>`
-            + [1, 2, 3].map(() => `<li><button type="button" class="slot empty" disabled aria-label="Slot vacío, próximamente"><span class="sbadge dim"><svg viewBox="-34 -38 68 76" role="presentation"><path d="M0 -36 L30 -18 V18 L0 36 L-30 18 V-18Z" fill="none" stroke="#6a5a68" stroke-width="2"/></svg></span><span class="stxt"><b>Vacío</b><small>Próximamente</small></span></button></li>`).join('');
-        $('selArt').innerHTML = silhouette(c.id, col, 'sa');
-        $('selDetail').innerHTML = `<h3>${esc(info.name)}</h3><dl><dt>Nivel</dt><dd>${sv.lvl}</dd><dt>Clase</dt><dd style="color:${col}">${c.name}</dd><dt>Facción</dt><dd style="color:${f.col}">${f.name}</dd><dt>Zona</dt><dd>${esc(info.zone)}</dd></dl>`;
+        const hpMax = c.hp + (sv.lvl - 1) * c.hpL, mpMax = c.mp + (sv.lvl - 1) * c.mpL;
+        const top = (fn: (x: ClassInfo) => number) => Math.max(...ctx.classes.map((x) => fn(x)));
+        const bar = (label: string, v: number, m: number) => `<li><span class="al">${label}</span><span class="av">${v}</span><span class="bar"><i style="width:${Math.round((v / m) * 100)}%"></i></span></li>`;
+        $('slots').innerHTML = `<li><button type="button" class="slot on" aria-pressed="true"><span class="sbadge">${clsIcon(c.id, col)}</span><span class="stxt"><b>${esc(info.name)}</b><small>${c.name} · ${f.name}</small></span><span class="lvl">Nv. ${sv.lvl}</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button></li>`
+            + [1, 2, 3].map(() => `<li><button type="button" class="slot empty" disabled aria-label="Slot vacío, próximamente"><span class="sbadge dim"><svg viewBox="-34 -34 68 68" role="presentation"><circle r="32" fill="none" stroke="#6a5a90" stroke-width="2" stroke-dasharray="5 4"/><path d="M0 -9 V9 M-9 0 H9" stroke="#8a78b0" stroke-width="2.4" stroke-linecap="round"/></svg></span><span class="stxt"><b>Vacío</b><small>Próximamente</small></span></button></li>`).join('');
+        $('selArt').innerHTML = dollCv(c.id, 0.66); mountDolls($('selArt'));
+        $('selDetail').innerHTML = `<h3>${esc(info.name)}</h3><p class="dsub"><b style="color:${col}">${c.name}</b> · <b style="color:${f.col}">${f.name}</b></p><ul class="attrs">${bar('Vida', hpMax, top((x) => x.hp + (sv.lvl - 1) * x.hpL))}${bar('Maná', mpMax, top((x) => x.mp + (sv.lvl - 1) * x.mpL))}</ul><dl><dt>Nivel</dt><dd>${sv.lvl}</dd><dt>Zona</dt><dd>${esc(info.zone)}</dd></dl>`;
     }
 
     // --- tarjetas de clase / facción ---
@@ -245,10 +148,10 @@ export function initLoginUI(ctx: FlowCtx) {
     }
     function cardsHtml(kind: 'cls' | 'fac'): string {
         const sel = kind === 'cls' ? ctx.get().cls : ctx.get().faction;
-        if (kind === 'cls') return ctx.classes.map((c) => { const col = clsCol(c.id), on = c.id === sel; return `<button type="button" role="radio" aria-checked="${on}" class="card${on ? ' on' : ''}" data-id="${c.id}" style="--c:${col}"><span class="cbadge">${clsIcon(c.id, col)}</span><span class="cart">${silhouette(c.id, col, 'c' + c.id)}</span><span class="cname">${c.name.toUpperCase()}</span><span class="ctag">${CLS_TAG[c.id] ?? c.desc}</span><ul>${bullets(c).map((b) => `<li>${esc(b)}</li>`).join('')}</ul></button>`; }).join('');
-        return ctx.factions.map((f) => { const on = f.id === sel; return `<button type="button" role="radio" aria-checked="${on}" class="card fcard${on ? ' on' : ''}" data-id="${f.id}" style="--c:${f.col}"><span class="cbadge">${shield(f.id, f.col)}</span><span class="cart fart">${factionBanner(f.id, f.col)}</span><span class="cname">${f.name.toUpperCase()}</span><span class="ctag">${esc(f.desc)}</span><ul><li>Ciudad inicial: ${esc(ctx.cityName(f.id))}</li><li>${f.id === 'solmar' ? 'Tierras costeras del sol y el mar' : 'Tierras secas del hierro y la ceniza'}</li></ul></button>`; }).join('');
+        if (kind === 'cls') return ctx.classes.map((c) => { const col = clsCol(c.id), on = c.id === sel; return `<button type="button" role="radio" aria-checked="${on}" class="card${on ? ' on' : ''}" data-id="${c.id}" style="--c:${col}"><span class="tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="cname">${c.name.toUpperCase()}</span><span class="cbadge">${clsIcon(c.id, col)}</span><span class="cart"><i class="halo"></i><i class="floor"></i><i class="spk s1"></i><i class="spk s2"></i><i class="spk s3"></i>${dollCv(c.id)}</span><span class="ctag">${CLS_TAG[c.id] ?? c.desc}</span><ul>${bullets(c).map((b) => `<li>${esc(b)}</li>`).join('')}</ul></button>`; }).join('');
+        return ctx.factions.map((f) => { const on = f.id === sel; return `<button type="button" role="radio" aria-checked="${on}" class="card fcard${on ? ' on' : ''}" data-id="${f.id}" style="--c:${f.col}"><span class="tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="cbadge">${shield(f.id, f.col)}</span><span class="cart fart">${factionBanner(f.id, f.col)}</span><span class="cname">${f.name.toUpperCase()}</span><span class="ctag">${esc(f.desc)}</span><ul><li>Ciudad inicial: ${esc(ctx.cityName(f.id))}</li><li>${f.id === 'solmar' ? 'Tierras costeras del sol y el mar' : 'Tierras secas del hierro y la ceniza'}</li></ul></button>`; }).join('');
     }
-    function renderClass() { $('clsCards').innerHTML = cardsHtml('cls'); }
+    function renderClass() { $('clsCards').innerHTML = cardsHtml('cls'); mountDolls($('clsCards')); }
     function renderFaction() { $('facCards').innerHTML = cardsHtml('fac'); }
     function pick(kind: 'cls' | 'fac', host: HTMLElement, e: Event) {
         const b = (e.target as HTMLElement).closest<HTMLElement>('.card'); if (!b) return;
@@ -271,7 +174,7 @@ export function initLoginUI(ctx: FlowCtx) {
         const mx = (fn: (x: ClassInfo) => number) => Math.max(...ctx.classes.map(fn));
         const row = (label: string, val: string, v: number, m: number) => `<li><span class="al">${label}</span><span class="av">${val}</span><span class="bar"><i style="width:${Math.round((v / m) * 100)}%"></i></span></li>`;
         const mid = (x: ClassInfo) => (x.melee[0] + x.melee[1]) / 2;
-        $('crArt').innerHTML = silhouette(c.id, col, 'cr');
+        $('crArt').innerHTML = dollCv(c.id, 0.66); mountDolls($('crArt'));
         $('crBody').innerHTML = `
   <div class="crhead"><span class="cbadge">${clsIcon(c.id, col)}</span><div><h3 style="color:${col}">${c.name.toUpperCase()}</h3><p>${esc(CLS_TAG[c.id] ?? '')}. ${esc(c.desc)}</p></div></div>
   <div class="crgrid">
