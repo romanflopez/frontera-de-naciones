@@ -1292,6 +1292,7 @@ function render() {
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     const pp = toScreen(P.x, P.y); const g = ctx.createRadialGradient(pp.x, pp.y - 25 * Z, 110 * Z, pp.x, pp.y - 25 * Z, Math.max(W, H) * 0.6);
     g.addColorStop(0, 'rgba(6,8,12,0)'); g.addColorStop(1, 'rgba(6,8,12,.82)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    if (MAP.fog) drawFog(MAP.fog, T);
     if (inDungeon(P.x, P.y)) { ctx.fillStyle = 'rgba(12,8,24,.28)'; ctx.fillRect(0, 0, W, H); }
     ctx.textAlign = 'center';
     const zn = isSafe(P.x, P.y) ? null : ZONES.find((z) => near(P.x, P.y, z, z.r + 2)), zl = zn ? mobDef(zn.type, zn).lvl : 0;
@@ -1764,7 +1765,10 @@ let mapLoading = false;
  * Arma el mapa `def` y todo lo que depende de él: grillas, props, zonas, edificios, NPCs, portales, luces. Cliente y server arman el
  * mismo mapa con el mismo código; la comparación de `mapHash` lo verifica. Devuelve el hash del mapa armado.
  */
+/** Mediciones (Fase 3): ms de armar el último mapa (`def.build()` + estado) y de pintar su minimapa; cuadros por segundo. */
+const perf = { build: 0, minimap: 0, fps: 0, frames: 0, since: 0 };
 function loadMap(def: MapDef): string {
+    const t0 = performance.now();
     MAP_DEF = def; MAP = def.build(); N = MAP.size;
     ({ tiles, blocked, safe, props, decals } = MAP);
     ZONES = MAP.zones; WAYPOINTS = MAP.waypoints ?? []; LINKS = def.links; LINK_WPS = linkWps(LINKS);
@@ -1775,7 +1779,10 @@ function loadMap(def: MapDef): string {
     cancelCast(); pveT = 0; // el server de este mapa todavía no sabe si estoy muerto ni mi nivel
     portalLock = now() + 2.5; // llegás al lado del portal de vuelta: que no te rebote
     refreshNpcLook(); // los NPC del mapa nuevo (por ejemplo los de un interior) arman su muñeco acá
-    return mapHash(MAP);
+    const h = mapHash(MAP);
+    perf.build = performance.now() - t0;
+    if (perf.build > 150) console.log(`[mapa] ${def.id} armado en ${perf.build.toFixed(0)} ms`);
+    return h;
 }
 const loadEl = () => $('maploading');
 function showMapLoading(name: string, lvl: [number, number] | null) {
@@ -1910,6 +1917,19 @@ function wpTick() {
 }
 $('wpClose').addEventListener('click', closeWp);
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && wpOpen) closeWp(); });
+/** Niebla del mapa (`WorldMap.fog`, Camposanto Viejo): velo gris y bancos de niebla que se desplazan despacio con parallax. En pantalla. */
+function drawFog(k: number, T: number) {
+    ctx.save();
+    ctx.fillStyle = `rgba(150,160,176,${0.1 * k})`; ctx.fillRect(0, 0, W, H);
+    const t = reduce ? 0 : T, WW = W + 700, HH = H + 500;
+    for (let i = 0; i < 8; i++) {
+        const sx = (((i * 397 + t * 9 * (1 + (i % 3)) - cam.x * 0.5) % WW) + WW) % WW - 350, sy = (((i * 211 + Math.sin(t * 0.13 + i) * 30 - cam.y * 0.5) % HH) + HH) % HH - 250, r = 200 + (i % 3) * 90;
+        ctx.save(); ctx.translate(sx, sy); ctx.scale(1.9, 0.55);
+        const fg = ctx.createRadialGradient(0, 0, 0, 0, 0, r); fg.addColorStop(0, `rgba(196,204,214,${0.2 * k})`); fg.addColorStop(1, 'rgba(196,204,214,0)');
+        ctx.fillStyle = fg; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    }
+    ctx.restore();
+}
 const inDungeon = (gx: number, gy: number) => [MAP.dungeon, ...(MAP.dungeons ?? [])].some((d) => !!d && gx >= d.x0 && gx < d.x1 + 1 && gy >= d.y0 && gy < d.y1 + 1);
 
 // ---------- loop ----------
@@ -1921,7 +1941,7 @@ let minimap: Minimap | null = null, minimapOf: WorldMap | null = null;
 function minimapTick() {
     if (!connected) return;
     minimap ??= createMinimap($('game'), { active: () => connected && !mapLoading });
-    if (minimapOf !== MAP) { minimapOf = MAP; minimap.setMap(MAP, { id: MAP_DEF.id, name: MAP_DEF.name }); }
+    if (minimapOf !== MAP) { minimapOf = MAP; const t0 = performance.now(); minimap.setMap(MAP, { id: MAP_DEF.id, name: MAP_DEF.name }); perf.minimap = performance.now() - t0; }
     minimap.tick(() => ({
         player: { x: P.x, y: P.y, dir: P.dir },
         party: [], // todavía no hay grupos en el cliente
@@ -1935,6 +1955,7 @@ function frame() {
     if (!mapLoading) { update(dt); checkPortals(); checkLinks(); wpTick(); npcTick(); }
     updateCam(Math.min(0.05, T - lastCam)); lastCam = T;
     updateHover(); render(); hud(); winTick(T); minimapTick(); requestAnimationFrame(frame);
+    perf.frames++; { const t = performance.now(); if (t - perf.since >= 1000) { perf.fps = (perf.frames * 1000) / (t - perf.since); perf.frames = 0; perf.since = t; } }
 }
 
 // ---------- entrada ----------
@@ -2106,7 +2127,7 @@ async function boot() {
     loadBuildingImages();
     refreshLook();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, toScreen, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, perf: () => ({ ...perf }), mobCount: () => mobs.length });
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5), recall: () => ({ on: !!recall, k: recallK(now()), cd: Math.max(0, recallCdEnd - now()) }) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();
