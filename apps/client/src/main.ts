@@ -6,7 +6,7 @@
  * mobs, combate, hechizos, loot y experiencia (pasan al server en la fase 1b).
  */
 import { drawPortalFloor, drawPortalFx, PORTAL_CITY, PORTAL_ZONE } from './portal';
-import { DEFAULT_MAP, expToLevel, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
+import { DEFAULT_MAP, expToLevel, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
 import { ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Quest, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
@@ -1105,8 +1105,15 @@ function drawPortalLabels() {
 /** Cartel de los portales entre mapas: a dónde llevan y, si no cumplís el requisito, qué falta. */
 function drawLinkLabels() {
     for (const l of LINKS) {
-        const d = Math.hypot(l.x + 0.5 - P.x, l.y + 0.5 - P.y); if (d > 9) continue;
+        const d = Math.hypot(l.x + 0.5 - P.x, l.y + 0.5 - P.y); if (d > (l.kind === 'enter' || l.kind === 'walk' ? 12 : 9)) continue;
         const c = iso(l.x + 0.5, l.y + 0.5), dest = getMapDef(l.to.map)?.name ?? l.to.map, why = linkGateReason(l, portalProgress(), (i) => QUESTS[i]?.name);
+        // puertas de edificios: el nombre arriba de la puerta y una flecha en el piso; caminos: hacia dónde llevan
+        if (l.kind === 'enter' || l.kind === 'walk') {
+            const k = clamp(1.4 - d / 10, 0.35, 1), up = l.kind === 'enter' ? 30 : 40;
+            ctx.save(); ctx.globalAlpha = 0.55 * k; ctx.fillStyle = LINK_COL[l.kind]; ctx.beginPath(); ctx.ellipse(c.x, c.y, 22, 11, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+            nameTag(l.kind === 'walk' ? `→ ${dest}` : dest, c.x, c.y - up, LINK_COL[l.kind], k, 12);
+            continue;
+        }
         nameTag(l.kind === 'oneway' ? `${dest} (solo ida)` : dest, c.x, c.y - 52, why ? '#ff9a8a' : LINK_COL[l.kind], 1, 11);
         if (d < 4 && why) nameTag(why, c.x, c.y - 40, '#d9d2b8', 1, 9);
     }
@@ -1147,7 +1154,7 @@ function render() {
     for (const o of props) if (o.x > minX - 3 && o.x < maxX + 3 && o.y > minY - 3 && o.y < maxY + 3) objs.push({ d: o.d ?? o.x + o.y, f: () => { const p = iso(o.x, o.y); drawWorld(o.id, p.x, p.y); } });
     for (const q of WAYPOINTS) if (q.x >= minX - 3 && q.x <= maxX + 3 && q.y >= minY - 3 && q.y <= maxY + 3) objs.push({ d: q.x + q.y + 0.5, f: () => drawPortalArch(q, T) });
     for (const q of LINK_WPS) if (q.x >= minX - 3 && q.x <= maxX + 3 && q.y >= minY - 3 && q.y <= maxY + 3) objs.push({ d: q.x + q.y + 0.5, f: () => drawPortalArch(q, T) });
-    for (const b of MAP.buildings) objs.push({ d: b.x + b.y + (b.w + b.h) / 2, f: () => drawBuilding(b) });
+    for (const b of MAP.buildings) pushBuilding(objs, b, minX, maxX, minY, maxY);
     for (const n of MAP.npcs) objs.push({ d: n.x + n.y + 1, f: () => drawNpc(n, T) });
     for (const d of drops) objs.push({ d: d.x + d.y - 0.2, f: () => drawDrop(d, T) });
     for (const c of corpses) objs.push({ d: c.x + c.y - 0.3, f: () => { const p = iso(c.x, c.y), age = T - c.t; drawSprite(c.sprite, 'die', age, c.dir, p.x, p.y, null, age > 2 ? 3 - age : 1); } });
@@ -1480,11 +1487,31 @@ let BUILD: Record<string, BuildMeta> = {};
 function loadBuildingImages() {
     for (const id of Object.keys(BUILD)) load(`assets/${id}.webp`).then((im) => { IMG[id] = im; }).catch(() => { /* sin imagen */ });
 }
-/** El edificio se apoya en la esquina sur de su huella. */
-function drawBuilding(b: { id: string; x: number; y: number; w: number; h: number }) {
+/**
+ * El edificio se apoya en la esquina sur de su huella y se dibuja en tiras verticales de media celda: cada tira lleva la profundidad
+ * de la celda de la huella más cercana a la cámara en esa columna. Así un personaje parado delante de la fachada (al sur o al este)
+ * se dibuja encima y uno que pasa por detrás queda tapado. Si el edificio tapa al jugador, se dibuja translúcido.
+ */
+type Bld = { id: string; x: number; y: number; w: number; h: number };
+function pushBuilding(objs: { d: number; f: () => void }[], b: Bld, minX: number, maxX: number, minY: number, maxY: number) {
     const M = BUILD[b.id], im = IMG[b.id]; if (!M || !im) return;
-    const p = iso(b.x + b.w, b.y + b.h);
-    ctx.drawImage(im, p.x - M.ax, p.y - M.ay, M.w, M.h);
+    if (b.x > maxX + 4 || b.y > maxY + 4 || b.x + b.w < minX - 8 || b.y + b.h < minY - 8) return;
+    const p = iso(b.x + b.w, b.y + b.h), left = iso(b.x, b.y + b.h).x, x0 = p.x - M.ax, y0 = p.y - M.ay, n = b.w + b.h;
+    const depthAt = (k: number) => (k < b.w ? b.x + k + b.y + b.h - 1 : b.x + b.w - 1 + b.y + b.h - 1 - (k - b.w));
+    // ¿tapa al jugador? en su columna de pantalla hay fachada más cerca de la cámara que él, y sus pies quedan detrás de esa fachada
+    const pp = iso(P.x, P.y), kp = Math.floor((pp.x - left) / 48);
+    let hides = false;
+    if (kp >= 0 && kp < n && P.x + P.y < depthAt(kp) + 0.25) {
+        const foot = kp < b.w ? iso(b.x + kp + 0.5, b.y + b.h).y : iso(b.x + b.w, b.y + b.h - (kp - b.w) - 0.5).y;
+        hides = pp.y < foot && pp.y > y0 + 10;
+    }
+    for (let k = 0; k < n; k++) {
+        const D = depthAt(k);
+        let s0 = Math.round(left + k * 48 - x0), s1 = Math.round(left + (k + 1) * 48 - x0) + 1; // +1: sin costuras entre tiras
+        if (k === 0) s0 = 0; if (k === n - 1) s1 = M.w;
+        s0 = Math.max(0, s0); s1 = Math.min(M.w, s1); if (s1 <= s0) continue;
+        objs.push({ d: D + 0.25, f: () => { if (hides) ctx.globalAlpha = 0.45; ctx.drawImage(im, s0, 0, s1 - s0, M.h, x0 + s0, y0, s1 - s0, M.h); ctx.globalAlpha = 1; } });
+    }
 }
 
 type Npc = (typeof MAP.npcs)[number];
@@ -1508,6 +1535,8 @@ const NPC_LOOKS: Record<string, string[]> = {
     subastador_v: ['leather_boots', 'leather_pants', 'cloth_gloves', 'mage_vest', 'head_bald', 'mage_hood'],
     depositario_s: ['leather_boots', 'cloth_pants', 'leather_gloves', 'leather_chest', 'head_short'],
     depositario_v: ['chain_boots', 'leather_pants', 'leather_gloves', 'cloth_shirt', 'head_bald', 'leather_hood'],
+    sanador_s: ['mage_boots', 'mage_skirt', 'mage_sleeves', 'mage_vest', 'head_short', 'mage_hood'],
+    mago_s: ['mage_boots', 'mage_skirt', 'mage_sleeves', 'mage_vest', 'head_short', 'mage_hood', 'staff'],
 };
 const lookOfNpc = (n: { id: string }) => NPC_LOOKS[n.id] ?? NPC_LOOKS[n.id.replace(/\d+$/, '')] ?? NPC_LOOKS[roleOf(n) + '_s'];
 function refreshNpcLook() {
@@ -1576,8 +1605,13 @@ const questMark = () => (!QUESTS[Q.i] ? '' : Q.st === 'new' ? '!' : Q.st === 're
 // ---------- vendedores y servicios de las ciudades: cada NPC tiene un rol (ver roleOf) ----------
 // el stock, los precios y los vendedores viven en @fdn/world (economy.ts): el server valida las compras con la misma tabla
 const GUARD_LINES: Record<string, string[]> = {
-    s: ['La empalizada aguanta, pero los goblins del sureste no se cansan. Si vas a salir, llevate pociones.', 'Dentro de las murallas no pelea nadie: en la ciudad se descansa y se comercia.', 'El Capitán Aldric tiene encargos para quien sepa pelear. Hablá con él en la plaza.', 'Armero, armadurero, joyero... todo lo que necesitás está a unos pasos de la plaza.'],
+    s: ['El portón del este lleva a las tierras de caza. Si vas a salir, llevate pociones.', 'Dentro de las murallas no pelea nadie: en la villa se descansa y se comercia.', 'El Capitán Aldric tiene encargos para quien sepa pelear. Está en el Ayuntamiento, al norte de la plaza.', 'Herrería, Tienda, Joyería... todo está a unos pasos de la plaza. La subasta es en el Ayuntamiento.'],
     v: ['Vhar no se rinde: las murallas son de hierro y de paciencia. Pasá, pero sin armar lío.', 'Más allá de la puerta sur empieza el páramo. No salgas sin armadura.', 'El Capitán Kharos recluta cazadores. Está en la plaza del noreste.', 'La forja no se apaga nunca. Si necesitás acero, el armero está al oeste.'],
+};
+/** NPC de servicio sin tienda todavía (charla corta). */
+const ROLE_LINES: Record<string, string[]> = {
+    sanador: ['Que la marea te devuelva las fuerzas. Si caés en la Frontera, despertarás acá, en el templo.', 'Dentro de la villa las heridas sanan solas. Descansá antes de volver a salir.'],
+    mago: ['Próximamente: la Torre abrirá sus puertas a los aprendices de magia.', 'Las runas del piso todavía no están listas. Volvé más adelante.'],
 };
 let talkNpc: Npc | null = null, shopNpc: Npc | null = null;
 const npcDist = (n: Npc) => Math.hypot(n.x + 0.5 - P.x, n.y + 0.5 - P.y);
@@ -1610,17 +1644,17 @@ function openShop(n: Npc = MAP.npcs[0]) {
     if (role === 'subastador') { closeShop(); shopNpc = n; talkNpc = null; auction.open(n); return; }
     if (role === 'depositario') { if (shopNpc !== n) closeShop(); shopNpc = n; talkNpc = null; deposit.open(n); return; }
     if (role === 'capitan') { openQuestDlg(n); return; }
-    if (role === 'guardia') { openTalk(n); return; }
+    if (role === 'guardia' || ROLE_LINES[role]) { openTalk(n); return; }
     const def = SHOPS[role]; if (!def) return;
     shopNpc = n; talkNpc = null; $('qdlg').hidden = true; $('shopName').textContent = n.name; $('shopRole').textContent = def.label; $('shop').hidden = false; renderShop();
     log(`${n.name}: «${def.greet}»`);
 }
 /** Guardias y otros NPC de ambiente: una charla corta, sin tienda. */
 function openTalk(n: Npc) {
-    const lines = GUARD_LINES[n.id.endsWith('_v') || n.id.includes('_v') ? 'v' : 's'];
+    const role = roleOf(n), lines = ROLE_LINES[role] ?? GUARD_LINES[n.id.endsWith('_v') || n.id.includes('_v') ? 'v' : 's'];
     shopNpc = n; talkNpc = null; $('shop').hidden = true;
     $('qdName').textContent = n.name; $('qdlg').hidden = false; $('qdForges').innerHTML = ''; $('qdBtn').hidden = true;
-    $('qdBody').innerHTML = `<small>${SHOPS.guardia.label}</small><br>${lines[Math.floor(R() * lines.length)]}`;
+    $('qdBody').innerHTML = `<small>${(SHOPS[role] ?? SHOPS.guardia).label}</small><br>${lines[Math.floor(R() * lines.length)]}`;
 }
 function closeShop() { shopNpc = null; $('shop').hidden = true; $('qdlg').hidden = true; auction.close(); deposit.close(); }
 function renderShop() {
@@ -1661,8 +1695,8 @@ window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && shopNpc) c
 let LINKS: Link[] = MAP_DEF.links;
 /** Los vínculos entre mapas se dibujan con el portal de piedra de portal.ts (como un waypoint chico). */
 let LINK_WPS: Waypoint[] = [];
-const LINK_COL: Record<Link['kind'], string> = { walk: '#9fd18b', portal: '#c78bff', oneway: '#9fd0ff', door: '#e2b04a', npc: '#d9d2b8' };
-const linkWps = (links: Link[]): Waypoint[] => links.map((l) => ({ id: `link:${l.id}`, x: l.x, y: l.y, kind: 'zone' as const, name: getMapDef(l.to.map)?.name ?? l.to.map, step: 0 }));
+const LINK_COL: Record<Link['kind'], string> = { walk: '#9fd18b', portal: '#c78bff', oneway: '#9fd0ff', door: '#e2b04a', npc: '#d9d2b8', enter: '#f3dfa6' };
+const linkWps = (links: Link[]): Waypoint[] => links.filter((l) => l.kind !== 'enter' && l.kind !== 'walk').map((l) => ({ id: `link:${l.id}`, x: l.x, y: l.y, kind: 'zone' as const, name: getMapDef(l.to.map)?.name ?? l.to.map, step: 0 }));
 LINK_WPS = linkWps(LINKS);
 let mapLoading = false;
 /**
@@ -1679,6 +1713,7 @@ function loadMap(def: MapDef): string {
     P.target = null; P.engage = false; P.pickup = null; P.queued = null; P.foe = null; P.path = []; P.step = null; hover = null; hoverDrop = null;
     cancelCast(); pveT = 0; // el server de este mapa todavía no sabe si estoy muerto ni mi nivel
     portalLock = now() + 2.5; // llegás al lado del portal de vuelta: que no te rebote
+    refreshNpcLook(); // los NPC del mapa nuevo (por ejemplo los de un interior) arman su muñeco acá
     return mapHash(MAP);
 }
 const loadEl = () => $('maploading');
@@ -1771,10 +1806,11 @@ function currentTrainStep(): number {
     return best;
 }
 const LOCK_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4.5 7V5a3.5 3.5 0 017 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="7" width="10" height="7" rx="1.4" fill="currentColor"/></svg>';
+const inHomeCity = () => cityAt(P.cell.x, P.cell.y)?.faction === selectedFaction && factionHome(selectedFaction)?.map === MAP_DEF.id;
 const lockMsg = (t: TrainingStep) => `Portal bloqueado (${t.zone}): ${t.after ? `entregá «${t.after}» al Capitán` : 'todavía no'} o llegá al nivel ${t.lvl}.`;
 function renderWp() {
     if (!wpOpen) return;
-    const city = MAP.cities?.find((c) => c.faction === selectedFaction), inCity = !!cityAt(P.cell.x, P.cell.y), cur = inCity ? -1 : currentTrainStep();
+    const city = selectedFaction === 'solmar' ? { name: 'Villa de Solmar' } : MAP.cities?.find((c) => c.faction === selectedFaction), inCity = inHomeCity(), cur = inCity ? -1 : currentTrainStep();
     $('wpTitle').textContent = wpOpen.kind === 'city' ? 'Portal de Frontera' : 'Portal de regreso';
     $('wpSub').textContent = wpOpen.kind === 'city' ? `${city?.name ?? 'Tu ciudad'} · zonas de entrenamiento` : `${wpOpen.name} · volvé a tu ciudad o viajá a otra zona`;
     const rows = [`<button type="button" class="wprow home${inCity ? ' cur' : ''}" data-wp="city"${inCity ? ' disabled' : ''}><i class="wpn">&#8962;</i><span class="wpt"><b>${inCity ? 'Estás en ' : 'Volver a '}${esc(city?.name ?? 'la ciudad')}</b><small>${inCity ? 'Zona segura' : 'Zona segura · tu facción'}</small></span>${inCity ? '<em class="wptag">Estás aquí</em>' : ''}</button>`];
@@ -1791,7 +1827,7 @@ function closeWp() { wpOpen = null; talkWpTarget = null; $('wpmenu').hidden = tr
 function wpGo(id: string) {
     if (!wpOpen || !connected || P.dead) return;
     let dest = 'la ciudad';
-    if (id === 'city') { if (cityAt(P.cell.x, P.cell.y)) return; }
+    if (id === 'city') { if (inHomeCity()) return; }
     else {
         const t = TRAINING.find((q) => q.id === id); if (!t) return;
         if (!trainOpen(t)) { toast(`Portal bloqueado: ${t.zone}`); log(lockMsg(t), true); return; }
@@ -1854,7 +1890,7 @@ try { const c = localStorage.getItem('fdn:class'); if (CLASSES.some((x) => x.id 
 // pantallas de login / selección / clase / facción / creación (ver loginui.ts)
 const flow = initLoginUI({
     classes: CLASSES.filter((c) => !c.hidden), factions: FACTIONS, spellName: (id) => LIB[id]?.name ?? id,
-    cityName: (f) => HUBS[f] ? (cityAt(HUBS[f].x, HUBS[f].y)?.name ?? 'Ciudad de ' + f) : f,
+    cityName: (f) => f === 'solmar' ? 'Villa de Solmar' : HUBS[f] ? (cityAt(HUBS[f].x, HUBS[f].y)?.name ?? 'Ciudad de ' + f) : f,
     get: () => ({ cls: selectedClass, faction: selectedFaction }),
     set: (p) => {
         if (p.cls) { selectedClass = p.cls; try { localStorage.setItem('fdn:class', selectedClass); } catch { /* sin almacenamiento */ } }
@@ -1980,9 +2016,9 @@ function enterWorld(name: string) {
     invApplied = false; if (lastInv) applyInventory(lastInv); invApplied = false; saver.start(); saver.tick(true); // el primer guardado le dice al server clase y bando si es un personaje nuevo
     if (welcomeBack) log(`Bienvenido de vuelta, ${name}. Nivel ${P.lvl}.`, true);
     // cada facción arranca en su ciudad (también si el guardado te dejó dentro de la del otro bando)
-    const hub = HUBS[selectedFaction], here = cityAt(P.cell.x, P.cell.y);
-    if (hub && MAP_DEF.id === DEFAULT_MAP && (!welcomeBack || (here && here.faction !== selectedFaction))) net.send({ $case: 'playerTeleportRequested', value: { x: hub.x, y: hub.y } });
-    log(selectedFaction === 'vhar' ? 'Bienvenido a la Ciudad de Vhar. La puerta del sur lleva a las tierras de Solmar.' : 'Bienvenido a la Ciudad de Solmar.', true);
+    const home = factionHome(selectedFaction), here = cityAt(P.cell.x, P.cell.y);
+    if (home && (!welcomeBack || (here && here.faction !== selectedFaction))) net.send({ $case: 'playerTeleportRequested', value: { x: home.x, y: home.y } });
+    log(selectedFaction === 'vhar' ? 'Bienvenido a la Ciudad de Vhar. La puerta del sur lleva a las tierras de Solmar.' : 'Bienvenido a la Villa de Solmar. Los edificios tienen interior: entrá por las puertas.', true);
     log('En la plaza está el Portal de Frontera: un menú con las zonas de entrenamiento. La primera ya está abierta; las demás se abren al entregar las misiones del Capitán (o subiendo de nivel). En cada zona hay un portal de regreso.', true);
     log('Tocá un mob para atacarlo. Apretá un hechizo (1–4), esperá que cargue y hacé clic en el objetivo. Enter para chatear.');
 }
@@ -1994,7 +2030,7 @@ async function boot() {
         const meta = JSON.parse(metaTxt);
         WORLD = meta.world; delete meta.world;
         BUILD = meta.buildings ?? {}; delete meta.buildings;
-        for (const k of ['dungeon', 'terrain']) {
+        for (const k of ['dungeon', 'terrain', 'town']) {
             const m = meta[k]; delete meta[k]; if (!m) continue;
             try { const im = await load(`assets/${k}.webp`); for (const [id, p] of Object.entries(m.pos as Record<string, number[]>)) EXT[Number(id)] = { im, p }; } catch { /* sin ese atlas se ve el mapa sin esas piezas */ }
         }
@@ -2009,7 +2045,7 @@ async function boot() {
     loadBuildingImages();
     refreshLook();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, toScreen, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading });
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();

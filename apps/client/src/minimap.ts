@@ -11,7 +11,7 @@
  *
  * Teclas: M abre/cierra el mapa grande, Escape lo cierra. No captura nada mientras el foco está en un campo de texto (chat).
  */
-import { getMapDef, mapLinks, SHOPS, type WorldMap } from '@fdn/world';
+import { getMapDef, mapLinks, SHOPS, townTileRGB, type WorldMap } from '@fdn/world';
 
 export interface MinimapMeta { id: string; name: string }
 /** Dirección como la de los sprites: 0 = oeste de la pantalla, en sentido horario (2 = arriba, 6 = abajo). */
@@ -56,7 +56,8 @@ function tileRGB(id: number): RGB {
     if (id >= 16 && id <= 31) return [80, 116, 54]; // pasto
     if (id >= 32 && id <= 43) return [134, 128, 114]; // piedra del campamento
     if (id >= 44 && id <= 47) return [138, 104, 64]; // camino de tierra
-    if (id >= 2000) { const n = (id - 2000) >> 2; return n === 8 || n === 9 ? [112, 86, 60] : n >= 10 && n <= 12 ? [124, 88, 52] : [96, 92, 92]; }
+    const town = townTileRGB(id); if (town) return town; // kit de ciudad (agua, arena, tierra, bosque)
+    if (id >= 2000 && id < 3000) { const n = (id - 2000) >> 2; return n === 8 || n === 9 ? [112, 86, 60] : n >= 10 && n <= 12 ? [124, 88, 52] : [96, 92, 92]; }
     if (id >= 1000) {
         const s = Math.floor((id - 1000) / 18), c = (id - 1000) % 18;
         if (s === 0) return c === 12 || c === 16 || c === 17 ? [150, 92, 66] : [170, 140, 96]; // seco / arcilla
@@ -64,7 +65,8 @@ function tileRGB(id: number): RGB {
         if (s === 4 || s === 5 || s === 6 || s === 7) return [88, 124, 60]; // flora / pasto
         if (s === 8 || s === 9) return [180, 206, 222]; // hielo
         if (s === 10 || s === 11) return [118, 108, 96]; // rocoso
-        if (s === 14 || s === 15) return [134, 88, 70]; // ladrillo
+        if (s === 14 || s === 15) return c >= 13 ? [176, 168, 154] : [134, 88, 70]; // ladrillo (las baldosas claras de la plaza de la villa, en piedra)
+        if (s >= 16) return [168, 160, 146]; // pisos de interior y baldosas
         return [124, 120, 112];
     }
     return [92, 98, 82];
