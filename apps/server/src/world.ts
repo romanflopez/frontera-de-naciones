@@ -7,7 +7,7 @@
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
 import { damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionMp, POTION_GCD_MS, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, progressFromEcon, PVP_SPELLS, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
-import { HUBS, QUESTS, TRAINING, WAYPOINT_RANGE, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointDest, type Link, type MapDef } from '@fdn/world';
+import { HUBS, QUESTS, TRAINING, WAYPOINT_RANGE, factionHome, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef } from '@fdn/world';
 import { applyParalysis, applySlow, applyWarcry, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, hasWarcry, isSlowed, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import type { Catalogs, GameWorldConfig, Settings } from './config.ts';
@@ -38,7 +38,7 @@ export class GameWorld {
     /** Dormido: sin jugadores, el registro dejó de llamar a tick(). Al despertar los mobs vuelven a empezar. */
     private hibernated = false;
     /** Lo setea el registro de mundos: saca al jugador de este mundo y lo manda a otro mapa (portal, respawn). */
-    transferHook?: (sessionId: string, dest: { map: string; x: number; y: number }, why: 'respawn') => void;
+    transferHook?: (sessionId: string, dest: { map: string; x: number; y: number }, why: 'respawn' | 'waypoint' | 'home') => void;
     /** Botín en el suelo de este mundo (solo en memoria). */
     private readonly loot = new GroundLoot();
     private lastGroundSync = 0;
@@ -748,6 +748,9 @@ export class GameWorld {
      */
     private handleTeleport(p: Player, reqX: number, reqY: number): void {
         if (p.isDead || (reqX === p.posX && reqY === p.posY)) return;
+        // al entrar (30 s): ir al hogar de la propia facción, que puede estar en otro mapa (Solmar vive en la Villa de Solmar)
+        const home = factionHome(this.factionOf(p)), toHome = !!home && reqX === home.x && reqY === home.y && Date.now() - p.joinedAt < 30000;
+        if (toHome && home.map !== this.mapId) { this.transferHook?.(p.sessionId, home, 'home'); return; }
         let x = reqX, y = reqY;
         if (process.env.FDN_DEBUG_WARP !== '1') {
             const portal = this.map?.portals?.find((q) => q.tx === reqX && q.ty === reqY && distance(p.posX, p.posY, q.x, q.y) <= 1);
@@ -755,9 +758,7 @@ export class GameWorld {
                 const why = portalGate(portal, p.prog);
                 if (why) { p.send(M.sendMessage(why)); return; }
             } else {
-                const hub = this.map?.hubs ? HUBS[this.factionOf(p)] : undefined; // los HUBS son coordenadas del mapa original: en otro mapa no valen
-                const toHub = !!hub && reqX === hub.x && reqY === hub.y && Date.now() - p.joinedAt < 30000;
-                if (!toHub) { console.log(`[Mundo:${this.id}] ${p.characterName} pidió un teletransporte sin portal a (${reqX}, ${reqY}); lo ignoro`); return; }
+                if (!toHome) { console.log(`[Mundo:${this.id}] ${p.characterName} pidió un teletransporte sin portal a (${reqX}, ${reqY}); lo ignoro`); return; }
             }
             // si alguien ocupa justo la celda de llegada, va a la libre más cercana
             const free = findNearestFreeLocation((cx, cy) => this.occupancy.isFree(cx, cy), reqX, reqY, 3);
@@ -796,7 +797,8 @@ export class GameWorld {
     private handleWaypoint(p: Player, id: string): void {
         if (p.isDead || !this.map) return;
         if (!this.map.waypoints?.some((q) => distance(p.posX, p.posY, q.x, q.y) <= WAYPOINT_RANGE)) { p.send(M.sendMessage('Tenés que estar junto a un portal.')); return; }
-        const dest = waypointDest(this.map, id, this.factionOf(p));
+        // el destino puede estar en otro mapa (las zonas siguen en el mapa original; la ciudad de Solmar es la villa)
+        const dest = waypointTarget(id, this.factionOf(p));
         if (!dest) return;
         if (dest.step !== undefined) {
             const t = TRAINING[dest.step];
@@ -805,6 +807,7 @@ export class GameWorld {
                 return;
             }
         }
+        if (dest.map !== this.mapId) { this.transferHook?.(p.sessionId, dest, 'waypoint'); return; }
         const free = findNearestFreeLocation((cx, cy) => this.occupancy.isFree(cx, cy), dest.x, dest.y, 3);
         if (!free || (free.x === p.posX && free.y === p.posY)) return;
         this.moveTo(p, p.posX, p.posY, free.x, free.y, false, true);
