@@ -96,9 +96,13 @@ export class WorldRegistry {
         this.handle.unref();
     }
     tickAll(now = Date.now()): void {
+        const t0 = performance.now();
         for (const w of this.worlds.values()) if (!w.isHibernated) w.tick();
+        this.tickStats.record(performance.now() - t0, now, this);
         if (now - this.lastSweep >= 1000) { this.lastSweep = now; this.sweep(now); }
     }
+    /** Medición del reloj (Fase 3: mapas grandes con pits de 30-60 mobs). Con FDN_TICK_STATS=1 se loguea cada 30 s. */
+    readonly tickStats = new TickStats();
 
     /** Duerme los mundos vacíos hace tiempo, da de baja las instancias vacías vencidas y mete a los que esperan MapReady hace demasiado. */
     sweep(now = Date.now()): void {
@@ -201,4 +205,26 @@ export class WorldRegistry {
     }
     /** index.ts lo setea: resuelve la sesión (y cómo guardarla) a partir de su id. */
     sessionHook?: (sessionId: string) => { session: TransferSession; save?: (state: PersistedPlayer) => void } | undefined;
+}
+
+/** Tiempo de cada vuelta del reloj (todos los mundos despiertos): promedio, máximo y p95 por ventana, más mobs y jugadores. */
+export class TickStats {
+    private samples: number[] = [];
+    private since = Date.now();
+    last = { avg: 0, max: 0, p95: 0, ticks: 0, worlds: 0, mobs: 0, awake: 0, players: 0 };
+    record(ms: number, now: number, reg: WorldRegistry): void {
+        this.samples.push(ms);
+        if (now - this.since < 30_000) return;
+        this.flush(reg, now);
+    }
+    /** Cierra la ventana actual y devuelve el resumen (también lo deja en `last`). */
+    flush(reg: WorldRegistry, now = Date.now()): TickStats['last'] {
+        const a = this.samples.sort((x, y) => x - y), n = a.length || 1;
+        let mobs = 0, awake = 0, players = 0, worlds = 0;
+        for (const w of reg.all()) if (!w.isHibernated) { worlds++; mobs += w.mobCount; awake += w.mobs?.awake ?? 0; players += w.playerCount; }
+        this.last = { avg: a.reduce((s, v) => s + v, 0) / n, max: a.at(-1) ?? 0, p95: a[Math.min(a.length - 1, Math.floor(a.length * 0.95))] ?? 0, ticks: a.length, worlds, mobs, awake, players };
+        if (process.env.FDN_TICK_STATS === '1') console.log(`[Reloj] ${a.length} vueltas: prom ${this.last.avg.toFixed(2)} ms, p95 ${this.last.p95.toFixed(2)} ms, máx ${this.last.max.toFixed(2)} ms | mundos despiertos ${worlds}, mobs ${mobs} (${awake} activos), jugadores ${players}`);
+        this.samples = []; this.since = now;
+        return this.last;
+    }
 }

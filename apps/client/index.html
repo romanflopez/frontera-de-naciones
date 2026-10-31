@@ -77,7 +77,8 @@
 /* pociones Q/E: al costado de cada orbe */
 #pots{position:absolute;inset:0;pointer-events:none}
 .pot{position:absolute;bottom:6px;width:46px;height:46px;padding:3px;box-sizing:border-box;border-radius:10px;background:linear-gradient(145deg,#f0c878 0%,#a8702a 45%,#5a3210 100%);border:0;box-shadow:0 0 0 1px #000,0 3px 6px rgba(0,0,0,.6);pointer-events:auto;display:block;cursor:pointer}
-#pothp{left:-56px}#potmp{right:-56px}
+#pothp{left:-56px}#potmp{right:-56px}#recallBtn{right:-108px}
+#recallBtn.on{box-shadow:0 0 0 1px #000,0 0 12px #4aa8ff,0 3px 6px rgba(0,0,0,.6)}
 .pot .sq{background:#0b080d}
 .cdv{position:absolute;inset:0;display:none;align-items:center;justify-content:center;border-radius:inherit;font:700 12px/1 var(--f-inter);font-style:normal;color:#fff;text-shadow:0 0 3px #000,0 0 3px #000;z-index:3;pointer-events:none}
 .pot.none .sq img{filter:grayscale(1) brightness(.4)}
@@ -456,7 +457,7 @@ canvas:focus{outline:none}
       <svg class="g1" width="22" height="22" aria-hidden="true"><use href="#gemS"/></svg><svg class="g2" width="18" height="18" aria-hidden="true"><use href="#gemS"/></svg>
     </div>
 
-    <div id="pots"><button id="pothp" class="pot" type="button"></button><button id="potmp" class="pot" type="button"></button></div>
+    <div id="pots"><button id="pothp" class="pot" type="button"></button><button id="potmp" class="pot" type="button"></button><button id="recallBtn" class="pot" type="button" title="Volver a la ciudad (H)" aria-label="Volver a la ciudad, tecla H"></button></div>
   </div>
   <div id="chips" aria-label="Estadísticas"></div>
 </div>

@@ -10,6 +10,7 @@ import { buildPruebaCaza, buildPruebaMazmorra, PRUEBA_CAZA, PRUEBA_MAZMORRA } fr
 import { TRAINING, type PortalProgress } from './training';
 import { buildSolmarVilla, VILLA, VILLA_BUILDINGS, VILLA_ID, VILLA_N, villaDoor, type VillaBuilding } from './solmar/villa';
 import { buildInterior, INTERIORS, roomOf, TEMPLE_RESPAWN } from './solmar/interiors';
+import { HUNT_ARRIVALS, huntMaps, LLANOS, PARAMO } from './hunt';
 
 /** Rectángulo de celdas con los dos extremos incluidos (igual que `WorldMap.dungeon`). */
 export interface MapRect { x0: number; y0: number; x1: number; y1: number }
@@ -59,6 +60,11 @@ export interface MapDef {
     /** Zona de todos contra todos dentro de un mapa `faction` (el Coliseo del mapa original). */
     ffaRect?: MapRect;
     music?: string;
+    /**
+     * Mapa de pruebas sin entrada desde el mundo (los de la Fase 1): no hace falta alcanzarlo desde el mapa inicial; los tests
+     * llegan con `WorldRegistry.beginTransfer`. Sus vínculos se validan igual que los demás.
+     */
+    debugOnly?: boolean;
     links: Link[];
     /** Constructor determinista: cliente y server tienen que armar exactamente lo mismo (sin Math.random ni hora). */
     build(): WorldMap;
@@ -72,14 +78,19 @@ export const canonicalMapId = (id: string | undefined): string | undefined => (i
 
 const ARENA: MapRect = { x0: 46, y0: 26, x1: 60, y1: 38 };
 
-/** Camino entre la Villa de Solmar y el mapa viejo: sale por el portón este de la villa y llega a la puerta sur de la ciudad vieja. */
+/**
+ * Camino entre los Llanos del Alba y el mapa viejo (Tierras de Solmar): sale por el camino norte de los Llanos y llega a la puerta
+ * sur de la ciudad vieja. Hasta la Fase 3 este camino unía la villa con el mapa viejo; ahora el portón este de la villa va a los Llanos.
+ */
 export const LEGACY_VILLA_LINK = { x: 8, y: 26 }, LEGACY_FROM_VILLA = { x: 8, y: 24 };
+/** En el páramo viejo, junto a la salida de la Cripta: portal de vuelta al Páramo Reseco (Fase 3). Llegada a la Cripta desde el páramo nuevo. */
+export const LEGACY_PARAMO_LINK = { x: 44, y: 50 }, LEGACY_CRYPT_ARRIVAL = { x: 46, y: 18 };
 
 /** Mapas de la Villa de Solmar (Fase 2): la villa exterior y un interior por edificio, unidos por puertas `enter`. */
 function solmarMaps(): Record<string, MapDef> {
     const out: Record<string, MapDef> = {};
     const villaLinks: Link[] = [
-        { id: 'villa_a_legacy', map: VILLA_ID, ...VILLA.toLegacy, to: { map: 'solmar_legacy', ...LEGACY_FROM_VILLA }, kind: 'walk', msg: 'Tomás el Camino de la Marea hacia las tierras de caza.' },
+        { id: 'villa_a_llanos', map: VILLA_ID, ...VILLA.toLegacy, to: { map: LLANOS.id, ...LLANOS.fromVilla }, kind: 'walk', msg: 'Tomás el Camino de la Marea hacia los Llanos del Alba.' },
     ];
     for (const it of INTERIORS) {
         const d = villaDoor(it.building as VillaBuilding), r = roomOf(it);
@@ -104,24 +115,25 @@ export const MAPS: Record<string, MapDef> = {
         id: 'solmar_legacy', name: 'Tierras de Solmar', region: 'solmar', size: 96, lvl: [1, 12], pvp: 'faction', safe: false,
         spawn: { x: HUBS.solmar.x, y: HUBS.solmar.y }, respawn: 'faction_home', tempRects: [ARENA], ffaRect: ARENA,
         links: [
-            // Portal de prueba junto a la plaza de Solmar: lleva al claro de caza (Fase 1 de docs/MUNDO.md)
-            { id: 'solmar_a_caza', map: 'solmar_legacy', x: 11, y: 11, to: { map: PRUEBA_CAZA.id, ...PRUEBA_CAZA.fromLegacy }, kind: 'portal', msg: 'Cruzás el portal hacia el Claro de prueba.' },
-            // camino a la Villa de Solmar (Fase 2): por la puerta sur de la ciudad vieja
-            { id: 'legacy_a_villa', map: 'solmar_legacy', ...LEGACY_VILLA_LINK, to: { map: VILLA_ID, ...VILLA.fromLegacy }, kind: 'walk', msg: 'Tomás el Camino de la Marea hacia la Villa de Solmar.' },
+            // camino a los Llanos del Alba (Fase 3; antes iba a la villa): por la puerta sur de la ciudad vieja
+            { id: 'legacy_a_llanos', map: 'solmar_legacy', ...LEGACY_VILLA_LINK, to: { map: LLANOS.id, ...LLANOS.fromLegacy }, kind: 'walk', msg: 'Tomás el camino del sur hacia los Llanos del Alba.' },
+            // del páramo viejo (salida de la Cripta) al Páramo Reseco nuevo
+            { id: 'legacy_a_paramo', map: 'solmar_legacy', ...LEGACY_PARAMO_LINK, to: { map: PARAMO.id, x: PARAMO.crypt.x, y: PARAMO.crypt.y - 3 }, kind: 'portal', msg: 'Cruzás al Páramo Reseco.' },
         ],
         build: () => buildSolmar(),
     },
     [PRUEBA_CAZA.id]: {
-        id: PRUEBA_CAZA.id, name: 'Claro de prueba', region: 'prueba', size: PRUEBA_CAZA.size, lvl: [1, 5], pvp: 'faction', safe: false,
+        id: PRUEBA_CAZA.id, name: 'Claro de prueba', region: 'prueba', size: PRUEBA_CAZA.size, lvl: [1, 5], pvp: 'faction', safe: false, debugOnly: true,
         spawn: { ...PRUEBA_CAZA.fromLegacy }, respawn: { ...PRUEBA_CAZA.respawn },
         links: [
-            { id: 'caza_a_solmar', map: PRUEBA_CAZA.id, ...PRUEBA_CAZA.toLegacy, to: { map: 'solmar_legacy', x: 11, y: 12 }, kind: 'portal', msg: 'Volvés a Solmar.' },
+            // el mapa viejo ya no tiene portal hacia acá (un solo portal por ciudad): la salida del claro es de una sola vía
+            { id: 'caza_a_solmar', map: PRUEBA_CAZA.id, ...PRUEBA_CAZA.toLegacy, to: { map: 'solmar_legacy', x: 11, y: 12 }, kind: 'oneway', msg: 'Volvés a Solmar.' },
             { id: 'caza_a_mazmorra', map: PRUEBA_CAZA.id, ...PRUEBA_CAZA.door, to: { map: PRUEBA_MAZMORRA.id, ...PRUEBA_MAZMORRA.fromCaza }, kind: 'door', gate: { lvl: 2 }, msg: 'Bajás a la Mazmorra de prueba.' },
         ],
         build: buildPruebaCaza,
     },
     [PRUEBA_MAZMORRA.id]: {
-        id: PRUEBA_MAZMORRA.id, name: 'Mazmorra de prueba', region: 'prueba', size: PRUEBA_MAZMORRA.size, lvl: [3, 5], pvp: 'off', safe: false,
+        id: PRUEBA_MAZMORRA.id, name: 'Mazmorra de prueba', region: 'prueba', size: PRUEBA_MAZMORRA.size, lvl: [3, 5], pvp: 'off', safe: false, debugOnly: true,
         spawn: { ...PRUEBA_MAZMORRA.fromCaza }, respawn: { ...PRUEBA_MAZMORRA.respawn },
         // temporal: si te desconectás adentro, al volver aparecés en la puerta del claro
         temporary: true, rest: { map: PRUEBA_CAZA.id, ...PRUEBA_CAZA.fromMazmorra },
@@ -132,6 +144,11 @@ export const MAPS: Record<string, MapDef> = {
         build: buildPruebaMazmorra,
     },
     ...solmarMaps(),
+    // núcleo de caza (Fase 3): Llanos del Alba, La Frontera, Camposanto Viejo y Páramo Reseco
+    ...huntMaps({
+        villa: { id: VILLA_ID, toLlanos: VILLA.toLegacy, fromLlanos: VILLA.fromLegacy },
+        legacy: { id: 'solmar_legacy', toLlanos: LEGACY_VILLA_LINK, fromLlanos: LEGACY_FROM_VILLA, toParamo: LEGACY_PARAMO_LINK, crypt: LEGACY_CRYPT_ARRIVAL },
+    }),
 };
 
 export const getMapDef = (id: string | undefined): MapDef | undefined => { const c = canonicalMapId(id); return c ? MAPS[c] : undefined; };
@@ -144,7 +161,7 @@ export const mapLinks = (id: string): Link[] => getMapDef(id)?.links ?? [];
 export const findLink = (id: string, portalId: string): Link | undefined => mapLinks(id).find((l) => l.id === portalId);
 
 /**
- * Hogar de cada facción: dónde aparece un personaje nuevo y a dónde lleva "volver a la ciudad" del Portal de Frontera.
+ * Hogar de cada facción: dónde aparece un personaje nuevo, a dónde lleva "volver a la ciudad" del Portal de Frontera y el recall (H).
  * Solmar vive en la Villa de Solmar (Fase 2); Vhar sigue en su ciudad del mapa original.
  */
 export function factionHome(faction: string): { map: string; x: number; y: number } | null {
@@ -162,6 +179,13 @@ export function respawnTarget(def: MapDef, faction: string): { map: string; x: n
     if (r === 'faction_home') return factionRespawn(faction) ?? { map: def.id, ...def.spawn };
     return { map: r.map ?? def.id, x: r.x, y: r.y };
 }
+/** Volver a la ciudad (recall, tecla H): canal de 8 s que corta moverse, recibir daño, atacar o lanzar; 60 s de enfriamiento. Lo valida el server. */
+export const RECALL = { channelMs: 8000, cooldownMs: 60000 } as const;
+/** Motivo por el que no se puede empezar el recall en `def` en (x, y), o null. El Coliseo (todos contra todos) y los mapas `ffa` no lo permiten. */
+export function recallBlockedReason(def: MapDef | undefined, x: number, y: number): string | null {
+    if (def?.pvp === 'ffa' || (def?.ffaRect && inMapRect(def.ffaRect, x, y))) return 'No podés volver a la ciudad desde la arena.';
+    return null;
+}
 let legacyArrivals: Record<string, { x: number; y: number }> | null = null;
 /**
  * Destino de un pedido del menú del Portal de Frontera, en cualquier mapa: 'city' = hogar de la facción, o el id de una zona de
@@ -170,6 +194,8 @@ let legacyArrivals: Record<string, { x: number; y: number }> | null = null;
 export function waypointTarget(id: string, faction: string): { map: string; x: number; y: number; step?: number } | null {
     if (id === 'city') return factionHome(faction);
     const t = TRAINING.find((q) => q.id === id); if (!t) return null;
+    // las zonas que ya se mudaron a un mapa de caza (Fase 3) llegan a su celda en ese mapa
+    const h = HUNT_ARRIVALS[id]; if (h) return { ...h, step: t.step };
     legacyArrivals ??= buildMap(DEFAULT_MAP).waypointArrivals ?? {};
     const a = legacyArrivals[id];
     return a ? { map: DEFAULT_MAP, x: a.x, y: a.y, step: t.step } : null;
@@ -204,13 +230,14 @@ export function mapHash(m: WorldMap): string {
 
 const walkable = (m: WorldMap, x: number, y: number) => Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < m.size && y < m.size && !m.blocked[y][x];
 
-/** Celdas alcanzables a pie (4 vecinos) desde (sx, sy). */
-export function reachableFrom(m: WorldMap, sx: number, sy: number): boolean[][] {
+/** Celdas alcanzables a pie (4 vecinos) desde (sx, sy). Con `viaPortals`, también cruzando las escaleras del mismo mapa (`WorldMap.portals`). */
+export function reachableFrom(m: WorldMap, sx: number, sy: number, viaPortals = false): boolean[][] {
     const seen: boolean[][] = Array.from({ length: m.size }, () => new Array<boolean>(m.size).fill(false));
     if (!walkable(m, sx, sy)) return seen;
     const q: [number, number][] = [[sx, sy]]; seen[sy][sx] = true;
     for (let i = 0; i < q.length; i++) {
         const [x, y] = q[i];
+        if (viaPortals) for (const p of m.portals ?? []) if (p.x === x && p.y === y && walkable(m, p.tx, p.ty) && !seen[p.ty][p.tx]) { seen[p.ty][p.tx] = true; q.push([p.tx, p.ty]); }
         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) { const nx = x + dx, ny = y + dy; if (walkable(m, nx, ny) && !seen[ny][nx]) { seen[ny][nx] = true; q.push([nx, ny]); } }
     }
     return seen;
@@ -266,19 +293,21 @@ export function validateMapGraph(defs: Record<string, MapDef> = MAPS, start: str
         const rt = respawnTarget(d, 'solmar'); cellOk(`${id}: respawn`, rt.map, rt);
         for (const f of ['vhar']) { const r2 = respawnTarget(d, f); cellOk(`${id}: respawn (${f})`, r2.map, r2); }
         if (d.rest) cellOk(`${id}: rest`, d.rest.map, d.rest);
-        // todo lo que importa se alcanza a pie desde el spawn
-        const reach = reachableFrom(m, d.spawn.x, d.spawn.y);
+        // todo lo que importa se alcanza a pie desde el spawn (o cruzando escaleras del mismo mapa, como la Cripta del mapa viejo)
+        const reach = reachableFrom(m, d.spawn.x, d.spawn.y, true);
         const must = (what: string, c: Cell) => { if (walkable(m, c.x, c.y) && !reach[c.y][c.x]) errs.push(`${id}: ${what} (${c.x}, ${c.y}) no se alcanza a pie desde el spawn`); };
         for (const l of d.links) must(`vínculo '${l.id}'`, l);
         for (const o of ids) for (const l of defs[o].links) if (l.to.map === id) must(`llegada de '${l.id}'`, l.to);
         if (rt.map === id) must('respawn', rt);
     }
-    // nombres de zona únicos entre mapas (dentro de un mapa se repiten: varios campamentos de la misma zona)
+    // nombres de zona únicos entre mapas (dentro de un mapa se repiten: varios campamentos de la misma zona). Excepción transitoria:
+    // las zonas que se mudaron del mapa viejo a un mapa de caza (Fase 3) conservan su nombre hasta que la Fase 8 borre el mapa viejo.
     const zoneMap = new Map<string, string>();
-    for (const [id, m] of built) for (const z of m.zones) { const o = zoneMap.get(z.name); if (o && o !== id) errs.push(`zona '${z.name}' repetida en '${o}' y '${id}'`); else zoneMap.set(z.name, id); }
-    // todos los mapas se alcanzan desde el inicial
+    for (const [id, m] of built) for (const z of m.zones) { const o = zoneMap.get(z.name); if (o && o !== id && o !== DEFAULT_MAP && id !== DEFAULT_MAP) errs.push(`zona '${z.name}' repetida en '${o}' y '${id}'`); else zoneMap.set(z.name, id); }
+    // todos los mapas se alcanzan desde el inicial (los de prueba, desde cualquiera de ellos: no tienen entrada desde el mundo)
     if (defs[start]) {
-        const seen = new Set([start]), q = [start];
+        const roots = [start, ...ids.filter((id) => defs[id].debugOnly)];
+        const seen = new Set(roots), q = [...roots];
         for (let i = 0; i < q.length; i++) for (const l of defs[q[i]]?.links ?? []) if (defs[l.to.map] && !seen.has(l.to.map)) { seen.add(l.to.map); q.push(l.to.map); }
         for (const id of ids) if (!seen.has(id)) errs.push(`'${id}' no se alcanza desde '${start}'`);
     }

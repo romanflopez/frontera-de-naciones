@@ -211,3 +211,6 @@ export const killReward = (v: { mobId: number; x: number; y: number; exp: number
 export const groundItemSpawned = (g: { id: number; item: SItem; x: number; y: number }, locked: boolean, freeInMs: number, expiresInMs: number): ServerMessage =>
     msg({ $case: 'groundItemSpawned', value: { id: g.id, item: invItem(g.item), x: g.x, y: g.y, locked, freeInMs: Math.max(0, Math.round(freeInMs)), expiresInMs: Math.max(0, Math.round(expiresInMs)) } });
 export const groundItemRemoved = (id: number): ServerMessage => msg({ $case: 'groundItemRemoved', value: { id } });
+/** Estado del recall (volver a la ciudad) para el que lo usa: canalizando (con lo que falta) o nada, el enfriamiento y el motivo de un corte. */
+export const recallState = (channeling: boolean, channelMs: number, remainingMs: number, cooldownMs: number, reason = ''): ServerMessage =>
+    msg({ $case: 'recallState', value: { state: channeling ? 1 : 0, channelMs, remainingMs: Math.max(0, Math.round(remainingMs)), cooldownMs: Math.max(0, Math.round(cooldownMs)), reason } });

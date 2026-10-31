@@ -47,6 +47,34 @@ El server y el cliente comparten las definiciones: `mobDef(tipo, zona)` devuelve
 Progresión pensada: núcleo 1-7 -> páramo 5 -> cripta 6-8 -> Tierras de ceniza 6 a 11 (oeste a este) -> foso 11-12.
 Los bosses del núcleo (Nv 7-12) son bolsillos opcionales lejos del campamento; el demonio Nv12 del núcleo es el techo de todo el mapa.
 
+## Mapas de caza (Fase 3)
+
+Las zonas de los niveles 1-5 y el Páramo viven ahora en mapas propios, grandes y con **pits** (zonas de 45-60 mobs con reaparición rápida). Las zonas del mapa viejo (`solmar_legacy`) siguen existiendo hasta la Fase 8. Código: `packages/world/src/hunt/`. Detalle y mediciones en [`MUNDO.md`](MUNDO.md).
+
+| Mapa | Tam. | PvP | Pit (zona) | Tipo | Nv | Mobs | Radio | Reaparición |
+|---|---|---|---|---|---|---|---|---|
+| `llanos_alba` Llanos del Alba | 128 | no | Campamento goblin | goblin | 1 | 55 | 11 | 8 s |
+| | | | Granjas tomadas | goblin | 1 | 50 | 11 | 8 s |
+| | | | Avanzada goblin | goblin_elite | 2 | 60 | 12 | 10 s |
+| | | | Empalizada goblin | goblin_elite | 2 | 45 | 11 | 10 s |
+| `la_frontera` La Frontera | 160 | facción | Hoyos de hormiga león | antlion | 4 | 60 | 12 | 10 s |
+| | | | Arenal de los hoyos | antlion | 4 | 50 | 11 | 10 s |
+| | | | Pantano muerto | zombie | 3 | 60 | 12 | 10 s |
+| | | | Ciénaga honda | zombie | 3 | 50 | 11 | 10 s |
+| `camposanto` Camposanto Viejo | 144 | facción | Cementerio viejo | skeleton | 5 | 60 | 12 | 12 s |
+| | | | Mausoleos | skeleton | 5 | 45 | 11 | 12 s |
+| | | | Ruinas del nigromante | skeleton_mage | 5 | 55 | 12 | 12 s |
+| | | | Capilla en ruinas | skeleton_mage | 5 | 45 | 11 | 12 s |
+| `paramo` Páramo Reseco | 160 | facción | Páramo reseco | antlion | 5 | 60 | 12 | 12 s |
+| | | | Grietas del páramo | antlion | 5 | 55 | 12 | 12 s |
+| | | | Hondonada de los huesos | antlion | 5 | 50 | 11 | 12 s |
+| | | | Llano de las calaveras | antlion | 5 | 45 | 11 | 12 s |
+
+- Densidad: 45-60 mobs en un círculo de radio 11-12 (~1 mob cada 7-8 celdas), 225-240 mobs por mapa más zonas sueltas de 5 mobs en los caminos (reaparición de 15 s).
+- Aggro de 3 celdas en los pits (4,5 por defecto). `Zone.respawn` y `Zone.aggro` son opcionales: sin ellos valen `mobRespawnSecs(tipo)` (22 s) y 4,5.
+- Exp y vida por kill: las de `mobDef` para el nivel de la zona (tablas de arriba); no cambia la curva.
+- Cada mapa tiene un campamento seguro con fogata y reaparición propia (Puesto del Alba, Posta de la Frontera, Capilla del guardián, Oasis del Páramo): morir deja ahí, no en la villa.
+
 ## Chequeo de combate (estimación, sin defensa ni mejoras de equipo)
 
 Daño del jugador con las fórmulas de `PVP_SPELLS`/`BASE` (`pvpCombat.ts`): Guerrero `tajo` 22-30 + 3·Nv + arma (cd 0,9 s); Mago `hoja`/`lanza` (2-3·Nv + mag) con cd 1,4/4,5 s. Vida: guerrero `140 + 18·(Nv-1)`, mago `90 + 10·(Nv-1)` (más ~8/5 por nivel de equipo).

@@ -32,8 +32,20 @@ test('detecta ids de vínculo repetidos', () => {
     assert.ok(validateMapGraph(d).some((e) => e.includes('repetido')));
 });
 test('detecta un vínculo sin vuelta salvo que sea de una vía', () => {
-    const d = clone(); d.prueba_caza.links = d.prueba_caza.links.filter((l) => l.id !== 'caza_a_solmar');
+    const d = clone(); d.prueba_mazmorra.links = d.prueba_mazmorra.links.filter((l) => l.id !== 'mazmorra_a_caza');
     assert.ok(validateMapGraph(d).some((e) => e.includes('no tiene vínculo de vuelta')));
+    // la salida del claro al mapa viejo es de una vía (el mapa viejo ya no tiene portal al claro): no es error
+    assert.equal(MAPS.prueba_caza.links.find((l) => l.id === 'caza_a_solmar')!.kind, 'oneway');
+    const e = clone(); e.prueba_caza.links.find((l) => l.id === 'caza_a_solmar')!.kind = 'portal';
+    assert.ok(validateMapGraph(e).some((x) => x.includes("'caza_a_solmar'") && x.includes('no tiene vínculo de vuelta')));
+});
+test('el mapa viejo no tiene portal a los mapas de prueba; los de prueba no hace falta alcanzarlos desde el inicial', () => {
+    assert.ok(!MAPS.solmar_legacy.links.some((l) => MAPS[l.to.map]?.debugOnly));
+    assert.equal(MAPS.solmar_legacy.links.find((l) => l.id === 'solmar_a_caza'), undefined);
+    assert.ok(MAPS.prueba_caza.debugOnly && MAPS.prueba_mazmorra.debugOnly);
+    // un mapa normal sin entrada sí es error
+    const d = clone(); d.prueba_caza = { ...d.prueba_caza, debugOnly: false }; d.prueba_mazmorra = { ...d.prueba_mazmorra, debugOnly: false };
+    assert.ok(validateMapGraph(d).some((x) => x.includes("'prueba_caza' no se alcanza desde")));
 });
 test('detecta que el destino sea una celda disparadora (rebotaría)', () => {
     const d = clone(); const back = d.prueba_caza.links.find((l) => l.id === 'caza_a_solmar')!; d.solmar_legacy.links[0].to = { map: 'prueba_caza', x: back.x, y: back.y };

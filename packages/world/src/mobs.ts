@@ -26,6 +26,10 @@ export const MOBS: Record<MobType, MobDef> = {
 
 /** Segundos hasta que reaparece un mob muerto. */
 export const mobRespawnSecs = (t: MobType): number => MOBS[t].boss?.respawn ?? (t === 'minotaur' ? 120 : 22);
+/** Segundos de reaparición de un mob de la zona: la de la zona si la define (pits de caza), si no la del tipo. Los bosses usan siempre la suya. */
+export const zoneRespawnSecs = (t: MobType, zone?: { respawn?: number }): number => (MOBS[t].boss ? mobRespawnSecs(t) : zone?.respawn ?? mobRespawnSecs(t));
+/** Radio de aggro por defecto (celdas) y radio de contagio a los compañeros de zona. */
+export const MOB_AGGRO = 4.5, MOB_ASSIST = 3.2;
 
 /** Curvas de referencia por nivel (mob común): vida, daño promedio por golpe y exp por kill. Los tipos base ya las siguen; sirven para reescalar un tipo a otro nivel. */
 export const mobHpCurve = (l: number): number => 29 + 10.5 * l + 2.75 * l * l;

@@ -1,6 +1,7 @@
 /**
- * Portales de entrenamiento: cada ciudad tiene UN portal grande (menú con las zonas de entrenamiento en el orden
- * de la cadena de misiones del Capitán) y cada zona un waypoint chico en su entrada para volver. La primera zona está
+ * Portales de entrenamiento: cada ciudad tiene UN portal grande, el Portal de Frontera (menú con las zonas de entrenamiento en el
+ * orden de la cadena de misiones del Capitán). Las zonas NO tienen portal: cada una tiene una celda de llegada (destino del menú)
+ * y para volver se usa "Volver a la ciudad" (tecla H, recall de 8 s que valida el server). La primera zona está
  * abierta de entrada; cada una de las demás se abre al entregar la misión anterior o al llegar a un nivel mínimo. Los datos y la regla viven acá para que el cliente
  * (los dibuja, avisa y bloquea) y el server (valida el teletransporte, no confía en el cliente) usen lo mismo.
  */
@@ -35,7 +36,7 @@ export const TRAINING: TrainingStep[] = [
 ];
 export const TRAINING_IDS = TRAINING.map((t) => t.id);
 
-/** Waypoint (estilo Diablo): el portal grande de la plaza de cada ciudad y uno chico en la entrada de cada zona de entrenamiento. */
+/** Waypoint (estilo Diablo): el Portal de Frontera de la plaza de cada ciudad. `kind: 'zone'` lo usa solo el cliente para dibujar vínculos entre mapas. */
 export interface Waypoint {
     id: string;
     /** Celda del waypoint (pararse o hacer click abre el menú). */
@@ -50,6 +51,8 @@ export interface Waypoint {
 export const WAYPOINT_RANGE = 3;
 /** Celda del portal grande de cada ciudad respecto del punto de aparición (HUBS). */
 export const CITY_PORTAL_OFFSET = { x: 3, y: 0 };
+/** Ciudades del mapa viejo que conservan su Portal de Frontera (Solmar se mudó a la Villa de Solmar, que tiene el suyo). */
+export const LEGACY_CITY_PORTALS: readonly string[] = ['vhar'];
 
 /** ¿Está abierto el portal del paso `step` para alguien que entregó `qi` misiones y tiene nivel `lvl`? */
 export const trainingUnlocked = (step: number, qi: number, lvl: number): boolean => { const t = TRAINING[step]; return !!t && (qi >= step || lvl >= t.lvl); };
@@ -65,22 +68,31 @@ export function portalGate(p: Portal, g: PortalProgress): string | null {
     return null;
 }
 
-/** Celda caminable (desde el campamento de Solmar) a la que llega quien cruza un portal a la zona: cerca del borde, no en medio de los mobs. */
+/** Celda caminable (desde el campamento de Solmar) a la que llega quien viaja a la zona desde el Portal de Frontera: cerca del borde, no en medio de los mobs. */
 function arrivalFor(w: WorldMap, reach: boolean[][], zoneName: string): { x: number; y: number } {
     const z = w.zones.find((q) => q.name === zoneName);
     if (!z) throw new Error(`zona de entrenamiento desconocida: ${zoneName}`);
+    const others = w.zones.filter((q) => q.name !== zoneName);
+    // las zonas están pegadas: primero se busca una celda a 3+ celdas del borde de las demás (que no te reciba un mob ajeno); si no hay, cualquiera
+    for (const margin of [3, -Infinity]) {
+        const best = pickArrival(w, reach, z, others, margin);
+        if (best) return best;
+    }
+    throw new Error(`sin celda de llegada para ${zoneName}`);
+}
+function pickArrival(w: WorldMap, reach: boolean[][], z: WorldMap['zones'][number], others: WorldMap['zones'], margin: number): { x: number; y: number } | null {
     let best: { x: number; y: number } | null = null, bestScore = Infinity;
     for (let y = 1; y < w.size - 1; y++) for (let x = 1; x < w.size - 1; x++) {
         if (!reach[y][x] || w.blocked[y][x] || w.safe[y][x]) continue;
         const d = Math.hypot(x + 0.5 - z.x - 0.5, y + 0.5 - z.y - 0.5);
         if (d < z.r + 1 || d > z.r + 5) continue;
+        if (margin > -Infinity && others.some((o) => Math.hypot(x - o.x, y - o.y) - o.r < margin)) continue;
         // sin vecinos bloqueados alrededor, para no aparecer encajonado
         let free = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (!w.blocked[y + dy]?.[x + dx]) free++;
         if (free < 8) continue;
         const score = Math.abs(d - (z.r + 2)) * 10 + (Math.abs(x - HUBS.solmar.x) + Math.abs(y - HUBS.solmar.y)) * 0.01;
         if (score < bestScore) { bestScore = score; best = { x, y }; }
     }
-    if (!best) throw new Error(`sin celda de llegada para ${zoneName}`);
     return best;
 }
 
@@ -103,22 +115,18 @@ export function extendTraining(w: WorldMap): WorldMap {
             reach[ny][nx] = true; q.push([nx, ny]);
         }
     }
-    const arrivals = TRAINING.map((t) => arrivalFor(w, reach, t.zone));
     const wps: Waypoint[] = [], arr: Record<string, { x: number; y: number }> = {};
-    // portal grande de cada ciudad: celda HUB+(3,0), con 3x3 despejado alrededor
+    // Portal de Frontera de cada ciudad del mapa viejo: celda HUB+(3,0). Solmar ya no tiene portal acá: su hogar es la Villa de Solmar
+    // (el portal está en la plaza de la villa, ver solmar/villa.ts); queda solo el de Vhar.
     for (const [city, h] of Object.entries(HUBS)) {
+        if (!LEGACY_CITY_PORTALS.includes(city)) continue;
         const x = h.x + CITY_PORTAL_OFFSET.x, y = h.y + CITY_PORTAL_OFFSET.y;
         // el 3x3 despejado lo reserva el layout de la ciudad (cities.ts); acá solo exigimos que la celda central sea caminable
         if (w.blocked[y][x]) throw new Error(`el portal de ${city} cae en una celda bloqueada (${x}, ${y}); el layout de la ciudad tiene que dejar libre HUB+(3,0)`);
         wps.push({ id: `city:${city}`, x, y, kind: 'city', name: 'Portal de Frontera', faction: city });
     }
-    // waypoint chico pegado a la celda de llegada de cada zona (no sobre ella, para que no se abra solo al llegar)
-    TRAINING.forEach((t, i) => {
-        const a = arrivals[i]; arr[t.id] = a;
-        const c = ([[1, 0], [0, 1], [-1, 0], [0, -1]] as const).map(([dx, dy]) => ({ x: a.x + dx, y: a.y + dy })).find((q) => !w.blocked[q.y][q.x]);
-        if (!c) throw new Error(`sin celda para el waypoint de ${t.zone}`);
-        wps.push({ id: `zone:${t.id}`, x: c.x, y: c.y, kind: 'zone', name: t.zone, step: t.step });
-    });
+    // celda de llegada de cada zona (destino del menú del Portal de Frontera; sin plataforma ni portal de vuelta)
+    TRAINING.forEach((t) => { arr[t.id] = arrivalFor(w, reach, t.zone); });
     w.waypoints = [...(w.waypoints ?? []), ...wps];
     w.waypointArrivals = arr;
     return w;

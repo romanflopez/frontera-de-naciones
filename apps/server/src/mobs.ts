@@ -3,7 +3,7 @@
  * Port de la lógica que antes corría en cada navegador (apps/client/src/main.ts): mismos números.
  */
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
-import { MOB_TYPES, mobDef, mobRespawnSecs, type MobDef, type MobType, type WorldMap, type Zone } from '@fdn/world';
+import { MOB_AGGRO, MOB_ASSIST, MOB_TYPES, mobDef, zoneRespawnSecs, type MobDef, type MobType, type WorldMap, type Zone } from '@fdn/world';
 import * as M from './messages.ts';
 import type { Player } from './player.ts';
 
@@ -38,6 +38,8 @@ const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 const SNAP_EVERY = 0.1;
 /** Un poco más que el radio de visión del mundo, para que no "aparezcan" mobs en el borde. */
 const VIEW_X = 20, VIEW_Y = 13;
+/** Un mob quieto sin ningún jugador a menos de esta distancia (en caja) no se simula: nadie lo ve y no puede aggrear. */
+const SLEEP_DIST = 26;
 
 export class MobSim {
     private readonly mobs = new Map<number, SimMob>();
@@ -47,29 +49,50 @@ export class MobSim {
     private readonly N: number;
     /** Presupuesto de golpes por jugador (evita ráfagas falsas): se recarga con el tiempo. */
     private readonly budget = new WeakMap<Player, Budget>();
+    /** Celdas donde puede nacer un mob de cada zona (caminables, fuera de la zona segura, dentro del cuadrado ±r): se calculan una vez. */
+    private readonly spawnCells: Int32Array[] = [];
 
     constructor(private readonly map: WorldMap, private readonly host: MobHost) {
         this.N = map.size;
+        map.zones.forEach((z, zi) => {
+            const cells: number[] = [];
+            for (let y = Math.max(0, Math.floor(z.y - z.r)); y <= Math.min(this.N - 1, Math.floor(z.y + z.r)); y++)
+                for (let x = Math.max(0, Math.floor(z.x - z.r)); x <= Math.min(this.N - 1, Math.floor(z.x + z.r)); x++)
+                    if (this.walk(x, y) && !map.safe[y]?.[x]) cells.push(y * this.N + x);
+            this.spawnCells[zi] = Int32Array.from(cells);
+        });
         map.zones.forEach((z, zi) => { for (let i = 0; i < z.n; i++) this.spawn(z, zi); });
     }
 
     get count(): number { return this.mobs.size; }
+    /** Mobs que se simularon en el último update (los quietos lejos de todo jugador duermen). */
+    awake = 0;
+    /** Cantidad de mobs vivos de cada zona (por índice en map.zones): para los tests y las mediciones. */
+    countByZone(): number[] { const out = this.map.zones.map(() => 0); for (const m of this.mobs.values()) if (!m.dead) out[m.zoneIdx]++; return out; }
+    /** Mobs vivos con posición (tests). */
+    list(): { id: number; zoneIdx: number; x: number; y: number; hp: number }[] { return [...this.mobs.values()].filter((m) => !m.dead).map((m) => ({ id: m.id, zoneIdx: m.zoneIdx, x: m.x, y: m.y, hp: m.hp })); }
 
     private walk(x: number, y: number) { return x >= 0 && y >= 0 && x < this.N && y < this.N && !this.map.blocked[y][x]; }
     private isSafe(gx: number, gy: number) { const x = Math.floor(gx), y = Math.floor(gy); return x >= 0 && y >= 0 && x < this.N && y < this.N && this.map.safe[y][x]; }
     private now() { return Date.now() / 1000; }
 
     private spawn(z: Zone, zi: number) {
-        for (let i = 0; i < 40; i++) {
-            const x = Math.floor(z.x + (Math.random() * 2 - 1) * z.r), y = Math.floor(z.y + (Math.random() * 2 - 1) * z.r);
-            if (!this.walk(x, y) || this.map.safe[y]?.[x]) continue;
+        const cells = this.spawnCells[zi]; if (!cells?.length) return;
+        // celda al azar entre las válidas; en los pits densos se prueba un par de veces para no nacer encima de otro mob
+        let x = 0, y = 0;
+        for (let i = 0; i < 6; i++) {
+            const c = cells[Math.floor(Math.random() * cells.length)]; x = c % this.N; y = Math.floor(c / this.N);
+            let crowded = false;
+            if (i < 5) for (const o of this.mobs.values()) if (o.zoneIdx === zi && Math.abs(o.x - x - 0.5) < 0.9 && Math.abs(o.y - y - 0.5) < 0.9) { crowded = true; break; }
+            if (!crowded) break;
+        }
+        {
             const d = mobDef(z.type, z), T = this.now(), id = this.nextId++;
             this.mobs.set(id, {
                 id, type: z.type, def: d, typeIdx: MOB_TYPES.indexOf(z.type), zone: z, zoneIdx: zi, x: x + 0.5, y: y + 0.5, hp: d.hp, hpMax: d.hp,
                 state: 'idle', target: null, lastAttacker: null, wx: x + 0.5, wy: y + 0.5, wait: Math.random() * 2, nextAtk: 0, nextSp: T + 4, busy: 0,
                 par: 0, imm: 0, slow: 0, poison: 0, poisonTick: 0, moving: false, dead: false,
             });
-            return;
         }
     }
 
@@ -91,8 +114,8 @@ export class MobSim {
         if (target) m.target = target.playerId;
         if (m.state === 'chase') return;
         m.state = 'chase';
-        const T = this.now();
-        for (const o of this.mobs.values()) if (o !== m && o.state === 'idle' && o.zone === m.zone && Math.hypot(o.x - m.x, o.y - m.y) < 3.2) { o.state = 'chase'; o.target = m.target; o.nextAtk = T + 0.4 + Math.random() * 0.6; }
+        const T = this.now(), assist = Math.min(MOB_ASSIST, (m.zone.aggro ?? MOB_AGGRO) * 0.7);
+        for (const o of this.mobs.values()) if (o !== m && o.state === 'idle' && o.zone === m.zone && Math.hypot(o.x - m.x, o.y - m.y) < assist) { o.state = 'chase'; o.target = m.target; o.nextAtk = T + 0.4 + Math.random() * 0.6; }
     }
 
     private nearestPlayer(m: SimMob, maxD: number): Player | null {
@@ -104,8 +127,20 @@ export class MobSim {
     update(): void {
         const nowMs = Date.now(), dt = Math.min(0.25, (nowMs - this.lastUpdate) / 1000); this.lastUpdate = nowMs;
         const T = nowMs / 1000;
+        // posiciones de los jugadores conectados (para dormir a los mobs quietos lejos de todos) y lista de los que persiguen (empuje)
+        const pxs: number[] = [], pys: number[] = [];
+        for (const p of this.host.players()) if (!p.disconnected) { pxs.push(p.posX); pys.push(p.posY); }
+        const chasing: SimMob[] = [];
+        for (const m of this.mobs.values()) if (m.state === 'chase' && !m.dead) chasing.push(m);
+        this.awake = 0;
         for (const m of [...this.mobs.values()]) {
             if (m.dead) continue;
+            if (m.state === 'idle' && m.poison <= T) {
+                let near = false;
+                for (let i = 0; i < pxs.length; i++) if (Math.abs(pxs[i] - m.x) < SLEEP_DIST && Math.abs(pys[i] - m.y) < SLEEP_DIST) { near = true; break; }
+                if (!near) { m.moving = false; continue; }
+            }
+            this.awake++;
             m.moving = false;
             if (m.poison > T && T >= m.poisonTick) {
                 m.poisonTick = T + 1; m.hp -= 3;
@@ -116,7 +151,7 @@ export class MobSim {
             if (m.par > T) continue;
             const d = m.def, home = { x: m.zone.x + 0.5, y: m.zone.y + 0.5 };
             if (m.state === 'idle') {
-                const near = this.nearestPlayer(m, 4.5);
+                const near = this.nearestPlayer(m, m.zone.aggro ?? MOB_AGGRO);
                 if (near) this.aggro(m, near);
                 else {
                     m.wait -= dt;
@@ -137,7 +172,7 @@ export class MobSim {
                 const sp = d.boss?.special;
                 if (sp && T >= m.nextSp && dp <= sp.range) { this.special(m, T); continue; }
                 if (dp > 1.1) this.step(m, px, py, d.spd, dt);
-                for (const o of this.mobs.values()) {
+                for (const o of chasing) {
                     if (o === m || o.state !== 'chase') continue;
                     const sx = m.x - o.x, sy = m.y - o.y, sd = Math.hypot(sx, sy);
                     if (sd > 0.01 && sd < 0.85) {
@@ -185,7 +220,7 @@ export class MobSim {
         m.dead = true; this.mobs.delete(m.id);
         if (killer) this.host.reward(killer, { mobId: m.id, type: m.type, def: m.def, zoneName: m.zone.name, x: m.x, y: m.y, shard: m.zone.drops?.shard }); // una sola vez: el mob ya salió del mapa
         this.broadcastNear(m, M.mobDied(m.id, killer ? killer.playerId : 0n, m.x, m.y, m.typeIdx, m.zoneIdx));
-        this.host.after(mobRespawnSecs(m.type) * 1000, () => this.spawn(m.zone, m.zoneIdx));
+        this.host.after(zoneRespawnSecs(m.type, m.zone) * 1000, () => this.spawn(m.zone, m.zoneIdx));
     }
 
     private sendSnapshots() {
