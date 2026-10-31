@@ -3,7 +3,7 @@
  * acepta WebSockets en /ws, autentica una vez por conexión, manda los paquetes al mundo
  * donde está el jugador, maneja la gracia de reconexión y guarda el personaje al salir.
  */
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,7 +12,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { ClientMessage, ServerMessage } from '@fdn/proto';
 import { DATA_DIR, loadCatalogs, loadSettings, type GameWorldConfig } from './config.ts';
 import { MAPS, getMapDef } from '@fdn/world';
-import { resolveSaved, restPosition } from './persist.ts';
+import { loadPosition, resolveSaved, savePosition } from './persist.ts';
 import * as M from './messages.ts';
 import type { PersistedPlayer } from './player.ts';
 import { WorldRegistry } from './registry.ts';
@@ -48,19 +48,22 @@ setDepot(new Depot(storage));
 const worldsListMessage = M.worldsList(worldConfigs);
 const monstersListMessage = M.monstersList(catalogs);
 
-// ---------- guardado de personajes (un JSON por id, igual que el original: solo para desarrollo) ----------
-const charsDir = join(SAVE_DIR, 'chars');
-mkdirSync(charsDir, { recursive: true });
-const charFile = (networkId: string) => join(charsDir, `${networkId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json`);
-function loadChar(networkId: string): PersistedPlayer | undefined {
-    const f = charFile(networkId);
+// ---------- posición del personaje (B1) ----------
+// Vive en el registro de la cuenta (`AccountRecord.pos`), junto al estado económico: con Postgres sobrevive a los redeploys.
+// Los guardados viejos en `chars/<id>.json` (disco) se leen una sola vez como respaldo y en el próximo guardado pasan a la cuenta.
+const legacyCharFile = (networkId: string) => join(SAVE_DIR, 'chars', `${networkId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json`);
+function readLegacyChar(networkId: string): PersistedPlayer | undefined {
+    const f = legacyCharFile(networkId);
     if (!existsSync(f)) return undefined;
     try { return JSON.parse(readFileSync(f, 'utf8')) as PersistedPlayer; } catch { return undefined; }
 }
-function saveChar(networkId: string, state: PersistedPlayer | undefined): void {
-    const s = restPosition(state, (id) => registry.mapOf(id));
-    if (s) writeFileSync(charFile(networkId), JSON.stringify(s, null, 2));
-}
+const loadChar = (networkId: string) => loadPosition(storage, networkId, readLegacyChar);
+const saveChar = (networkId: string, state: PersistedPlayer | undefined) => savePosition(storage, networkId, state, (id) => registry.mapOf(id));
+/** Foto periódica de dónde está cada conectado: si el proceso muere sin avisar (OOM, corte), se pierde como mucho este intervalo. */
+const POS_CHECKPOINT_MS = 60_000;
+setInterval(() => {
+    for (const s of sessionsByNetworkId.values()) if (s.socket) saveChar(s.networkId, worldOf(s)?.snapshot(s.sessionId));
+}, POS_CHECKPOINT_MS).unref();
 
 // ---------- cuentas y progreso (ver docs/PERSISTENCIA.md) ----------
 const clientIp = (req: { headers: Record<string, string | string[] | undefined>; socket: { remoteAddress?: string } }) => {
