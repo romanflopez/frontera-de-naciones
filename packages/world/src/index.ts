@@ -17,6 +17,7 @@ import type { MobType } from './mobs';
 export * from './mobs';
 export * from './economy';
 export * from './auction';
+export * from './deposit';
 export * from './maps';
 
 export const MAP_SIZE = 40;

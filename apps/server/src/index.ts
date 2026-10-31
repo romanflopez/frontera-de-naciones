@@ -20,6 +20,7 @@ import { authenticate } from './accounts.ts';
 import { Economy, toCharSave } from './economy.ts';
 import { FileStorage, PgStorage, type Storage } from './storage.ts';
 import { AuctionHouse, setAuctionHouse } from './auction.ts';
+import { Depot, setDepot } from './deposit.ts';
 
 const MAX_INCOMING_BYTES = 24576;
 
@@ -41,6 +42,8 @@ console.log(`[Server] ${worldConfigs.length} mapas registrados (${worldConfigs.m
 // casa de subastas compartida por todos los mundos (docs/SUBASTAS.md): mismo Storage; avisa a los vendedores conectados
 const auction = new AuctionHouse(storage); setAuctionHouse(auction); auction.start();
 auction.notify = (key, ...msgs) => { const s = sessionsByNetworkId.get(`acc:${key}`)?.socket; if (s?.readyState === s?.OPEN) for (const m of msgs) s?.send(encode(m)); };
+// depósito por cuenta (docs/DEPOSITO.md): vive dentro del registro de la cuenta, en el mismo Storage
+setDepot(new Depot(storage));
 
 const worldsListMessage = M.worldsList(worldConfigs);
 const monstersListMessage = M.monstersList(catalogs);

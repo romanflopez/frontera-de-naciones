@@ -142,6 +142,9 @@ export interface ClientMessage {
     | //
     /** Casa de subastas (ver docs/SUBASTAS.md). Rango propio de tags desde 300. */
     { $case: "auctionRequest"; value: AuctionRequest }
+    | //
+    /** Depósito por cuenta (ver docs/DEPOSITO.md). Rango propio de tags desde 400. */
+    { $case: "depositRequest"; value: DepositRequest }
     | undefined;
 }
 
@@ -545,6 +548,9 @@ export interface ServerMessage {
     { $case: "auctionSearchResult"; value: AuctionSearchResult }
     | { $case: "auctionMyState"; value: AuctionMyState }
     | { $case: "auctionHistory"; value: AuctionHistory }
+    | //
+    /** Depósito por cuenta (ver docs/DEPOSITO.md). Rango propio de tags desde 400; el resultado de cada acción va en EconResult. */
+    { $case: "depositState"; value: DepositState }
     | undefined;
 }
 
@@ -1595,6 +1601,36 @@ export interface AuctionHistory {
   entries: AuctionHistoryEntry[];
 }
 
+/**
+ * Pedido al Depositario (npc_id: el NPC con el que se habla; el server valida rol y distancia).
+ * action = open | put | take | gold_in | gold_out | stack_in | stack_out | sort.
+ * put: uid de la bolsa; take: uid del depósito; gold_in/gold_out: amount; stack_in/stack_out: stack + amount.
+ * stack = pot_hp | pot_mp | key_cripta | key_foso | shard_cripta | shard_foso.
+ * op_id: número de pedido elegido por el cliente (distinto de 0): si llega dos veces, la segunda no se aplica.
+ */
+export interface DepositRequest {
+  npcId: string;
+  action: string;
+  uid: number;
+  amount: number;
+  stack: string;
+  opId: number;
+}
+
+export interface DepositStack {
+  id: string;
+  qty: number;
+}
+
+/** Contenido del depósito de la cuenta (se manda al abrir y después de cada acción). */
+export interface DepositState {
+  items: InvItem[];
+  gold: number;
+  stacks: DepositStack[];
+  capacity: number;
+  stackMax: number;
+}
+
 function createBaseClientMessage(): ClientMessage {
   return { payload: undefined };
 }
@@ -1799,6 +1835,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         break;
       case "auctionRequest":
         AuctionRequest.encode(message.payload.value, writer.uint32(2402).fork()).join();
+        break;
+      case "depositRequest":
+        DepositRequest.encode(message.payload.value, writer.uint32(3202).fork()).join();
         break;
     }
     return writer;
@@ -2462,6 +2501,14 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "auctionRequest", value: AuctionRequest.decode(reader, reader.uint32()) };
             continue;
           }
+          case 400: {
+            if (tag !== 3202) {
+              break;
+            }
+
+            message.payload = { $case: "depositRequest", value: DepositRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -2990,6 +3037,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "auctionRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "auctionRequest", value: AuctionRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "depositRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "depositRequest", value: DepositRequest.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -7111,6 +7164,9 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "auctionHistory":
         AuctionHistory.encode(message.payload.value, writer.uint32(2418).fork()).join();
         break;
+      case "depositState":
+        DepositState.encode(message.payload.value, writer.uint32(3202).fork()).join();
+        break;
     }
     return writer;
   },
@@ -7895,6 +7951,14 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "auctionHistory", value: AuctionHistory.decode(reader, reader.uint32()) };
             continue;
           }
+          case 400: {
+            if (tag !== 3202) {
+              break;
+            }
+
+            message.payload = { $case: "depositState", value: DepositState.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -8507,6 +8571,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "auctionHistory": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "auctionHistory", value: AuctionHistory.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "depositState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "depositState", value: DepositState.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -20890,6 +20960,291 @@ export const AuctionHistory: MessageFns<AuctionHistory> = {
   fromPartial<I extends Exact<DeepPartial<AuctionHistory>, I>>(object: I): AuctionHistory {
     const message = createBaseAuctionHistory();
     message.entries = object.entries?.map((e) => AuctionHistoryEntry.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseDepositRequest(): DepositRequest {
+  return { npcId: "", action: "", uid: 0, amount: 0, stack: "", opId: 0 };
+}
+
+export const DepositRequest: MessageFns<DepositRequest> = {
+  encode(message: DepositRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.npcId !== "") {
+      writer.uint32(10).string(message.npcId);
+    }
+    if (message.action !== "") {
+      writer.uint32(18).string(message.action);
+    }
+    if (message.uid !== 0) {
+      writer.uint32(24).int32(message.uid);
+    }
+    if (message.amount !== 0) {
+      writer.uint32(33).double(message.amount);
+    }
+    if (message.stack !== "") {
+      writer.uint32(42).string(message.stack);
+    }
+    if (message.opId !== 0) {
+      writer.uint32(48).uint32(message.opId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DepositRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseDepositRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.npcId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.action = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.uid = reader.int32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 33) {
+              break;
+            }
+
+            message.amount = reader.double();
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.stack = reader.string();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.opId = reader.uint32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<DepositRequest>, I>>(base?: I): DepositRequest {
+    return DepositRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<DepositRequest>, I>>(object: I): DepositRequest {
+    const message = createBaseDepositRequest();
+    message.npcId = object.npcId ?? "";
+    message.action = object.action ?? "";
+    message.uid = object.uid ?? 0;
+    message.amount = object.amount ?? 0;
+    message.stack = object.stack ?? "";
+    message.opId = object.opId ?? 0;
+    return message;
+  },
+};
+
+function createBaseDepositStack(): DepositStack {
+  return { id: "", qty: 0 };
+}
+
+export const DepositStack: MessageFns<DepositStack> = {
+  encode(message: DepositStack, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    if (message.qty !== 0) {
+      writer.uint32(16).int32(message.qty);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DepositStack {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseDepositStack();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.id = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.qty = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<DepositStack>, I>>(base?: I): DepositStack {
+    return DepositStack.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<DepositStack>, I>>(object: I): DepositStack {
+    const message = createBaseDepositStack();
+    message.id = object.id ?? "";
+    message.qty = object.qty ?? 0;
+    return message;
+  },
+};
+
+function createBaseDepositState(): DepositState {
+  return { items: [], gold: 0, stacks: [], capacity: 0, stackMax: 0 };
+}
+
+export const DepositState: MessageFns<DepositState> = {
+  encode(message: DepositState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.items) {
+      InvItem.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.gold !== 0) {
+      writer.uint32(17).double(message.gold);
+    }
+    for (const v of message.stacks) {
+      DepositStack.encode(v!, writer.uint32(26).fork()).join();
+    }
+    if (message.capacity !== 0) {
+      writer.uint32(32).int32(message.capacity);
+    }
+    if (message.stackMax !== 0) {
+      writer.uint32(40).int32(message.stackMax);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DepositState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseDepositState();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.items.push(InvItem.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 2: {
+            if (tag !== 17) {
+              break;
+            }
+
+            message.gold = reader.double();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.stacks.push(DepositStack.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.capacity = reader.int32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.stackMax = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<DepositState>, I>>(base?: I): DepositState {
+    return DepositState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<DepositState>, I>>(object: I): DepositState {
+    const message = createBaseDepositState();
+    message.items = object.items?.map((e) => InvItem.fromPartial(e)) || [];
+    message.gold = object.gold ?? 0;
+    message.stacks = object.stacks?.map((e) => DepositStack.fromPartial(e)) || [];
+    message.capacity = object.capacity ?? 0;
+    message.stackMax = object.stackMax ?? 0;
     return message;
   },
 };

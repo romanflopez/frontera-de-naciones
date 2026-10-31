@@ -122,6 +122,8 @@ message ClientMessage {
     MapReady map_ready = 124;
     // Casa de subastas (ver docs/SUBASTAS.md). Rango propio de tags desde 300.
     AuctionRequest auction_request = 300;
+    // Depósito por cuenta (ver docs/DEPOSITO.md). Rango propio de tags desde 400.
+    DepositRequest deposit_request = 400;
   }
 }
 
@@ -509,6 +511,8 @@ message ServerMessage {
     AuctionSearchResult auction_search_result = 300;
     AuctionMyState auction_my_state = 301;
     AuctionHistory auction_history = 302;
+    // Depósito por cuenta (ver docs/DEPOSITO.md). Rango propio de tags desde 400; el resultado de cada acción va en EconResult.
+    DepositState deposit_state = 400;
   }
 }
 
@@ -1402,4 +1406,30 @@ message AuctionHistoryEntry {
 /** Historial de transacciones del que recibe el mensaje, del más nuevo al más viejo (máximo 200). */
 message AuctionHistory {
   repeated AuctionHistoryEntry entries = 1;
+}
+
+// ---------- Depósito por cuenta (ver docs/DEPOSITO.md) ----------
+/**
+ * Pedido al Depositario (npc_id: el NPC con el que se habla; el server valida rol y distancia).
+ * action = open | put | take | gold_in | gold_out | stack_in | stack_out | sort.
+ * put: uid de la bolsa; take: uid del depósito; gold_in/gold_out: amount; stack_in/stack_out: stack + amount.
+ * stack = pot_hp | pot_mp | key_cripta | key_foso | shard_cripta | shard_foso.
+ * op_id: número de pedido elegido por el cliente (distinto de 0): si llega dos veces, la segunda no se aplica.
+ */
+message DepositRequest {
+  string npc_id = 1;
+  string action = 2;
+  int32 uid = 3;
+  double amount = 4;
+  string stack = 5;
+  uint32 op_id = 6;
+}
+message DepositStack { string id = 1; int32 qty = 2; }
+/** Contenido del depósito de la cuenta (se manda al abrir y después de cada acción). */
+message DepositState {
+  repeated InvItem items = 1;
+  double gold = 2;
+  repeated DepositStack stacks = 3;
+  int32 capacity = 4;
+  int32 stack_max = 5;
 }

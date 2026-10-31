@@ -106,6 +106,7 @@ export function extendCities(w: WorldMap): WorldMap {
         npc('guardia_s2', 'Guardia de la Marea', 17, 10, 4);
         npc('guardia_s3', 'Guardia del Puerto', 6, 21, 2);
         npc('subastador_s', 'Subastadora Rosalba', 12, 10, 6); // casa de subastas (docs/SUBASTAS.md)
+        npc('depositario_s', 'Depositario Anselmo', 13, 6, 6); // depósito por cuenta (docs/DEPOSITO.md)
         w.spawn = { ...HUBS.solmar }; w.fire = { x: 4, y: 6 };
     }
 
@@ -153,6 +154,7 @@ export function extendCities(w: WorldMap): WorldMap {
         npc('guardia_v2', 'Guardia de Hierro', 80, 24, 2);
         npc('guardia_v3', 'Centinela de la Muralla', 82, 6, 6);
         npc('subastador_v', 'Subastador Morvek', 84, 11, 6); // casa de subastas (docs/SUBASTAS.md)
+        npc('depositario_v', 'Depositaria Ilsa', 84, 14, 6); // depósito por cuenta (docs/DEPOSITO.md)
     }
     for (const n of npcs) { w.blocked[n.y][n.x] = true; w.npcs.push(n); }
 
