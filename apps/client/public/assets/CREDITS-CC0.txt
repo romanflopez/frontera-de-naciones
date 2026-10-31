@@ -45,3 +45,26 @@ https://creativecommons.org/publicdomain/zero/1.0/
 Dwayne Jarvis
 Peardox
 David Williams
+
+=== Screaming Brain Studios, "Isometric Overworld Pack" (Small y Large), "Isometric Wall Pack" (Small y Large) e "Isometric Object Pack" (town.webp y sm_*.webp) ===
+
+Generados con tools/src/town/atlas.ts: pisos del Overworld (agua, tierra, arena, bosque) reescalados de 256x128 a 100x50,
+paredes planas y gruesas del Wall Pack apiladas en dos pisos y reescaladas a 0,375 (grilla de 96x48), pilares de esquina,
+muretes y balaustradas (Copings), escaleras y cajas del Object Pack; magenta (#ff00ff) y negro puro pasados a transparente.
+Las fachadas sm_*.webp (edificios de la Villa de Solmar) se componen con esas mismas paredes y pisos; la puerta, el cartel,
+el toldo, el farol, la bandera, los botes y el bolardo están dibujados por código (sin arte de terceros).
+town.webp también trae muebles de Kenney "Isometric Dungeon" (CC0, ver arriba) agrandados 1,6x desde dungeon.webp.
+
+Texto de licencia de los packs (License.txt de cada uno):
+
+All Screaming Brain Studios assets have been released
+under the CC0/Public Domain License. You are free to
+use these assets in any and all projects, commercial
+or non-commercial, with no restrictions, and can be
+released with or without credit.
+
+--------------------------------------------------
+CC0 1.0 Universal (CC0 1.0)
+Public Domain
+https://creativecommons.org/publicdomain/zero/1.0/
+--------------------------------------------------
