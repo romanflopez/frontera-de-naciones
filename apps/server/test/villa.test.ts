@@ -94,10 +94,10 @@ test('entrar y salir del Templo por la puerta (cruce de dos fases ida y vuelta)'
     assert.deepEqual(pos(villa, J.session.sessionId), [d.out.x, d.out.y]);
 });
 
-test('Solmar reaparece en el Templo al morir en el mapa viejo; Vhar en su ciudad', () => {
+test('Solmar reaparece en el Templo al morir en el mapa viejo; Vhar en su Santuario', () => {
     assert.deepEqual(respawnTarget(getMapDef('solmar_legacy')!, 'solmar'), { map: 'solmar_templo', ...TEMPLE_RESPAWN });
     assert.deepEqual(respawnTarget(getMapDef('solmar_villa')!, 'solmar'), { map: 'solmar_templo', ...TEMPLE_RESPAWN });
-    assert.equal(respawnTarget(getMapDef('solmar_legacy')!, 'vhar').map, 'solmar_legacy');
+    assert.equal(respawnTarget(getMapDef('solmar_legacy')!, 'vhar').map, 'vhar_santuario');
     const { reg, join } = setup();
     const legacy = reg.ensure('solmar_legacy');
     const J = join(legacy, 'rita', { x: 26, y: 26 });
@@ -109,7 +109,7 @@ test('Solmar reaparece en el Templo al morir en el mapa viejo; Vhar en su ciudad
     assert.deepEqual(pos(reg.get('solmar_templo')!, J.session.sessionId), [TEMPLE_RESPAWN.x, TEMPLE_RESPAWN.y]);
 });
 
-test('un personaje nuevo de Solmar va a la villa (hogar de la facción); uno de Vhar se queda en el mapa viejo', () => {
+test('un personaje nuevo de Solmar va a la villa (hogar de la facción)', () => {
     const home = factionHome('solmar')!;
     assert.deepEqual(home, { map: 'solmar_villa', ...VILLA.spawn });
     const { reg, join } = setup();
@@ -119,7 +119,7 @@ test('un personaje nuevo de Solmar va a la villa (hogar de la facción); uno de 
     assert.equal(reg.pendingOf(J.session.sessionId)?.map, 'solmar_villa');
     reg.completeTransfer(J.session.sessionId, 'solmar_villa', reg.hashOf('solmar_villa'));
     assert.deepEqual(pos(reg.get('solmar_villa')!, J.session.sessionId), [home.x, home.y]);
-    assert.equal(factionHome('vhar')!.map, 'solmar_legacy');
+    assert.equal(factionHome('vhar')!.map, 'vhar_ciudadela');
 });
 
 test('el Portal de Frontera de la villa lleva a las zonas (mapas de caza y mapa viejo)', () => {

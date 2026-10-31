@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { HUBS, MAPS, RECALL, TRAINING, VILLA, buildMap, type Waypoint } from '@fdn/world';
+import { HUBS, MAPS, RECALL, TRAINING, VHAR, VILLA, buildMap, type Waypoint } from '@fdn/world';
 import { loadCatalogs, loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
@@ -81,17 +81,17 @@ test('el recall canaliza 8 s y lleva a Solmar a la plaza de la villa (cruce de m
     } finally { c.restore(); }
 });
 
-test('el recall de Vhar lo lleva a su ciudad dentro del mapa viejo (sin cruce)', () => {
+test('el recall de Vhar lo lleva a la plaza de la Ciudadela de Vhar (cruce de mapa)', () => {
     const c = clock();
     try {
         const { reg, join } = setup();
         const legacy = calm(reg.ensure('solmar_legacy'));
         const J = join(legacy, 'vito', ZONE_AT, 'vhar');
         J.recall(); c.advance(RECALL.channelMs + 100); legacy.tick();
-        assert.equal(reg.pendingOf(J.session.sessionId), undefined);
-        const [x, y] = pos(legacy, J.session.sessionId);
-        assert.ok(Math.abs(x - HUBS.vhar.x) + Math.abs(y - HUBS.vhar.y) <= 4, `${x},${y}`);
-        assert.ok(all(J.log, 'playerTeleported').length >= 1);
+        assert.equal(reg.pendingOf(J.session.sessionId)?.map, 'vhar_ciudadela');
+        reg.completeTransfer(J.session.sessionId, 'vhar_ciudadela', reg.hashOf('vhar_ciudadela'));
+        const [x, y] = pos(reg.get('vhar_ciudadela')!, J.session.sessionId);
+        assert.ok(Math.abs(x - VHAR.spawn.x) + Math.abs(y - VHAR.spawn.y) <= 3, `${x},${y}`);
     } finally { c.restore(); }
 });
 
@@ -143,12 +143,15 @@ test('enfriamiento de 60 s después de un recall completo', () => {
         const legacy = calm(reg.ensure('solmar_legacy'));
         const J = join(legacy, 'vhal', ZONE_AT, 'vhar'), sid = J.session.sessionId;
         J.recall(); c.advance(RECALL.channelMs + 100); legacy.tick();
-        legacy.playerOf(sid)!.setPosition(ZONE_AT.x, ZONE_AT.y);
-        c.advance(10_000); J.recall();
-        const st = last(J.log, 'recallState');
-        assert.equal(J.p.recallUntil, 0); assert.match(st.reason, /faltan 5\d s/); assert.ok(st.cooldownMs > 49_000 && st.cooldownMs <= 50_100, String(st.cooldownMs));
-        c.advance(50_200); J.recall();
-        assert.ok(J.p.recallUntil > 0, 'pasó el enfriamiento');
+        reg.completeTransfer(sid, 'vhar_ciudadela', reg.hashOf('vhar_ciudadela'));
+        // vuelve a la zona (por el camino) y lo intenta de nuevo
+        assert.ok(reg.beginTransfer(J.session, { map: 'solmar_legacy', ...ZONE_AT }));
+        reg.completeTransfer(sid, 'solmar_legacy', reg.hashOf('solmar_legacy'));
+        c.advance(10_000); pkt(legacy, sid, 'recallRequest', { cancel: false });
+        const st = last(J.log, 'recallState'), p = legacy.playerOf(sid)!;
+        assert.equal(p.recallUntil, 0); assert.match(st.reason, /faltan 5\d s/); assert.ok(st.cooldownMs > 49_000 && st.cooldownMs <= 50_100, String(st.cooldownMs));
+        c.advance(50_200); pkt(legacy, sid, 'recallRequest', { cancel: false });
+        assert.ok(p.recallUntil > 0, 'pasó el enfriamiento');
     } finally { c.restore(); }
 });
 
@@ -198,9 +201,10 @@ test('no se puede usar durante un cruce de mapa y el cruce corta el canal', () =
 test('el Portal de Frontera lleva a una zona que no tiene portal de llegada; las zonas no tienen waypoints', () => {
     const legacyMap = buildMap('solmar_legacy');
     const wps: Waypoint[] = legacyMap.waypoints ?? [];
-    // en el mapa viejo queda solo el Portal de Frontera de Vhar (Solmar tiene el suyo en la villa)
-    assert.deepEqual(wps.map((q) => q.id), ['city:vhar']);
+    // el mapa viejo ya no tiene portales: cada ciudad tiene el suyo (la villa de Solmar y la ciudadela de Vhar)
+    assert.deepEqual(wps.map((q) => q.id), []);
     assert.deepEqual(buildMap('solmar_villa').waypoints!.map((q) => q.id), ['city:solmar']);
+    assert.deepEqual(buildMap('vhar_ciudadela').waypoints!.map((q) => q.id), ['city:vhar']);
     for (const t of TRAINING) {
         const a = legacyMap.waypointArrivals![t.id]; assert.ok(a, t.id);
         assert.ok(!legacyMap.blocked[a.y][a.x], t.id);
@@ -222,7 +226,7 @@ test('el Portal de Frontera lleva a una zona que no tiene portal de llegada; las
     pkt(legacy, sid, 'waypointRequest', { id: 'goblins' });
     assert.equal(reg.pendingOf(sid), undefined);
     // el portal de Vhar no le sirve a uno de Solmar
-    const vp = wps[0]; legacy.playerOf(sid)!.setPosition(vp.x + 1, vp.y);
-    pkt(legacy, sid, 'waypointRequest', { id: 'goblins' });
-    assert.equal(reg.pendingOf(sid), undefined); assert.match(last(J.log, 'sendMessage').message, /tu ciudad/);
+    const vc = reg.ensure('vhar_ciudadela'), K = join(vc, 'intrusa', { x: VHAR.portal.x + 1, y: VHAR.portal.y + 1 }, 'solmar');
+    pkt(vc, K.session.sessionId, 'waypointRequest', { id: 'goblins' });
+    assert.equal(reg.pendingOf(K.session.sessionId), undefined); assert.match(last(K.log, 'sendMessage').message, /tu ciudad/);
 });
