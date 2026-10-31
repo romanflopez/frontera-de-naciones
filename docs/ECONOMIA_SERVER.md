@@ -19,6 +19,7 @@ Desde esta versión el **server es dueño** del oro, la bolsa, el equipo, el niv
 Cliente → server (`ClientMessage`): `EconBuyRequest`=90, `EconSellRequest`=91, `EconEquipRequest`=92, `EconUnequipRequest`=93, `EconDropRequest`=94, `EconSortRequest`=95, `EconQuestRequest`=96 (`accept | turnin | forge`).
 Server → cliente (`ServerMessage`): `InventoryState`=140 (foto completa; al entrar, después de cada acción, kill, muerte, poción y portal con llave), `EconResult`=141 (ok/código/texto), `KillReward`=142 (qué ganó el golpe final, para mostrar). `LootRoll`=130 quedó sin uso.
 Botín en el suelo: `PickupRequest`=97 (cliente → server), `GroundItemSpawned`=143 y `GroundItemRemoved`=144 (server → cliente).
+Depósito por cuenta: `DepositRequest`=400 (cliente → server) y `DepositState`=400 (server → cliente), ver `docs/DEPOSITO.md`.
 Oro: `InventoryState.gold_d`=18 y `KillReward.gold_d`=13 (double, exacto hasta 2^53-1); `gold` (int32) queda por compatibilidad, topado a 2.147.483.647.
 
 ## Acciones (Etapa 2)
@@ -70,7 +71,7 @@ Hoy no existe el sistema de grupos (invitaciones, lista de miembros, UI). El bot
 ## Pendientes
 - ~~Casa de subastas~~: hecha (compra directa, custodia de items, buzón, tasa y comisión), ver `docs/SUBASTAS.md`. Faltan pujas.
 - Crafteo (recetas en `packages/world`, validación y consumo atómico en el server).
-- Banco/almacén por cuenta.
+- ~~Banco/almacén por cuenta~~: hecho (Depositario: 48 casillas de equipo, oro sin tope y stacks de pociones/llaves/esquirlas, en el mismo registro de la cuenta), ver `docs/DEPOSITO.md`.
 - Sistema de grupos y el reparto de exp/botín/oro descripto arriba; persistir el suelo entre reinicios.
 - Pasar `u` (portales), llaves y quests a un módulo propio; log/auditoría de transacciones (`transactions`) y alertas de anomalías.
 - Probar la persistencia contra un Postgres real (el camino es el mismo upsert `jsonb` de la cuenta; no se corrió acá).

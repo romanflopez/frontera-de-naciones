@@ -16,6 +16,7 @@ import { coinIcon, itemIcon, keyIcon, potionIcon, shardIcon } from './itemicons.
 import { initLoginUI } from './loginui.ts';
 import { createMinimap, type Minimap } from './minimap.ts';
 import { createAuctionUI } from './auction.ts';
+import { createDepositUI } from './deposit.ts';
 const ico = (it: { look?: string; slot: string; rar: { c: string; k: number } }) => `<img class="iico" alt="" src="${itemIcon(it.look, it.slot, it.rar.c, it.rar.k)}">`;
 
 // ---------- utilidades ----------
@@ -278,7 +279,8 @@ function onServer(m: ServerPayload) {
         }
         case 'groundItemRemoved': { const i = drops.findIndex((d) => d.gid === m.value.id); if (i >= 0) { if (P.pickup === drops[i]) P.pickup = null; drops.splice(i, 1); } break; }
         case 'auctionSearchResult': case 'auctionMyState': case 'auctionHistory': auction.onMessage(m); break;
-        case 'econResult': if (m.value.ok) log(esc(m.value.text)); else { toast(m.value.text); log(esc(m.value.text)); } break;
+        case 'depositState': deposit.onMessage(m); break;
+        case 'econResult': deposit.onResult(m.value.ok, m.value.text); if (m.value.ok) log(esc(m.value.text)); else { toast(m.value.text); log(esc(m.value.text)); } break;
         case 'killReward': onKillReward(m.value); break;
         case 'statusUpdate': onStatusUpdate(m.value); break;
         case 'skillEffect': onSkillEffect(m.value); break;
@@ -1049,6 +1051,7 @@ function drawRoleMark(role: string, x: number, y: number) {
     else if (role === 'armadurero') { ctx.moveTo(0, -6.5); ctx.lineTo(5.5, -4.5); ctx.lineTo(5, 1); ctx.quadraticCurveTo(4, 5, 0, 7); ctx.quadraticCurveTo(-4, 5, -5, 1); ctx.lineTo(-5.5, -4.5); ctx.closePath(); ctx.fill(); ctx.fillStyle = 'rgba(14,18,14,.85)'; ctx.fillRect(-0.9, -4, 1.8, 8); }
     else if (role === 'joyero') { ctx.moveTo(0, -6.5); ctx.lineTo(5.5, -1); ctx.lineTo(0, 6.5); ctx.lineTo(-5.5, -1); ctx.closePath(); ctx.fill(); ctx.strokeStyle = 'rgba(14,18,14,.85)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-5.5, -1); ctx.lineTo(5.5, -1); ctx.moveTo(-2, -1); ctx.lineTo(0, 6.5); ctx.moveTo(2, -1); ctx.lineTo(0, 6.5); ctx.stroke(); }
     else if (role === 'alquimista') { for (let i = 0; i < 8; i++) { const r = i % 2 ? 2.2 : 6.5, a = (i * Math.PI) / 4 - Math.PI / 2; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.closePath(); ctx.fill(); }
+    else if (role === 'depositario') { ctx.fillRect(-6, -2, 12, 7.5); ctx.beginPath(); ctx.moveTo(-6, -2.6); ctx.quadraticCurveTo(0, -8, 6, -2.6); ctx.closePath(); ctx.fill(); ctx.fillStyle = 'rgba(14,18,14,.85)'; ctx.fillRect(-6, -2.2, 12, 1.4); ctx.fillRect(-1.2, -1.2, 2.4, 3); } // baúl
     else if (role === 'capitan') { ctx.moveTo(-4, -6.5); ctx.lineTo(-4, 7); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-3.5, -6); ctx.lineTo(5.5, -3.5); ctx.lineTo(-3.5, -0.5); ctx.closePath(); ctx.fill(); }
     else { ctx.moveTo(-5, 3); ctx.lineTo(-5, -1); ctx.quadraticCurveTo(-5, -6.5, 0, -6.5); ctx.quadraticCurveTo(5, -6.5, 5, -1); ctx.lineTo(5, 3); ctx.closePath(); ctx.fill(); ctx.fillStyle = 'rgba(14,18,14,.85)'; ctx.fillRect(-3.5, -1.2, 7, 1.8); ctx.fillRect(-0.8, -1.2, 1.6, 6); }
     ctx.restore();
@@ -1485,8 +1488,10 @@ const NPC_LOOKS: Record<string, string[]> = {
     guardia_v: ['plate_boots', 'chain_greaves', 'plate_gauntlets', 'chain_cuirass', 'head_bald', 'chain_coif', 'battle_axe'],
     subastador_s: ['mage_boots', 'cloth_pants', 'cloth_gloves', 'mage_vest', 'head_short'],
     subastador_v: ['leather_boots', 'leather_pants', 'cloth_gloves', 'mage_vest', 'head_bald', 'mage_hood'],
+    depositario_s: ['leather_boots', 'cloth_pants', 'leather_gloves', 'leather_chest', 'head_short'],
+    depositario_v: ['chain_boots', 'leather_pants', 'leather_gloves', 'cloth_shirt', 'head_bald', 'leather_hood'],
 };
-const lookOfNpc = (n: { id: string }) => NPC_LOOKS[n.id] ?? NPC_LOOKS[n.id.replace(/\d+$/, '')];
+const lookOfNpc = (n: { id: string }) => NPC_LOOKS[n.id] ?? NPC_LOOKS[n.id.replace(/\d+$/, '')] ?? NPC_LOOKS[roleOf(n) + '_s'];
 function refreshNpcLook() {
     if (!PAPER) return;
     for (const n of MAP.npcs) {
@@ -1580,9 +1585,12 @@ function stockInfo(st: Stock): string {
 }
 /** Casa de subastas (ventana propia en auction.ts; el server valida todo). */
 const auction = createAuctionUI({ send: (p) => net.send(p), bag: () => P.bag, gold: () => P.gold, fromInv: itemFromInv, icon: ico, attrText, esc, fmt: fmtNum, toast });
+/** Depósito por cuenta (ventana propia en deposit.ts; el server valida todo, ver docs/DEPOSITO.md). */
+const deposit = createDepositUI({ send: (p) => net.send(p), bag: () => P.bag, gold: () => P.gold, pots: () => pots, keys: () => Q.keys, shards: () => Q.shards, fromInv: itemFromInv, icon: ico, attrText, esc, fmt: fmtNum, requestClose: () => closeShop() });
 function openShop(n: Npc = MAP.npcs[0]) {
     const role = roleOf(n);
     if (role === 'subastador') { closeShop(); shopNpc = n; talkNpc = null; auction.open(n); return; }
+    if (role === 'depositario') { if (shopNpc !== n) closeShop(); shopNpc = n; talkNpc = null; deposit.open(n); return; }
     if (role === 'capitan') { openQuestDlg(n); return; }
     if (role === 'guardia') { openTalk(n); return; }
     const def = SHOPS[role]; if (!def) return;
@@ -1596,7 +1604,7 @@ function openTalk(n: Npc) {
     $('qdName').textContent = n.name; $('qdlg').hidden = false; $('qdForges').innerHTML = ''; $('qdBtn').hidden = true;
     $('qdBody').innerHTML = `<small>${SHOPS.guardia.label}</small><br>${lines[Math.floor(R() * lines.length)]}`;
 }
-function closeShop() { shopNpc = null; $('shop').hidden = true; $('qdlg').hidden = true; auction.close(); }
+function closeShop() { shopNpc = null; $('shop').hidden = true; $('qdlg').hidden = true; auction.close(); deposit.close(); }
 function renderShop() {
     if ($('shop').hidden || !shopNpc) return;
     const def = SHOPS[roleOf(shopNpc)];
@@ -1898,7 +1906,7 @@ function applyInventory(v: InventoryState) {
     if (prevSel >= 0) { const inBag = P.bag.find((x) => x.id === prevSel); const inEq = SLOTS.map((sl) => P.eq[sl]).find((x) => x && x.id === prevSel); sel = inBag ? { it: inBag, from: 'bag' } : inEq ? { it: inEq!, from: 'eq' } : null; }
     if (invApplied && v.lvl > lvlBefore) onLevelUp(); else { P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); }
     invApplied = true;
-    refreshLook(); renderBag(); renderQuest(); renderPots(); renderShop(); auction.refresh(); sendProfile();
+    refreshLook(); renderBag(); renderQuest(); renderPots(); renderShop(); auction.refresh(); deposit.refresh(); sendProfile();
     if (!$('qdlg').hidden && shopNpc && roleOf(shopNpc) === 'capitan') openQuestDlg(shopNpc);
 }
 const saver = new Saver(buildSave, (data) => net.send({ $case: 'saveCharacterRequest', value: { data } }));
