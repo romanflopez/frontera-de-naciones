@@ -31,8 +31,18 @@ export const WALL_STYLES = [
     { id: 'madera_clara', mat: 'Wood', color: 6 },
     { id: 'lila', mat: 'Stone', color: 8 }, // torre de magia
     { id: 'beige', mat: 'Stone', color: 9 },
+    // Ciudadela de Vhar: piedra y ladrillo oscuros (`shade` oscurece la pieza al armar el atlas)
+    { id: 'basalto', mat: 'Stone', color: 5 }, // piedra negra agrietada (muralla, torres)
+    { id: 'pizarra', mat: 'Brick', color: 8 }, // ladrillo gris pizarra
+    { id: 'hollin', mat: 'Brick', color: 9 }, // ladrillo ennegrecido por el humo
+    { id: 'carbon', mat: 'Brick', color: 10 }, // ladrillo gris carbón
+    { id: 'sangre', mat: 'Brick', color: 0, shade: 0.66 }, // ladrillo rojo oscuro
+    { id: 'herrumbre', mat: 'Brick', color: 5, shade: 0.74 }, // ladrillo de horno, óxido
+    { id: 'hierro', mat: 'Stone', color: 3, shade: 0.78 }, // placa gris de hierro
 ] as const;
 export type WallStyle = (typeof WALL_STYLES)[number]['id'];
+/** Estilos con oscurecimiento propio (el resto va tal cual). */
+export const wallShade = (id: WallStyle): number => { const s = WALL_STYLES.find((q) => q.id === id) as { shade?: number } | undefined; return s?.shade ?? 1; };
 export type WallVariant = 'liso' | 'ventana' | 'ventana2';
 const WALL_VARIANTS: WallVariant[] = ['liso', 'ventana', 'ventana2'];
 export const WALL_BASE = 3200;
@@ -65,24 +75,41 @@ export const FOAM_BASE = 3470;
 export const FOAM = { ne: FOAM_BASE, se: FOAM_BASE + 1, sw: FOAM_BASE + 2, nw: FOAM_BASE + 3 } as const;
 /** Objetos dibujados por el script (sin arte de terceros): farol de hierro, bote, bandera, cartel. */
 export const PROP_BASE = 3480;
-export const TOWN_PROPS = { farol: PROP_BASE, bote: PROP_BASE + 1, bote2: PROP_BASE + 2, bandera: PROP_BASE + 3, poste: PROP_BASE + 4, alfombra: PROP_BASE + 5 } as const;
+export const TOWN_PROPS = {
+    farol: PROP_BASE, bote: PROP_BASE + 1, bote2: PROP_BASE + 2, bandera: PROP_BASE + 3, poste: PROP_BASE + 4, alfombra: PROP_BASE + 5,
+    // Ciudadela de Vhar
+    brasero: PROP_BASE + 6, estandarte: PROP_BASE + 7, forja: PROP_BASE + 8, yunque: PROP_BASE + 9, roca: PROP_BASE + 10, roca2: PROP_BASE + 11,
+    obsidiana: PROP_BASE + 12, lingotes: PROP_BASE + 13, alfombraV: PROP_BASE + 14, monolito: PROP_BASE + 15, pinchos: PROP_BASE + 16, perchero: PROP_BASE + 17,
+} as const;
+
+/**
+ * Pisos de la Ciudadela de Vhar (tierra volcánica): 18 rombos que el script arma con filtros sobre las hojas del Overworld Pack
+ * (ceniza, roca) y con dibujo propio por código (adoquín negro, placas de hierro, lava). Ocupan 3090..3107 (entre los pisos del Overworld y las paredes).
+ */
+export const VHAR_FLOOR_BASE = TOWN_BASE + TOWN_SHEETS.length * 18;
+export const VHAR_FLOORS = { ceniza: [0, 1, 2], roca: [3, 4, 5], adoquin: [6, 7, 8], placa: [9, 10], runa: [11], lava: [12, 13, 14], costra: [15, 16], ladrillo: [17] } as const;
+export const vharTile = (cell: number): number => VHAR_FLOOR_BASE + cell;
+export const vharTiles = (k: keyof typeof VHAR_FLOORS): number[] => VHAR_FLOORS[k].map(vharTile);
 
 /**
  * Fachadas: edificios cerrados (cara sur y cara este a la vista) con terraza plana y pretil, puerta dibujada y cartel.
  * `door.side` 'S' = cara sur (la puerta da a la celda (x + i, y + h)), 'E' = cara este (da a (x + w, y + i)).
  */
+export interface TownUpper { x: number; y: number; w: number; h: number; floors: number }
 export interface TownBuilding {
     id: string; w: number; h: number;
     /** Pisos de ~96 px (cada uno son dos piezas del Wall Pack apiladas). */
     floors: number; style: WallStyle;
     door?: { side: 'S' | 'E'; i: number };
     sign?: string;
-    /** Color de la terraza: celda 15 de terrain1 (arcilla) o 17 de terrain2 (arena dorada). */
-    roof?: 15 | 17;
+    /** Color de la terraza: celda 15 de terrain1 (arcilla) o 17 de terrain2 (arena dorada); 'ceniza' / 'losa' / 'placa' son pisos de Vhar. */
+    roof?: 15 | 17 | 'ceniza' | 'losa' | 'placa';
     /** Pretil de la terraza (Copings). */
     parapet?: Coping;
-    /** Volumen escalonado sobre la terraza (en celdas relativas a la huella). */
-    upper?: { x: number; y: number; w: number; h: number; floors: number };
+    /** Volumen(es) escalonado(s) sobre la terraza (en celdas relativas a la huella). */
+    upper?: TownUpper | TownUpper[];
+    /** Estilo de herrería de Vhar: puerta de hierro con brasas y cartel de placa oscura. */
+    iron?: boolean;
     /** Toldo a rayas sobre la puerta (color). */
     awning?: string;
 }
@@ -105,6 +132,28 @@ export const TOWN_BUILDINGS: TownBuilding[] = [
     { id: 'sm_torre_muralla', w: 3, h: 3, floors: 2, style: 'piedra', roof: 17, parapet: 'muro' },
     { id: 'sm_faro', w: 3, h: 3, floors: 3, style: 'cal', door: { side: 'S', i: 1 }, roof: 17, parapet: 'baranda', upper: { x: 1, y: 1, w: 1, h: 1, floors: 1 } },
 ];
+/** Fachadas de la Ciudadela de Vhar: cuadradas, macizas, de piedra y ladrillo oscuros, con terrazas de losa y torrecillas. */
+TOWN_BUILDINGS.push(
+    { id: 'vh_concejo', w: 12, h: 8, floors: 2, style: 'carbon', door: { side: 'S', i: 6 }, sign: 'CONCEJO', roof: 'losa', parapet: 'muro', iron: true, upper: [{ x: 0, y: 0, w: 3, h: 3, floors: 2 }, { x: 9, y: 0, w: 3, h: 3, floors: 2 }, { x: 4, y: 1, w: 4, h: 4, floors: 1 }] },
+    { id: 'vh_santuario', w: 9, h: 9, floors: 2, style: 'basalto', door: { side: 'E', i: 4 }, sign: 'SANTUARIO', roof: 'ceniza', parapet: 'muro', iron: true, upper: [{ x: 1, y: 1, w: 7, h: 7, floors: 1 }, { x: 3, y: 3, w: 3, h: 3, floors: 2 }] },
+    { id: 'vh_forja', w: 9, h: 6, floors: 2, style: 'herrumbre', door: { side: 'S', i: 4 }, sign: 'FORJA', roof: 'placa', parapet: 'muro', iron: true, upper: [{ x: 6, y: 0, w: 2, h: 2, floors: 3 }, { x: 0, y: 0, w: 2, h: 2, floors: 2 }] },
+    { id: 'vh_bazar', w: 9, h: 6, floors: 1, style: 'hollin', door: { side: 'E', i: 3 }, sign: 'BAZAR', roof: 'losa', parapet: 'muro', iron: true, awning: '#5e1c1c', upper: [{ x: 0, y: 0, w: 4, h: 3, floors: 2 }] },
+    { id: 'vh_orfebreria', w: 6, h: 6, floors: 2, style: 'sangre', door: { side: 'E', i: 3 }, sign: 'ORFEBRERÍA', roof: 'losa', parapet: 'muro', iron: true, upper: [{ x: 0, y: 0, w: 3, h: 3, floors: 1 }] },
+    { id: 'vh_camara', w: 8, h: 6, floors: 2, style: 'basalto', door: { side: 'S', i: 4 }, sign: 'CÁMARA', roof: 'placa', parapet: 'muro', iron: true, upper: [{ x: 0, y: 0, w: 2, h: 2, floors: 1 }, { x: 6, y: 0, w: 2, h: 2, floors: 1 }] },
+    { id: 'vh_torre', w: 5, h: 5, floors: 3, style: 'pizarra', door: { side: 'S', i: 2 }, sign: 'TORRE', roof: 'ceniza', parapet: 'muro', iron: true, upper: [{ x: 1, y: 1, w: 3, h: 3, floors: 2 }] },
+    { id: 'vh_cuartel', w: 12, h: 8, floors: 2, style: 'sangre', door: { side: 'E', i: 4 }, sign: 'CUARTEL', roof: 'losa', parapet: 'muro', iron: true, upper: [{ x: 0, y: 0, w: 3, h: 3, floors: 2 }, { x: 0, y: 5, w: 3, h: 3, floors: 1 }, { x: 5, y: 2, w: 5, h: 4, floors: 1 }] },
+    // casas, talleres y torres sin interior
+    { id: 'vh_casa_a', w: 5, h: 5, floors: 2, style: 'pizarra', door: { side: 'S', i: 2 }, iron: true, roof: 'losa', parapet: 'muro' },
+    { id: 'vh_casa_b', w: 4, h: 4, floors: 2, style: 'hollin', door: { side: 'E', i: 1 }, iron: true, roof: 'ceniza', parapet: 'muro', upper: [{ x: 0, y: 0, w: 2, h: 2, floors: 1 }] },
+    { id: 'vh_casa_c', w: 6, h: 5, floors: 1, style: 'carbon', door: { side: 'S', i: 3 }, iron: true, roof: 'losa', parapet: 'muro', upper: [{ x: 0, y: 0, w: 3, h: 3, floors: 1 }] },
+    { id: 'vh_casa_d', w: 5, h: 4, floors: 2, style: 'sangre', door: { side: 'E', i: 2 }, iron: true, roof: 'losa', parapet: 'muro' },
+    { id: 'vh_casa_e', w: 4, h: 5, floors: 1, style: 'herrumbre', door: { side: 'S', i: 1 }, iron: true, roof: 'placa', parapet: 'muro', upper: [{ x: 0, y: 0, w: 2, h: 3, floors: 1 }] },
+    { id: 'vh_barracon', w: 8, h: 5, floors: 1, style: 'basalto', door: { side: 'S', i: 4 }, iron: true, roof: 'ceniza', parapet: 'muro', upper: [{ x: 0, y: 0, w: 2, h: 2, floors: 1 }, { x: 6, y: 0, w: 2, h: 2, floors: 1 }] },
+    { id: 'vh_almacen', w: 6, h: 5, floors: 1, style: 'hierro', door: { side: 'S', i: 2 }, iron: true, roof: 'placa', parapet: 'muro' },
+    { id: 'vh_hornos', w: 8, h: 5, floors: 1, style: 'herrumbre', door: { side: 'S', i: 3 }, iron: true, roof: 'placa', parapet: 'muro', upper: [{ x: 1, y: 0, w: 2, h: 2, floors: 3 }, { x: 5, y: 0, w: 2, h: 2, floors: 2 }] },
+    { id: 'vh_torre_muralla', w: 4, h: 4, floors: 2, style: 'basalto', roof: 'placa', parapet: 'muro', upper: [{ x: 1, y: 1, w: 2, h: 2, floors: 1 }] },
+    { id: 'vh_torreon', w: 6, h: 6, floors: 3, style: 'basalto', roof: 'placa', parapet: 'muro', upper: [{ x: 1, y: 1, w: 4, h: 4, floors: 1 }] },
+);
 export const townBuilding = (id: string): TownBuilding => { const b = TOWN_BUILDINGS.find((q) => q.id === id); if (!b) throw new Error(`edificio desconocido: ${id}`); return b; };
 
 /**
@@ -117,6 +166,7 @@ export const townFurniture = (name: (typeof KENNEY_FURNITURE)[number], o: 'N' | 
 
 /** Color aproximado de un tile del kit para el minimapa (null si no es del kit). */
 export function townTileRGB(id: number): [number, number, number] | null {
+    if (id >= VHAR_FLOOR_BASE && id < VHAR_FLOOR_BASE + 18) { const c = id - VHAR_FLOOR_BASE; return c >= 12 && c <= 14 ? [214, 84, 28] : c >= 15 && c <= 16 ? [96, 54, 40] : [72, 68, 70]; }
     if (id < TOWN_BASE || id >= TOWN_BASE + TOWN_SHEETS.length * 18) return null;
     const s = TOWN_SHEETS[Math.floor((id - TOWN_BASE) / 18)];
     if (s === 'water') return [52, 112, 150];
