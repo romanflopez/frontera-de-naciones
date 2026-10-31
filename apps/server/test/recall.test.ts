@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { HUBS, MAPS, RECALL, TRAINING, VHAR, VILLA, buildMap, type Waypoint } from '@fdn/world';
+import { MAPS, RECALL, TRAINING, VHAR, VILLA, buildMap, type Waypoint } from '@fdn/world';
 import { loadCatalogs, loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';

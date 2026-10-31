@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { LEGACY_VHAR_LINK, MAPS, RECALL, VHAR, VHAR_BUILDINGS, VHAR_INTERIORS, VHAR_RESPAWN, buildMap, factionHome, getMapDef, reachableFrom, respawnTarget, roleOf, roomOf, validateMapGraph, vharDoor, type VharBuilding } from '@fdn/world';
+import { HUNT_ARRIVALS, LEGACY_VHAR_LINK, MAPS, RECALL, VHAR, VHAR_BUILDINGS, VHAR_INTERIORS, VHAR_RESPAWN, buildMap, factionHome, getMapDef, reachableFrom, respawnTarget, roleOf, roomOf, validateMapGraph, vharDoor, type VharBuilding } from '@fdn/world';
 import { loadCatalogs, loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
@@ -154,15 +154,12 @@ test('el recall (H) de Vhar lleva a la plaza de la ciudadela', () => {
     } finally { c.restore(); }
 });
 
-test('el Portal de Frontera de la ciudadela lleva a las zonas del mapa viejo', () => {
+test('el Portal de Frontera de la ciudadela lleva a las zonas de caza (Llanos del Alba)', () => {
     const { reg, join } = setup();
     const city = reg.ensure('vhar_ciudadela');
     const J = join(city, 'viajero', { x: VHAR.portal.x + 1, y: VHAR.portal.y + 1 });
     pkt(city, J.session.sessionId, 'waypointRequest', { id: 'goblins' });
-    assert.equal(reg.pendingOf(J.session.sessionId)?.map, 'solmar_legacy');
-    reg.completeTransfer(J.session.sessionId, 'solmar_legacy', reg.hashOf('solmar_legacy'));
-    const legacy = reg.get('solmar_legacy')!, arr = buildMap('solmar_legacy').waypointArrivals!.goblins, [x, y] = pos(legacy, J.session.sessionId);
-    assert.ok(Math.abs(x - arr.x) + Math.abs(y - arr.y) <= 3);
+    assert.deepEqual([reg.pendingOf(J.session.sessionId)!.map, reg.pendingOf(J.session.sessionId)!.x, reg.pendingOf(J.session.sessionId)!.y], ['llanos_alba', HUNT_ARRIVALS.goblins.x, HUNT_ARRIVALS.goblins.y]);
 });
 
 test('camino entre la ciudadela y el mapa viejo, ida y vuelta (llega junto a la puerta de la ciudad vieja de Vhar)', () => {
