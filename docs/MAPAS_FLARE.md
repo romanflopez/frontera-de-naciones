@@ -60,6 +60,7 @@ Cada mapa tiene **3 pits con un mob distinto cada uno** (A más cerca de la entr
 - **Pits:** las regiones de spawn de Flare se agrupan en 3 sectores por cercanía (k-means determinista, rebalanceado para que ninguno quede con menos de ~1/3 de las zonas). Se ordenan por distancia a la entrada: A el más cercano, C el más lejano. Cada sector toma el nombre, el mob y el nivel de su pit.
 - **Sueltos:** zonas chicas (radio 5, 2 mobs) repartidas por todo el mapa, ~1 cada 250 celdas caminables, a ≥12 celdas de la entrada y fuera de los pits. Son mobs de bajo nivel o ambientales de cada mapa. Respawn igual que los demás.
 - Todo cae en celdas caminables (se ajusta el centro a la celda libre más cercana) y es determinista (mismo JSON en cada corrida).
+- **Sin partes negras:** el vacío de Flare (fuera de la isla y en los pozos) se rellena con pasto y bosque bloqueado, en vez de dejarlo negro: pinos (ids 248-251 del tileset de pasto), frondosos (240-243 y 252-255), rocas (128-131) y matas (112, 113, 124-127). Probado en renders de `goblin_camp`, `stonewood` y `salted_field`. Falta llevarlo al importador; cuevas, dungeons y nieve necesitan su propio relleno de roca. Quedan algunas astillas negras que son parte del arte de los acantilados.
 - En mapas chicos con muchas regiones (p. ej. `salted_field`) quedan pocos sueltos porque los pits ya ocupan casi todo; se sube la densidad a mano si hace falta.
 
 ## 5. Los 6 dungeons (uno por rango de nivel, 2 pisos cada uno)
@@ -89,7 +90,7 @@ Curva común: `hp(L) = 29 + 10,5·L + 2,75·L²` (`mobs.ts`).
 
 Todo mob de dungeon necesita animaciones completas: **stance, run, ataque, golpe recibido y muerte**, ×8 direcciones (más cast para magos).
 
-**En curso (otro agente, en paralelo):** sumar los 9 tipos nuevos de Flare a `MOB_TYPES` con su sprite y auditar los mobs de OpenGameArt. El informe va a `docs/MOBS_NUEVOS.md`; lo que no se pueda agregar bien queda anotado ahí.
+**Hecho (ya en `main`, detalle en `docs/MOBS_NUEVOS.md`):** los 9 tipos nuevos de Flare están en `MOB_TYPES` con su sprite en 8 direcciones (ninguna zona los usa todavía) y la auditoría de los mobs de OpenGameArt está en ese doc. Los arqueros pelean cuerpo a cuerpo hasta que `MobSim` tenga ataque a distancia, y `cursed_grave` es una lápida sin animación de andar (se desliza lento).
 
 - **Los de Flare cumplen** (las definiciones de `animations/enemies/*.txt` traen todas, p. ej. goblin: 8 direcciones × 4 frames de reposo). Las sheets vienen empaquetadas (no son grilla): hay que cortarlas con los rectángulos de esas definiciones, no con una grilla fija.
 - **Tipos nuevos para `MOB_TYPES`** (se agregan al **final** de la lista: el protocolo manda el índice): `hobgoblin`, `hobgoblin_archer`, `skeleton_archer`, `zombie_dark`, `cursed_grave`, `ice_ant`, `antlion_small`, `wyvern_fire`, `wyvern_ice`. Los sprites ya están en Flare y salen del mismo pipeline de `atlas.ts`.
@@ -111,6 +112,8 @@ Todo mob de dungeon necesita animaciones completas: **stance, run, ataque, golpe
 3. `atlas.ts`: empaquetar los tilesets cave, dungeon, snow y ruins a 0,5 con ids propios (hoy solo grassland), y pasar los ids de tiles de Flare a los de ERIS.
 4. `buildFlareMap(id)` que lea el JSON, `props` desde la capa `object`, vínculos de Flare → `Link`, zona segura en la entrada, y alta en `MAPS` (así `validateMapGraph()` y `mapHash()` lo cubren).
 5. Portar el render de control a `tools/` (hoy es un script aparte).
+6. Relleno del vacío (ver sección 4) dentro del importador, con los ids por tileset.
+7. Verificar cada mapa en el juego con navegador antes de habilitar los portales.
 
 ## 8. Licencia
 
@@ -123,3 +126,4 @@ Los mapas de Flare son datos CC-BY-SA 3.0 o posterior: hay que atribuir (autores
 3. ¿Mobs a distancia (arqueros, magos) en abierto o solo en dungeons?
 4. Dungeons como mapas compartidos (hoy) o instancia de grupo (`MUNDO.md` §5.0 lo prevé más adelante).
 5. Qué mapas de la reserva se suman primero para Nv13+.
+6. `main` ya trae 4 mapas de caza generados por código (`llanos_alba`, `la_frontera`, `camposanto`, `paramo`, Fase 3 de `MUNDO.md`): ¿los mapas de Flare los reemplazan o se suman?
