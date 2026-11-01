@@ -24,12 +24,14 @@ import { DATA as GOBLIN_CAVE } from './goblin_cave';
 import { DATA as PERDITION_MINES } from './perdition_mines';
 import { DATA as ANTLION_NEST } from './antlion_nest';
 import { DATA as STORMROCK_RUINS } from './stormrock_ruins';
+import { DATA as ST_MARIA_2 } from './st_maria_2';
+import { DATA as ST_MARIA_3 } from './st_maria_3';
 
 export { flareTile, FLARE_BASE } from './types';
 export type { FlareMapData } from './types';
 
 /** En el orden de la cadena: la primera es la que une el portal de las ciudades. */
-export const FLARE_DATA: FlareMapData[] = [SALTED_FIELD, STONEWOOD, GOBLIN_CAMP, MERRIMEAD_SWAMP, NAZIA_HIGHLANDS, LOCHPORT_CEMETERY, SOUTHERN_RIDGE, THE_BREACH, GOBLIN_CAVE, PERDITION_MINES, ANTLION_NEST, STORMROCK_RUINS];
+export const FLARE_DATA: FlareMapData[] = [SALTED_FIELD, STONEWOOD, GOBLIN_CAMP, MERRIMEAD_SWAMP, NAZIA_HIGHLANDS, LOCHPORT_CEMETERY, SOUTHERN_RIDGE, THE_BREACH, GOBLIN_CAVE, PERDITION_MINES, ANTLION_NEST, STORMROCK_RUINS, ST_MARIA_2, ST_MARIA_3];
 const byFlareId = new Map(FLARE_DATA.map((d) => [d.id, d]));
 const byEris = new Map(FLARE_DATA.map((d) => [d.eris, d]));
 export const FLARE_FIRST = FLARE_DATA[0];
@@ -109,6 +111,7 @@ export function buildFlareMap(d: FlareMapData): WorldMap {
 function surfaceRest(d: FlareMapData, seen = new Set<string>()): { map: string; x: number; y: number } | undefined {
     seen.add(d.eris);
     for (const l of d.links) { const to = byFlareId.get(l.to); if (to && !to.dungeon) return { map: to.eris, ...nearestWalkable(to, l.tx, l.ty, [...to.links.map((b) => b.cell), ...to.extras.map((b) => b.cell)]) }; }
+    for (const l of d.links) { const to = byFlareId.get(l.to); if (!to || !to.dungeon || seen.has(to.eris)) continue; const r = surfaceRest(to, seen); if (r) return r; }
     for (const e of d.extras) {
         const to = byEris.get(e.to); if (!to || seen.has(to.eris)) continue;
         if (!to.dungeon) return { map: to.eris, ...nearestWalkable(to, to.entry.x, to.entry.y, [...to.links.map((b) => b.cell), ...to.extras.map((b) => b.cell)]) };

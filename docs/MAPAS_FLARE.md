@@ -71,7 +71,7 @@ Son de grupo: mobs más fuertes que en abierto, packs, y un jefe final en el pis
 |---|---|---|---|---|---|---|
 | D1 | Cueva y minas goblin | 2-3 | goblin_cave (48x48) | perdition_mines (56x38) | goblin, goblin_elite, hobgoblin, hobgoblin_archer | Jefe goblin (Nv4; hobgoblin/goblin_elite escalado) |
 | D2 ✅ (en main) | Nido de hormiga león | 6-8 (puerta Nv6 desde La Brecha) | antlion_nest (80x80) | stormrock_ruins (100x100) | antlion, antlion_small, fire_ant | Reina hormiga león (Nv6; `antlion_armored`) |
-| D3 | Cripta olvidada | 6-7 | st_maria_2 (70x70) | st_maria_3 (40x60) | skeleton, skeleton_archer, skeleton_mage, zombie, cursed_grave | Bárbaro (Nv8, ya existe) o `skeleton_knight_boss` |
+| D3 ✅ (en main) | Cripta olvidada | 7-9 (puerta Nv6 desde el Cementerio de Lochport; jefe `caballero_cripta`) | st_maria_2 (70x70) | st_maria_3 (40x60) | skeleton, skeleton_archer, skeleton_mage, zombie, cursed_grave | Bárbaro (Nv8, ya existe) o `skeleton_knight_boss` |
 | D4 | Torre del hechicero | 8-9 | wizards_tower_1 (100x100) | wizards_tower_2 (100x108) | skeleton_mage y variantes, zombie_dark | Mago mayor (Nv10; `skeleton_mage_high_boss`) |
 | D5 | Templo de Mez | 10-11 | temple_of_mez_1 (80x80) | temple_of_mez_2 (100x100) | wyvern en 4 elementos, skeleton | Wyvern del aire (Nv11; `wyvern_air_boss`) |
 | D6 | Foso del demonio | 11-12 | underworld_stronghold_1 (75x92) | the_pit (80x80) | skeleton_mage, wyvern, minotaur | Demonio (Nv12, ya existe) |
@@ -134,4 +134,5 @@ Los mapas de Flare son datos CC-BY-SA 3.0 o posterior: hay que atribuir (autores
 ### Estado de mazmorras
 - D1 (Cueva/Minas goblin) y D2 (Nido de hormiga león / Ruinas de Stormrock, jefe `antlion_reina`) están en main. El tileset de mazmorra (`flare_dungeon`, base 22000) ya está; Flare se baja directo de GitHub (sparse: mods/fantasycore + mods/empyrean_campaign) con `FLARE_DIR`.
 - Las Ruinas de Stormrock tenían puertas trabadas por evento: el spec las abre con `open`.
-- Quedan D3–D6.
+- D3 (Cripta olvidada / Sepulcro profundo, jefe `caballero_cripta`) también está en main; el jefe final es nuevo (no el Bárbaro).
+- Quedan D4–D6.
