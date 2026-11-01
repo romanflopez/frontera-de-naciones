@@ -110,7 +110,7 @@ Salen de las páginas de Helbreath que pasaste (mecánicas de mobs, personaje y 
 | Exp de descanso (acumulada al desconectarse) | Mobs | Casual y "chill" | Post-beta |
 | Rebirth: reiniciar niveles conservando habilidades, con puntos extra | Personaje | Rejugabilidad de largo plazo | Post-beta |
 | Stat de suerte (+0,175 % al multiplicador de drops por punto) | Personaje | Otra palanca de drops | Post-beta |
-| Ángeles tutelares (pendientes que suman stats) | Personaje | Personalización | Descartado por ahora |
+| **Ángel tutelar** (pendiente ligado al personaje, se compra al tope con puntos Majestic y se mejora de +0 a +15 sin tirada de fallo; el bonus es chico, +1 a +16 puntos de stat sobre ~550) | Personaje / Ángel | Sumidero de los puntos Majestic y objetivo después del 40; el poder es poco y el valor es el aura y el estatus, sin pay2win. Ver §8 | Beta si hay tiempo, si no Fase 2 |
 
 ### Mobs
 | Idea | De dónde | Para qué | Cuándo |
@@ -154,5 +154,20 @@ Salen de las páginas de Helbreath que pasaste (mecánicas de mobs, personaje y 
 | Zona de revivir y zona de principiantes | Mapas | Arranque y muertes más amables | Evaluar |
 | Interiores de ciudad (depósito, herrero, municipalidad, sede del clan, tienda, iglesia) | Mapas | Ya tenemos depósito y herrero; falta el resto | Post-beta |
 | Arenas numeradas (9 en el original) y una isla de PvP con acceso por NPC | Mapas | Pareja natural de las arenas con cola | Fase 3 |
+
+## 8. Ángel tutelar: cómo lo adaptaría a ERIS
+
+**Qué es en Helbreath:** al nivel máximo se compra un pendiente de ángel por 5 puntos Majestic; se mejora del +0 al +15 (costos 6, 8, 10, 13, 16, 20, 24, 29, 34, 39, 44, 49, 54, 59 y 64), siempre sube, sin tirada de fallo. Cada paso suma stats (+1 al principio, +16 al final). El costo total es de 474 puntos. Es poco poder (unos 3 % de los stats de un personaje) y mucho estatus.
+
+**Problema de escala:** en Helbreath un punto Majestic cuesta lo que el último nivel. En ERIS, el último nivel del 40 son ~2,3 h de un veterano, así que 474 puntos serían ~1.090 h. **Propuesta:** que un punto cueste ~15 min de veterano (~150 kills de un bicho común de nivel 40) y dejar la tabla de costos igual: el ángel completo queda en ~120 h de veterano, un objetivo largo sin ser imposible, y comprar el ángel son ~1 h.
+
+**Qué más se le puede agregar** (las ideas de Román):
+1. **Aura visible que cambia con la mejora** (brillo en +5, alas o halo en +10, efecto completo en +15). Es lo que da estatus sin tocar el balance.
+2. **Un segundo camino para mejorarlo además de los puntos Majestic**, para no depender solo de farmear exp: esencias que caen de jefes de mazmorra de nivel 40 o de las dificultades altas. Mezcla el farmeo de bichos con el de dungeons.
+3. **Ángel por nación**: uno de luz para Solmar y uno oscuro para Vhar, con su aura propia.
+4. **Evolución a un estado final** al llegar al +15 (cambia el aspecto, no los stats), para tener un cierre claro.
+5. **Elegir el stat** que suma entre las cuatro opciones de la clase (vida, daño, magia, crítico), con los mismos topes que el resto del equipo.
+
+Cuidados: que el bonus pueda superar el tope de stats (como en Helbreath) solo si los topes del server lo permiten, y que nada de esto se pueda comprar con dinero real.
 
 Fuentes de las referencias: ficha de Dreadmyst en Steam y notas de lanzamiento (clases, dungeons por llave y dificultad, arenas 1v1/2v2, tope de nivel 25), y notas de prensa sobre Apogea (MMO isométrico estilo Tibia, sin pay2win, housing, crítica a inventario y comercio tediosos). Helbreath: tus notas del proyecto y mi conocimiento del juego.
