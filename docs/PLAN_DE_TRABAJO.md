@@ -148,6 +148,8 @@ Estado de partida (`main`, 1/11): 140 de 141 tests del server en verde (1 saltea
 **Hacer:** dos habilidades por jefe (la actual y una de área o invocación), vida ~11× la curva, premio de un ítem propio por compañero cercano.
 **Pruebas:**
 - D: simulación de grupo: un guerrero solo pierde; 3-4 jugadores ganan en 2-3 minutos.
+- D: **matriz de composiciones** contra cada jefe: 4 guerreros, 4 magos y un grupo mixto tienen que poder ganar (el mixto, más rápido). La party no restringe por clase.
+- B: la curación a un aliado del mago cura de verdad, cuesta maná, respeta la recarga y no cura a jugadores de otra nación.
 - B: el drop del jefe llega una vez por compañero cercano y nunca se duplica; un compañero lejos o muerto no cobra.
 - E: pelear cada jefe con un grupo real y anotar si las habilidades se pueden esquivar o resolver.
 **Listo cuando:** cada jefe tiene su rango de tiempo de pelea y no hay forma de repetir el premio.
@@ -162,6 +164,15 @@ Estado de partida (`main`, 1/11): 140 de 141 tests del server en verde (1 saltea
 
 ### 2.5 Versión en solitario de D1 y D2 (M)
 **Pruebas:** B de que un jugador sin party entra a su instancia propia con mobs más livianos; D de que un jugador de su nivel la completa en un tiempo razonable.
+
+### 2.6 Buscar grupo (LFG) (M)
+**Hacer:** canal de chat "Buscar grupo" con mensaje armado y botón **Unirme**; tablero de grupos abiertos en cada puerta de mazmorra y en la ciudad (destino, dificultad, rango de nivel, cupo, líder); estado "buscando grupo" visible; el líder acepta o rechaza el pedido. Detalle en `PENDIENTES_Y_HUECOS.md` §2.1.
+**Pruebas:**
+- B: publicar un grupo lo lista; vence a los pocos minutos; se actualiza el cupo al entrar o salir alguien; si el líder se va, pasa al siguiente o se retira.
+- B: pedir unirse a un grupo de otra nación, sin el nivel de la puerta, lleno o disuelto es rechazado con aviso.
+- H: límite de mensajes por minuto (spam), mensajes con texto o botones armados a mano, pedidos duplicados.
+- E: con 3 jugadores reales, juntar un grupo desde el tablero y entrar al dungeon en menos de un minuto.
+**Listo cuando:** un jugador que no conoce a nadie puede entrar a una mazmorra de grupo en un par de clics.
 
 ---
 
