@@ -10,6 +10,7 @@
     "dungeon": "tsx src/dungeon/atlas.ts",
     "town": "tsx src/town/atlas.ts",
     "flare:fetch": "tsx src/flare/fetch.ts",
+    "flare:maps": "tsx src/flare/maps.ts",
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {

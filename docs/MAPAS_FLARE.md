@@ -1,0 +1,125 @@
+# Mapas de Flare en ERIS: organización por nivel
+
+Estado: **propuesta + primera prueba del importador** (3 mapas convertidos a datos, sin tiles en el atlas de ERIS todavía). Complementa a [`MUNDO.md`](MUNDO.md) (grafo y fases) y [`ZONAS.md`](ZONAS.md) (curva de niveles y mobs). Si algo de acá contradice a esos dos, hay que decidir cuál se actualiza (ver sección 9).
+
+## 1. Marco: lo que ya manda en ERIS
+
+- **Tile 96x48.** El arte de Flare es 192x96 y `tools/src/flare/atlas.ts` ya lo escala a 0,5, así que **una celda de Flare = una celda de ERIS**: un mapa de 100x100 tiles de Flare mide 100x100 celdas.
+- **Niveles 1-12** (`ZONAS.md`; el demonio Nv12 es el techo). Subir de nivel pide `40·L` kills de un mob común de su nivel: el grindeo en mapas abiertos es el motor de la progresión, misiones y jefes casi no dan exp.
+- **Velocidad:** 270 ms por celda, 3,7 celdas/s. 100 celdas = 27 s de lado a lado.
+- **Mapas cuadrados y deterministas** (`MapDef.size`, igual en cliente y server, con `map_hash`). Los mapas de Flare no son cuadrados: se rellenan con vacío bloqueado. La importación produce **datos estáticos** (JSON versionado) y el `build()` del mapa los lee: sigue siendo determinista.
+- **Zona de caza = `Zone {type, x, y, r, n, name, lvl}`** (círculo de radio 9-12 en los mapas actuales). `mobDef(tipo, {lvl})` reescala cualquier mob no-boss a cualquier nivel (mismo sprite).
+
+## 2. Qué trae Flare v1.14 (analizado en `~/Downloads/flare-win-zip`)
+
+- 55 mapas jugables + `spawn.txt`. Formato `.txt` propio de Flare (capas en CSV); el paquete no trae `.tmx`.
+- **745 regiones de spawn** (`[enemy] location=x,y,w,h category=… level=… number=min,max`), unos 1.800 mobs esperados, ~33 por mapa. No son mobs fijos: son zonas que eligen enemigos por categoría y nivel. Se convierten a `Zone` casi 1 a 1.
+- Casi todos los mapas son de un solo nivel y de una sola categoría de mob (p. ej. `the_breach`: 23 regiones de antlion). **Ahí está lo que mejoramos:** pits con mobs distintos y sueltos entre medio.
+- Colisión: capa `collision` (0 libre; 1, 2, 3 y 4 bloquean). Los mapas son de 50x60 a 164x164 tiles.
+- Tilesets: grassland, cave, cave_and_dungeon, dungeon, snowplains (fantasycore) y ruins (empyrean). Los tiles están definidos en `tilesetdefs/*.txt`.
+- Sprites de mobs con 8 direcciones y animaciones definidas en `animations/enemies/*.txt`.
+
+## 3. Regla de escala
+
+Los mapas se usan **al tamaño nativo de Flare** (50-136 celdas): en vez de fusionar para llegar a los 128-160 de `MUNDO.md`, se suman más mapas. Con 12 niveles se usa lo que cubre la curva y el resto queda de reserva:
+
+| Tipo | Cantidad | Para qué |
+|---|---|---|
+| Mapas abiertos | 12 | caza por franja de nivel: 3 pits con mobs distintos + mobs sueltos |
+| Cuevas de mini-boss | 4 | una por zona, con mini-boss (las de `MUNDO.md` §3.1) |
+| **Dungeons** | **6 (2 pisos cada uno)** | de grupo, uno por rango de 2 niveles, con jefe final en el piso 2 (sección 5) |
+| Reserva | ~25 | Nv13+, eventos, ampliaciones |
+
+## 4. Mapas abiertos (12, tamaño nativo)
+
+Cada mapa tiene **3 pits con un mob distinto cada uno** (A más cerca de la entrada y más fácil, C más lejos y más duro, ±1 nivel entre pits) y **mobs sueltos** repartidos entre ellos.
+
+| # | Mapa ERIS (base Flare) | Tam. | Nv | Pit A | Pit B | Pit C | Sueltos |
+|---|---|---|---|---|---|---|---|
+| 1 | Campos de Sal (`salted_field`) | 60x60 | 1-2 | goblin Nv1 | slime Nv1 (OGA) | goblin_elite Nv2 | goblin |
+| 2 | Bosque de Piedra (`stonewood`) | 100x80 | 1-2 | goblin Nv1 | hobgoblin Nv2 * | goblin_elite Nv2 | goblin, slime |
+| 3 | Campamento goblin (`goblin_camp`) | 60x60 | 2-3 | goblin_elite Nv2 | hobgoblin_archer Nv3 * | hobgoblin Nv3 * | goblin |
+| 4 | Pantano de Merrimead (`merrimead_swamp`) | 80x80 | 3-4 | zombie Nv3 | zombie_dark Nv4 * | tentacle Nv4 (OGA) | zombie, slime |
+| 5 | Altas de Nazia (`nazia_highlands`) | 80x80 | 4-5 | antlion_small Nv4 * | antlion Nv4 | fire_ant Nv5 | antlion_small |
+| 6 | Cementerio de Lochport (`lochport_cemetery`) | 60x80 | 5 | skeleton Nv5 | skeleton_archer Nv5 * | skeleton_mage Nv5 | cursed_grave * |
+| 7 | Risco del Sur (`southern_ridge`) | 80x80 | 5-6 | antlion Nv5 | skeleton_mage Nv6 | werebear Nv6 (OGA) | antlion_small |
+| 8 | La Brecha (`the_breach`) | 100x100 | 6-7 | fire_ant Nv6 | antlion Nv6 | spider Nv7 (OGA) | antlion_small, fire_ant |
+| 9 | Paso de Stormrock (`stormrock_pass`) | 132x132 | 7-8 | wyvern Nv7 | ice_ant Nv7 * | wyvern_ice Nv8 * | skeleton_archer |
+| 10 | Cenizas I (`underworld`) | 120x120 | 8-9 | fire_ant Nv8 | skeleton_mage Nv8 | orc Nv9 (OGA) | skeleton |
+| 11 | Cenizas II (`underworld_catacombs`) | 120x105 | 9-10 | skeleton Nv9 | cursed_grave Nv9 * | werebear Nv10 (OGA) | zombie_dark |
+| 12 | Cenizas III (`underworld_mines`) | 136x110 | 10-11 | zombie_dark Nv10 * | wyvern_fire Nv11 * | orc_heavy Nv11 (OGA) | fire_ant |
+
+`*` = tipo nuevo que no está en `MOB_TYPES` (el sprite viene de Flare). `(OGA)` = viene de `assets/raw` y hay que auditar sus animaciones antes (sección 6). Es un primer borrador de asignación: se ajusta cuando se vea cada mapa.
+
+**Reserva de Flare** (los más lindos que no entran por ahora): `grot_lagoon` y `lake_kuuma` (nevados), `black_oak_farm/city`, `oasis`, `lochport`, `torture_chambers`, `arrival`, `perdition_harbor`.
+
+**Cuevas de mini-boss** (los 4 "bolsillos" de `MUNDO.md`, ahora cuevas chicas): `nido_arana` (Nv7, base mog_caverns 60x80), `guarida_barbaro` (Nv8, nazia_underground 100x60), `laberinto` (Nv9, nazia_mines 80x60), `cueva_golem` (Nv10, blackmire_mines 80x80).
+
+### Cómo se arman los pits y los sueltos (lo que hace el importador)
+
+- **Pits:** las regiones de spawn de Flare se agrupan en 3 sectores por cercanía (k-means determinista, rebalanceado para que ninguno quede con menos de ~1/3 de las zonas). Se ordenan por distancia a la entrada: A el más cercano, C el más lejano. Cada sector toma el nombre, el mob y el nivel de su pit.
+- **Sueltos:** zonas chicas (radio 5, 2 mobs) repartidas por todo el mapa, ~1 cada 250 celdas caminables, a ≥12 celdas de la entrada y fuera de los pits. Son mobs de bajo nivel o ambientales de cada mapa. Respawn igual que los demás.
+- Todo cae en celdas caminables (se ajusta el centro a la celda libre más cercana) y es determinista (mismo JSON en cada corrida).
+- En mapas chicos con muchas regiones (p. ej. `salted_field`) quedan pocos sueltos porque los pits ya ocupan casi todo; se sube la densidad a mano si hace falta.
+
+## 5. Los 6 dungeons (uno por rango de nivel, 2 pisos cada uno)
+
+Son de grupo: mobs más fuertes que en abierto, packs, y un jefe final en el piso 2. Reemplazan a la Cripta, al Foso y a los otros dungeons de `MUNDO.md` §3.1. Total: 12 mapas de dungeon.
+
+| # | Dungeon | Nv mobs | Piso 1 | Piso 2 (jefe) | Mobs (sprites disponibles) | Jefe final |
+|---|---|---|---|---|---|---|
+| D1 | Cueva y minas goblin | 2-3 | goblin_cave (48x48) | perdition_mines (56x38) | goblin, goblin_elite, hobgoblin, hobgoblin_archer | Jefe goblin (Nv4; hobgoblin/goblin_elite escalado) |
+| D2 | Nido de hormiga león | 4-5 | antlion_nest (80x80) | stormrock_ruins (100x100) | antlion, antlion_small, fire_ant | Reina hormiga león (Nv6; `antlion_armored`) |
+| D3 | Cripta olvidada | 6-7 | st_maria_2 (70x70) | st_maria_3 (40x60) | skeleton, skeleton_archer, skeleton_mage, zombie, cursed_grave | Bárbaro (Nv8, ya existe) o `skeleton_knight_boss` |
+| D4 | Torre del hechicero | 8-9 | wizards_tower_1 (100x100) | wizards_tower_2 (100x108) | skeleton_mage y variantes, zombie_dark | Mago mayor (Nv10; `skeleton_mage_high_boss`) |
+| D5 | Templo de Mez | 10-11 | temple_of_mez_1 (80x80) | temple_of_mez_2 (100x100) | wyvern en 4 elementos, skeleton | Wyvern del aire (Nv11; `wyvern_air_boss`) |
+| D6 | Foso del demonio | 11-12 | underworld_stronghold_1 (75x92) | the_pit (80x80) | skeleton_mage, wyvern, minotaur | Demonio (Nv12, ya existe) |
+
+Criterio de los pisos: el piso 2 es el mapa de Flare donde está el jefe del tema (o el más parecido), y el piso 1 el que lleva hasta él. Se descartan `st_maria_1` (mausoleo), `wizards_tower_3` (islas flotantes unidas por teletransportes), `temple_of_mez_3` (entrada nevada) y `underworld_stronghold_2` (cuartel con ~130 eventos). Entradas por puerta de nivel o llave, como en `MUNDO.md`. Los pisos de 100x100 son largos para un grupo: recortarlos a ~64-72 de lado (D2 piso 2, D4 ambos pisos, D5 piso 2); el recorte se hace al armar cada spec.
+
+### Balance de grupo (punto de partida; validar con `test-combat.ts`)
+
+Curva común: `hp(L) = 29 + 10,5·L + 2,75·L²` (`mobs.ts`).
+
+- **Mob común de dungeon:** vida ×2,5, daño ×1,25, exp ×2 (menos que el ×2,5 de vida: el grindeo abierto sigue rindiendo igual o mejor; el atractivo del dungeon es botín y esquirlas). Packs de 4-6, con un élite (vida ×4) cada pack. Ejemplo Nv9: 346 de vida común → ~865.
+- **Jefe final:** vida ~11× la curva de su nivel (hoy los bosses están en ~3-3,5×, pensados para jugar solo). Ejemplos: Nv4 ~1.300, Nv6 ~2.100, Nv8 ~3.200, Nv10 ~4.500, Nv12 ~6.100. Dos habilidades (la actual más una de área o invocación). Objetivo: un guerrero solo pierde, un grupo de 3-4 gana en 2-3 min.
+- Los jefes de dungeon siguen **sin reescalarse** por `zone.lvl` (decisión existente).
+
+## 6. Mobs y animaciones
+
+Todo mob de dungeon necesita animaciones completas: **stance, run, ataque, golpe recibido y muerte**, ×8 direcciones (más cast para magos).
+
+**En curso (otro agente, en paralelo):** sumar los 9 tipos nuevos de Flare a `MOB_TYPES` con su sprite y auditar los mobs de OpenGameArt. El informe va a `docs/MOBS_NUEVOS.md`; lo que no se pueda agregar bien queda anotado ahí.
+
+- **Los de Flare cumplen** (las definiciones de `animations/enemies/*.txt` traen todas, p. ej. goblin: 8 direcciones × 4 frames de reposo). Las sheets vienen empaquetadas (no son grilla): hay que cortarlas con los rectángulos de esas definiciones, no con una grilla fija.
+- **Tipos nuevos para `MOB_TYPES`** (se agregan al **final** de la lista: el protocolo manda el índice): `hobgoblin`, `hobgoblin_archer`, `skeleton_archer`, `zombie_dark`, `cursed_grave`, `ice_ant`, `antlion_small`, `wyvern_fire`, `wyvern_ice`. Los sprites ya están en Flare y salen del mismo pipeline de `atlas.ts`.
+- **Arqueros y magos:** el combate de mobs de hoy es cuerpo a cuerpo con habilidad de boss; los mobs a distancia (`*_archer`, magos) necesitan ataque con alcance en `MobSim`. Hay que decidir si se hace o si se usan solo en dungeons.
+- **Los de `assets/raw` (OpenGameArt) hay que auditarlos uno por uno:** slime, tentacle, spider, werebear, orc, knight, demon, golem, flying_terror, wolf_rider. Hay PNG sueltos y `.blend` sin renders de animación. Antes de ponerlos en un pit hay que confirmar que tengan el set completo o renderizarlos desde el `.blend`.
+- Peso: un mob son sheets de 1.300x3.200 hasta 3.900x3.400 px. A 96x48 se escalan a 0,5 (como el resto) y se carga por mapa, no todo al inicio.
+
+## 7. Importador
+
+**Hecho (primera prueba):**
+- `tools/src/flare/maps.ts` + script `pnpm --filter @fdn/tools flare:maps [id…]` (usa `FLARE_DIR`; sin dependencias nativas; tipos OK en modo estricto).
+- Genera `packages/world/src/flare/<id>.json`: tamaño cuadrado, capas `background` y `object` con los ids de tiles de Flare, `blocked` (de la capa `collision`), `zones` (pits + sueltos), `links` (de los `[event] intermap`), `entry`, `source` y `license`.
+- Probado con `salted_field`, `stonewood` y `goblin_camp`: 0 zonas con el centro en una pared, mismo JSON en dos corridas, tipos de mob validados contra `MOB_TYPES`. Render de control de cada mapa (con pits, sueltos, entrada y portales) generado fuera del repo, en `~/Downloads/flare-analysis/imports/`.
+- En las pruebas se usaron solo los tipos que ya existen (en `goblin_camp` el pit C es goblin Nv3 en vez del hobgoblin previsto, y en `salted_field` el zombie Nv1 hace de slime).
+
+**Falta:**
+1. `fetch.ts`: sumar `mods/empyrean_campaign/{maps,tilesetdefs,images/tilesets}` a lo que baja (hoy solo `fantasycore`). Mientras, se apunta `FLARE_DIR` al zip v1.14.
+2. Specs de los 9 mapas abiertos restantes y de los dungeons.
+3. `atlas.ts`: empaquetar los tilesets cave, dungeon, snow y ruins a 0,5 con ids propios (hoy solo grassland), y pasar los ids de tiles de Flare a los de ERIS.
+4. `buildFlareMap(id)` que lea el JSON, `props` desde la capa `object`, vínculos de Flare → `Link`, zona segura en la entrada, y alta en `MAPS` (así `validateMapGraph()` y `mapHash()` lo cubren).
+5. Portar el render de control a `tools/` (hoy es un script aparte).
+
+## 8. Licencia
+
+Los mapas de Flare son datos CC-BY-SA 3.0 o posterior: hay que atribuir (autores en `CREDITS.txt` de Flare) y **lo modificado queda CC-BY-SA**. Los JSON importados llevan `source` y `license`, y se mantienen en archivos de datos separados del código (MIT), como pide `LICENCIAS_AUDITORIA.md` §2; no se cifran ni se ofuscan. Cada mapa importado registra "basado en X, modificado". Los assets de `assets/raw` (OpenGameArt) tienen licencia **por pieza**: hay que anotar autor y licencia de cada uno antes de usarlo, y sumarlos a `LICENCIAS_AUDITORIA.md`.
+
+## 9. Decisiones abiertas
+
+1. ¿Los 6 dungeons reemplazan a Cripta/Foso/bolsillos de `MUNDO.md` §3.1? (propuesto: sí; hay que actualizar esa tabla, que además cambia de 9 a 12 mapas abiertos y de tamaños).
+2. ¿Qué jefe final para D3: el Bárbaro (ya definido) o `skeleton_knight_boss`? Hoy el Bárbaro aparece dos veces en `MUNDO.md` (guarida y cripta).
+3. ¿Mobs a distancia (arqueros, magos) en abierto o solo en dungeons?
+4. Dungeons como mapas compartidos (hoy) o instancia de grupo (`MUNDO.md` §5.0 lo prevé más adelante).
+5. Qué mapas de la reserva se suman primero para Nv13+.
