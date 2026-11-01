@@ -178,6 +178,7 @@ export const mobDamaged = (mobId: number, attackerId: bigint, dmg: number, crit:
     msg({ $case: 'mobDamaged', value: { mobId, attackerId, dmg, crit, hp } });
 export const mobAttack = (mobId: number, tx: number, ty: number): ServerMessage => msg({ $case: 'mobAttack', value: { mobId, tx, ty } });
 export const mobHitPlayer = (mobId: number, dmg: number, stun: number): ServerMessage => msg({ $case: 'mobHitPlayer', value: { mobId, dmg, stun } });
+export const mobProjectile = (mobId: number, fromX: number, fromY: number, toX: number, toY: number, travelMs: number, kind: number): ServerMessage => msg({ $case: 'mobProjectile', value: { mobId, fromX, fromY, toX, toY, travelMs, kind } });
 export const mobSpecialEvent = (mobId: number, phase: number, x: number, y: number): ServerMessage => msg({ $case: 'mobSpecialEvent', value: { mobId, phase, x, y } });
 export const lootRoll = (mobId: number, rarity: number, baseSeed: number, attrs: { key: string; value: number }[]): ServerMessage =>
     msg({ $case: 'lootRoll', value: { mobId, rarity, baseSeed, attrs } });

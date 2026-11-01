@@ -509,6 +509,8 @@ message ServerMessage {
     GroundItemRemoved ground_item_removed = 144;
     // Cambio de mapa: el server sacó al jugador del mundo viejo y espera MapReady para meterlo en el nuevo.
     MapTransfer map_transfer = 150;
+    // Proyectil de un mob a distancia (docs/MOBS_A_DISTANCIA.md). Los mobs cuerpo a cuerpo siguen usando MobAttack + MobHitPlayer.
+    MobProjectile mob_projectile = 151;
     // Casa de subastas (ver docs/SUBASTAS.md). Rango propio de tags desde 300; el resultado de cada acción va en EconResult.
     AuctionSearchResult auction_search_result = 300;
     AuctionMyState auction_my_state = 301;
@@ -1234,6 +1236,16 @@ message MobAttack {
   int32 mob_id = 1;
   float tx = 2;
   float ty = 3;
+}
+/** Un mob a distancia dispara: el proyectil sale de (from_x, from_y), llega a (to_x, to_y) en travel_ms y es solo visual; el daño lo decide el server al llegar (MobHitPlayer). kind: 0 flecha, 1 virote. */
+message MobProjectile {
+  int32 mob_id = 1;
+  float from_x = 2;
+  float from_y = 3;
+  float to_x = 4;
+  float to_y = 5;
+  int32 travel_ms = 6;
+  int32 kind = 7;
 }
 /** Solo para el jugador golpeado: daño (antes de defensa) y/o inmovilización en segundos. */
 message MobHitPlayer {

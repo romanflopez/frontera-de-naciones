@@ -10,7 +10,13 @@ export const MOB_TYPES: MobType[] = ['goblin', 'zombie', 'skeleton', 'barbaro', 
 /** Habilidad de boss: cada `every` s, si el jugador está a menos de `range`, carga un golpe y lo lanza a los 0,8 s. Alcanza a quien esté a menos de `r`. */
 export interface BossSpecial { name: string; every: number; range: number; r: number; dmg?: [number, number]; stun?: number; col: string }
 export interface BossDef { respawn: number; minRar: number; gold: [number, number]; special: BossSpecial }
-export interface MobDef { name: string; lvl: number; hp: number; dmg: [number, number]; spd: number; ref: number; exp: number; hitR: number; head: number; atk: number; boss?: BossDef }
+/**
+ * Ataque a distancia (docs/MOBS_A_DISTANCIA.md): el mob se acerca hasta tener tiro (a `range` celdas o menos y con línea libre), se queda ahí,
+ * retrocede si lo pisan a menos de `keep`·0,6 y dispara cada `atk` s. El proyectil vuela `speed` celdas/s y pega si el jugador sigue
+ * a menos de una celda del punto al que apuntó (se puede esquivar). `kind`: 0 flecha, 1 virote (lo dibuja el cliente).
+ */
+export interface RangedDef { range: number; keep: number; speed: number; kind: 0 | 1 }
+export interface MobDef { name: string; lvl: number; hp: number; dmg: [number, number]; spd: number; ref: number; exp: number; hitR: number; head: number; atk: number; boss?: BossDef; ranged?: RangedDef }
 export const MOBS: Record<MobType, MobDef> = {
     goblin: { name: 'Goblin lancero', lvl: 1, hp: 42, dmg: [4, 7], spd: 1.8, ref: 2.6, exp: 14, hitR: 20, head: 42, atk: 1.3 },
     zombie: { name: 'Zombi del pantano', lvl: 3, hp: 85, dmg: [7, 11], spd: 1.0, ref: 1.5, exp: 30, hitR: 22, head: 50, atk: 1.6 },
@@ -26,10 +32,10 @@ export const MOBS: Record<MobType, MobDef> = {
     wyvern: { name: 'Wyvern', lvl: 7, hp: 240, dmg: [16, 24], spd: 1.6, ref: 2.3, exp: 101, hitR: 32, head: 90, atk: 1.7 },
     minotaur: { name: 'Minotauro (mini-boss)', lvl: 9, hp: 1200, dmg: [22, 34], spd: 1.4, ref: 2.4, exp: 560, hitR: 40, head: 130, atk: 1.9 },
     // Tipos nuevos: nivel base sobre las curvas de ZONAS.md (vida 29+10,5·L+2,75·L², daño medio 2,5·L+3, exp 60·L^1,5/11); en una zona con `lvl` se reescalan igual que los demás.
-    // Los dos arqueros pelean cuerpo a cuerpo hasta que MobSim tenga ataque a distancia (ver docs/MOBS_NUEVOS.md).
+    // Los dos arqueros disparan a distancia (`ranged`, ver docs/MOBS_A_DISTANCIA.md).
     hobgoblin: { name: 'Hobgoblin', lvl: 3, hp: 85, dmg: [8, 13], spd: 1.5, ref: 2.2, exp: 30, hitR: 22, head: 42, atk: 1.5 },
-    hobgoblin_archer: { name: 'Hobgoblin arquero', lvl: 3, hp: 70, dmg: [7, 11], spd: 1.4, ref: 2.2, exp: 30, hitR: 21, head: 40, atk: 1.6 },
-    skeleton_archer: { name: 'Esqueleto arquero', lvl: 5, hp: 125, dmg: [10, 16], spd: 1.4, ref: 2.1, exp: 55, hitR: 22, head: 55, atk: 1.6 },
+    hobgoblin_archer: { name: 'Hobgoblin arquero', lvl: 3, hp: 70, dmg: [7, 11], spd: 1.4, ref: 2.2, exp: 30, hitR: 21, head: 40, atk: 1.6, ranged: { range: 7, keep: 4.5, speed: 11, kind: 0 } },
+    skeleton_archer: { name: 'Esqueleto arquero', lvl: 5, hp: 125, dmg: [10, 16], spd: 1.4, ref: 2.1, exp: 55, hitR: 22, head: 55, atk: 1.6, ranged: { range: 8, keep: 5, speed: 12, kind: 0 } },
     zombie_dark: { name: 'Zombi oscuro', lvl: 4, hp: 125, dmg: [9, 15], spd: 1.1, ref: 1.6, exp: 45, hitR: 22, head: 50, atk: 1.6 },
     // Lápida inmóvil en Flare (sin animación de andar): se arrastra muy lento para no dejar a la IA con velocidad 0 (volver a casa nunca terminaría).
     cursed_grave: { name: 'Tumba maldita', lvl: 5, hp: 150, dmg: [11, 18], spd: 0.5, ref: 1.0, exp: 62, hitR: 24, head: 55, atk: 1.8 },

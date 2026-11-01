@@ -9,8 +9,8 @@ Se agregaron **al final** de `MOB_TYPES` (el protocolo manda el índice: los 13 
 | Índice | Tipo | Nombre | Nv base | Vida | Daño | Exp | Sprite de Flare | Notas |
 |---|---|---|---|---|---|---|---|---|
 | 13 | `hobgoblin` | Hobgoblin | 3 | 85 | 8-13 | 30 | `hobgoblin` (empyrean) | |
-| 14 | `hobgoblin_archer` | Hobgoblin arquero | 3 | 70 | 7-11 | 30 | `hobgoblin_archer` (empyrean) | **cuerpo a cuerpo por ahora** (ver 3) |
-| 15 | `skeleton_archer` | Esqueleto arquero | 5 | 125 | 10-16 | 55 | `skeleton_archer` | **cuerpo a cuerpo por ahora** |
+| 14 | `hobgoblin_archer` | Hobgoblin arquero | 3 | 70 | 7-11 | 30 | `hobgoblin_archer` (empyrean) | **a distancia** (ver docs/MOBS_A_DISTANCIA.md) |
+| 15 | `skeleton_archer` | Esqueleto arquero | 5 | 125 | 10-16 | 55 | `skeleton_archer` | **a distancia** (ver docs/MOBS_A_DISTANCIA.md) |
 | 16 | `zombie_dark` | Zombi oscuro | 4 | 125 | 9-15 | 45 | `zombie_dark` (empyrean) | sprite casi negro: poco visible en mapas oscuros |
 | 17 | `cursed_grave` | Tumba maldita | 5 | 150 | 11-18 | 62 | `cursed_grave` | lápida inmóvil en Flare; velocidad 0,5 (ver 3) |
 | 18 | `ice_ant` | Hormiga de hielo | 7 | 237 | 15-23 | 101 | `ice_ant` | |
@@ -37,7 +37,7 @@ Server, proto y economía **no necesitaron cambios**: `MobSnap.type` es un `int3
 
 ## 3. Lo que falta o hay que decidir
 
-- **Arqueros con ataque a distancia.** `MobSim` solo pelea cuerpo a cuerpo (avanza hasta 1,1 celdas y golpea) y tiene la habilidad especial de boss. Para que `hobgoblin_archer`, `skeleton_archer` (y los magos que se quieran) disparen hay que agregar a `MobDef` un alcance (`range`) y un proyectil/animación `shoot`, y en `MobSim` un estado que se detenga a distancia de ataque, más el evento de red correspondiente (hoy `MobAttack` solo marca el golpe). Los atlas ya traen la animación `shoot` en Flare, pero `atlas.ts` solo empaqueta las 5 básicas. Hasta entonces pelean cuerpo a cuerpo.
+- **(Hecho en la rama `mobs-ranged`: ver docs/MOBS_A_DISTANCIA.md.) Arqueros con ataque a distancia.** `MobSim` solo pelea cuerpo a cuerpo (avanza hasta 1,1 celdas y golpea) y tiene la habilidad especial de boss. Para que `hobgoblin_archer`, `skeleton_archer` (y los magos que se quieran) disparen hay que agregar a `MobDef` un alcance (`range`) y un proyectil/animación `shoot`, y en `MobSim` un estado que se detenga a distancia de ataque, más el evento de red correspondiente (hoy `MobAttack` solo marca el golpe). Los atlas ya traen la animación `shoot` en Flare, pero `atlas.ts` solo empaqueta las 5 básicas. Hasta entonces pelean cuerpo a cuerpo.
 - **`cursed_grave`** no tiene animación de andar. Se le dio velocidad 0,5 (no 0) para no dejar a la IA con velocidad nula: con 0 un mob que vuelve a casa nunca termina de llegar y se queda en estado `return` sin recuperar vida. Se ve "deslizarse" con la animación quieta. Si molesta, la salida limpia es mobs inmóviles en `MobSim` (no persiguen, pegan solo al que está pegado).
 - **`hobgoblin` y `hobgoblin_archer`** se parecen mucho entre sí a escala 0,5 (mismo cuerpo, cambia el arma). Dentro de un mismo pit se van a confundir.
 - **Carga inicial:** el cliente baja los 9 atlas nuevos al arrancar (+5,9 MB, sobre los ~12 MB de mobs que ya baja). La carga por mapa ya figura en `MUNDO.md` como mejora opcional; con 22 tipos conviene hacerla.
