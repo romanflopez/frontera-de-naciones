@@ -3,7 +3,7 @@
  * con las mismas fórmulas del juego, el nivel y el equipo del último guardado validado, la Furia que lleva el server,
  * y límites de recarga, alcance y ritmo por hechizo.
  */
-import { BASE_BY_NAME, upMult } from '@fdn/world';
+import { BASE_BY_NAME, MAX_LEVEL, statBonus, upMult, type Stats } from '@fdn/world';
 export type Stat = 'mag' | 'wdmg' | 'melee';
 export interface PvpSpell {
     dmg?: [number, number]; lvlK?: number; stat?: Stat;
@@ -56,21 +56,21 @@ export const UTIL_MP = { furia: 15, invisibilidad: 40, detectar: 30, remover: 20
 const CLASS_MP: Record<string, [number, number]> = { guerrero: [40, 4], mago: [90, 12] };
 export const potionMp = (maxMp: number) => Math.max(40, Math.round(maxMp * 0.5));
 
-export interface CombatStats { lvl: number; cls: string; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; savedHp: number; maxMp: number; savedMp: number }
+export interface CombatStats { lvl: number; cls: string; /** multiplicadores de daño por Fuerza (físico) y Magia (hechizos) */ meleeMult: number; magicMult: number; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; savedHp: number; maxMp: number; savedMp: number }
 const CLASS_HP: Record<string, [number, number]> = { guerrero: [140, 18], mago: [90, 10] };
-export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, rm: 0, rpar: 0, savedHp: 140, maxMp: 40, savedMp: 40 };
+export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, rm: 0, rpar: 0, savedHp: 140, maxMp: 40, savedMp: 40 };
 
 /** Las bases de items son las compartidas de @fdn/world (el cliente usa las mismas). */
 const MELEE: Record<string, [number, number]> = { guerrero: [5, 9], mago: [2, 4] };
 
 /** Lo mínimo del personaje que hace falta para calcular los stats de combate: nivel, clase, vida/maná guardados y el EQUIPO. */
-export interface StatSource { lvl: number; cls: string; hp?: number; mp?: number; eq: Partial<Record<string, { n: string; a?: { id: string; v: number }[]; up?: number } | null>> }
+export interface StatSource { lvl: number; cls: string; stats?: Stats; hp?: number; mp?: number; eq: Partial<Record<string, { n: string; a?: { id: string; v: number }[]; up?: number } | null>> }
 
 /** Stats de combate a partir del personaje del server (equipo autoritativo, ver economy.ts). */
 export function statsFromChar(o: StatSource | undefined): CombatStats {
     if (!o) return { ...DEFAULT_STATS };
-    const cls = o.cls === 'mago' ? 'mago' : 'guerrero', lvl = Math.max(1, Math.min(60, Number(o.lvl) || 1));
-    const s: CombatStats = { lvl, cls, mag: 0, wdmg: [0, 0], maxHp: 0, def: 0, rm: 0, rpar: 0, savedHp: 1, maxMp: 0, savedMp: 0 };
+    const cls = o.cls === 'mago' ? 'mago' : 'guerrero', lvl = Math.max(1, Math.min(MAX_LEVEL, Number(o.lvl) || 1));
+    const s: CombatStats = { lvl, cls, meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 0, def: 0, rm: 0, rpar: 0, savedHp: 1, maxMp: 0, savedMp: 0 };
     let bonusHp = 0, bonusMp = 0;
     for (const [slot, it] of Object.entries(o.eq ?? {})) {
         if (!it) continue;
@@ -78,6 +78,8 @@ export function statsFromChar(o: StatSource | undefined): CombatStats {
         if (b && b.slot === slot) { const k = upMult(it.up); if (b.dmg) s.wdmg = k === 1 ? b.dmg : [Math.round(b.dmg[0] * k), Math.round(b.dmg[1] * k)]; if (b.mag) s.mag += Math.round(b.mag * k); if (b.def) s.def += Math.round(b.def * k); if (b.rm) s.rm += Math.round(b.rm * k); }
         for (const a of it.a ?? []) { if (a.id === 'mag') s.mag += a.v; else if (a.id === 'hp') bonusHp += a.v; else if (a.id === 'mp') bonusMp += a.v; else if (a.id === 'df') s.def += a.v; else if (a.id === 'rm' || a.id === 'fres' || a.id === 'ires') s.rm += a.v; /* fres/ires: atributos viejos, ahora valen RM 1:1 */ else if (a.id === 'rpar') s.rpar += a.v; }
     }
+    const sb = statBonus(o.stats); // puntos de Fuerza, Vitalidad, Destreza y Magia
+    bonusHp += sb.hp; bonusMp += sb.mp; s.def += sb.def; s.meleeMult = sb.meleeMult; s.magicMult = sb.magicMult;
     const [hp0, hpL] = CLASS_HP[cls];
     s.maxHp = hp0 + (lvl - 1) * hpL + bonusHp;
     const [mp0, mpL] = CLASS_MP[cls];
@@ -127,6 +129,7 @@ export function rollSpellDamage(id: string, s: CombatStats, fury: boolean): numb
     const sp = PVP_SPELLS[id] ?? SKILLS[id]; if (!sp || !sp.dmg) return 0;
     let d = id === 'ataque' ? rint(...(MELEE[s.cls] ?? MELEE.guerrero)) + s.lvl + rint(s.wdmg[0], s.wdmg[1])
         : rint(sp.dmg[0], sp.dmg[1]) + s.lvl * (sp.lvlK ?? 0) + (sp.stat === 'mag' ? s.mag : sp.stat === 'wdmg' ? rint(s.wdmg[0], s.wdmg[1]) : 0);
+    d = Math.round(d * (id === 'ataque' || sp.stat === 'wdmg' || sp.stat === 'melee' || sp.melee ? s.meleeMult : sp.stat === 'mag' ? s.magicMult : 1)); // Fuerza / Magia
     if (sp.aoe && (sp.stat === 'mag' && id === 'bola')) d = Math.round(d * (0.85 + Math.random() * 0.3));
     if (fury) d = Math.round(d * (sp.melee ? 1.3 : s.cls === 'mago' ? 1.2 : 1));
     return Math.max(1, d);

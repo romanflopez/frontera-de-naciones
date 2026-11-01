@@ -6,7 +6,7 @@
  * mobs, combate, hechizos, loot y experiencia (pasan al server en la fase 1b).
  */
 import { drawPortalFloor, drawPortalFx, PORTAL_CITY, PORTAL_ZONE } from './portal';
-import { DEFAULT_MAP, RECALL, expToLevel, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
+import { DEFAULT_MAP, RECALL, STAT_CAP, STAT_DESC, STAT_IDS, STAT_NAMES, defaultStats, expToLevel, statBonus, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
 import { UNIQUE_BY_NAME, UP_MAX, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Quest, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
@@ -103,6 +103,8 @@ const ATTRS = ATTR_IDS.map((id) => ({ id, r: ATTR_RANGES[id], f: ATTR_FMT[id] })
 interface Item extends Base { id: number; rar: Rarity; attrs: { id: AttrId; v: number }[]; /** nivel de mejora (+N) */ up?: number }
 const itName = (it: { name: string; up?: number }) => (it.up ? `+${it.up} ` : '') + it.name;
 let forgeStones = 0;
+/** Puntos de stats repartidos y libres (los manda el server en InventoryState; el server decide, esto solo se muestra y se refleja en los números). */
+let stats: Stats = defaultStats(), statFree = 0;
 const FORGE_ICON = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M16 3 27 12 22 28H10L5 12Z" fill="#c9833a" stroke="#6b3f16" stroke-width="2"/><path d="M16 3 22 28 27 12ZM16 3 10 28 5 12Z" fill="#e5a65a" opacity=".45"/></svg>');
 let uid = 1;
 const attrText = (a: { id: AttrId; v: number }) => ATTRS.find((x) => x.id === a.id)!.f(a.v);
@@ -183,6 +185,7 @@ function totals() {
         if (it.dmg) t.wdmg = k === 1 ? it.dmg : [Math.round(it.dmg[0] * k), Math.round(it.dmg[1] * k)]; if (it.def) t.def += Math.round(it.def * k); if (it.rm) t.rm += Math.round(it.rm * k); if (it.mag) t.mag += Math.round(it.mag * k);
         for (const a of it.attrs) t[a.id] += a.v;
     }
+    const sb = statBonus(stats); t.hp += sb.hp; t.mp += sb.mp; t.df += sb.def; // los puntos de Vitalidad, Fuerza, Magia y Destreza (mismos números que el server)
     t.def += t.df; // el atributo 'df' suma a la defensa
     return t;
 }
@@ -364,6 +367,7 @@ function onServer(m: ServerPayload) {
 /** Pide el golpe al server: él valida alcance y tope de daño, lo aplica y avisa a todos (`mobDamaged`). */
 function damageMob(m: Mob, dmg: number, crit: boolean, src: 'melee' | 'spell', parSecs = 0) {
     if (!mobs.includes(m) || P.dead) return;
+    { const sb = statBonus(stats); dmg = Math.round(dmg * (src === 'melee' ? sb.meleeMult : sb.magicMult)); } // Fuerza / Magia
     if (P.fury > now()) dmg = Math.round(dmg * (src === 'melee' ? 1.3 : CLS.id === 'mago' ? 1.2 : 1));
     const t = totals();
     if (src === 'melee' && t.leech) P.hp = Math.min(maxHp(), P.hp + Math.max(1, Math.round((dmg * t.leech) / 100))); syncHp();
@@ -1500,7 +1504,7 @@ function hud() {
 function layoutHud() {
     const root = $('hudroot'), sc = clamp(Math.min(innerWidth / 1360, innerHeight / 900), 0.4, 1);
     const st = document.documentElement.style; st.setProperty('--hud-scale', sc.toFixed(3)); st.setProperty('--hud-h', Math.round((root.offsetHeight + 8) * sc) + 'px');
-    { const hh = (root.offsetHeight + 8) * sc, ws = clamp(Math.min((innerWidth - 24) / 696, (innerHeight - hh - 96) / 516), 0.45, 1.3); st.setProperty('--win-scale', ws.toFixed(3)); renderTipPos(); }
+    { const hh = (root.offsetHeight + 8) * sc, ws = clamp(Math.min((innerWidth - 24) / 696, (innerHeight - hh - 96) / 640), 0.45, 1.3); st.setProperty('--win-scale', ws.toFixed(3)); renderTipPos(); }
 }
 addEventListener('resize', layoutHud); layoutHud();
 function renderTipPos() { if (typeof renderTip === 'function' && !$('itip').hidden) renderTip(); }
@@ -1514,7 +1518,7 @@ const bagOpen = () => !$('bag').hidden, charOpen = () => !$('char').hidden;
 /** I: abre Personaje + Inventario juntos (o cierra ambos). */
 function toggleBag() { const open = bagOpen(); $('bag').hidden = open; $('char').hidden = open; renderBag(); }
 /** C: solo la ventana de Personaje. */
-function toggleChar() { $('char').hidden = !charOpen(); renderBag(); }
+function toggleChar() { $('char').hidden = charOpen(); renderBag(); }
 function closeWins() { $('bag').hidden = true; $('char').hidden = true; $('itip').hidden = true; }
 $('openBag').addEventListener('click', toggleBag);
 $('openChar').addEventListener('click', toggleChar);
@@ -1550,7 +1554,23 @@ function renderChar() {
         STAT_ICON('fire', `${tt.rm} (${mitigPct(tt.rm)}%)`, 'Res. mágica (RM)'), STAT_ICON('ice', `${mitigPct(tt.def)}% / ${mitigPct(tt.rm)}%`, 'Mitigación F/M'), STAT_ICON('par', tt.rpar + '%', 'Res. parálisis'), STAT_ICON('poi', tt.poison + '%', 'Veneno'),
     ].join('');
     if ($('stats').dataset.h !== st) { $('stats').dataset.h = st; $('stats').innerHTML = st; }
+    renderAttrs();
 }
+/** Puntos de stats: una fila por stat con su botón "+" (el server valida; acá solo se pide). */
+function renderAttrs() {
+    const rows = STAT_IDS.map((id) => {
+        const can = statFree > 0 && stats[id] < STAT_CAP && !P.dead;
+        return `<div class="atr" title="${esc(STAT_DESC[id])}"><span>${STAT_NAMES[id]}</span><b>${stats[id]}</b><button type="button" class="atrb" data-stat="${id}" ${can ? '' : 'disabled'} aria-label="Sumar un punto a ${STAT_NAMES[id]}">+</button></div>`;
+    }).join('');
+    const cost = statResetCost(P.lvl);
+    const h = `<div class="atrh"><span>Puntos libres: <b>${statFree}</b></span><button type="button" class="atrr" id="statReset" title="${cost ? `Cuesta ${cost} de oro` : 'Gratis hasta el nivel 10'}">Reasignar${cost ? ` (${cost} oro)` : ''}</button></div><div class="atrg">${rows}</div>`;
+    if ($('attrs').dataset.h !== h) { $('attrs').dataset.h = h; $('attrs').innerHTML = h; }
+}
+$('attrs').addEventListener('click', (e) => {
+    const t = e.target as HTMLElement, b = t.closest('button[data-stat]') as HTMLButtonElement | null;
+    if (b && !b.disabled) { net.send({ $case: 'statAllocRequest', value: { action: 'add', stat: b.dataset.stat as StatId, points: e.shiftKey ? Math.min(5, statFree) : 1 } }); return; }
+    if (t.closest('#statReset')) net.send({ $case: 'statAllocRequest', value: { action: 'reset', stat: '', points: 0 } });
+});
 /** Muñeco real del personaje (idle) en el retrato. */
 function drawPortrait(T: number) {
     const c = $('heroCv') as HTMLCanvasElement, g = c.getContext('2d')!, M = SPR.hero, A = M?.anims.stance, im = IMG.hero;
@@ -2163,6 +2183,7 @@ function applyInventory(v: InventoryState) {
     for (const sl of SLOTS) P.eq[sl] = null;
     for (const e of v.eq) if (e.item && (SLOTS as string[]).includes(e.slot)) P.eq[e.slot as Slot] = itemFromInv(e.item);
     pots.hp = v.potsHp; pots.mp = v.potsMp; forgeStones = v.forge;
+    stats = { str: v.statStr || 10, vit: v.statVit || 10, dex: v.statDex || 10, mag: v.statMag || 10, luk: v.statLuk || 10 }; statFree = v.statFree;
     Q.i = v.questI; Q.st = v.questState === 'active' || v.questState === 'ready' ? v.questState : 'new'; Q.prog = v.questProg;
     Q.keys.cripta = v.keysCripta; Q.keys.foso = v.keysFoso; Q.shards.cripta = v.shardsCripta; Q.shards.foso = v.shardsFoso;
     for (const id of v.unlocked) if (!UNLOCKED.has(id)) {

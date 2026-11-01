@@ -501,6 +501,7 @@ export class GameWorld {
                 case 'hpReport': this.acceptHpReport(p, payload.value.hp, payload.value); break;
                 case 'potionRequest': this.usePotion(p, payload.value.kind); break;
                 case 'econUpgradeRequest': this.econ?.upgrade(p, this.ctx, payload.value.npcId.slice(0, 64), payload.value.uid); break;
+                case 'statAllocRequest': this.econ?.statAlloc(p, this.ctx, payload.value.action.slice(0, 8), payload.value.stat.slice(0, 8), payload.value.points); break;
                 case 'econBuyRequest': this.econ?.buy(p, this.ctx, payload.value.npcId, payload.value.stockIndex); break;
                 case 'econSellRequest': this.econ?.sell(p, this.ctx, payload.value.npcId, payload.value.uid); break;
                 case 'econEquipRequest': this.econ?.equip(p, this.ctx, payload.value.uid); break;

@@ -138,7 +138,7 @@ button:hover{border-color:var(--brass)} button:focus-visible{outline:2px solid v
   background:radial-gradient(ellipse at 50% 0,#1e1813 0,#0e0b09 60%,#070605 100%);border:3px solid #3b2d1b;border-radius:6px;display:flex;flex-direction:column;
   box-shadow:0 0 0 1px #050302,0 0 0 3px #1c140c,0 0 0 4px #8a6a36,0 0 0 6px #120c06,inset 0 0 0 1px #a58144aa,inset 0 0 60px #000,0 14px 44px #000c}
 #bag{right:max(12px,env(safe-area-inset-right,0px))}
-#char{right:calc(max(12px,env(safe-area-inset-right,0px)) + (var(--W) + 16px) * var(--win-scale))}
+#char{--H:640px;right:calc(max(12px,env(safe-area-inset-right,0px)) + (var(--W) + 16px) * var(--win-scale))}
 .fw-crest{position:absolute;left:50%;top:-26px;width:196px;height:46px;margin-left:-98px;pointer-events:none;z-index:2;filter:drop-shadow(0 2px 3px #000)}
 .fw-gem{position:absolute;left:50%;bottom:-11px;width:44px;height:22px;margin-left:-22px;pointer-events:none;z-index:2;filter:drop-shadow(0 2px 2px #000)}
 .fw-c{position:absolute;width:44px;height:44px;pointer-events:none;z-index:2;filter:drop-shadow(0 1px 1px #000)}
@@ -173,6 +173,17 @@ button.sl:not(.dis):hover,.cl:hover{border-color:#e0b765;filter:brightness(1.15)
 .lvbar{position:relative;flex:1;height:9px;background:#050403;border:1px solid #5a4424;border-radius:5px;overflow:hidden}
 .lvbar i{position:absolute;inset:0 auto 0 0;background:linear-gradient(#ffcf6a,#d27a1a 60%,#8a4a0c);box-shadow:0 0 6px #e8a03a}
 .lvl span{font-size:11px;color:#bfae86;font-variant-numeric:tabular-nums;white-space:nowrap}
+.attrs{padding:6px 12px;background:linear-gradient(#14100c,#0a0807);border:1px solid #4d3b20;border-radius:3px;box-shadow:inset 0 0 14px #000;margin-bottom:6px}
+.atrh{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;margin-bottom:4px}
+.atrh b{color:#ffd24a}
+.atrr{font:inherit;font-size:11.5px;padding:2px 8px;background:#2a1f10;color:#e8d9b5;border:1px solid #6a5230;border-radius:3px;cursor:pointer}
+.atrr:hover{background:#3a2b16}
+.atrg{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.atr{display:flex;align-items:center;gap:7px;height:24px;border-bottom:1px solid #2d2418;font-size:12.5px}
+.atr span{flex:1}
+.atr b{min-width:26px;text-align:right}
+.atrb{width:20px;height:20px;line-height:16px;padding:0;font-size:15px;background:#3a2b16;color:#ffd24a;border:1px solid #8a6a34;border-radius:3px;cursor:pointer}
+.atrb:disabled{opacity:.3;cursor:default}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:0 14px;padding:6px 12px;background:linear-gradient(#14100c,#0a0807);border:1px solid #4d3b20;border-radius:3px;box-shadow:inset 0 0 14px #000;flex:1;align-content:space-evenly}
 .stat{display:flex;align-items:center;gap:7px;height:24px;border-bottom:1px solid #2d2418;font-size:12.5px}
 .stat svg{width:15px;height:15px;color:#c9a35a;flex:none}
@@ -331,6 +342,7 @@ canvas:focus{outline:none}
         <div class="eqcol" id="eqR"></div>
       </div>
       <div class="lvl"><b id="lvN">Lv. 1</b><div class="lvbar" role="progressbar" aria-label="Experiencia" id="lvBar"><i id="lvI"></i></div><span id="lvT">0 / 0</span></div>
+      <div class="attrs" id="attrs"></div>
       <div class="stats" id="stats"></div>
     </div>
     <svg class="fw-gem" aria-hidden="true"><use href="#fwgem"/></svg>

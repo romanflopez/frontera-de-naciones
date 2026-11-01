@@ -154,6 +154,9 @@ export interface ClientMessage {
     | //
     /** Party (ver docs/PARTY_Y_ARENAS.md). Rango propio de tags desde 600. */
     { $case: "partyRequest"; value: PartyRequest }
+    | //
+    /** Puntos de stats del personaje (ver docs/PLAN_DE_TRABAJO.md paso 1.2). Rango propio de tags desde 700. */
+    { $case: "statAllocRequest"; value: StatAllocRequest }
     | undefined;
 }
 
@@ -1508,6 +1511,13 @@ export interface EconUpgradeRequest {
   uid: number;
 }
 
+/** Repartir puntos de stats: action = "add" (suma `points` al stat `stat`: str, vit, dex, mag o luk) o "reset" (devuelve todos los puntos). El server valida todo. */
+export interface StatAllocRequest {
+  action: string;
+  stat: string;
+  points: number;
+}
+
 export interface InvEquip {
   slot: string;
   item: InvItem | undefined;
@@ -1536,6 +1546,13 @@ export interface InventoryState {
   goldD: number;
   /** Piedras de forja (materiales para mejorar ítems únicos). */
   forge: number;
+  /** Puntos de stats repartidos y puntos libres (paso 1.2). Los stats de las cuentas viejas valen 10. */
+  statStr: number;
+  statVit: number;
+  statDex: number;
+  statMag: number;
+  statLuk: number;
+  statFree: number;
 }
 
 /** Respuesta a una acción de economía: ok=false con un motivo (code) y texto para mostrar. */
@@ -1935,6 +1952,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         break;
       case "partyRequest":
         PartyRequest.encode(message.payload.value, writer.uint32(4802).fork()).join();
+        break;
+      case "statAllocRequest":
+        StatAllocRequest.encode(message.payload.value, writer.uint32(5602).fork()).join();
         break;
     }
     return writer;
@@ -2633,6 +2653,14 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "partyRequest", value: PartyRequest.decode(reader, reader.uint32()) };
             continue;
           }
+          case 700: {
+            if (tag !== 5602) {
+              break;
+            }
+
+            message.payload = { $case: "statAllocRequest", value: StatAllocRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -3188,6 +3216,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "partyRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "partyRequest", value: PartyRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "statAllocRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "statAllocRequest", value: StatAllocRequest.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -19978,6 +20012,85 @@ export const EconUpgradeRequest: MessageFns<EconUpgradeRequest> = {
   },
 };
 
+function createBaseStatAllocRequest(): StatAllocRequest {
+  return { action: "", stat: "", points: 0 };
+}
+
+export const StatAllocRequest: MessageFns<StatAllocRequest> = {
+  encode(message: StatAllocRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.action !== "") {
+      writer.uint32(10).string(message.action);
+    }
+    if (message.stat !== "") {
+      writer.uint32(18).string(message.stat);
+    }
+    if (message.points !== 0) {
+      writer.uint32(24).int32(message.points);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): StatAllocRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseStatAllocRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.action = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.stat = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.points = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<StatAllocRequest>, I>>(base?: I): StatAllocRequest {
+    return StatAllocRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<StatAllocRequest>, I>>(object: I): StatAllocRequest {
+    const message = createBaseStatAllocRequest();
+    message.action = object.action ?? "";
+    message.stat = object.stat ?? "";
+    message.points = object.points ?? 0;
+    return message;
+  },
+};
+
 function createBaseInvEquip(): InvEquip {
   return { slot: "", item: undefined };
 }
@@ -20066,6 +20179,12 @@ function createBaseInventoryState(): InventoryState {
     faction: "",
     goldD: 0,
     forge: 0,
+    statStr: 0,
+    statVit: 0,
+    statDex: 0,
+    statMag: 0,
+    statLuk: 0,
+    statFree: 0,
   };
 }
 
@@ -20127,6 +20246,24 @@ export const InventoryState: MessageFns<InventoryState> = {
     }
     if (message.forge !== 0) {
       writer.uint32(152).int32(message.forge);
+    }
+    if (message.statStr !== 0) {
+      writer.uint32(160).int32(message.statStr);
+    }
+    if (message.statVit !== 0) {
+      writer.uint32(168).int32(message.statVit);
+    }
+    if (message.statDex !== 0) {
+      writer.uint32(176).int32(message.statDex);
+    }
+    if (message.statMag !== 0) {
+      writer.uint32(184).int32(message.statMag);
+    }
+    if (message.statLuk !== 0) {
+      writer.uint32(192).int32(message.statLuk);
+    }
+    if (message.statFree !== 0) {
+      writer.uint32(200).int32(message.statFree);
     }
     return writer;
   },
@@ -20296,6 +20433,54 @@ export const InventoryState: MessageFns<InventoryState> = {
             message.forge = reader.int32();
             continue;
           }
+          case 20: {
+            if (tag !== 160) {
+              break;
+            }
+
+            message.statStr = reader.int32();
+            continue;
+          }
+          case 21: {
+            if (tag !== 168) {
+              break;
+            }
+
+            message.statVit = reader.int32();
+            continue;
+          }
+          case 22: {
+            if (tag !== 176) {
+              break;
+            }
+
+            message.statDex = reader.int32();
+            continue;
+          }
+          case 23: {
+            if (tag !== 184) {
+              break;
+            }
+
+            message.statMag = reader.int32();
+            continue;
+          }
+          case 24: {
+            if (tag !== 192) {
+              break;
+            }
+
+            message.statLuk = reader.int32();
+            continue;
+          }
+          case 25: {
+            if (tag !== 200) {
+              break;
+            }
+
+            message.statFree = reader.int32();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -20332,6 +20517,12 @@ export const InventoryState: MessageFns<InventoryState> = {
     message.faction = object.faction ?? "";
     message.goldD = object.goldD ?? 0;
     message.forge = object.forge ?? 0;
+    message.statStr = object.statStr ?? 0;
+    message.statVit = object.statVit ?? 0;
+    message.statDex = object.statDex ?? 0;
+    message.statMag = object.statMag ?? 0;
+    message.statLuk = object.statLuk ?? 0;
+    message.statFree = object.statFree ?? 0;
     return message;
   },
 };

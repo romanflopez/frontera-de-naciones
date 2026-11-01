@@ -4,6 +4,7 @@
 import { ServerMessage, type DeepPartial, type PlayerEnteredRange } from '@fdn/proto';
 import type { Catalogs, GameWorldConfig, ItemConfig, SpellConfig } from './config.ts';
 import type { Player } from './player.ts';
+import { statPointsFree } from '@fdn/world';
 import type { Econ, SItem } from './economy.ts';
 
 type Payload = NonNullable<DeepPartial<ServerMessage>['payload']>;
@@ -204,6 +205,7 @@ export const inventoryState = (st: Econ): ServerMessage => msg({
         questI: st.q.i, questState: st.q.st, questProg: st.q.prog,
         keysCripta: st.q.keys.cripta, keysFoso: st.q.keys.foso, shardsCripta: st.q.shards.cripta, shardsFoso: st.q.shards.foso,
         unlocked: st.u, cls: st.cls, faction: st.faction, forge: st.forge ?? 0,
+        statStr: st.stats.str, statVit: st.stats.vit, statDex: st.stats.dex, statMag: st.stats.mag, statLuk: st.stats.luk, statFree: statPointsFree(st.lvl, st.stats),
     },
 });
 export const econResult = (ok: boolean, code: string, text: string): ServerMessage => msg({ $case: 'econResult', value: { ok, code, text } });

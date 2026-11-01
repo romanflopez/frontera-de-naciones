@@ -8,9 +8,10 @@ Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última a
 | 0.2 Legal y catálogos | Pendiente | |
 | 0.3 Deploy de prueba | Pendiente | |
 | **1.1 Techo 40 y curva de nivel** | **Implementado** (faltan la simulación y la prueba manual) | Ver abajo |
-| 1.2 Puntos de stats | Pendiente | |
+| **1.2 Puntos de stats** | **Implementado** (falta la prueba de balance con el script de combate) | Ver abajo |
 | 1.3 Atributos autoritativos y topes | Pendiente | |
 | 1.4 Daño en área y habilidades de mobs | Pendiente | |
+| **1.5 Tiers de zona** (paso nuevo) | Diseñado, pendiente | `TIERS_DE_ZONA.md`: cada mapa lleva un tier y de ahí salen los niveles de los mobs y la banda de ítems; con los 12 mapas actuales alcanza hasta el T6 |
 
 ## Paso 1.1: qué quedó
 
@@ -31,3 +32,21 @@ Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última a
 - **E, prueba manual:** guerrero y mago nuevos de 1 a 10 midiendo el tiempo real (meta: menos de una hora).
 
 **Efecto que hay que saber.** Hoy no hay mapas con mobs por encima del nivel ~12 (llegan Fase 4). Con el multiplicador y la regla de diferencia, **a partir del nivel 12-15 subir se vuelve muy lento hasta que existan zonas de nivel alto**. Para probar niveles altos se usa el comando de GM `/gm nivel`.
+
+## Paso 1.2: qué quedó
+
+**Atributos** (`packages/world/src/stats.ts`, compartido cliente/server): Fuerza, Vitalidad, Destreza, Magia y Suerte, base 10 y tope 100 cada uno. Se arranca con 10 puntos libres y se ganan 3 por nivel (22 libres en el nivel 5 con `/gm nivel 5`).
+- Fuerza: +2/3 de vida y +0,2 % de daño cuerpo a cuerpo por punto sobre la base.
+- Vitalidad: +2,5 de vida por punto.
+- Destreza: +0,5 de defensa por punto.
+- Magia: +2 de maná y +0,3 % de daño mágico por punto.
+- Suerte: +0,1 % a la probabilidad de drop por punto (afecta únicos, comunes y oro).
+- Reset: gratis hasta el nivel 10, después `200 · nivel` de oro.
+
+**Server (autoritativo):** `statAlloc` en `economy.ts` valida stat, puntos enteros ≥ 1, puntos libres, tope 100 y personaje vivo; usa `Economy.run()` (límite de frecuencia y snapshot). `ECON_VERSION` pasa a 4 y `migrateEcon` sanea los stats guardados. Mensaje nuevo `StatAllocRequest` (tag 700) y campos 20-25 en `InventoryState`. El PvP ya usa los stats (vida, maná, defensa y multiplicadores de daño en `pvpCombat.ts`).
+
+**Cliente:** panel de atributos en la ventana de personaje (`+`, shift-click = +5, botón reset). Se corrigió un bug previo de `toggleChar` y la ventana pasa a 640 px de alto para que entre.
+
+**Pruebas:** `apps/server/test/stats.test.ts` (13 tests: fórmulas, asignación, concurrencia, tope, muerto, protocolo, reset, Monte Carlo de Suerte, guardado anti-trampa, migraciones). Suite del server: 164 verdes y 1 salteado. Verificado además a mano en el navegador.
+
+**Lo que falta:** correr `test-combat.ts` con distribuciones extremas (todo en Fuerza, todo en Vitalidad) y la prueba manual. El daño PvE sigue calculándose en el cliente (con tope en el server); pasa a ser autoritativo en el paso 1.3.

@@ -10,7 +10,7 @@
  */
 import {
     ATTR_RANGES, BAG_MAX, BASE_BY_NAME, BASES, KEY_IDS, KEYDEFS, POT_MAX, POTS, QUESTS, roleOf, SHARDS_PER_KEY, SHOP_SERVER_RANGE,
-    MAPS, SHOPS, SLOTS, SRV_ATTR, TRAINING, buildMap, expToLevel, legacyExpToLevel, levelExpMult, levelGapMult, MAX_LEVEL, mobDef, sellPrice, trainingUnlocked,
+    MAPS, SHOPS, SLOTS, SRV_ATTR, TRAINING, buildMap, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statBonus, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, mobDef, sellPrice, trainingUnlocked,
     BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BASES, UP_MAX, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
 } from '@fdn/world';
@@ -20,8 +20,8 @@ import * as M from './messages.ts';
 import type { Player } from './player.ts';
 import type { AccountRecord, Storage } from './storage.ts';
 
-/** v3: nivel máximo 40 y curva de exp nueva (migra la exp guardada conservando la fracción del nivel). */
-export const ECON_VERSION = 3;
+/** v3: nivel máximo 40 y curva de exp nueva (migra la exp guardada conservando la fracción del nivel). v4: puntos de stats. */
+export const ECON_VERSION = 4;
 export const MAX_LVL = MAX_LEVEL;
 /** Sin límite de oro de juego: el único techo es el técnico (entero exacto en JS / double del protocolo). */
 export const MAX_GOLD = Number.MAX_SAFE_INTEGER;
@@ -37,6 +37,8 @@ export interface Econ {
     v: number;
     cls: string; faction: string;
     lvl: number; exp: number; gold: number;
+    /** Puntos de stats repartidos (arrancan en 10; los puntos libres salen del nivel, ver @fdn/world stats.ts). */
+    stats: Stats;
     /** Vida y maná al salir (el server los lleva en vivo en Player; acá solo se guardan). */
     hp: number; mp: number;
     bag: SItem[];
@@ -139,7 +141,7 @@ export function newEcon(cls: string, faction: string): Econ {
     const kit = CLASS_KIT[cls] ?? CLASS_KIT.guerrero;
     const st: Econ = {
         v: ECON_VERSION, cls: CLASS_KIT[cls] ? cls : 'guerrero', faction: FACTIONS.includes(faction) ? faction : 'solmar',
-        lvl: 1, exp: 0, gold: 0, hp: 1, mp: 0, bag: [], eq: emptyEq(), pots: { hp: 3, mp: 3 },
+        lvl: 1, exp: 0, gold: 0, stats: defaultStats(), hp: 1, mp: 0, bag: [], eq: emptyEq(), pots: { hp: 3, mp: 3 },
         q: { i: 0, st: 'new', prog: 0, keys: { cripta: 0, foso: 0 }, shards: { cripta: 0, foso: 0 } }, u: [], nextUid: 1,
     };
     st.eq.arma = newItem(st, kit.weapon, 0, []); st.eq.armadura = newItem(st, kit.armor, 0, []);
@@ -192,10 +194,14 @@ export function importLegacy(json: string, trusted = false): Econ | null {
  * y un nivel por encima del tope se recorta a 40 con la exp en cero.
  */
 export function migrateEcon(st: Econ): boolean {
-    if (st.v >= 3) return false;
-    const frac = st.lvl > MAX_LVL ? 0 : Math.min(0.999, Math.max(0, st.exp / Math.max(1, legacyExpToLevel(st.lvl))));
-    st.lvl = clampInt(st.lvl, 1, MAX_LVL, 1);
-    st.exp = Math.min(expToLevel(st.lvl) - 1, Math.floor(frac * expToLevel(st.lvl)));
+    if (st.v >= ECON_VERSION) return false;
+    if (st.v < 3) {
+        const frac = st.lvl > MAX_LVL ? 0 : Math.min(0.999, Math.max(0, st.exp / Math.max(1, legacyExpToLevel(st.lvl))));
+        st.lvl = clampInt(st.lvl, 1, MAX_LVL, 1);
+        st.exp = Math.min(expToLevel(st.lvl) - 1, Math.floor(frac * expToLevel(st.lvl)));
+    }
+    // v4: puntos de stats. Las cuentas viejas arrancan sin repartir y reciben los puntos libres que les corresponden por nivel.
+    st.stats = cleanStats(st.stats);
     st.v = ECON_VERSION;
     refreshUnlocks(st);
     return true;
@@ -391,6 +397,36 @@ export class Economy {
         });
     }
 
+    // ---------- puntos de stats (paso 1.2) ----------
+    /**
+     * Reparte o devuelve los puntos de stats. Todo lo decide el server: el cliente solo pide.
+     * "add": suma `points` a un stat (hay que tener puntos libres y no pasar el tope); "reset": los devuelve todos (gratis hasta el nivel 10, después cuesta oro).
+     */
+    statAlloc(p: Player, ctx: EconCtx, action: string, stat: string, points: number): void {
+        this.run(p, ctx, (st) => {
+            if (p.isDead) return fail('dead', 'Estás muerto.');
+            st.stats = cleanStats(st.stats);
+            if (action === 'add') {
+                if (!(STAT_IDS as readonly string[]).includes(stat)) return fail('bad_stat', 'Stat inválido.');
+                const id = stat as StatId;
+                if (typeof points !== 'number' || !Number.isInteger(points) || points < 1) return fail('bad_points', 'Cantidad inválida.');
+                const free = statPointsFree(st.lvl, st.stats);
+                if (free < 1) return fail('no_points', 'No tenés puntos libres.');
+                if (points > free) return fail('no_points', `Solo tenés ${free} punto${free > 1 ? 's' : ''} libre${free > 1 ? 's' : ''}.`);
+                if (st.stats[id] + points > STAT_CAP) return fail('cap', `El tope de cada stat es ${STAT_CAP}.`);
+                st.stats[id] += points;
+                return done(`+${points} ${STAT_NAMES[id]}.`, true);
+            }
+            if (action === 'reset') {
+                const cost = statResetCost(st.lvl);
+                if (st.gold < cost) return fail('gold', `Reasignar cuesta ${cost} de oro.`);
+                addGold(st, -cost); st.stats = defaultStats();
+                return done(cost > 0 ? `Reasignaste tus puntos por ${cost} de oro.` : 'Reasignaste tus puntos (gratis hasta el nivel 10).', true);
+            }
+            return fail('bad_action', 'Acción inválida.');
+        });
+    }
+
     // ---------- equipo ----------
     equip(p: Player, ctx: EconCtx, uid: number): void {
         this.run(p, ctx, (st) => {
@@ -505,17 +541,18 @@ export class Economy {
         const gain = lm > 0 ? Math.max(1, Math.round(def.exp * (1 + bonus(st, 'exp') / 100) * expMult * lm)) : 0;
         st.exp += gain;
         let gold = 0, item: SItem | undefined, bagFull = false, potion = '', shard = '';
-        const bossU = boss ? BOSS_UNIQUES[k.type] : undefined, tier = tierOfLevel(def.lvl);
+        const bossU = boss ? BOSS_UNIQUES[k.type] : undefined, tier = tierOfLevel(def.lvl), dm = statBonus(st.stats).dropMult;
         if (boss) {
             // los jefes de mazmorra con ítems propios sueltan uno de ellos (siempre); los demás, el botín de siempre
             item = bossU ? uniqueItem(st, pick(bossU)) : itemFromRoll(st, rollMobDrop(def.lvl, boss.minRar)); gold = rint(boss.gold[0], boss.gold[1]);
         } else if (tier <= UNIQUE_TIERS_READY) {
             // bandas con ítems únicos: casi siempre oro; a veces un ítem común y, con poca chance, un único de la banda (más en pits y mazmorras)
-            const r = Math.random(), uc = UNIQUE_CHANCE[k.origin ?? 'pit'];
+            // la Suerte sube la chance de cada botín (+0,1 % por punto sobre 10)
+            const r = Math.random(), uc = UNIQUE_CHANCE[k.origin ?? 'pit'] * dm, cc = COMMON_CHANCE * dm, gc = GOLD_CHANCE * dm;
             if (r < uc) item = uniqueItem(st, pick(UNIQUES_BY_TIER[tier]));
-            else if (r < uc + COMMON_CHANCE) item = itemFromRoll(st, { rarity: 'comun', attributes: [], baseSeed: Math.floor(Math.random() * 1_000_000) });
-            else if (r < uc + COMMON_CHANCE + GOLD_CHANCE) gold = rint(3, 8) * def.lvl;
-        } else if (Math.random() < 0.62) item = itemFromRoll(st, rollMobDrop(def.lvl, 0));
+            else if (r < uc + cc) item = itemFromRoll(st, { rarity: 'comun', attributes: [], baseSeed: Math.floor(Math.random() * 1_000_000) });
+            else if (r < uc + cc + gc) gold = rint(3, 8) * def.lvl;
+        } else if (Math.random() < Math.min(0.95, 0.62 * dm)) item = itemFromRoll(st, rollMobDrop(def.lvl, 0));
         else gold = rint(3, 8) * def.lvl;
         if (gold) addGold(st, gold);
         if (item) {

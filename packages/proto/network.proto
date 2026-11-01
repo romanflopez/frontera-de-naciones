@@ -130,6 +130,8 @@ message ClientMessage {
     RecallRequest recall_request = 500;
     // Party (ver docs/PARTY_Y_ARENAS.md). Rango propio de tags desde 600.
     PartyRequest party_request = 600;
+    // Puntos de stats del personaje (ver docs/PLAN_DE_TRABAJO.md paso 1.2). Rango propio de tags desde 700.
+    StatAllocRequest stat_alloc_request = 700;
   }
 }
 
@@ -1324,6 +1326,8 @@ message InvAttr { string id = 1; int32 v = 2; }
 /** Item con identidad: uid único por personaje, base (nombre en la tabla de bases), rareza 0..3 y atributos. */
 message InvItem { int32 uid = 1; string base = 2; int32 rarity = 3; repeated InvAttr attrs = 4; /* nivel de mejora (+N) */ int32 up = 5; }
 message EconUpgradeRequest { string npc_id = 1; int32 uid = 2; }
+/** Repartir puntos de stats: action = "add" (suma `points` al stat `stat`: str, vit, dex, mag o luk) o "reset" (devuelve todos los puntos). El server valida todo. */
+message StatAllocRequest { string action = 1; string stat = 2; int32 points = 3; }
 message InvEquip { string slot = 1; InvItem item = 2; }
 /** Foto completa del estado económico del personaje según el server. Se manda al entrar y después de cada cambio. */
 message InventoryState {
@@ -1348,6 +1352,13 @@ message InventoryState {
   double gold_d = 18;
   // Piedras de forja (materiales para mejorar ítems únicos).
   int32 forge = 19;
+  // Puntos de stats repartidos y puntos libres (paso 1.2). Los stats de las cuentas viejas valen 10.
+  int32 stat_str = 20;
+  int32 stat_vit = 21;
+  int32 stat_dex = 22;
+  int32 stat_mag = 23;
+  int32 stat_luk = 24;
+  int32 stat_free = 25;
 }
 /** Respuesta a una acción de economía: ok=false con un motivo (code) y texto para mostrar. */
 message EconResult { bool ok = 1; string code = 2; string text = 3; }
