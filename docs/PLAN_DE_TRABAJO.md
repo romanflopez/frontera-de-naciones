@@ -32,11 +32,15 @@ Estado de partida (`main`, 1/11): 140 de 141 tests del server en verde (1 saltea
 |---|---|---|
 | Curva de nivel (exponente de la exp por bicho) | 1.1 | 0,15 (≈ 30 h de veterano hasta el 40) |
 | Cuánto más rápido puede subir el mago en área | 1.4 | máximo 1,6× el guerrero |
-| Bandas de ítems: 5 o 4 niveles | 3.1 | 5 niveles (8 bandas) |
+| **Nivel máximo de un ítem y tamaño de banda** (Román: 30 o 35 como máximo de ítem; bandas de 4 o 5) | 3.1 | **Máximo 30, bandas de 5 = 6 bandas** (son los T1-T6 que ya existen en el código y calzan 1 a 1 con las 6 mazmorras). Los niveles 31-40 se juegan con el mismo equipo y se mejoran con +N, runas, ángel, stats y unas pocas armas legendarias |
+| **Tope de bichos que se juntan** (Román: en Helbreath se junta una banda) | 1.4 | Sin tope duro de bichos en aggro; tope de **objetivos por golpe de área** (5 para Bola y Lluvia, 4 para Giro) + el riesgo natural de recibir el daño de toda la banda (ver 1.4) |
+| **Qué se vende con monedas y si pueden usarse en la subasta** (Román quiere ítems exclusivos que incentiven donar) | 3.7 / 0.3 | Monedas solo para **cosmética y conveniencia** (auras, títulos, espacios, tickets). Si se aceptan en la subasta, que sea como mercado entre jugadores y no como tienda de poder. Ver la nota de monetización abajo |
 | Ítems de jefe: ¿se subastan? | 3.7 | Sí, con las llaves como límite del suministro |
 | Tope de +N por banda o % menor por nivel | 3.4 | Tope por banda: +3 hasta la banda 4, +5 en 5-6, +11 en las dos últimas |
 | ¿Afijos en ítems comunes? | 3.3 | Sí, después de los únicos T4+ |
 | ¿Puntos Majestic y ángel en la beta? | 3.9 | Puntos sí, ángel si hay tiempo |
+
+**Nota de monetización (para decidir antes del paso 3.7).** Un ítem fuerte que solo se consigue con monedas pagas es pay2win directo; permitir las monedas en la subasta lo convierte en pay2win indirecto, porque el que paga compra poder a otros jugadores. Es una decisión válida pero define la marca del juego. Lo que sí se puede vender sin ese costo: auras y apariencias (que es justo lo que más te gustó de los legendarios), títulos, espacios de bolsa y depósito, cambios de nombre y de stats, y piezas **iguales en poder** a las que se consiguen jugando. Además, aceptar monedas en la subasta suma riesgos operativos: contracargos de pagos después de que el ítem ya se intercambió, y compra-venta de cuentas.
 
 ---
 
@@ -110,7 +114,7 @@ Estado de partida (`main`, 1/11): 140 de 141 tests del server en verde (1 saltea
 
 ### 1.4 Daño en área y habilidades de mobs (M-L)
 **Hacer:**
-- Penalidad de daño en área: −12 % por objetivo extra, mínimo 50 %, solo en el server; revisión del consumo de maná.
+- **Tope de objetivos por golpe de área** (Bola y Lluvia 5, Giro 4, los más cercanos al centro) y penalidad de daño por objetivo extra (−12 %, mínimo 50 %), solo en el server; revisión del consumo de maná. **No** se pone un tope duro a cuántos bichos te siguen: hoy los bichos se asisten entre sí (radio 3,2 celdas) y forman bandas de 4 a 8, y el límite real es sobrevivir al daño de todos juntos. Antes de fijar números, medir en `sim-arranque.ts` cuántos bichos juntan en promedio los jugadores en un pit y cuánta vida pierden.
 - Mobs que huyen a ≤7 % de vida según su valentía (no huyen si están paralizados).
 - Habilidades de mob con multiplicador de exp: anti-físico y anti-mágico (×1,5), tóxico (×1,3), explosivo (×1,5); mutantes (×3 de exp, ×2 de chance de drop) como variante de un pit; salvajes (+25 %) fuera de los pits.
 **Pruebas:**
@@ -164,7 +168,7 @@ Estado de partida (`main`, 1/11): 140 de 141 tests del server en verde (1 saltea
 ## FASE 3 — Ítems y economía (a 40 niveles)
 
 ### 3.1 Poder de los ítems por nivel y bandas (M)
-**Hacer:** pasar de bandas de 2 niveles con tope 6 a 8 bandas de 5 niveles; el poder del ítem sale del nivel de ítem (arma ≈ `6 + 1,05·L`); teñir el aspecto por banda.
+**Hacer:** pasar de bandas de 2 niveles (`tierOfLevel = ceil(nivel / 2)`, tope 6) a **6 bandas de 5 niveles con el nivel máximo de ítem en 30** (`ceil(nivel / 5)`, tope 6): se mantienen los T1-T6 y las 6 mazmorras, y hay que subir de nivel los jefes de mazmorra, que no se reescalan (hoy cubren los niveles 2 a 12; pasan a ~5, 10, 15, 20, 25 y 30). Los niveles 31 a 40 usan equipo T6 más +N, runas, ángel y stats, y suman unas pocas armas **legendarias** con aura (8 a 12, nivel 35-40, desde la dificultad más alta). El poder del ítem sale del nivel de ítem (arma ≈ `6 + 1,05·L`); teñir el aspecto por banda. Mostrar en la descripción de cada ítem **de qué bichos cae** (como en la wiki de Helbreath Evolution), para que "aprender dónde farmear" sea posible.
 **Pruebas:**
 - A: el arma aporta entre 22 y 27 % del daño por golpe en los niveles 6, 12, 20, 30 y 40; la defensa mitiga entre 30 y 55 %.
 - B: un bicho solo suelta ítems de su banda o la anterior.
