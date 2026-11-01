@@ -18,6 +18,7 @@ con tools/src/flare/atlas.ts) y que se distribuyen bajo la misma licencia, CC-BY
   - world.webp
   - paper/*.webp (piezas de equipo y cuerpo del personaje)
   - goblin.webp, goblin_elite.webp, zombie.webp, skeleton.webp, skeleton_mage.webp, antlion.webp, fire_ant.webp, wyvern.webp, minotaur.webp
+  - hobgoblin.webp, hobgoblin_archer.webp, skeleton_archer.webp, zombie_dark.webp, cursed_grave.webp, ice_ant.webp, antlion_small.webp, wyvern_fire.webp, wyvern_ice.webp
 El resto del juego (código, protocolo, interfaz) no forma parte de esas adaptaciones.
 
 

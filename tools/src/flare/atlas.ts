@@ -14,7 +14,11 @@ import { fileURLToPath } from 'node:url';
 import { createCanvas, loadImage, type Image } from '@napi-rs/canvas';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const mod = join(process.env.FLARE_DIR ?? join(root, 'reference', 'flare-game'), 'mods', 'fantasycore');
+const flare = process.env.FLARE_DIR ?? join(root, 'reference', 'flare-game');
+const mod = join(flare, 'mods', 'fantasycore');
+/** Dónde se busca cada archivo: fantasycore y, para hobgoblin, hobgoblin_archer y zombie_dark, también empyrean_campaign. */
+const mods = [mod, join(flare, 'mods', 'empyrean_campaign')];
+const at = (rel: string): string => mods.map((m) => join(m, rel)).find((p) => existsSync(p)) ?? join(mod, rel);
 const out = join(root, 'apps', 'client', 'public', 'assets');
 const S = 0.5;
 const DIRS = ['W', 'NW', 'N', 'NE', 'E', 'SE', 'S', 'SW'];
@@ -30,7 +34,7 @@ function parse(rel: string): { image: string; perAnim: Map<string, string>; sect
     let image = '';
     const perAnim = new Map<string, string>(), sections = new Map<string, Section>();
     let cur: Section | undefined;
-    for (const raw of readFileSync(join(mod, rel), 'utf8').split(/\r?\n/)) {
+    for (const raw of readFileSync(at(rel), 'utf8').split(/\r?\n/)) {
         const l = raw.trim();
         const m = /^\[(\w+)\]$/.exec(l);
         if (m) { cur = { frames: 1, duration: 600, type: 'looped', f: new Map() }; sections.set(m[1], cur); continue; }
@@ -48,7 +52,7 @@ function parse(rel: string): { image: string; perAnim: Map<string, string>; sect
 }
 
 const imageCache = new Map<string, Promise<Image>>();
-const img = (rel: string) => { let p = imageCache.get(rel); if (!p) { p = loadImage(readFileSync(join(mod, rel))); imageCache.set(rel, p); } return p; };
+const img = (rel: string) => { let p = imageCache.get(rel); if (!p) { p = loadImage(readFileSync(at(rel))); imageCache.set(rel, p); } return p; };
 
 const order = new Map<string, string[]>();
 for (const l of readFileSync(join(mod, 'engine', 'hero_layers.txt'), 'utf8').split(/\r?\n/)) {
@@ -110,11 +114,18 @@ for (const n of ['goblin', 'zombie', 'skeleton']) {
 }
 // Enemigos extra de fantasycore (progresión nivel 2 a 9). Si a alguno le falta una animación se arma con otra parecida.
 const FALLBACK: Record<string, string[]> = { hit: ['block', 'stance'], swing: ['cast', 'shoot', 'stance'], die: ['critdie'], run: ['stance'] };
-for (const n of ['goblin_elite', 'antlion', 'skeleton_mage', 'fire_ant', 'wyvern', 'minotaur']) {
-    const anim = parse(`animations/enemies/${n}.txt`);
+// [tipo de ERIS, enemigo de Flare]: los nueve últimos son los tipos nuevos (docs/MOBS_NUEVOS.md); wyvern_ice sale del wyvern_water de Flare.
+const EXTRA: [string, string][] = [...['goblin_elite', 'antlion', 'skeleton_mage', 'fire_ant', 'wyvern', 'minotaur'].map((n): [string, string] => [n, n]),
+    ['hobgoblin', 'hobgoblin'], ['hobgoblin_archer', 'hobgoblin_archer'], ['skeleton_archer', 'skeleton_archer'], ['zombie_dark', 'zombie_dark'], ['cursed_grave', 'cursed_grave'],
+    ['ice_ant', 'ice_ant'], ['antlion_small', 'antlion_small'], ['wyvern_fire', 'wyvern_fire'], ['wyvern_ice', 'wyvern_water']];
+for (const [n, src] of EXTRA) {
+    if (!existsSync(at(`animations/enemies/${src}.txt`))) {
+        throw new Error(`${n}: no encuentro animations/enemies/${src}.txt. hobgoblin, hobgoblin_archer y zombie_dark están en mods/empyrean_campaign: apuntá FLARE_DIR al zip de Flare v1.14 o bajá esa carpeta.`);
+    }
+    const anim = parse(`animations/enemies/${src}.txt`);
     for (const a of EA) {
         const ok = (k: string) => anim.sections.has(k) && (anim.perAnim.has(k) || anim.image) && (anim.sections.get(k)!.f.size > 0)
-            && existsSync(join(mod, anim.perAnim.get(k) ?? anim.image));
+            && existsSync(at(anim.perAnim.get(k) ?? anim.image));
         if (ok(a)) continue;
         const alt = (FALLBACK[a] ?? []).find(ok);
         if (!alt) throw new Error(`${n}: no hay animación ${a} ni reemplazo`);

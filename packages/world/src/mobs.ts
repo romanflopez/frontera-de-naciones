@@ -1,9 +1,12 @@
 /**
  * Mobs: definiciones compartidas entre cliente y server (el server los simula, el cliente los dibuja).
  */
-export type MobType = 'goblin' | 'zombie' | 'skeleton' | 'barbaro' | 'goblin_elite' | 'antlion' | 'skeleton_mage' | 'fire_ant' | 'wyvern' | 'minotaur' | 'arana' | 'golem' | 'demonio';
+export type MobType = 'goblin' | 'zombie' | 'skeleton' | 'barbaro' | 'goblin_elite' | 'antlion' | 'skeleton_mage' | 'fire_ant' | 'wyvern' | 'minotaur' | 'arana' | 'golem' | 'demonio'
+    // tipos nuevos (docs/MOBS_NUEVOS.md): siempre al final, el protocolo manda el índice
+    | 'hobgoblin' | 'hobgoblin_archer' | 'skeleton_archer' | 'zombie_dark' | 'cursed_grave' | 'ice_ant' | 'antlion_small' | 'wyvern_fire' | 'wyvern_ice';
 /** Orden fijo: el protocolo manda el índice del tipo. */
-export const MOB_TYPES: MobType[] = ['goblin', 'zombie', 'skeleton', 'barbaro', 'goblin_elite', 'antlion', 'skeleton_mage', 'fire_ant', 'wyvern', 'minotaur', 'arana', 'golem', 'demonio'];
+export const MOB_TYPES: MobType[] = ['goblin', 'zombie', 'skeleton', 'barbaro', 'goblin_elite', 'antlion', 'skeleton_mage', 'fire_ant', 'wyvern', 'minotaur', 'arana', 'golem', 'demonio',
+    'hobgoblin', 'hobgoblin_archer', 'skeleton_archer', 'zombie_dark', 'cursed_grave', 'ice_ant', 'antlion_small', 'wyvern_fire', 'wyvern_ice'];
 /** Habilidad de boss: cada `every` s, si el jugador está a menos de `range`, carga un golpe y lo lanza a los 0,8 s. Alcanza a quien esté a menos de `r`. */
 export interface BossSpecial { name: string; every: number; range: number; r: number; dmg?: [number, number]; stun?: number; col: string }
 export interface BossDef { respawn: number; minRar: number; gold: [number, number]; special: BossSpecial }
@@ -22,6 +25,18 @@ export const MOBS: Record<MobType, MobDef> = {
     fire_ant: { name: 'Hormiga de fuego', lvl: 6, hp: 190, dmg: [13, 20], spd: 1.7, ref: 2.0, exp: 80, hitR: 24, head: 42, atk: 1.3 },
     wyvern: { name: 'Wyvern', lvl: 7, hp: 240, dmg: [16, 24], spd: 1.6, ref: 2.3, exp: 101, hitR: 32, head: 90, atk: 1.7 },
     minotaur: { name: 'Minotauro (mini-boss)', lvl: 9, hp: 1200, dmg: [22, 34], spd: 1.4, ref: 2.4, exp: 560, hitR: 40, head: 130, atk: 1.9 },
+    // Tipos nuevos: nivel base sobre las curvas de ZONAS.md (vida 29+10,5·L+2,75·L², daño medio 2,5·L+3, exp 60·L^1,5/11); en una zona con `lvl` se reescalan igual que los demás.
+    // Los dos arqueros pelean cuerpo a cuerpo hasta que MobSim tenga ataque a distancia (ver docs/MOBS_NUEVOS.md).
+    hobgoblin: { name: 'Hobgoblin', lvl: 3, hp: 85, dmg: [8, 13], spd: 1.5, ref: 2.2, exp: 30, hitR: 22, head: 42, atk: 1.5 },
+    hobgoblin_archer: { name: 'Hobgoblin arquero', lvl: 3, hp: 70, dmg: [7, 11], spd: 1.4, ref: 2.2, exp: 30, hitR: 21, head: 40, atk: 1.6 },
+    skeleton_archer: { name: 'Esqueleto arquero', lvl: 5, hp: 125, dmg: [10, 16], spd: 1.4, ref: 2.1, exp: 55, hitR: 22, head: 55, atk: 1.6 },
+    zombie_dark: { name: 'Zombi oscuro', lvl: 4, hp: 125, dmg: [9, 15], spd: 1.1, ref: 1.6, exp: 45, hitR: 22, head: 50, atk: 1.6 },
+    // Lápida inmóvil en Flare (sin animación de andar): se arrastra muy lento para no dejar a la IA con velocidad 0 (volver a casa nunca terminaría).
+    cursed_grave: { name: 'Tumba maldita', lvl: 5, hp: 150, dmg: [11, 18], spd: 0.5, ref: 1.0, exp: 62, hitR: 24, head: 55, atk: 1.8 },
+    ice_ant: { name: 'Hormiga de hielo', lvl: 7, hp: 237, dmg: [15, 23], spd: 1.6, ref: 2.1, exp: 101, hitR: 24, head: 42, atk: 1.3 },
+    antlion_small: { name: 'Cría de hormiga león', lvl: 4, hp: 75, dmg: [6, 10], spd: 1.9, ref: 2.2, exp: 28, hitR: 17, head: 26, atk: 1.2 },
+    wyvern_fire: { name: 'Wyvern de fuego', lvl: 9, hp: 346, dmg: [20, 31], spd: 1.6, ref: 2.3, exp: 147, hitR: 32, head: 90, atk: 1.7 },
+    wyvern_ice: { name: 'Wyvern de hielo', lvl: 8, hp: 289, dmg: [18, 28], spd: 1.6, ref: 2.3, exp: 123, hitR: 32, head: 90, atk: 1.7 },
 };
 
 /** Segundos hasta que reaparece un mob muerto. */

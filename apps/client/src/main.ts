@@ -2138,7 +2138,7 @@ async function boot() {
         }
         PAPER = meta.paper; delete meta.paper; SPR.hero = SPR.hero_other = PAPER as unknown as SpriteMeta;
         Object.assign(SPR, meta);
-        const names = ['world', 'goblin', 'zombie', 'skeleton', 'barbaro', 'goblin_elite', 'antlion', 'skeleton_mage', 'fire_ant', 'wyvern', 'minotaur', 'arana', 'golem', 'demonio'];
+        const names = ['world', 'goblin', 'zombie', 'skeleton', 'barbaro', 'goblin_elite', 'antlion', 'skeleton_mage', 'fire_ant', 'wyvern', 'minotaur', 'arana', 'golem', 'demonio', 'hobgoblin', 'hobgoblin_archer', 'skeleton_archer', 'zombie_dark', 'cursed_grave', 'ice_ant', 'antlion_small', 'wyvern_fire', 'wyvern_ice'];
         const imgs = await Promise.all(names.map((n) => load(`assets/${n}.webp`)));
         names.forEach((n, i) => (IMG[n] = imgs[i]));
     } catch { $('loading').textContent = 'No se pudieron cargar los gráficos. Recargá la página.'; return; }
