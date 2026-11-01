@@ -3,10 +3,13 @@
  */
 export type MobType = 'goblin' | 'zombie' | 'skeleton' | 'barbaro' | 'goblin_elite' | 'antlion' | 'skeleton_mage' | 'fire_ant' | 'wyvern' | 'minotaur' | 'arana' | 'golem' | 'demonio'
     // tipos nuevos (docs/MOBS_NUEVOS.md): siempre al final, el protocolo manda el índice
-    | 'hobgoblin' | 'hobgoblin_archer' | 'skeleton_archer' | 'zombie_dark' | 'cursed_grave' | 'ice_ant' | 'antlion_small' | 'wyvern_fire' | 'wyvern_ice';
+    | 'hobgoblin' | 'hobgoblin_archer' | 'skeleton_archer' | 'zombie_dark' | 'cursed_grave' | 'ice_ant' | 'antlion_small' | 'wyvern_fire' | 'wyvern_ice'
+    // jefes de mazmorra de grupo (docs/MAPAS_FLARE.md §5)
+    | 'goblin_jefe';
 /** Orden fijo: el protocolo manda el índice del tipo. */
 export const MOB_TYPES: MobType[] = ['goblin', 'zombie', 'skeleton', 'barbaro', 'goblin_elite', 'antlion', 'skeleton_mage', 'fire_ant', 'wyvern', 'minotaur', 'arana', 'golem', 'demonio',
-    'hobgoblin', 'hobgoblin_archer', 'skeleton_archer', 'zombie_dark', 'cursed_grave', 'ice_ant', 'antlion_small', 'wyvern_fire', 'wyvern_ice'];
+    'hobgoblin', 'hobgoblin_archer', 'skeleton_archer', 'zombie_dark', 'cursed_grave', 'ice_ant', 'antlion_small', 'wyvern_fire', 'wyvern_ice',
+    'goblin_jefe'];
 /** Habilidad de boss: cada `every` s, si el jugador está a menos de `range`, carga un golpe y lo lanza a los 0,8 s. Alcanza a quien esté a menos de `r`. */
 export interface BossSpecial { name: string; every: number; range: number; r: number; dmg?: [number, number]; stun?: number; col: string }
 export interface BossDef { respawn: number; minRar: number; gold: [number, number]; special: BossSpecial }
@@ -16,7 +19,9 @@ export interface BossDef { respawn: number; minRar: number; gold: [number, numbe
  * a menos de una celda del punto al que apuntó (se puede esquivar). `kind`: 0 flecha, 1 virote (lo dibuja el cliente).
  */
 export interface RangedDef { range: number; keep: number; speed: number; kind: 0 | 1 }
-export interface MobDef { name: string; lvl: number; hp: number; dmg: [number, number]; spd: number; ref: number; exp: number; hitR: number; head: number; atk: number; boss?: BossDef; ranged?: RangedDef }
+export interface MobDef { name: string; lvl: number; hp: number; dmg: [number, number]; spd: number; ref: number; exp: number; hitR: number; head: number; atk: number; boss?: BossDef; ranged?: RangedDef;
+    /** Sprite que se dibuja si no es el del propio tipo (un jefe que reutiliza el arte de otro mob). */
+    sprite?: MobType }
 export const MOBS: Record<MobType, MobDef> = {
     goblin: { name: 'Goblin lancero', lvl: 1, hp: 42, dmg: [4, 7], spd: 1.8, ref: 2.6, exp: 14, hitR: 20, head: 42, atk: 1.3 },
     zombie: { name: 'Zombi del pantano', lvl: 3, hp: 85, dmg: [7, 11], spd: 1.0, ref: 1.5, exp: 30, hitR: 22, head: 50, atk: 1.6 },
@@ -43,6 +48,8 @@ export const MOBS: Record<MobType, MobDef> = {
     antlion_small: { name: 'Cría de hormiga león', lvl: 4, hp: 75, dmg: [6, 10], spd: 1.9, ref: 2.2, exp: 28, hitR: 17, head: 26, atk: 1.2 },
     wyvern_fire: { name: 'Wyvern de fuego', lvl: 9, hp: 346, dmg: [20, 31], spd: 1.6, ref: 2.3, exp: 147, hitR: 32, head: 90, atk: 1.7 },
     wyvern_ice: { name: 'Wyvern de hielo', lvl: 8, hp: 289, dmg: [18, 28], spd: 1.6, ref: 2.3, exp: 123, hitR: 32, head: 90, atk: 1.7 },
+    // Jefe final de la Cueva y minas goblin (D1): vida ~11x la curva de su nivel (pensado para grupo), reusa el sprite del goblin de élite.
+    goblin_jefe: { name: 'Jefe goblin', lvl: 4, hp: 1260, dmg: [14, 22], spd: 1.5, ref: 2.4, exp: 320, hitR: 30, head: 64, atk: 1.6, sprite: 'goblin_elite', boss: { respawn: 180, minRar: 1, gold: [40, 70], special: { name: 'Grito de guerra', every: 10, range: 3.4, r: 3, stun: 1, dmg: [8, 12], col: '#ff9a3c' } } },
 };
 
 /** Segundos hasta que reaparece un mob muerto. */
@@ -66,17 +73,23 @@ export const expToLevel = (l: number): number => Math.round(refExp(l) * killsToL
 
 const scaled = new Map<string, MobDef>();
 /**
- * Definición del mob en una zona: si la zona fija `lvl`, vida, daño y exp se reescalan sobre las curvas desde el nivel base del tipo
- * (mismo sprite, mismo comportamiento). Los bosses no se reescalan: su nivel es el del tipo.
+ * Mazmorras de grupo (docs/MAPAS_FLARE.md §5): los mobs comunes de una zona con `tier: 'dungeon'` tienen x2,5 de vida, x1,25 de daño y
+ * x2 de exp sobre la curva de su nivel. Los jefes no se tocan.
  */
-export function mobDef(type: MobType, zone?: { lvl?: number }): MobDef {
-    const base = MOBS[type], L = zone?.lvl;
-    if (!L || L === base.lvl || base.boss) return base;
-    const key = type + ':' + L;
+export const DUNGEON_MULT = { hp: 2.5, dmg: 1.25, exp: 2 } as const;
+/**
+ * Definición del mob en una zona: si la zona fija `lvl`, vida, daño y exp se reescalan sobre las curvas desde el nivel base del tipo
+ * (mismo sprite, mismo comportamiento); con `tier: 'dungeon'` además se aplica `DUNGEON_MULT`. Los bosses no se reescalan: su nivel es el del tipo.
+ */
+export function mobDef(type: MobType, zone?: { lvl?: number; tier?: 'dungeon' }): MobDef {
+    const base = MOBS[type], L = zone?.lvl, tier = zone?.tier;
+    if (base.boss || ((!L || L === base.lvl) && !tier)) return base;
+    const key = `${type}:${L ?? ''}:${tier ?? ''}`;
     let d = scaled.get(key);
     if (!d) {
-        const kh = mobHpCurve(L) / mobHpCurve(base.lvl), kd = mobDmgCurve(L) / mobDmgCurve(base.lvl), ke = mobExpCurve(L) / mobExpCurve(base.lvl);
-        d = { ...base, lvl: L, hp: Math.round(base.hp * kh), dmg: [Math.round(base.dmg[0] * kd), Math.round(base.dmg[1] * kd)], exp: Math.round(base.exp * ke) };
+        const lv = L ?? base.lvl, mh = tier ? DUNGEON_MULT.hp : 1, md = tier ? DUNGEON_MULT.dmg : 1, me = tier ? DUNGEON_MULT.exp : 1;
+        const kh = (mobHpCurve(lv) / mobHpCurve(base.lvl)) * mh, kd = (mobDmgCurve(lv) / mobDmgCurve(base.lvl)) * md, ke = (mobExpCurve(lv) / mobExpCurve(base.lvl)) * me;
+        d = { ...base, lvl: lv, hp: Math.round(base.hp * kh), dmg: [Math.round(base.dmg[0] * kd), Math.round(base.dmg[1] * kd)], exp: Math.round(base.exp * ke) };
         scaled.set(key, d);
     }
     return d;

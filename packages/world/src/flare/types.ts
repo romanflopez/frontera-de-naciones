@@ -6,12 +6,14 @@ export interface FlareZone {
     /** Tipo de mob (un `MobType`; el test de los mapas de Flare comprueba que existe). */
     type: string; x: number; y: number; r: number; n: number; name: string; lvl: number;
     /** `pit` = zona de caza con su mob; `loose` = mobs sueltos entre los pits. `pit` = 0 (A, cerca de la entrada), 1 (B) o 2 (C, lejos). */
-    kind: 'pit' | 'loose'; pit?: number;
+    kind: 'pit' | 'loose' | 'boss'; pit?: number;
 }
-export interface FlareLinkData { cell: { x: number; y: number }; to: string; tx: number; ty: number; tooltip: string }
+export interface FlareLinkData { cell: { x: number; y: number }; to: string; tx: number; ty: number; tooltip: string; /** Nivel mínimo para pasar (la puerta de una mazmorra). */ gate?: number }
 export interface FlareMapData {
     /** Id del mapa en Flare y en ERIS. */
     id: string; eris: string; name: string; region: string; pvp: 'off' | 'faction'; lvl: [number, number];
+    /** Mazmorra de grupo: mobs con `tier: 'dungeon'`, sin PvP, posición temporal y el mapa oscurecido. `respawnMap` = piso donde reaparecés si no es este. */
+    dungeon?: boolean; respawnMap?: string;
     /** Hoja de tiles de Flare (`grassland`, `cave`, `dungeon`…). */
     tileset: string;
     /** Lado del cuadrado de ERIS y tamaño original en Flare. */
@@ -25,7 +27,7 @@ export interface FlareMapData {
     /** Vínculos de Flare hacia otros mapas (`to` = id de Flare; `tx,ty` = celda de llegada allá). */
     links: FlareLinkData[];
     /** Conexiones que Flare no trae (`to` = id de ERIS del otro mapa): portales de piedra en esta celda. */
-    extras: { to: string; cell: { x: number; y: number } }[];
+    extras: { to: string; cell: { x: number; y: number }; kind: 'portal' | 'door'; gate?: number }[];
     layers: { background: number[][]; object: number[][] };
     /** 1 = bloqueada. */
     blocked: number[][];

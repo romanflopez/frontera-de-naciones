@@ -160,7 +160,7 @@ function syncMobs(list: { id: number; type: number; zone: number; x: number; y: 
         if (!m) {
             const type = MOB_TYPES[s.type], z = ZONES[s.zone]; if (!type || !z) continue;
             const d = mobDef(type, z);
-            m = { ...d, sprite: type, zone: z, x: s.x, y: s.y, sx: s.x, sy: s.y, buf: [], hpMax: d.hp, hp: s.hp, busy: 0, par: 0, parT: 0, imm: 0, poison: 0, dir: rint(0, 7), moving: false, flash: 0, one: null, t0: R() * 5, id: s.id };
+            m = { ...d, sprite: d.sprite ?? type, zone: z, x: s.x, y: s.y, sx: s.x, sy: s.y, buf: [], hpMax: d.hp, hp: s.hp, busy: 0, par: 0, parT: 0, imm: 0, poison: 0, dir: rint(0, 7), moving: false, flash: 0, one: null, t0: R() * 5, id: s.id };
             mobs.push(m); mobMap.set(s.id, m);
         }
         m.sx = s.x; m.sy = s.y; m.hp = s.hp;
@@ -405,7 +405,7 @@ function onStatusUpdate(v: { playerId: bigint; invisible: boolean; detect: boole
 function onMobDied(v: { mobId: number; killerId: bigint; x: number; y: number; type: number; zone: number }) {
     const type = MOB_TYPES[v.type], z = ZONES[v.zone]; if (!type || !z) return;
     const mob = mobMap.get(v.mobId); if (mob) dropMob(mob);
-    corpses.push({ sprite: type, x: v.x, y: v.y, dir: mob?.dir ?? 6, t: now() });
+    corpses.push({ sprite: mobDef(type, z).sprite ?? type, x: v.x, y: v.y, dir: mob?.dir ?? 6, t: now() });
 }
 /** El server ya aplicó el botín del golpe final (exp, oro, item, pociones, misión): acá solo se muestra. El estado nuevo llega en `inventoryState`. */
 function onKillReward(v: { mobId: number; x: number; y: number; exp: number; gold: number; goldD: number; item?: InvItemMsg; bagFull: boolean; potion: string; shard: string; newLvl: number; questReady: boolean; questProg: number }) {

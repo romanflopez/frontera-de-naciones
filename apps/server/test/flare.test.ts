@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { FLARE_DATA, FLARE_FIRST, MAPS, MOB_TYPES, buildMap, flareTile, mapHash, type MobType } from '@fdn/world';
+import { FLARE_DATA, FLARE_FIRST, MAPS, MOB_TYPES, buildMap, mobDef, flareTile, mapHash, type MobType } from '@fdn/world';
 
 /** Mapas importados de Flare (docs/MAPAS_FLARE.md): datos de tools/src/flare/maps.ts y atlas de tools/src/flare/mapatlas.ts. */
 const meta = JSON.parse(readFileSync(new URL('../../client/public/assets/meta.json', import.meta.url), 'utf8')) as Record<string, { pos?: Record<string, number[]> }>;
@@ -37,7 +37,7 @@ test('los pits tienen un mob distinto cada uno, existen en MOB_TYPES y caen en c
         const types = [...kinds.values()].map((s) => [...s][0]);
         assert.equal(kinds.size, 3, `${d.eris}: tiene que haber 3 pits`);
         assert.equal(new Set(types).size, 3, `${d.eris}: los 3 pits tienen que tener mobs distintos (${types.join(', ')})`);
-        assert.ok(m.zones.some((z) => z.name.startsWith('Merodeadores')), `${d.eris}: faltan mobs sueltos`);
+        if (!d.dungeon) assert.ok(m.zones.some((z) => z.name.startsWith('Merodeadores')), `${d.eris}: faltan mobs sueltos`);
         assert.ok(m.zones.every((z) => (z.type as MobType) && z.n > 0));
     }
 });
@@ -55,4 +55,15 @@ test('los portales de las ciudades llevan a los Campos de Sal y la vuelta llega 
     assert.equal(v.kind, 'portal'); assert.equal(c.kind, 'oneway');
     const back = MAPS[FLARE_FIRST.eris].links.find((l) => l.id === 'campos_a_ciudad');
     assert.equal(back?.to.map, 'solmar_villa');
+});
+
+test('mazmorra D1: puerta con nivel mínimo, jefe, tier de mazmorra y mapas temporales', () => {
+    const sup = MAPS.canon_goblin, cueva = MAPS.cueva_goblin, minas = MAPS.minas_goblin;
+    const door = sup.links.find((l) => l.to.map === 'cueva_goblin')!;
+    assert.equal(door.kind, 'door');
+    assert.equal(door.gate?.lvl, 2);
+    for (const m of [cueva, minas]) { assert.ok(m.temporary); const w = buildMap(m.id); assert.ok(w.dungeon); assert.ok(w.zones.every((z) => z.tier === 'dungeon' || z.type === 'goblin_jefe')); }
+    assert.ok(buildMap('minas_goblin').zones.some((z) => z.type === 'goblin_jefe'));
+    const n = mobDef('goblin', { lvl: 3 }), g = mobDef('goblin', { lvl: 3, tier: 'dungeon' });
+    assert.ok(g.hp > n.hp * 2.4 && g.exp > n.exp * 1.9);
 });

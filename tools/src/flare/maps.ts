@@ -27,20 +27,33 @@ interface MapSpec {
     /** Id del mapa en ERIS. */ eris: string; name: string; region: string; pvp: 'off' | 'faction'; lvl: [number, number];
     pits: [PitSpec, PitSpec, PitSpec]; loose: LooseSpec[];
     /** Conexiones que Flare no trae (mapas que en Flare no se tocan): `near` = a unos pasos de la entrada, `far` = en el punto más lejano. Hay que declararlas en los dos mapas. */
-    extras?: { to: string; where: 'near' | 'far' }[];
+    extras?: { to: string; where: 'near' | 'far'; kind?: 'portal' | 'door'; gate?: number }[];
+    /** Mazmorra de grupo (docs/MAPAS_FLARE.md §5). `respawnMap` = piso 1 (reaparecés ahí si morís en el piso 2). */
+    dungeon?: boolean; respawnMap?: string;
+    /** Jefe final: una zona de 1 mob en el punto más lejano de las entradas. */
+    boss?: { type: string; lvl: number; name: string };
+    /** Vínculos de Flare a descartar (id de Flare del destino) y nivel mínimo para los que quedan (id de Flare del destino -> nivel). */
+    dropLinks?: string[]; linkGates?: Record<string, number>;
 }
 
 /** Un mapa por entrada. Pit A = el más cerca de la entrada (el más fácil), C = el más lejos. Los nombres de zona son únicos entre mapas. */
 const SPECS: MapSpec[] = [
-    { id: 'salted_field', eris: 'campos_de_sal', name: 'Campos de Sal', region: 'comun', pvp: 'off', lvl: [1, 2],
+    { id: 'salted_field', eris: 'campos_de_sal', name: 'Campos de Sal', region: 'comun', pvp: 'off', lvl: [1, 2], dropLinks: ['perdition_mines'],
         pits: [{ name: 'Puesto goblin', type: 'goblin', lvl: 1 }, { name: 'Charco de zombis', type: 'zombie', lvl: 1 }, { name: 'Avanzada del campo', type: 'goblin_elite', lvl: 2 }],
         loose: [{ type: 'goblin', lvl: 1 }] },
     { id: 'stonewood', eris: 'bosque_de_piedra', name: 'Bosque de Piedra', region: 'comun', pvp: 'off', lvl: [1, 2],
         pits: [{ name: 'Claro de los goblins', type: 'goblin', lvl: 1 }, { name: 'Madriguera hobgoblin', type: 'hobgoblin', lvl: 2 }, { name: 'Fuerte del bosque', type: 'goblin_elite', lvl: 2 }],
         loose: [{ type: 'goblin', lvl: 1 }, { type: 'zombie', lvl: 2 }] },
-    { id: 'goblin_camp', eris: 'canon_goblin', name: 'Cañón goblin', region: 'comun', pvp: 'faction', lvl: [2, 3],
+    { id: 'goblin_camp', eris: 'canon_goblin', name: 'Cañón goblin', region: 'comun', pvp: 'faction', lvl: [2, 3], linkGates: { goblin_cave: 2 },
         pits: [{ name: 'Empalizada del cañón', type: 'goblin_elite', lvl: 2 }, { name: 'Puesto de arqueros', type: 'hobgoblin_archer', lvl: 3 }, { name: 'Tienda del cabecilla', type: 'hobgoblin', lvl: 3 }],
         loose: [{ type: 'goblin', lvl: 2 }] },
+    // D1: Cueva y minas goblin (2 pisos de cueva, Nv 2-4, jefe final en las minas). La entrada es la del Cañón goblin (Nv 2).
+    { id: 'goblin_cave', eris: 'cueva_goblin', name: 'Cueva goblin', region: 'mazmorra', pvp: 'off', lvl: [2, 3], dungeon: true,
+        pits: [{ name: 'Guardia de la cueva', type: 'goblin', lvl: 2 }, { name: 'Hobgoblins de la gruta', type: 'hobgoblin', lvl: 3 }, { name: 'Arqueros del túnel', type: 'hobgoblin_archer', lvl: 3 }],
+        loose: [{ type: 'goblin_elite', lvl: 2 }], extras: [{ to: 'minas_goblin', where: 'far' }] },
+    { id: 'perdition_mines', eris: 'minas_goblin', name: 'Minas goblin', region: 'mazmorra', pvp: 'off', lvl: [3, 4], dungeon: true, respawnMap: 'cueva_goblin', dropLinks: ['salted_field'],
+        pits: [{ name: 'Picadores goblin', type: 'goblin_elite', lvl: 3 }, { name: 'Capataces hobgoblin', type: 'hobgoblin', lvl: 3 }, { name: 'Ballesteros de las minas', type: 'hobgoblin_archer', lvl: 4 }],
+        loose: [{ type: 'goblin_elite', lvl: 3 }], boss: { type: 'goblin_jefe', lvl: 4, name: 'Sala del Jefe goblin' }, extras: [{ to: 'cueva_goblin', where: 'near' }] },
     { id: 'merrimead_swamp', eris: 'pantano_de_merrimead', name: 'Pantano de Merrimead', region: 'comun', pvp: 'faction', lvl: [3, 4],
         pits: [{ name: 'Ciénaga de zombis', type: 'zombie', lvl: 3 }, { name: 'Pozo oscuro', type: 'zombie_dark', lvl: 4 }, { name: 'Lápidas del pantano', type: 'cursed_grave', lvl: 4 }],
         loose: [{ type: 'zombie', lvl: 3 }], extras: [{ to: 'altas_de_nazia', where: 'far' }] },
@@ -117,7 +130,7 @@ const makeRnd = (seed0: number) => () => { let t = (seed0 = (seed0 + 0x6d2b79f5)
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }): number => Math.hypot(a.x - b.x, a.y - b.y);
 const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
 
-interface OutZone { type: string; x: number; y: number; r: number; n: number; name: string; lvl: number; kind: 'pit' | 'loose'; pit?: number }
+interface OutZone { type: string; x: number; y: number; r: number; n: number; name: string; lvl: number; kind: 'pit' | 'loose' | 'boss'; pit?: number }
 
 function convert(spec: MapSpec): object {
     const p = parseMap(join(mapsDir, spec.id + '.txt'));
@@ -228,7 +241,7 @@ function convert(spec: MapSpec): object {
     for (const z of zones) if (!knownMobs.has(z.type)) throw new Error(`${spec.id}: tipo de mob desconocido "${z.type}" (agregalo a MOB_TYPES o cambialo en SPECS)`);
 
     // 6) Vínculos de Flare: la celda disparadora es la libre más cercana al centro de su rectángulo.
-    const links = p.links.flatMap((l) => { const c = snap(Math.floor(l.x + l.w / 2), Math.floor(l.y + l.h / 2)); return c ? [{ cell: c, to: l.to, tx: l.tx, ty: l.ty, tooltip: l.tooltip }] : []; });
+    const links = p.links.filter((l) => !spec.dropLinks?.includes(l.to)).flatMap((l) => { const c = snap(Math.floor(l.x + l.w / 2), Math.floor(l.y + l.h / 2)); return c ? [{ cell: c, to: l.to, tx: l.tx, ty: l.ty, tooltip: l.tooltip, ...(spec.linkGates?.[l.to] ? { gate: spec.linkGates[l.to] } : {}) }] : []; });
 
     // 7) Conexiones extra: celda caminable con espacio alrededor, lejos de la entrada (far) o a unos pasos de ella (near), separadas de todo lo demás.
     const taken: { x: number; y: number }[] = [entry, ...links.map((l) => l.cell)];
@@ -239,11 +252,18 @@ function convert(spec: MapSpec): object {
         const pool = cand.filter((c) => taken.every((t) => dist(t, c) >= 9) && (e.where === 'far' || (dist(c, entry) >= 5 && dist(c, entry) <= 12)));
         const best = e.where === 'far' ? pool.sort((a, b) => dist(b, entry) - dist(a, entry) || a.y - b.y || a.x - b.x)[0] : pool.sort((a, b) => dist(a, entry) - dist(b, entry) || a.y - b.y || a.x - b.x)[0];
         if (!best) throw new Error(`${spec.id}: no encontré celda para la conexión a ${e.to}`);
-        taken.push(best); return { to: e.to, cell: best };
+        taken.push(best); return { to: e.to, cell: best, kind: e.kind ?? 'portal', ...(e.gate ? { gate: e.gate } : {}) };
     });
+    // 8) Jefe final: una zona de 1 mob en el punto caminable con espacio más lejos de la entrada y de todas las conexiones.
+    if (spec.boss) {
+        const b = cand.filter((c) => taken.every((t) => dist(t, c) >= 15)).sort((a, c) => Math.min(...taken.map((t) => dist(c, t))) - Math.min(...taken.map((t) => dist(a, t))) || a.y - c.y || a.x - c.x)[0];
+        if (!b) throw new Error(`${spec.id}: no encontré lugar para el jefe`);
+        zones.push({ type: spec.boss.type, x: b.x, y: b.y, r: 6, n: 1, name: spec.boss.name, lvl: spec.boss.lvl, kind: 'boss' });
+        if (!knownMobs.has(spec.boss.type)) throw new Error(`${spec.id}: tipo de jefe desconocido "${spec.boss.type}"`);
+    }
 
     return {
-        id: spec.id, eris: spec.eris, name: spec.name, region: spec.region, pvp: spec.pvp, lvl: spec.lvl, tileset: tsName, size: N, flareSize: [p.w, p.h], entry,
+        id: spec.id, eris: spec.eris, name: spec.name, region: spec.region, pvp: spec.pvp, lvl: spec.lvl, ...(spec.dungeon ? { dungeon: true } : {}), ...(spec.respawnMap ? { respawnMap: spec.respawnMap } : {}), tileset: tsName, size: N, flareSize: [p.w, p.h], entry,
         source: `Flare (flare-game) mods/empyrean_campaign/maps/${spec.id}.txt`, license: 'CC-BY-SA-3.0 (adaptado: ver docs/MAPAS_FLARE.md)',
         walkable, zones, links, extras, layers: { background, object }, blocked: reach.map((r) => r.map((v) => (v ? 0 : 1))),
     };

@@ -40,6 +40,8 @@ export interface Portal {
 /** `lvl` (opcional) fija el nivel de los mobs de la zona; si no está, vale el del tipo. Ver `mobDef`. */
 export interface Zone {
     type: MobType; x: number; y: number; r: number; n: number; name: string; lvl?: number;
+    /** `dungeon`: mob de mazmorra de grupo (más vida, daño y exp: ver `mobDef`). */
+    tier?: 'dungeon';
     /** Esquirla que suelta el boss de esta zona (si no, se decide por el nombre: ver Economy.reward). */
     drops?: { shard?: 'cripta' | 'foso' };
     /** Segundos hasta que reaparece un mob muerto de esta zona (pits de caza: 8-15 s). Sin él vale `mobRespawnSecs(tipo)`. */
