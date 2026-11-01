@@ -55,3 +55,4 @@ Mazmorra Nv2-4 (Cueva goblin y Minas goblin): mapas "goblin_cave" y "perdition_m
 Mazmorra Nv6-8 (Nido de hormiga león y Ruinas de Stormrock): mapas "antlion_nest" y "stormrock_ruins" y tileset de mazmorra de Flare (flare-game), CC-BY-SA 3.0, modificados (puertas abiertas, mobs, jefe) para ERIS.
 Mazmorra Nv7-9 (Cripta olvidada y Sepulcro profundo): mapas "st_maria_2" y "st_maria_3" de Flare (flare-game), CC-BY-SA 3.0, modificados (puertas abiertas, mobs, jefe) para ERIS.
 Mazmorra Nv9-11 (Torre del hechicero y Cámaras de investigación): mapas "wizards_tower_1" y "wizards_tower_2" de Flare (flare-game), CC-BY-SA 3.0, modificados (puertas abiertas, mobs, jefe) para ERIS.
+Mazmorra Nv10-12 (Templo de Mez y Salón principal de Mez): mapas "temple_of_mez_1" y "temple_of_mez_2" de Flare (flare-game), CC-BY-SA 3.0, modificados (puertas abiertas, mobs, jefe) para ERIS.

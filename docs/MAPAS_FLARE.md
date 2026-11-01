@@ -73,7 +73,7 @@ Son de grupo: mobs más fuertes que en abierto, packs, y un jefe final en el pis
 | D2 ✅ (en main) | Nido de hormiga león | 6-8 (puerta Nv6 desde La Brecha) | antlion_nest (80x80) | stormrock_ruins (100x100) | antlion, antlion_small, fire_ant | Reina hormiga león (Nv6; `antlion_armored`) |
 | D3 ✅ (en main) | Cripta olvidada | 7-9 (puerta Nv6 desde el Cementerio de Lochport; jefe `caballero_cripta`) | st_maria_2 (70x70) | st_maria_3 (40x60) | skeleton, skeleton_archer, skeleton_mage, zombie, cursed_grave | Bárbaro (Nv8, ya existe) o `skeleton_knight_boss` |
 | D4 ✅ (en main) | Torre del hechicero | 9-11 (puerta Nv9 desde La Brecha; jefe `mago_mayor`) | wizards_tower_1 (100x100) | wizards_tower_2 (100x108) | skeleton_mage y variantes, zombie_dark | Mago mayor (Nv10; `skeleton_mage_high_boss`) |
-| D5 | Templo de Mez | 10-11 | temple_of_mez_1 (80x80) | temple_of_mez_2 (100x100) | wyvern en 4 elementos, skeleton | Wyvern del aire (Nv11; `wyvern_air_boss`) |
+| D5 ✅ (en main) | Templo de Mez | 10-12 (puerta Nv10 desde La Brecha; jefe `wyvern_aire`) | temple_of_mez_1 (80x80) | temple_of_mez_2 (100x100) | wyvern en 4 elementos, skeleton | Wyvern del aire (Nv11; `wyvern_air_boss`) |
 | D6 | Foso del demonio | 11-12 | underworld_stronghold_1 (75x92) | the_pit (80x80) | skeleton_mage, wyvern, minotaur | Demonio (Nv12, ya existe) |
 
 Criterio de los pisos: el piso 2 es el mapa de Flare donde está el jefe del tema (o el más parecido), y el piso 1 el que lleva hasta él. Se descartan `st_maria_1` (mausoleo), `wizards_tower_3` (islas flotantes unidas por teletransportes), `temple_of_mez_3` (entrada nevada) y `underworld_stronghold_2` (cuartel con ~130 eventos). Entradas por puerta de nivel o llave, como en `MUNDO.md`. Los pisos de 100x100 son largos para un grupo: recortarlos a ~64-72 de lado (D2 piso 2, D4 ambos pisos, D5 piso 2); el recorte se hace al armar cada spec.
@@ -136,4 +136,5 @@ Los mapas de Flare son datos CC-BY-SA 3.0 o posterior: hay que atribuir (autores
 - Las Ruinas de Stormrock tenían puertas trabadas por evento: el spec las abre con `open`.
 - D3 (Cripta olvidada / Sepulcro profundo, jefe `caballero_cripta`) también está en main; el jefe final es nuevo (no el Bárbaro).
 - D4 (Torre del hechicero / Cámaras de investigación, jefe `mago_mayor`) en main; la puerta está en La Brecha hasta que haya mapas abiertos de Nv8-9.
-- Quedan D5–D6.
+- D5 (Templo de Mez / Salón principal de Mez, jefe `wyvern_aire`) en main.
+- Queda D6.
