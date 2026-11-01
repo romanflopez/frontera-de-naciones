@@ -36,9 +36,9 @@ Estado de partida (`main`, 1/11): 140 de 141 tests del server en verde (1 saltea
 | **Tope de bichos que se juntan** (Román: en Helbreath se junta una banda) | 1.4 | Sin tope duro de bichos en aggro; tope de **objetivos por golpe de área** (5 para Bola y Lluvia, 4 para Giro) + el riesgo natural de recibir el daño de toda la banda (ver 1.4) |
 | **Qué se vende con monedas y si pueden usarse en la subasta** (Román quiere ítems exclusivos que incentiven donar) | 3.7 / 0.3 | Monedas solo para **cosmética y conveniencia** (auras, títulos, espacios, tickets). Si se aceptan en la subasta, que sea como mercado entre jugadores y no como tienda de poder. Ver la nota de monetización abajo |
 | Ítems de jefe: ¿se subastan? | 3.7 | Sí, con las llaves como límite del suministro |
-| Tope de +N por banda o % menor por nivel | 3.4 | Tope por banda: +3 hasta la banda 4, +5 en 5-6, +11 en las dos últimas |
-| ¿Afijos en ítems comunes? | 3.3 | Sí, después de los únicos T4+ |
-| ¿Puntos Majestic y ángel en la beta? | 3.9 | Puntos sí, ángel si hay tiempo |
+| Tope de +N por banda o % menor por nivel | 3.4 | Tope por banda (con 6 bandas): **T1-T3 hasta +3, T4-T5 hasta +5, T6 y legendarios hasta +11**; cada nivel sigue sumando +4 %. Así un ítem viejo mejorado nunca supera a uno de una banda más alta |
+| ¿Afijos en ítems comunes? | 3.3 | **Decidido (Román, 1/11): desde la banda T4** (niveles 16 en adelante); antes, ítems sin afijos |
+| ¿Puntos Majestic y ángel en la beta? | 3.9 | **Puntos Majestic: decidido que sí.** Ángel: si hay tiempo |
 
 **Nota de monetización (para decidir antes del paso 3.7).** Un ítem fuerte que solo se consigue con monedas pagas es pay2win directo; permitir las monedas en la subasta lo convierte en pay2win indirecto, porque el que paga compra poder a otros jugadores. Es una decisión válida pero define la marca del juego. Lo que sí se puede vender sin ese costo: auras y apariencias (que es justo lo que más te gustó de los legendarios), títulos, espacios de bolsa y depósito, cambios de nombre y de stats, y piezas **iguales en poder** a las que se consiguen jugando. Además, aceptar monedas en la subasta suma riesgos operativos: contracargos de pagos después de que el ítem ya se intercambió, y compra-venta de cuentas.
 
