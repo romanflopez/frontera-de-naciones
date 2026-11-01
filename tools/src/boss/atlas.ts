@@ -61,7 +61,7 @@ function pickAngle(dir: string, deg: number) {
     for (const a of byAng.keys()) { const d = Math.min(Math.abs(a - deg), 360 - Math.abs(a - deg)); if (d < bd) { bd = d; best = a; } }
     return byAng.get(best)!;
 }
-const probe = createCanvas(CELL, CELL), pg = probe.getContext('2d', { willReadFrequently: true });
+const probe = createCanvas(CELL, CELL), pg = probe.getContext('2d', { willReadFrequently: true } as never);
 const used = new Map<string, number>();
 /** Cuadros realmente dibujados de la hoja (las hojas pueden traer celdas vacías al final). */
 function usedFrames(im: Image, total: number, key: string) {

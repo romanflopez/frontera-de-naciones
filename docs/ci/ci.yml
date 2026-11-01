@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Si llega un push nuevo a la misma rama, se cancela la corrida anterior.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    name: Tipos, tests y build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # La versión de pnpm sale de "packageManager" en el package.json de la raíz.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Instalar dependencias (con el lockfile, sin cambiarlo)
+        run: pnpm install --frozen-lockfile
+
+      - name: Revisar tipos (proto, world, tools, server y cliente)
+        run: pnpm -r --no-bail typecheck
+
+      - name: Tests del server
+        run: pnpm --filter @fdn/server test
+
+      - name: Build del cliente
+        run: pnpm --filter @fdn/client build
