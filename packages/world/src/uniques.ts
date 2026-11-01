@@ -87,3 +87,13 @@ for (const u of UNIQUE_BASES) if (!u.uniq.boss) (UNIQUES_BY_TIER[u.uniq.tier] ??
 /** Ítems característicos de cada jefe de mazmorra. */
 export const BOSS_UNIQUES: Partial<Record<MobType, UniqueBase[]>> = {};
 for (const u of UNIQUE_BASES) if (u.uniq.boss) (BOSS_UNIQUES[u.uniq.boss] ??= []).push(u);
+
+// ---------- mejora (+N) de ítems únicos (docs/ITEMS.md §7) ----------
+/** Tope de mejora del MVP (el diseño llega a +11; las probabilidades de fallo viven solo en el server). */
+export const UP_MAX = 5;
+/** Cada nivel de mejora suma este porcentaje a los stats base del ítem (daño, defensa, RM y daño mágico). */
+export const UP_PCT = 0.04;
+export const upMult = (up = 0): number => 1 + UP_PCT * Math.max(0, up);
+/** Piedras de forja y oro que cuesta pasar de +up a +up+1 un ítem de la banda `tier`. */
+export const upStones = (up: number): number => up + 1;
+export const upGold = (tier: number, up: number): number => Math.round(40 * tier * (up + 1));

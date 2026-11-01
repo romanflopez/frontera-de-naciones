@@ -55,7 +55,7 @@ export type AhOutcome = { ok: boolean; code: string; text: string };
 const fail = (code: string, text: string): AhOutcome => ({ ok: false, code, text });
 const ok = (text: string, code = 'ok'): AhOutcome => ({ ok: true, code, text });
 const fmt = (n: number) => Math.floor(n).toLocaleString('es-AR');
-const cloneItem = (i: SItem): SItem => ({ u: 0, n: i.n, r: i.r, a: i.a.map((a) => ({ id: a.id as AttrId, v: a.v })) });
+const cloneItem = (i: SItem): SItem => ({ u: 0, n: i.n, r: i.r, a: i.a.map((a) => ({ id: a.id as AttrId, v: a.v })), ...(i.up ? { up: i.up } : {}) });
 
 export interface SearchQuery { slot?: string; rarity?: number; text?: string; lvlMin?: number; lvlMax?: number; maxPrice?: number; sort?: string; page?: number }
 export interface SearchPage { listings: Listing[]; page: number; pages: number; total: number }

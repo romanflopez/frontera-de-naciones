@@ -11,7 +11,7 @@
 import {
     ATTR_RANGES, BAG_MAX, BASE_BY_NAME, BASES, KEY_IDS, KEYDEFS, POT_MAX, POTS, QUESTS, roleOf, SHARDS_PER_KEY, SHOP_SERVER_RANGE,
     MAPS, SHOPS, SLOTS, SRV_ATTR, TRAINING, buildMap, expToLevel, mobDef, sellPrice, trainingUnlocked,
-    BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, type UniqueBase,
+    BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BASES, UP_MAX, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
 } from '@fdn/world';
 import { RARITY_INDEX, rollMobDrop, type GeneratedItem } from './loot/itemGenerator.ts';
@@ -31,7 +31,7 @@ const lootScale = (() => { const v = Number(process.env.FDN_DEBUG_LOOT_SCALE); r
 export const LOOT_FREE_MS = 60_000 * lootScale;
 export const DROP_FREE_MS = 30_000 * lootScale;
 
-export interface SItem { u: number; n: string; r: number; a: { id: AttrId; v: number }[] }
+export interface SItem { u: number; n: string; r: number; a: { id: AttrId; v: number }[]; /** nivel de mejora (+N), solo ítems únicos */ up?: number }
 export interface Econ {
     v: number;
     cls: string; faction: string;
@@ -40,6 +40,8 @@ export interface Econ {
     hp: number; mp: number;
     bag: SItem[];
     eq: Record<Slot, SItem | null>;
+    /** Piedras de forja (material de mejora). Las cuentas viejas no lo tienen: se toma como 0. */
+    forge?: number;
     pots: { hp: number; mp: number };
     q: { i: number; st: 'new' | 'active' | 'ready'; prog: number; keys: Record<KeyId, number>; shards: Record<KeyId, number> };
     /** Portales de entrenamiento ya abiertos. */
@@ -77,6 +79,11 @@ function newItem(st: Econ, base: string, r: number, a: SItem['a']): SItem { retu
 /** Probabilidades de botín de los mobs de bandas con ítems únicos (docs/ITEMS.md §5). El resto del tiempo cae oro. */
 export const UNIQUE_CHANCE = { loose: 0.005, pit: 0.015, dungeon: 0.04 };
 export const COMMON_CHANCE = 0.06;
+/** Piedras de forja: chance por muerte según el origen del mob, y cantidad que suelta un jefe. */
+export const FORGE_CHANCE = { loose: 0.05, pit: 0.08, dungeon: 0.18 };
+export const FORGE_BOSS: [number, number] = [3, 5];
+/** Probabilidad de éxito de cada mejora (+1 .. +UP_MAX). Solo vive en el server. Al fallar el ítem no baja (hasta +5), se pierden las piedras y el oro. */
+export const UP_RATE = [1, 1, 1, 0.8, 0.6];
 export const GOLD_CHANCE = 0.45;
 const pick = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
 /** Un ítem único con sus atributos fijos y una variación de ±10 %. Los de jefe son rareza 3 (Épico); los demás, 2 (Raro). */
@@ -106,7 +113,7 @@ function cleanImportItem(st: Econ, v: unknown, clipped: string[], trusted = fals
     if (uniq && !trusted) { // únicos: solo con sus atributos fijos (se aceptan los del cliente si caen en la variación permitida)
         const lim = UNIQUE_VARIATION + 0.05, given = new Map<string, number>(); for (const x of Array.isArray(o.a) ? o.a : []) { const e = (x ?? {}) as Record<string, unknown>; if (typeof e.id === 'string') given.set(e.id, clampInt(e.v, 1, 1e6)); }
         for (const [id, v] of uniq.uniq.attrs) { const g = given.get(id); a.push({ id, v: g !== undefined && g >= Math.floor(v * (1 - lim)) && g <= Math.ceil(v * (1 + lim)) ? g : v }); }
-        return newItem(st, base.name, uniq.uniq.boss ? 3 : 2, a);
+        const ni = newItem(st, base.name, uniq.uniq.boss ? 3 : 2, a); const upv = clampInt(o.up, 0, UP_MAX); if (upv) ni.up = upv; return ni;
     }
     if (isShop && !trusted) { // bases de tienda: solo existen con los atributos fijos de su línea de stock
         const line = Object.values(SHOPS).flatMap((s) => s.stock).find((x) => x.base === base.name);
@@ -136,6 +143,7 @@ export function newEcon(cls: string, faction: string): Econ {
     };
     st.eq.arma = newItem(st, kit.weapon, 0, []); st.eq.armadura = newItem(st, kit.armor, 0, []);
     refreshUnlocks(st);
+    const dfg = Number(process.env.FDN_DEBUG_FORGE); if (Number.isFinite(dfg) && dfg > 0) { st.forge = Math.floor(dfg); const u = UNIQUE_BASES.find((x) => !x.uniq.boss)!; st.bag.push(uniqueItem(st, u)); } // solo pruebas: piedras y un único
     const dbg = Number(process.env.FDN_DEBUG_GOLD); if (Number.isFinite(dbg) && dbg > 0) st.gold = Math.min(MAX_GOLD, Math.floor(dbg)); // solo pruebas
     return st;
 }
@@ -194,11 +202,11 @@ const addGold = (st: Econ, n: number) => { st.gold = Math.min(MAX_GOLD, Math.max
 const bonus = (st: Econ, id: AttrId): number => SLOTS.reduce((s, sl) => s + (st.eq[sl]?.a.find((x) => x.id === id)?.v ?? 0), 0);
 
 // ---------- vistas hacia el cliente ----------
-export const toInvItem = (i: SItem) => ({ uid: i.u, base: i.n, rarity: i.r, attrs: i.a.map((a) => ({ id: a.id, v: a.v })) });
+export const toInvItem = (i: SItem) => ({ uid: i.u, base: i.n, rarity: i.r, attrs: i.a.map((a) => ({ id: a.id, v: a.v })), up: i.up ?? 0 });
 
 /** JSON de CharSave v1 que usa el cliente para la pantalla de selección y para armar su espejo inicial. */
 export function toCharSave(st: Econ): string {
-    const it = (i: SItem | null) => (i ? { n: i.n, r: i.r, a: i.a } : null);
+    const it = (i: SItem | null) => (i ? { n: i.n, r: i.r, a: i.a, up: i.up ?? 0 } : null);
     return JSON.stringify({
         v: 1, faction: st.faction, cls: st.cls, lvl: st.lvl, exp: st.exp, gold: st.gold, hp: st.hp, mp: st.mp,
         bag: st.bag.map(it), eq: Object.fromEntries(SLOTS.map((s) => [s, it(st.eq[s])])),
@@ -337,6 +345,25 @@ export class Economy {
         });
     }
 
+    // ---------- mejora de ítems únicos (docs/ITEMS.md §7) ----------
+    /** Mejora un ítem único (en la bolsa o equipado) en un herrero: gasta piedras de forja y oro; puede fallar (probabilidades solo acá). */
+    upgrade(p: Player, ctx: EconCtx, npcId: string, uid: number): void {
+        this.run(p, ctx, (st) => {
+            if (p.isDead) return fail('dead', 'Estás muerto.');
+            const npc = this.near(p, ctx, npcId); if (!npc) return fail('far', 'Estás muy lejos del herrero.');
+            if (!['armero', 'armadurero'].includes(roleOf(npc))) return fail('no_smith', 'Ese NPC no mejora equipo.');
+            const it = st.bag.find((x) => x.u === uid) ?? Object.values(st.eq).find((x) => x?.u === uid) ?? undefined; if (!it) return fail('no_item', 'No tenés ese item.');
+            const u = UNIQUE_BY_NAME.get(it.n); if (!u) return fail('not_unique', 'Solo se pueden mejorar los ítems únicos.');
+            const up = it.up ?? 0; if (up >= UP_MAX) return fail('max', `Ya está en el máximo (+${UP_MAX}).`);
+            const stones = upStones(up), gold = upGold(u.uniq.tier, up);
+            if ((st.forge ?? 0) < stones) return fail('stones', `Necesitás ${stones} piedra${stones > 1 ? 's' : ''} de forja.`);
+            if (st.gold < gold) return fail('gold', `Necesitás ${gold} de oro.`);
+            st.forge = (st.forge ?? 0) - stones; addGold(st, -gold);
+            if (Math.random() < (UP_RATE[up] ?? 0)) { it.up = up + 1; return done(`¡${it.n} subió a +${it.up}!`, true); }
+            return done(`La mejora falló: se perdieron ${stones} piedra${stones > 1 ? 's' : ''} y ${gold} de oro. ${it.n} sigue en +${up}.`);
+        });
+    }
+
     // ---------- equipo ----------
     equip(p: Player, ctx: EconCtx, uid: number): void {
         this.run(p, ctx, (st) => {
@@ -466,6 +493,8 @@ export class Economy {
             if (st.bag.length < BAG_MAX) st.bag.push(item);
             else { bagFull = true; ctx.ground.add(item, Math.floor(p.posX) + 0.5, Math.floor(p.posY) + 0.5, [p.accountKey], LOOT_FREE_MS); } // nada se destruye: cae junto al jugador
         }
+        let forge = 0;
+        if (boss ? bossU : Math.random() < FORGE_CHANCE[k.origin ?? 'pit']) { forge = boss ? rint(FORGE_BOSS[0], FORGE_BOSS[1]) : 1; st.forge = (st.forge ?? 0) + forge; }
         if (Math.random() < 0.14) { const kind: PotKind = Math.random() < 0.6 ? 'hp' : 'mp'; if (st.pots[kind] < POT_MAX) { st.pots[kind]++; potion = kind; } }
         if (boss && !bossU) { const kid: KeyId = k.shard ?? (k.zoneName === 'Cripta olvidada' ? 'foso' : 'cripta'); st.q.shards[kid] = Math.min(99, st.q.shards[kid] + 1); shard = kid; }
         let questReady = false, questProg = 0;
@@ -476,7 +505,7 @@ export class Economy {
         }
         const ups = levelUp(st);
         this.touch(p);
-        p.send(M.killReward({ mobId: k.mobId, x: k.x, y: k.y, exp: gain, gold, item: item ? toInvItem(item) : undefined, bagFull, potion, shard, newLvl: ups ? st.lvl : 0, questReady, questProg }));
+        p.send(M.killReward({ mobId: k.mobId, x: k.x, y: k.y, exp: gain, gold, item: item ? toInvItem(item) : undefined, bagFull, potion, shard, forge, newLvl: ups ? st.lvl : 0, questReady, questProg }));
         if (ups) ctx.restat(p); // subir de nivel cura (restat lo detecta por el nivel nuevo)
         this.snapshot(p);
     }

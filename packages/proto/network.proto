@@ -113,6 +113,8 @@ message ClientMessage {
     EconSortRequest econ_sort_request = 95;
     EconQuestRequest econ_quest_request = 96;
     PickupRequest pickup_request = 97;
+    // Mejora de ítems únicos en el herrero (docs/ITEMS.md §7).
+    EconUpgradeRequest econ_upgrade_request = 98;
     SaveCharacterRequest save_character_request = 80;
     MobHitRequest mob_hit_request = 120;
     PveStatusRequest pve_status_request = 121;
@@ -1318,7 +1320,8 @@ message EconQuestRequest { string npc_id = 1; string action = 2; string key = 3;
 
 message InvAttr { string id = 1; int32 v = 2; }
 /** Item con identidad: uid único por personaje, base (nombre en la tabla de bases), rareza 0..3 y atributos. */
-message InvItem { int32 uid = 1; string base = 2; int32 rarity = 3; repeated InvAttr attrs = 4; }
+message InvItem { int32 uid = 1; string base = 2; int32 rarity = 3; repeated InvAttr attrs = 4; /* nivel de mejora (+N) */ int32 up = 5; }
+message EconUpgradeRequest { string npc_id = 1; int32 uid = 2; }
 message InvEquip { string slot = 1; InvItem item = 2; }
 /** Foto completa del estado económico del personaje según el server. Se manda al entrar y después de cada cambio. */
 message InventoryState {
@@ -1341,6 +1344,8 @@ message InventoryState {
   string faction = 17;
   // Oro real (puede pasar de 2^31: `gold` queda topado a int32 solo por compatibilidad; el cliente usa gold_d).
   double gold_d = 18;
+  // Piedras de forja (materiales para mejorar ítems únicos).
+  int32 forge = 19;
 }
 /** Respuesta a una acción de economía: ok=false con un motivo (code) y texto para mostrar. */
 message EconResult { bool ok = 1; string code = 2; string text = 3; }
@@ -1359,6 +1364,7 @@ message KillReward {
   bool quest_ready = 11;
   int32 quest_prog = 12;
   double gold_d = 13;
+  int32 forge = 14;
 }
 
 // ---------- Botín en el suelo (server-autoritativo; ver docs/ECONOMIA_SERVER.md) ----------

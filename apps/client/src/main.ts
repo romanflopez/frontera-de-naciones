@@ -7,7 +7,7 @@
  */
 import { drawPortalFloor, drawPortalFx, PORTAL_CITY, PORTAL_ZONE } from './portal';
 import { DEFAULT_MAP, RECALL, expToLevel, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
-import { ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Quest, type Slot, type Stock } from '@fdn/world';
+import { UNIQUE_BY_NAME, UP_MAX, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Quest, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
 import { spellIcon } from './icons.ts';
@@ -100,7 +100,10 @@ const ATTR_FMT: Record<AttrId, (v: number) => string> = {
     df: (v) => `+${v} defensa`, rm: (v) => `+${v} resistencia mágica`,
 };
 const ATTRS = ATTR_IDS.map((id) => ({ id, r: ATTR_RANGES[id], f: ATTR_FMT[id] }));
-interface Item extends Base { id: number; rar: Rarity; attrs: { id: AttrId; v: number }[] }
+interface Item extends Base { id: number; rar: Rarity; attrs: { id: AttrId; v: number }[]; /** nivel de mejora (+N) */ up?: number }
+const itName = (it: { name: string; up?: number }) => (it.up ? `+${it.up} ` : '') + it.name;
+let forgeStones = 0;
+const FORGE_ICON = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M16 3 27 12 22 28H10L5 12Z" fill="#c9833a" stroke="#6b3f16" stroke-width="2"/><path d="M16 3 22 28 27 12ZM16 3 10 28 5 12Z" fill="#e5a65a" opacity=".45"/></svg>');
 let uid = 1;
 const attrText = (a: { id: AttrId; v: number }) => ATTRS.find((x) => x.id === a.id)!.f(a.v);
 
@@ -176,7 +179,8 @@ function totals() {
     const t = { crit: 0, aspd: 0, leech: 0, hp: 0, mp: 0, mag: 0, exp: 0, poison: 0, rpar: 0, rm: 0, df: 0, def: 0, wdmg: [0, 0] as [number, number] };
     for (const s of SLOTS) {
         const it = P.eq[s]; if (!it) continue;
-        if (it.dmg) t.wdmg = it.dmg; if (it.def) t.def += it.def; if (it.rm) t.rm += it.rm; if (it.mag) t.mag += it.mag;
+        const k = upMult(it.up);
+        if (it.dmg) t.wdmg = k === 1 ? it.dmg : [Math.round(it.dmg[0] * k), Math.round(it.dmg[1] * k)]; if (it.def) t.def += Math.round(it.def * k); if (it.rm) t.rm += Math.round(it.rm * k); if (it.mag) t.mag += Math.round(it.mag * k);
         for (const a of it.attrs) t[a.id] += a.v;
     }
     t.def += t.df; // el atributo 'df' suma a la defensa
@@ -410,7 +414,7 @@ function onMobDied(v: { mobId: number; killerId: bigint; x: number; y: number; t
     corpses.push({ sprite: mobDef(type, z).sprite ?? type, x: v.x, y: v.y, dir: mob?.dir ?? 6, t: now() });
 }
 /** El server ya aplicó el botín del golpe final (exp, oro, item, pociones, misión): acá solo se muestra. El estado nuevo llega en `inventoryState`. */
-function onKillReward(v: { mobId: number; x: number; y: number; exp: number; gold: number; goldD: number; item?: InvItemMsg; bagFull: boolean; potion: string; shard: string; newLvl: number; questReady: boolean; questProg: number }) {
+function onKillReward(v: { mobId: number; x: number; y: number; exp: number; gold: number; goldD: number; item?: InvItemMsg; bagFull: boolean; potion: string; shard: string; forge?: number; newLvl: number; questReady: boolean; questProg: number }) {
     const mob = mobMap.get(v.mobId), boss = !!mob?.boss;
     float(v.x, v.y - 0.3, `+${v.exp} exp`, '#c9a227');
     if (v.item) {
@@ -421,6 +425,7 @@ function onKillReward(v: { mobId: number; x: number; y: number; exp: number; gol
         else log(`Agarraste <span style="color:${it.rar.c}">${esc(it.name)}</span>.`);
     }
     if (v.gold || v.goldD) log(`Juntaste ${fmtNum(v.goldD || v.gold)} de oro.`);
+    if (v.forge) log(`Encontraste ${v.forge} piedra${v.forge > 1 ? 's' : ''} de forja.`, true);
     if (v.potion === 'hp' || v.potion === 'mp') log(`Encontraste una ${POTS[v.potion].name.toLowerCase()}.`, true);
     if (v.shard === 'cripta' || v.shard === 'foso') { const kd = KEYDEFS[v.shard]; log(`El boss soltó una <b>${kd.shard}</b>. Con ${SHARDS_PER_KEY} esquirlas y ${kd.gold} de oro el Capitán te forja una ${kd.name}.`, true); }
     if (v.questReady) { const q = QUESTS[Q.i]; log(`Misión lista: volvé con el Capitán${q ? ` (${q.name})` : ''}.`, true); }
@@ -1557,6 +1562,7 @@ function renderBag() {
     const gear: InvEnt[] = P.bag.map((it, i) => ({ key: 'g' + i, html: `<button type="button" class="cl${sel && sel.it === it ? ' sel' : ''}" data-bag="${i}" data-r="${it.rar.k}" aria-label="${esc(it.name)}, ${it.rar.n}" title="${esc(it.name)}" style="--rc:${rarCol(it)}">${ico(it)}</button>` }));
     const cons: InvEnt[] = (['hp', 'mp'] as const).filter((k) => pots[k] > 0).map((k) => ({ key: 'p' + k, html: `<button type="button" class="cl${selX && selX.id === k ? ' sel' : ''}" data-pot="${k}" aria-label="${POTS[k].name}, ${pots[k]}" title="${POTS[k].name}" style="--rc:${k === 'hp' ? '#8a3a34' : '#345a8a'}"><img class="iico" alt="" src="${potionIcon(k)}"><span class="q">${pots[k]}</span><i class="cdv" data-gcd></i></button>` }));
     const mats: InvEnt[] = [];
+    if (forgeStones > 0) mats.push({ key: 'forge', html: `<button type="button" class="cl${selX && selX.id === 'forge' ? ' sel' : ''}" data-mat="forge" aria-label="Piedra de forja, ${forgeStones}" title="Piedra de forja" style="--rc:#c9833a"><img class="iico" alt="" src="${FORGE_ICON}"><span class="q">${forgeStones}</span></button>` });
     for (const kid of ['cripta', 'foso'] as KeyId[]) {
         const kd = KEYDEFS[kid];
         if (Q.shards[kid] > 0) mats.push({ key: 's' + kid, html: `<button type="button" class="cl${selX && selX.id === 's' + kid ? ' sel' : ''}" data-mat="s${kid}" aria-label="${kd.shard}, ${Q.shards[kid]}" title="${kd.shard}" style="--rc:#6a4aa0"><img class="iico" alt="" src="${shardIcon(kid)}"><span class="q">${Q.shards[kid]}</span></button>` });
@@ -1583,17 +1589,27 @@ function renderTip() {
     d.style.right = `calc(max(12px, env(safe-area-inset-right, 0px)) + ${(n * 356 * wsc).toFixed(1)}px)`; d.hidden = false;
     if (selX) {
         if (selX.k === 'pot') { const k = selX.id; d.innerHTML = `<div><div class="iname" style="color:${POTS[k].col}">${POTS[k].name}</div><div class="sub">Consumible · ×${pots[k]}</div><div>${k === 'hp' ? 'Recupera 40% de la vida máxima: 20% al instante y el resto en 2 s.' : 'Recupera 50% del maná máximo.'}</div><div class="sub">Delay global de 1,75 s entre pociones.</div><div class="row"><button type="button" id="usePot">Usar (${POTS[k].key})</button></div></div>`; $('usePot').onclick = () => { usePotion(k); renderBag(); }; }
+        else if (selX.id === 'forge') d.innerHTML = `<div><div class="iname" style="color:#e5a65a">Piedra de forja</div><div class="sub">Material · ×${forgeStones}</div><div>Sirve para mejorar ítems únicos (+1 a +${UP_MAX}) en un herrero. La sueltan los mobs, más en pits y mazmorras, y los jefes.</div></div>`;
         else { const id = selX.id, kid = id.slice(1) as KeyId, kd = KEYDEFS[kid], shard = id[0] === 's'; d.innerHTML = `<div><div class="iname" style="color:${shard ? '#b99cff' : '#ffd24a'}">${shard ? kd.shard : kd.name}</div><div class="sub">Material · ×${shard ? Q.shards[kid] : Q.keys[kid]}</div><div>${shard ? `Con ${SHARDS_PER_KEY} esquirlas y ${kd.gold} de oro el Capitán forja la ${kd.name}.` : 'Abre la escalera sellada del portal correspondiente.'}</div></div>`; }
         return;
     }
     const it = sel!.it, base: string[] = [];
-    if (it.dmg) base.push(`Daño ${it.dmg[0]}–${it.dmg[1]}`); if (it.def) base.push(`Defensa ${it.def}`); if (it.rm) base.push(`Res. mágica ${it.rm}`); if (it.mag) base.push(`+${it.mag} daño mágico`);
-    d.innerHTML = `<div style="border-color:${rarCol(it)}"><div class="iname" style="color:${it.rar.c}">${esc(it.name)}</div><div class="sub">${it.rar.n} · ${it.slot}</div>
+    const km = upMult(it.up), ru = (n: number) => Math.round(n * km);
+    if (it.dmg) base.push(`Daño ${ru(it.dmg[0])}–${ru(it.dmg[1])}`); if (it.def) base.push(`Defensa ${ru(it.def)}`); if (it.rm) base.push(`Res. mágica ${ru(it.rm)}`); if (it.mag) base.push(`+${ru(it.mag)} daño mágico`);
+    const un = UNIQUE_BY_NAME.get(it.name), upLine = un ? ((it.up ?? 0) < UP_MAX ? `<div class="sub">Mejorar a +${(it.up ?? 0) + 1}: ${upStones(it.up ?? 0)} piedra${upStones(it.up ?? 0) > 1 ? 's' : ''} de forja y ${upGold(un.uniq.tier, it.up ?? 0)} de oro (en un herrero)</div>` : '<div class="sub">Mejora máxima</div>') : '';
+    d.innerHTML = `<div style="border-color:${rarCol(it)}"><div class="iname" style="color:${it.rar.c}">${esc(itName(it))}</div><div class="sub">${it.rar.n} · ${it.slot}</div>
     ${base.length ? `<div>${base.join(' · ')}</div>` : ''}
     ${it.attrs.length ? `<ul>${it.attrs.map((a) => `<li style="color:#8fb6f0">${attrText(a)}</li>`).join('')}</ul>` : `<div class="sub">Sin atributos extra</div>`}
-    <div class="row">${sel!.from === 'bag' ? `<button type="button" id="eqBtn">Equipar</button>` : `<button type="button" id="uneqBtn">Sacar</button>`}</div></div>`;
+    ${upLine}
+    <div class="row">${sel!.from === 'bag' ? `<button type="button" id="eqBtn">Equipar</button>` : `<button type="button" id="uneqBtn">Sacar</button>`}${un && (it.up ?? 0) < UP_MAX ? `<button type="button" id="upBtn">Mejorar</button>` : ''}</div></div>`;
     const eqBtn = document.getElementById('eqBtn'), uneqBtn = document.getElementById('uneqBtn');
     if (eqBtn) eqBtn.onclick = () => net.send({ $case: 'econEquipRequest', value: { uid: it.id } }); // el server valida y manda el estado nuevo
+    const upBtn = document.getElementById('upBtn');
+    if (upBtn) upBtn.onclick = () => {
+        const smith = MAP.npcs.find((n) => ['armero', 'armadurero'].includes(roleOf(n)) && Math.hypot(n.x - P.x, n.y - P.y) <= TALK_RANGE);
+        if (!smith) { log('Acercate a un herrero (armero o armadurero) para mejorar el equipo.'); return; }
+        net.send({ $case: 'econUpgradeRequest', value: { npcId: smith.id, uid: it.id } });
+    };
     if (uneqBtn) uneqBtn.onclick = () => net.send({ $case: 'econUnequipRequest', value: { slot: it.slot } });
 }
 /** Salir: en zona segura es inmediato; en zona insegura hay que aguantar quieto unos segundos (se cancela si te movés o te pegan). */
@@ -2089,7 +2105,7 @@ function applySave(sv: CharSave) {
 /** Item del server -> item del cliente (la base y la rareza salen de las tablas compartidas). */
 function itemFromInv(v: InvItemMsg): Item {
     const b = ALL_BASES.find((x) => x.name === v.base) ?? ALL_BASES[0];
-    return { ...b, id: v.uid, rar: RAR[Math.min(3, Math.max(0, v.rarity))], attrs: loadAttrs(v.attrs) };
+    return { ...b, id: v.uid, rar: RAR[Math.min(3, Math.max(0, v.rarity))], attrs: loadAttrs(v.attrs), up: v.up || undefined };
 }
 let invApplied = false;
 /** Última foto del server: el save local del login pisa la bolsa con uids locales, así que se vuelve a aplicar al entrar al mundo. */
@@ -2102,7 +2118,7 @@ function applyInventory(v: InventoryState) {
     P.bag = v.bag.map(itemFromInv);
     for (const sl of SLOTS) P.eq[sl] = null;
     for (const e of v.eq) if (e.item && (SLOTS as string[]).includes(e.slot)) P.eq[e.slot as Slot] = itemFromInv(e.item);
-    pots.hp = v.potsHp; pots.mp = v.potsMp;
+    pots.hp = v.potsHp; pots.mp = v.potsMp; forgeStones = v.forge;
     Q.i = v.questI; Q.st = v.questState === 'active' || v.questState === 'ready' ? v.questState : 'new'; Q.prog = v.questProg;
     Q.keys.cripta = v.keysCripta; Q.keys.foso = v.keysFoso; Q.shards.cripta = v.shardsCripta; Q.shards.foso = v.shardsFoso;
     for (const id of v.unlocked) if (!UNLOCKED.has(id)) {

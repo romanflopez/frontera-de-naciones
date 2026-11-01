@@ -131,6 +131,9 @@ export interface ClientMessage {
     | { $case: "econSortRequest"; value: EconSortRequest }
     | { $case: "econQuestRequest"; value: EconQuestRequest }
     | { $case: "pickupRequest"; value: PickupRequest }
+    | //
+    /** Mejora de ítems únicos en el herrero (docs/ITEMS.md §7). */
+    { $case: "econUpgradeRequest"; value: EconUpgradeRequest }
     | { $case: "saveCharacterRequest"; value: SaveCharacterRequest }
     | { $case: "mobHitRequest"; value: MobHitRequest }
     | { $case: "pveStatusRequest"; value: PveStatusRequest }
@@ -1495,6 +1498,12 @@ export interface InvItem {
   base: string;
   rarity: number;
   attrs: InvAttr[];
+  up: number;
+}
+
+export interface EconUpgradeRequest {
+  npcId: string;
+  uid: number;
 }
 
 export interface InvEquip {
@@ -1523,6 +1532,8 @@ export interface InventoryState {
   faction: string;
   /** Oro real (puede pasar de 2^31: `gold` queda topado a int32 solo por compatibilidad; el cliente usa gold_d). */
   goldD: number;
+  /** Piedras de forja (materiales para mejorar ítems únicos). */
+  forge: number;
 }
 
 /** Respuesta a una acción de economía: ok=false con un motivo (code) y texto para mostrar. */
@@ -1547,6 +1558,7 @@ export interface KillReward {
   questReady: boolean;
   questProg: number;
   goldD: number;
+  forge: number;
 }
 
 /** Recoger el item del suelo `id`: el server valida que exista, distancia <= 2 celdas, que sea tuyo (o ya libre) y que haya lugar en la bolsa. */
@@ -1888,6 +1900,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         break;
       case "pickupRequest":
         PickupRequest.encode(message.payload.value, writer.uint32(778).fork()).join();
+        break;
+      case "econUpgradeRequest":
+        EconUpgradeRequest.encode(message.payload.value, writer.uint32(786).fork()).join();
         break;
       case "saveCharacterRequest":
         SaveCharacterRequest.encode(message.payload.value, writer.uint32(642).fork()).join();
@@ -2522,6 +2537,17 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "pickupRequest", value: PickupRequest.decode(reader, reader.uint32()) };
             continue;
           }
+          case 98: {
+            if (tag !== 786) {
+              break;
+            }
+
+            message.payload = {
+              $case: "econUpgradeRequest",
+              value: EconUpgradeRequest.decode(reader, reader.uint32()),
+            };
+            continue;
+          }
           case 80: {
             if (tag !== 642) {
               break;
@@ -3088,6 +3114,15 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "pickupRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "pickupRequest", value: PickupRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "econUpgradeRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "econUpgradeRequest",
+            value: EconUpgradeRequest.fromPartial(object.payload.value),
+          };
         }
         break;
       }
@@ -19760,7 +19795,7 @@ export const InvAttr: MessageFns<InvAttr> = {
 };
 
 function createBaseInvItem(): InvItem {
-  return { uid: 0, base: "", rarity: 0, attrs: [] };
+  return { uid: 0, base: "", rarity: 0, attrs: [], up: 0 };
 }
 
 export const InvItem: MessageFns<InvItem> = {
@@ -19776,6 +19811,9 @@ export const InvItem: MessageFns<InvItem> = {
     }
     for (const v of message.attrs) {
       InvAttr.encode(v!, writer.uint32(34).fork()).join();
+    }
+    if (message.up !== 0) {
+      writer.uint32(40).int32(message.up);
     }
     return writer;
   },
@@ -19825,6 +19863,14 @@ export const InvItem: MessageFns<InvItem> = {
             message.attrs.push(InvAttr.decode(reader, reader.uint32()));
             continue;
           }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.up = reader.int32();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -19846,6 +19892,74 @@ export const InvItem: MessageFns<InvItem> = {
     message.base = object.base ?? "";
     message.rarity = object.rarity ?? 0;
     message.attrs = object.attrs?.map((e) => InvAttr.fromPartial(e)) || [];
+    message.up = object.up ?? 0;
+    return message;
+  },
+};
+
+function createBaseEconUpgradeRequest(): EconUpgradeRequest {
+  return { npcId: "", uid: 0 };
+}
+
+export const EconUpgradeRequest: MessageFns<EconUpgradeRequest> = {
+  encode(message: EconUpgradeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.npcId !== "") {
+      writer.uint32(10).string(message.npcId);
+    }
+    if (message.uid !== 0) {
+      writer.uint32(16).int32(message.uid);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EconUpgradeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseEconUpgradeRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.npcId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.uid = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<EconUpgradeRequest>, I>>(base?: I): EconUpgradeRequest {
+    return EconUpgradeRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EconUpgradeRequest>, I>>(object: I): EconUpgradeRequest {
+    const message = createBaseEconUpgradeRequest();
+    message.npcId = object.npcId ?? "";
+    message.uid = object.uid ?? 0;
     return message;
   },
 };
@@ -19937,6 +20051,7 @@ function createBaseInventoryState(): InventoryState {
     cls: "",
     faction: "",
     goldD: 0,
+    forge: 0,
   };
 }
 
@@ -19995,6 +20110,9 @@ export const InventoryState: MessageFns<InventoryState> = {
     }
     if (message.goldD !== 0) {
       writer.uint32(145).double(message.goldD);
+    }
+    if (message.forge !== 0) {
+      writer.uint32(152).int32(message.forge);
     }
     return writer;
   },
@@ -20156,6 +20274,14 @@ export const InventoryState: MessageFns<InventoryState> = {
             message.goldD = reader.double();
             continue;
           }
+          case 19: {
+            if (tag !== 152) {
+              break;
+            }
+
+            message.forge = reader.int32();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -20191,6 +20317,7 @@ export const InventoryState: MessageFns<InventoryState> = {
     message.cls = object.cls ?? "";
     message.faction = object.faction ?? "";
     message.goldD = object.goldD ?? 0;
+    message.forge = object.forge ?? 0;
     return message;
   },
 };
@@ -20289,6 +20416,7 @@ function createBaseKillReward(): KillReward {
     questReady: false,
     questProg: 0,
     goldD: 0,
+    forge: 0,
   };
 }
 
@@ -20332,6 +20460,9 @@ export const KillReward: MessageFns<KillReward> = {
     }
     if (message.goldD !== 0) {
       writer.uint32(105).double(message.goldD);
+    }
+    if (message.forge !== 0) {
+      writer.uint32(112).int32(message.forge);
     }
     return writer;
   },
@@ -20453,6 +20584,14 @@ export const KillReward: MessageFns<KillReward> = {
             message.goldD = reader.double();
             continue;
           }
+          case 14: {
+            if (tag !== 112) {
+              break;
+            }
+
+            message.forge = reader.int32();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -20483,6 +20622,7 @@ export const KillReward: MessageFns<KillReward> = {
     message.questReady = object.questReady ?? false;
     message.questProg = object.questProg ?? 0;
     message.goldD = object.goldD ?? 0;
+    message.forge = object.forge ?? 0;
     return message;
   },
 };

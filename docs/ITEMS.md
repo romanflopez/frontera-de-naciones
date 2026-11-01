@@ -1,6 +1,6 @@
 # Ítems, runas y mejoras (borrador de diseño)
 
-Estado: **paso 1 del MVP implementado** (ítems únicos de T1 a T3 + ítems de los jefes D1-D3 + tabla de drops). Runas y mejoras +N siguen en diseño. Los números son puntos de partida para probar, no valores finales.
+Estado: **paso 1 del MVP implementado** (ítems únicos de T1 a T3 + ítems de los jefes D1-D3 + tabla de drops). Mejoras +1 a +5 implementadas (§7); las runas siguen en diseño. Los números son puntos de partida para probar, no valores finales.
 
 Implementación: `packages/world/src/uniques.ts` (catálogo; cada único es una `Base` más y entra en `ALL_BASES`), `apps/server/src/economy.ts` (`reward`, `uniqueItem`, `UNIQUE_CHANCE`, `COMMON_CHANCE`, `GOLD_CHANCE`). Rareza en el juego: los únicos de banda son rareza 2 (se muestra "Raro") y los de jefe rareza 3 ("Épico"); no se cambiaron los nombres de la interfaz.
 Depende de: `docs/MAPAS_FLARE.md` (mapas, mazmorras y jefes), `docs/ECONOMIA_SERVER.md` (el server valida precios, stock y atributos) y `docs/ZONAS.md` (curvas de vida/exp por nivel).
@@ -138,3 +138,12 @@ Probabilidades iniciales (a ajustar):
 - Loop buscado: limpiar mobs, mejorar el equipo, hacer mazmorras, en un ritmo tranquilo ("chill").
 - **Siempre un próximo objetivo claro**: el ítem de tal jefe, el siguiente +N, el siguiente mapa. Farmear sin objetivo aburre (pasaba en Helbreath). Hay que mostrarlo en el juego.
 - Mapa del mundo (tecla M) y wiki generada desde los datos: después de la beta.
+
+## 13. Estado de la mejora +N (implementado)
+
+- Solo ítems únicos (de banda y de jefe), en la bolsa o equipados, en un herrero (armero o armadurero), con el botón "Mejorar" del tooltip.
+- MVP: de +1 a +5 (`UP_MAX`). Éxito: +1 a +3 100 %, +4 80 %, +5 60 % (`UP_RATE`, solo en el server). Si falla, el ítem no baja: se pierden las piedras y el oro del intento. Costo de pasar de +n a +n+1: n+1 piedras de forja y `40 × banda × (n+1)` de oro.
+- Cada nivel suma +4 % a daño, defensa, RM y daño mágico base (`upMult`); los atributos fijos no escalan.
+- Piedras de forja: 5 % mob suelto, 8 % pit, 18 % mob de mazmorra (1 piedra); los jefes con ítems propios sueltan 3 a 5. Se guardan en la cuenta (`Econ.forge`).
+- El nivel de mejora se conserva al guardar en el depósito, subastar y comprar en la subasta.
+- Pendiente: +6 a +11 con bajada de nivel al fallar, piedra pura y pergamino de protección (cuando se vean los números reales).

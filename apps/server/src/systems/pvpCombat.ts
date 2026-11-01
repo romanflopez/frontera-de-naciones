@@ -3,7 +3,7 @@
  * con las mismas fórmulas del juego, el nivel y el equipo del último guardado validado, la Furia que lleva el server,
  * y límites de recarga, alcance y ritmo por hechizo.
  */
-import { BASE_BY_NAME } from '@fdn/world';
+import { BASE_BY_NAME, upMult } from '@fdn/world';
 export type Stat = 'mag' | 'wdmg' | 'melee';
 export interface PvpSpell {
     dmg?: [number, number]; lvlK?: number; stat?: Stat;
@@ -64,7 +64,7 @@ export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', mag: 0, wdm
 const MELEE: Record<string, [number, number]> = { guerrero: [5, 9], mago: [2, 4] };
 
 /** Lo mínimo del personaje que hace falta para calcular los stats de combate: nivel, clase, vida/maná guardados y el EQUIPO. */
-export interface StatSource { lvl: number; cls: string; hp?: number; mp?: number; eq: Partial<Record<string, { n: string; a?: { id: string; v: number }[] } | null>> }
+export interface StatSource { lvl: number; cls: string; hp?: number; mp?: number; eq: Partial<Record<string, { n: string; a?: { id: string; v: number }[]; up?: number } | null>> }
 
 /** Stats de combate a partir del personaje del server (equipo autoritativo, ver economy.ts). */
 export function statsFromChar(o: StatSource | undefined): CombatStats {
@@ -75,7 +75,7 @@ export function statsFromChar(o: StatSource | undefined): CombatStats {
     for (const [slot, it] of Object.entries(o.eq ?? {})) {
         if (!it) continue;
         const b = BASE_BY_NAME.get(it.n);
-        if (b && b.slot === slot) { if (b.dmg) s.wdmg = b.dmg; if (b.mag) s.mag += b.mag; if (b.def) s.def += b.def; if (b.rm) s.rm += b.rm; }
+        if (b && b.slot === slot) { const k = upMult(it.up); if (b.dmg) s.wdmg = k === 1 ? b.dmg : [Math.round(b.dmg[0] * k), Math.round(b.dmg[1] * k)]; if (b.mag) s.mag += Math.round(b.mag * k); if (b.def) s.def += Math.round(b.def * k); if (b.rm) s.rm += Math.round(b.rm * k); }
         for (const a of it.a ?? []) { if (a.id === 'mag') s.mag += a.v; else if (a.id === 'hp') bonusHp += a.v; else if (a.id === 'mp') bonusMp += a.v; else if (a.id === 'df') s.def += a.v; else if (a.id === 'rm' || a.id === 'fres' || a.id === 'ires') s.rm += a.v; /* fres/ires: atributos viejos, ahora valen RM 1:1 */ else if (a.id === 'rpar') s.rpar += a.v; }
     }
     const [hp0, hpL] = CLASS_HP[cls];

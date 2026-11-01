@@ -45,7 +45,7 @@ export type DepotOutcome = { ok: boolean; code: string; text: string };
 const fail = (code: string, text: string): DepotOutcome => ({ ok: false, code, text });
 const ok = (text: string, code = 'ok'): DepotOutcome => ({ ok: true, code, text });
 const fmt = (n: number) => Math.floor(n).toLocaleString('es-AR');
-const copyItem = (i: SItem, u: number): SItem => ({ u, n: i.n, r: i.r, a: i.a.map((a) => ({ id: a.id as AttrId, v: a.v })) });
+const copyItem = (i: SItem, u: number): SItem => ({ u, n: i.n, r: i.r, a: i.a.map((a) => ({ id: a.id as AttrId, v: a.v })), ...(i.up ? { up: i.up } : {}) });
 const slotIdx = (i: SItem) => SLOTS.indexOf(BASE_BY_NAME.get(i.n)?.slot ?? 'anillo');
 
 /** Monto entero positivo y exacto (el cliente puede mandar cualquier cosa). */
