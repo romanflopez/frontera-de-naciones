@@ -1258,6 +1258,8 @@ message MobSnap {
   float imm = 8;
   bool poison = 9;
   bool moving = 10;
+  /** Rasgos del mob (máscara de bits, ver packages/world/src/mobTraits.ts): mutante, anti-físico, anti-mágico, tóxico, explosivo, salvaje. */
+  int32 traits = 11;
 }
 /** Mobs a la vista del jugador, 10 veces por segundo. */
 message MobsSnapshot {

@@ -6,7 +6,7 @@
  * mobs, combate, hechizos, loot y experiencia (pasan al server en la fase 1b).
  */
 import { drawPortalFloor, drawPortalFx, PORTAL_CITY, PORTAL_ZONE } from './portal';
-import { DEFAULT_MAP, RECALL, STAT_CAP, STAT_DESC, STAT_IDS, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
+import { DEFAULT_MAP, RECALL, STAT_CAP, STAT_DESC, STAT_IDS, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, traitLabel, traitHpMult, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
 import { UNIQUE_BY_NAME, UP_MAX, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Quest, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
@@ -157,7 +157,7 @@ function dropMob(m: Mob) {
     mobMap.delete(m.id); if (P.target === m) P.target = null;
 }
 const MOB_DELAY = 0.2;
-function syncMobs(list: { id: number; type: number; zone: number; x: number; y: number; hp: number; par: number; imm: number; poison: boolean; moving: boolean }[]) {
+function syncMobs(list: { id: number; type: number; zone: number; x: number; y: number; hp: number; par: number; imm: number; poison: boolean; moving: boolean; traits: number }[]) {
     const T = now(), seen = new Set<number>();
     for (const s of list) {
         seen.add(s.id);
@@ -165,7 +165,8 @@ function syncMobs(list: { id: number; type: number; zone: number; x: number; y: 
         if (!m) {
             const type = MOB_TYPES[s.type], z = ZONES[s.zone]; if (!type || !z) continue;
             const d = mobDef(type, z);
-            m = { ...d, sprite: d.sprite ?? type, zone: z, x: s.x, y: s.y, sx: s.x, sy: s.y, buf: [], hpMax: d.hp, hp: s.hp, busy: 0, par: 0, parT: 0, imm: 0, poison: 0, dir: rint(0, 7), moving: false, flash: 0, one: null, t0: R() * 5, id: s.id };
+            const tl = traitLabel(s.traits);
+            m = { ...d, name: tl ? `${tl} ${d.name}` : d.name, sprite: d.sprite ?? type, zone: z, x: s.x, y: s.y, sx: s.x, sy: s.y, buf: [], hpMax: Math.round(d.hp * traitHpMult(s.traits)), hp: s.hp, busy: 0, par: 0, parT: 0, imm: 0, poison: 0, dir: rint(0, 7), moving: false, flash: 0, one: null, t0: R() * 5, id: s.id };
             mobs.push(m); mobMap.set(s.id, m);
         }
         m.sx = s.x; m.sy = s.y; m.hp = s.hp;
@@ -365,6 +366,8 @@ function onServer(m: ServerPayload) {
 
 // ---------- combate ----------
 /** Pide el golpe al server: él valida alcance y tope de daño, lo aplica y avisa a todos (`mobDamaged`). */
+/** Los mobs ordenados del más cercano al más lejano al centro de un área: el server pega a los primeros (tope de objetivos). */
+const byDistance = (list: Mob[], x: number, y: number): Mob[] => list.slice().sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y));
 function damageMob(m: Mob, spell: string, parSecs = 0) {
     if (!mobs.includes(m) || P.dead) return;
     // Desde el paso 1.3 el server calcula todo (daño, crítico, veneno, robo de vida, recarga y maná): acá solo se pide el golpe.
@@ -459,7 +462,7 @@ function explode(p: Proj) {
     if (!reduce) shake = 0.3; hitstop = Math.max(hitstop, 0.06);
     let n = 0;
     for (const o of enemiesNear(p.tx!, p.ty!, p.aoe!)) pvpDamage(o, 'bola', '');
-    for (const m of mobs.slice()) { if (Math.hypot(m.x - p.tx!, m.y - p.ty!) <= p.aoe!) { n++; damageMob(m, 'bola'); } }
+    for (const m of byDistance(mobs, p.tx!, p.ty!)) { if (Math.hypot(m.x - p.tx!, m.y - p.ty!) <= p.aoe!) { n++; damageMob(m, 'bola'); } }
     if (n > 1) log(`Bola de fuego: ${n} enemigos alcanzados.`, true);
 }
 /** Mitigación con rendimiento decreciente: daño × 100/(100+X), X = DF (físico) o RM (mágico). Igual que el server. */
@@ -541,7 +544,7 @@ const LIB: Record<string, SpellDef> = {
     tajo: { name: 'Tajo salvaje', mp: 12, cd: 1, col: '#ff6b55', range: 1.9, target: true,
         cast(m) { if (!isMob(m)) return false; efx('crosswind', m.x, m.y, 8); damageMob(m, 'tajo'); } },
     torbellino: { name: 'Torbellino', mp: 22, cd: 5, col: '#e0e0e0', range: 0, target: false,
-        cast() { fx.push({ k: 'boom', x: P.x, y: P.y, t: 0, r: 2.2 }); efx('cyclone', P.x, P.y); let n = 0; for (const m of mobs.slice()) if (dist(P, m) <= 2.2 && !isSafe(m.x, m.y)) { n++; damageMob(m, 'torbellino'); } if (!n) log('El torbellino no alcanzó a nadie.'); } },
+        cast() { fx.push({ k: 'boom', x: P.x, y: P.y, t: 0, r: 2.2 }); efx('cyclone', P.x, P.y); let n = 0; for (const m of byDistance(mobs, P.x, P.y)) if (dist(P, m) <= 2.2 && !isSafe(m.x, m.y)) { n++; damageMob(m, 'torbellino'); } if (!n) log('El torbellino no alcanzó a nadie.'); } },
     hoja: { name: 'Hoja de viento', mp: 14, cd: 1.5, col: '#8dffa0', range: 7, target: true,
         cast(m) { if (!isMob(m)) return false; efx('windblade', m.x, m.y, 10); damageMob(m, 'hoja'); } },
     lanza: { name: 'Lanza de piedra', mp: 30, cd: 5, col: '#d9a45a', range: 7, target: true,
@@ -585,7 +588,7 @@ function zone(x: number, y: number, r: number, ticks: number, every: number, dmg
         if (effect === 'blizz') { if (i === 0) { fx.push({ k: 'blizz', x, y, t: 0, r, d: ticks * every + 0.5 }); pvpSend('blizz', x, y, 0n, '', 0, r); } } else if (i === 0 || effect === 'cataclysm') efx(effect, x, y);
         if (!reduce && i === 0) shake = Math.max(shake, 0.15);
         for (const o of enemiesNear(x, y, r)) { if (sid) { pvpSend('', x, y, o.id, sid, slow && i === ticks - 1 ? slow : 0, r); } }
-        for (const m of mobs.slice()) if (Math.hypot(m.x - x, m.y - y) <= r && !isSafe(m.x, m.y)) damageMob(m, sid, slow && m.imm <= now() && i === ticks - 1 ? slow : 0);
+        for (const m of byDistance(mobs, x, y)) if (Math.hypot(m.x - x, m.y - y) <= r && !isSafe(m.x, m.y)) damageMob(m, sid, slow && m.imm <= now() && i === ticks - 1 ? slow : 0);
     });
 }
 function heal(h: number, eff = 'sphere') { P.hp = Math.min(maxHp(), P.hp + h); syncHp(); float(P.x, P.y - 0.2, '+' + h, '#7ee08a'); efx(eff, P.x, P.y); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#7ee08a' }); }

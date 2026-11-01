@@ -9,7 +9,7 @@
  * Storage (archivos o Postgres). Ver docs/ECONOMIA_SERVER.md.
  */
 import {
-    ATTR_RANGES, BAG_MAX, BASE_BY_NAME, BASES, KEY_IDS, KEYDEFS, POT_MAX, POTS, QUESTS, roleOf, SHARDS_PER_KEY, SHOP_SERVER_RANGE,
+    ATTR_RANGES, traitExpMult, traitDropMult, BAG_MAX, BASE_BY_NAME, BASES, KEY_IDS, KEYDEFS, POT_MAX, POTS, QUESTS, roleOf, SHARDS_PER_KEY, SHOP_SERVER_RANGE,
     MAPS, SHOPS, SLOTS, SRV_ATTR, TRAINING, buildMap, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statBonus, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, mobDef, sellPrice, trainingUnlocked,
     BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BASES, UP_MAX, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
@@ -243,7 +243,7 @@ export interface EconCtx {
     /** Botín en el suelo del mundo del jugador. */
     ground: GroundApi;
 }
-export interface KillInfo { mobId: number; type: MobType; def: MobDef; zoneName: string; /** de dónde sale el mob: suelto, de un pit o de una mazmorra (docs/ITEMS.md) */ origin?: 'loose' | 'pit' | 'dungeon'; x: number; y: number; /** esquirla que suelta el boss de la zona (Zone.drops); si falta, se decide por el nombre */ shard?: KeyId }
+export interface KillInfo { /** rasgos del mob (mobTraits.ts): multiplican la exp (mutante ×3, habilidades ×1,3-1,5, salvaje ×1,25) y el botín del mutante (×2) */ traits?: number; mobId: number; type: MobType; def: MobDef; zoneName: string; /** de dónde sale el mob: suelto, de un pit o de una mazmorra (docs/ITEMS.md) */ origin?: 'loose' | 'pit' | 'dungeon'; x: number; y: number; /** esquirla que suelta el boss de la zona (Zone.drops); si falta, se decide por el nombre */ shard?: KeyId }
 
 const fail = (code: string, text: string) => ({ ok: false as const, code, text });
 type Outcome = { ok: true; code: string; text: string; stats?: boolean } | { ok: false; code: string; text: string };
@@ -538,10 +538,10 @@ export class Economy {
         const def = k.def, boss = def.boss;
         // la exp baja con tu nivel (levelExpMult) y con la diferencia de nivel contra el mob (levelGapMult: 0 si es muy inferior)
         const lm = levelExpMult(st.lvl) * levelGapMult(st.lvl, def.lvl);
-        const gain = lm > 0 ? Math.max(1, Math.round(def.exp * (1 + bonus(st, 'exp') / 100) * expMult * lm)) : 0;
+        const gain = lm > 0 ? Math.max(1, Math.round(def.exp * (1 + bonus(st, 'exp') / 100) * expMult * traitExpMult(k.traits ?? 0) * lm)) : 0;
         st.exp += gain;
         let gold = 0, item: SItem | undefined, bagFull = false, potion = '', shard = '';
-        const bossU = boss ? BOSS_UNIQUES[k.type] : undefined, tier = tierOfLevel(def.lvl), dm = statBonus(st.stats).dropMult;
+        const bossU = boss ? BOSS_UNIQUES[k.type] : undefined, tier = tierOfLevel(def.lvl), dm = statBonus(st.stats).dropMult * traitDropMult(k.traits ?? 0); // Suerte y mutante
         if (boss) {
             // los jefes de mazmorra con ítems propios sueltan uno de ellos (siempre); los demás, el botín de siempre
             item = bossU ? uniqueItem(st, pick(bossU)) : itemFromRoll(st, rollMobDrop(def.lvl, boss.minRar)); gold = rint(boss.gold[0], boss.gold[1]);

@@ -173,7 +173,7 @@ export const pvpHit = (casterId: bigint, v: { fx: string; x: number; y: number; 
 
 export const characterLoaded = (exists: boolean, data: string): ServerMessage => msg({ $case: 'characterLoaded', value: { exists, data } });
 // ---------- PvE autoritativo ----------
-export const mobsSnapshot = (mobs: { id: number; type: number; zone: number; x: number; y: number; hp: number; par: number; imm: number; poison: boolean; moving: boolean }[]): ServerMessage =>
+export const mobsSnapshot = (mobs: { id: number; type: number; zone: number; x: number; y: number; hp: number; par: number; imm: number; poison: boolean; moving: boolean; traits: number }[]): ServerMessage =>
     msg({ $case: 'mobsSnapshot', value: { mobs } });
 export const mobDamaged = (mobId: number, attackerId: bigint, dmg: number, crit: boolean, hp: number): ServerMessage =>
     msg({ $case: 'mobDamaged', value: { mobId, attackerId, dmg, crit, hp } });

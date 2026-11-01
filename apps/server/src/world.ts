@@ -7,7 +7,7 @@
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
 import { PARTY_SHARE_RANGE, partyExpMult, partyMates } from './party.ts';
-import { damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionMp, POTION_GCD_MS, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, progressFromEcon, PVP_SPELLS, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
+import { AOE_MAX_TARGETS, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionMp, POTION_GCD_MS, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, progressFromEcon, PVP_SPELLS, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
 import { HUBS, QUESTS, RECALL, TRAINING, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef } from '@fdn/world';
 import { applyParalysis, applySlow, applyWarcry, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, hasWarcry, isSlowed, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
@@ -734,7 +734,10 @@ export class GameWorld {
                 if (!this.isEnemyPair(p, o) || o.isDead || Math.hypot(o.posX + 0.5 - cx, o.posY + 0.5 - cy) > sp.aoe!) continue;
                 hitPlayer(o, false);
             }
-            if (!this.cellSafe(p.posX, p.posY)) for (const m of this.mobSim?.near(cx, cy, sp.aoe!) ?? []) this.mobSim!.skillHit(p, m.id, rollDmg());
+            if (!this.cellSafe(p.posX, p.posY)) {
+                const hits = (this.mobSim?.near(cx, cy, sp.aoe!) ?? []).sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy)).slice(0, AOE_MAX_TARGETS.giro); // los más cercanos, con tope y caída de daño
+                hits.forEach((m, i) => this.mobSim!.skillHit(p, m.id, Math.max(1, Math.round(rollDmg() * aoeMult(i)))));
+            }
             this.skillBroadcast(p, 'giro', p.posX, p.posY);
             return;
         }

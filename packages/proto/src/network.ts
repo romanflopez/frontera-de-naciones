@@ -1399,6 +1399,8 @@ export interface MobSnap {
   imm: number;
   poison: boolean;
   moving: boolean;
+  /** Rasgos del mob (máscara de bits, ver packages/world/src/mobTraits.ts): mutante, anti-físico, anti-mágico, tóxico, explosivo, salvaje. */
+  traits: number;
 }
 
 /** Mobs a la vista del jugador, 10 veces por segundo. */
@@ -18549,7 +18551,7 @@ export const PveStatusRequest: MessageFns<PveStatusRequest> = {
 };
 
 function createBaseMobSnap(): MobSnap {
-  return { id: 0, type: 0, zone: 0, x: 0, y: 0, hp: 0, par: 0, imm: 0, poison: false, moving: false };
+  return { id: 0, type: 0, zone: 0, x: 0, y: 0, hp: 0, par: 0, imm: 0, poison: false, moving: false, traits: 0 };
 }
 
 export const MobSnap: MessageFns<MobSnap> = {
@@ -18583,6 +18585,9 @@ export const MobSnap: MessageFns<MobSnap> = {
     }
     if (message.moving !== false) {
       writer.uint32(80).bool(message.moving);
+    }
+    if (message.traits !== 0) {
+      writer.uint32(88).int32(message.traits);
     }
     return writer;
   },
@@ -18680,6 +18685,14 @@ export const MobSnap: MessageFns<MobSnap> = {
             message.moving = reader.bool();
             continue;
           }
+          case 11: {
+            if (tag !== 88) {
+              break;
+            }
+
+            message.traits = reader.int32();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -18707,6 +18720,7 @@ export const MobSnap: MessageFns<MobSnap> = {
     message.imm = object.imm ?? 0;
     message.poison = object.poison ?? false;
     message.moving = object.moving ?? false;
+    message.traits = object.traits ?? 0;
     return message;
   },
 };

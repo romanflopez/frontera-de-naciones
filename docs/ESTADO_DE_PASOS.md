@@ -1,6 +1,6 @@
 # Estado de los pasos del plan
 
-Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última actualización: 1/11/2026 (paso 1.3).
+Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última actualización: 1/11/2026 (paso 1.4).
 
 | Paso | Estado | Detalle |
 |---|---|---|
@@ -10,7 +10,7 @@ Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última a
 | **1.1 Techo 40 y curva de nivel** | **Implementado** (faltan la simulación y la prueba manual) | Ver abajo |
 | **1.2 Puntos de stats** | **Implementado** (falta la prueba de balance con el script de combate) | Ver abajo |
 | **1.3 Atributos autoritativos y topes** | **Implementado** (faltan crítico con cargas, topes de absorción y la prueba manual) | Ver abajo |
-| 1.4 Daño en área y habilidades de mobs | Pendiente | |
+| **1.4 Daño en área y habilidades de mobs** | **Implementado** (falta la simulación D del área y la prueba manual) | Ver abajo |
 | **1.5 Tiers de zona** (paso nuevo) | Diseñado, pendiente | `TIERS_DE_ZONA.md`: cada mapa lleva un tier y de ahí salen los niveles de los mobs y la banda de ítems; con los 12 mapas actuales alcanza hasta el T6 |
 
 ## Paso 1.1: qué quedó
@@ -73,3 +73,24 @@ Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última a
 - **Topes de absorción (60 % mágica, 80 % física por zona):** todavía no existe un atributo de absorción (hoy se mitiga con DF/RM de rendimiento decreciente); se hace cuando entre.
 - **E, prueba manual:** equiparse un arma con velocidad y crítico y comparar lo que se ve con lo que registra el server.
 - `live-arranque.ts` se adaptó al protocolo nuevo pero no se corrió.
+
+## Paso 1.4: qué quedó
+
+**Medición previa.** Se simularon los 596 pozos y zonas de los mapas actuales: al tirar de un bicho se suman en promedio **1,4 bichos** (66 % solo, 29 % de a 2, 4 % de a 3 y 0,7 % de 4 o más). O sea que las bandas de 4 a 8 vienen casi siempre de pegar en **área**, no de la cercanía natural; por eso se limita el área y **no** se pone tope a los que te siguen.
+
+**Área (solo en el server).** Tope de objetivos por lanzamiento: Bola, Lluvia, Ventisca, Marejada, Pilar de luz y Sismo 5; Torbellino y Giro 4. Los objetivos van del más cercano al centro al más lejano y cada uno extra cobra **−12 % de daño (mínimo 50 %)**: 100, 88, 76, 64 y 52 %. Un mismo lanzamiento (ventana de 250 ms) no pasa del tope aunque el cliente repita los pedidos. Con 5 objetivos el área rinde 3,8 golpes. El Giro elige él mismo los más cercanos. El cliente manda ordenados por cercanía. **El área contra jugadores (PvP) no cambió.**
+
+**Huida.** Un mob cobarde con ≤ 7 % de vida corre 5 s en dirección contraria a quien lo atacó (velocidad ×1,2), no se contagia ni vuelve a pelear, y después vuelve a casa y se cura. La chance depende del tipo (`fleeChance`): goblins 40-70 %, hormigas 50-70 %, wyverns y hechiceros 30 %, no huyen zombis, esqueletos guerreros ni jefes. Un mob **paralizado no huye**.
+
+**Rasgos de mob** (`packages/world/src/mobTraits.ts`, se sortean al nacer y viajan en la foto de mobs, campo nuevo `traits`):
+- **Mutante** (3 % en pozos y mazmorras): ×3 de exp, ×2 de chance de drop, +50 % de vida y +25 % de daño.
+- **Habilidad** (10 %, una sola): **anti-físico** y **anti-mágico** (reciben la mitad de ese daño, ×1,5 de exp), **tóxico** (su golpe deja un sangrado de 3 ticks del 15 % del golpe, ×1,3) y **explosivo** (al morir pega 1,5× su daño medio a los jugadores a menos de 2,5 celdas, ×1,5).
+- **Salvaje** (+25 % de exp): todos los mobs sueltos fuera de los pozos.
+- Los jefes no llevan rasgos. El nombre en pantalla lleva el rasgo adelante ("Mutante Goblin lancero") y la barra de vida usa la vida real.
+
+**Pruebas:** `apps/server/test/area-y-rasgos.test.ts` (18 tests): fórmula de caída con 1, 2, 3 y 6 objetivos; de 8 mobs solo 5 reciben daño y de forma decreciente; un cliente tramposo que repite no pasa del tope; la recarga habilita otro lanzamiento; un solo objetivo no tiene castigo; huida (sí / no con vida alta, no huyen valientes ni jefes ni paralizados, se aleja y termina); anti-físico y anti-mágico reducen a la mitad de verdad sin tocar el otro tipo; tóxico y explosivo; multiplicadores de exp y de botín (incluido el cálculo real del server); proporciones del sorteo (3 % y 10 %); **G:** 60 mobs con rasgos mantienen el p95 del tick del simulador por debajo de 10 ms. Suite del server: 199 verdes y 1 salteado; `test-combat.ts` 17/17 y `test-economy.ts` 81/81 contra un server real.
+
+**Lo que falta**
+- **D, simulación:** confirmar con `sim-arranque.ts` que el mago en área saca ≤ 1,6× la exp por hora del guerrero. Con un pozo medio (1,4 bichos por tirada) y el tope no debería pasarse, pero no se midió.
+- **E, prueba manual:** 15 minutos en un pozo con cada clase para ver si se siente repetitivo, y el aspecto de los rasgos (hoy solo el nombre; una marca visual queda para el arte HD).
+- El tóxico y el explosivo no tienen animación propia todavía.

@@ -48,6 +48,11 @@ export const SKILLS: Record<string, ClassSkill> = {
     giro: { cls: 'guerrero', mp: 8, dmg: [16, 22], lvlK: 2, stat: 'wdmg', range: 0, cd: 4, melee: true, aoe: 1.9 },
     grito: { cls: 'guerrero', mp: 20, range: 0, cd: 25 },
 };
+/** Golpes de área contra mobs (paso 1.4): máximo de objetivos por lanzamiento (los más cercanos al centro) y caída de daño por cada objetivo extra. */
+export const AOE_MAX_TARGETS: Record<string, number> = { bola: 5, lluvia: 5, ventisca: 5, marejada: 5, luz: 5, sismo: 5, torbellino: 4, giro: 4 };
+export const AOE_FALLOFF = 0.12, AOE_MIN_MULT = 0.5, AOE_GROUP_MS = 250;
+/** Multiplicador de daño del objetivo número `index` (0 = el más cercano al centro): 100 %, 88 %, 76 %, 64 %, 52 %... mínimo 50 %. */
+export const aoeMult = (index: number): number => Math.max(AOE_MIN_MULT, 1 - AOE_FALLOFF * Math.max(0, index));
 /** Grito de guerra: duración (ms), radio de aliados y defensa plana que suma. */
 export const WARCRY_MS = 10000, WARCRY_RADIUS = 5, WARCRY_DEF = 15;
 export const FURY_MS = 10000, FURY_CD_MS = 18000;
@@ -162,6 +167,16 @@ export class PvpLimiter {
         if (fresh) this.bursts.set(id, { start: now, end: now + win * 1000 });
         this.lastHit.set(key, now);
         return true;
+    }
+
+    private aoeGroup = new Map<string, { start: number; n: number }>();
+    /** Lugar (0, 1, 2...) que ocupa este golpe dentro del lanzamiento de área en curso, o -1 si ya se llegó al tope de objetivos. */
+    aoeSlot(id: string, now: number): number {
+        const max = AOE_MAX_TARGETS[id]; if (!max) return 0;
+        let g = this.aoeGroup.get(id);
+        if (!g || now - g.start > AOE_GROUP_MS) { g = { start: now, n: 0 }; this.aoeGroup.set(id, g); }
+        if (g.n >= max) return -1;
+        return g.n++;
     }
 
     private lastSecs = new Map<string, number>();
