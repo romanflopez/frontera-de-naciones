@@ -1208,8 +1208,18 @@ function render() {
     ctx.setTransform(DPR * Z, 0, 0, DPR * Z, DPR * (W / 2 - cam.x * Z + cam.sx), DPR * (H / 2 - cam.y * Z + cam.sy));
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
     const c0 = toGrid(0, 0), c1 = toGrid(W, 0), c2 = toGrid(0, H), c3 = toGrid(W, H);
-    const minX = Math.max(0, Math.floor(Math.min(c0.x, c1.x, c2.x, c3.x)) - 2), maxX = Math.min(N - 1, Math.ceil(Math.max(c0.x, c1.x, c2.x, c3.x)) + 2);
-    const minY = Math.max(0, Math.floor(Math.min(c0.y, c1.y, c2.y, c3.y)) - 2), maxY = Math.min(N - 1, Math.ceil(Math.max(c0.y, c1.y, c2.y, c3.y)) + 2);
+    const rawMinX = Math.floor(Math.min(c0.x, c1.x, c2.x, c3.x)) - 2, rawMaxX = Math.ceil(Math.max(c0.x, c1.x, c2.x, c3.x)) + 2;
+    const rawMinY = Math.floor(Math.min(c0.y, c1.y, c2.y, c3.y)) - 2, rawMaxY = Math.ceil(Math.max(c0.y, c1.y, c2.y, c3.y)) + 2;
+    const minX = Math.max(0, rawMinX), maxX = Math.min(N - 1, rawMaxX), minY = Math.max(0, rawMinY), maxY = Math.min(N - 1, rawMaxY);
+    // Fuera del mapa (cámara pegada al borde) se repite el piso del borde, oscurecido, en vez de dejar el fondo negro (solo mapas de caza y mazmorras).
+    if (!MAP_DEF.safe && (rawMinX < 0 || rawMinY < 0 || rawMaxX > N - 1 || rawMaxY > N - 1)) {
+        ctx.globalAlpha = 0.45;
+        for (let y = rawMinY; y <= rawMaxY; y++) for (let x = rawMinX; x <= rawMaxX; x++) {
+            if (x >= 0 && y >= 0 && x < N && y < N) continue;
+            const p = iso(x + 0.5, y + 0.5); drawWorld(tiles[clamp(y, 0, N - 1)][clamp(x, 0, N - 1)], p.x, p.y);
+        }
+        ctx.globalAlpha = 1;
+    }
     for (let y = minY; y <= maxY; y++) for (let x = minX; x <= maxX; x++) { const p = iso(x + 0.5, y + 0.5); drawWorld(tiles[y][x], p.x, p.y); }
     for (const d of decals) { const p = iso(d.x, d.y); drawWorld(d.id, p.x, p.y); }
     for (const q of WAYPOINTS) if (q.x >= minX - 3 && q.x <= maxX + 3 && q.y >= minY - 3 && q.y <= maxY + 3) drawPortalPad(q, T);
