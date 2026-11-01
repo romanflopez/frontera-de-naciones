@@ -87,6 +87,8 @@ Cada tramo necesita algo que perseguir. Propuesta mínima: por cada banda T1-T6,
 ### 5.2 Nivel máximo: 40 (decidido el 1/11/2026)
 El techo pasa de 12 a **40**. Más mapas y más contenido, curva más amable hasta el 10 y más dura después, y el farmeo en área revisado. El análisis con números, la curva propuesta y los 7 problemas de ítems que hay que arreglar para que funcione a 40 niveles están en [`NIVEL_40_E_ITEMS.md`](NIVEL_40_E_ITEMS.md). Esto reemplaza la idea de dejar el 12 como techo.
 
+**Meta de tiempo (2/11/2026):** que un veterano llegue al 40 en **~2 días a full (~30 h)**; ~60 h en el modelo de un bicho a la vez y ~95 h para alguien casual. El nivel dura poco y el largo plazo lo carga el equipo (set por nación, +N, runas, dificultades de dungeon, arenas) más lo que pase después del 40. Detalle y tabla en `NIVEL_40_E_ITEMS.md` §2.4.
+
 ## 6. Orden recomendado
 
 1. Fase 0 en paralelo (legal y CI) porque es lo único que puede frenar la beta.
@@ -94,5 +96,63 @@ El techo pasa de 12 a **40**. Más mapas y más contenido, curva más amable has
 3. Fase 2 (ítems únicos T4-T6, +6..+11, llaves, runas).
 4. Fase 3 (arenas).
 5. Fase 4 (pulido) y beta cerrada con tu amigo y gente cercana.
+
+## 7. Ideas candidatas (a leer y decidir: beta / Fase 1 / después)
+
+Salen de las páginas de Helbreath que pasaste (mecánicas de mobs, personaje y exp, combate, economía y mapas). **Ninguna está decidida**: la columna "cuándo" es una sugerencia mía para discutir.
+
+### Progresión
+| Idea | De dónde | Para qué | Cuándo (sugerido) |
+|---|---|---|---|
+| Tabla de exp como ley de potencias (`T(L) ∝ L^2,35`, ×5,1 al duplicar el nivel) | Personaje | Curva predecible; con tope 40 | Fase 2, punto 0 |
+| **Puntos tipo Majestic al tope**: la exp que entra al nivel 40 compra puntos de costo fijo (un stat, una runa extra, cosmético) | Personaje | Objetivo claro después del 40; la exp no se pierde | Beta si alcanza, si no Fase 2 |
+| Regla de diferencia de nivel en la exp | Mobs | Frena el power-leveling en party | Fase 2 |
+| Exp de descanso (acumulada al desconectarse) | Mobs | Casual y "chill" | Post-beta |
+| Rebirth: reiniciar niveles conservando habilidades, con puntos extra | Personaje | Rejugabilidad de largo plazo | Post-beta |
+| Stat de suerte (+0,175 % al multiplicador de drops por punto) | Personaje | Otra palanca de drops | Post-beta |
+| Ángeles tutelares (pendientes que suman stats) | Personaje | Personalización | Descartado por ahora |
+
+### Mobs
+| Idea | De dónde | Para qué | Cuándo |
+|---|---|---|---|
+| Habilidades de mob que multiplican la exp (veneno ×1,3; anti-físico y anti-mágico ×1,5; explosivo ×1,5; etc.) | Mobs | Variedad en pits y freno al área sin penalizar | Fase 1-2 |
+| Huida con poca vida (≤7 %, según "valentía" del mob) | Mobs | Vida en los pits, rompe el farmeo perfecto | Fase 1 |
+| Mobs salvajes (+⅓ de exp) fuera de los pits y berserk (+75 %) | Mobs | Premia explorar, picos de exp | Fase 2 |
+| **Exp por daño** (⅓ al morir, ⅔ repartido durante la pelea según el daño) | Mobs | Evita robo de kills; progreso más suave | Fase 2 |
+| Bonus de party más alto: total ×min(1+0,2 por compañero extra, 4), en partes iguales (2 jugadores ×1,2; 4 jugadores ×1,6) | Mobs / Personaje | Incentivar grupos | **Hecho** (2/11) |
+
+### Combate
+| Idea | De dónde | Para qué | Cuándo |
+|---|---|---|---|
+| **Críticos con cargas recargables** (en vez de % pasivo) | Combate | Hoy el crítico lo calcula el cliente; con cargas lo controla el server | Fase 2, junto con topes de atributos |
+| Tirada de acierto: ratio de ataque contra ratio de defensa, mínimo 15 % (jugador) / 7 % (mob) y tope 99 % | Combate | Que la defensa y la destreza tengan peso | Evaluar |
+| Combos por arma (bonus al 2.º, 3.º y 4.º golpe seguido; se reinicia al fallar) | Combate | Identidad por tipo de arma | Post-beta |
+| **Espalda**: si atacante y defensor miran al mismo lado, defensa ×0,5 | Combate | Posicionamiento en PvP y arenas | Fase 3 |
+| Bloqueo de escudo según maestría y absorción por zona de armadura (pecho, piernas, casco), tope 80 % | Combate | Profundidad defensiva | Post-beta; el tope 80 % sí conviene ya |
+| Aplastar (crush) y aturdimiento, con la suerte que los baja | Combate | Variedad de golpes | Post-beta |
+| **Desgaste de equipo**: la armadura se gasta al recibir golpes (los críticos duplican); el agotado se desequipa | Combate | Durabilidad como sumidero de oro | Fase 2 |
+| Hambre: con mucha hambre se recupera menos vida/maná/stamina | Combate | Sumidero de comida | Post-beta, opcional |
+| Mobs con absorción propia y armas que la reducen (martillo, fuego) | Combate | Pareja natural de los mobs anti-físico/anti-mágico | Fase 2 |
+
+### Economía
+| Idea | De dónde | Para qué | Cuándo |
+|---|---|---|---|
+| **Intercambio directo entre jugadores**: hasta 8 ítems por lado, ambos confirman, cualquier cambio quita las confirmaciones y lo agregado después aparece como "Nuevo"; los ligados y los frágiles no se pueden intercambiar | Economía | Hoy solo hay subasta; es lo más seguro y lo que más se espera | Beta o Fase 2 |
+| **Ítems frágiles**: duran N días y no se pueden comerciar | Economía | Premios de eventos sin inflar el mercado | Fase 2 |
+| Tienda de eventos con fichas que dan las misiones de caza; se canjean por piedras de mejora y por ítems temporales | Economía | Objetivo diario, sumidero y entrada de materiales | Post-beta |
+| Moneda de la tienda de pago que se puede retirar como ítem y comerciar | Economía | Decisión de monetización: tiene que cuadrar con "sin pay2win" | Decisión pendiente |
+| Contribución a clanes (se dona del propio saldo al del clan) | Economía | Clanes | Post-beta |
+| Pergaminos de reputación | Economía | Reputación entre naciones | Post-beta |
+
+### Mapas y eventos
+| Idea | De dónde | Para qué | Cuándo |
+|---|---|---|---|
+| **Mapas con nivel mínimo y sin máximo** (salvo la zona de principiantes, que se abandona al llegar a cierto nivel) | Mapas | Los mapas altos siguen sirviendo y se necesitan menos | Fase 1-2, es la forma de "abrir los mapas" |
+| Zonas espejo por nación (mismo rango y mismo diseño, una para cada bando) | Mapas | Cada nación tiene su territorio | Cuando se armen los mapas nuevos |
+| Pisos de mazmorra que piden el nivel máximo (Torre del Infierno exige nivel 140 desde el piso 3) | Mapas | Contenido de endgame a nivel 40 | Fase 2-3 |
+| Eventos de nación con teletransporte que expulsa a todos al empezar y al terminar (Cruzada, Heldenian, Capturar la Reliquia desde nivel 40) | Mapas | Guerra de naciones | Post-beta |
+| Zona de revivir y zona de principiantes | Mapas | Arranque y muertes más amables | Evaluar |
+| Interiores de ciudad (depósito, herrero, municipalidad, sede del clan, tienda, iglesia) | Mapas | Ya tenemos depósito y herrero; falta el resto | Post-beta |
+| Arenas numeradas (9 en el original) y una isla de PvP con acceso por NPC | Mapas | Pareja natural de las arenas con cola | Fase 3 |
 
 Fuentes de las referencias: ficha de Dreadmyst en Steam y notas de lanzamiento (clases, dungeons por llave y dificultad, arenas 1v1/2v2, tope de nivel 25), y notas de prensa sobre Apogea (MMO isométrico estilo Tibia, sin pay2win, housing, crítica a inventario y comercio tediosos). Helbreath: tus notas del proyecto y mi conocimiento del juego.

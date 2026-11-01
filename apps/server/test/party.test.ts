@@ -80,5 +80,5 @@ test('party: chat de party solo llega a los miembros; sin party devuelve false',
 
 test('party: la exp total crece 10 % por compañero extra y se reparte en partes iguales', () => {
     assert.equal(partyExpMult(1), 1);
-    assert.ok(Math.abs(partyExpMult(2) * 2 - 1.1) < 1e-9); assert.ok(Math.abs(partyExpMult(4) * 4 - 1.3) < 1e-9);
+    assert.ok(Math.abs(partyExpMult(2) * 2 - 1.2) < 1e-9); assert.ok(Math.abs(partyExpMult(4) * 4 - 1.6) < 1e-9);
 });

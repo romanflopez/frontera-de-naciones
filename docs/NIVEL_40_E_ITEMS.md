@@ -54,6 +54,32 @@ Para que se sienta "más exp pero más difícil" sin tocar el modelo: mostrar la
 - **Riesgo de power-leveling (hoy sin protección en mapa abierto):** la exp que se reparte usa la exp del bicho sin mirar el nivel del jugador. Un nivel 40 que lleva a un nivel 5 a un pit de nivel 30 le da exp a full. Falta una regla de diferencia de nivel (p. ej. exp ×(1 − 0,1 por nivel de diferencia pasados 5, mínimo 10 %)). En mazmorras lo frenan las puertas con requisito de nivel, que ya validan a cada compañero.
 - Los **bichos de mazmorra** dan ×2 de exp pero tienen ×2,5 de vida: rinden menos exp por segundo que un pit. Es lo que se busca (la mazmorra es por botín), pero hay que saberlo.
 
+### 2.4 Meta de tiempo ajustada (2 de noviembre, a pedido): llegar a 40 en ~2 días a full
+
+Las ~190 h de arriba eran demasiado. La vara que dio Román: un veterano que ya sabe las mecánicas llegaba al máximo en unos 2 días de juego intenso. Además, a la gente le gusta más ir encontrando ítems y armando un set que subir de nivel sin parar. Entonces **el nivel dura poco y el equipo carga el largo plazo.**
+
+| Quién | Horas hasta el 40 | Cómo sale |
+|---|---|---|
+| Veterano, farmeando en área | ~30 h | ≈ 2 días a full |
+| Modelo un bicho a la vez | ~60 h | es el modelo base de este documento |
+| Jugador casual (muertes, camina, mira el mapa) | ~95 h | ≈ 1,6× el modelo |
+
+Curva con la forma de la tabla de Helbreath (`T(L) ∝ L^2,35`) y exp por bicho que casi no crece (exponente ~0,15):
+
+| Tramo | Modelo un bicho | Veterano en área |
+|---|---|---|
+| 1 → 10 | 0,9 h | 0,5 h |
+| 10 → 20 | 6,1 h | 3 h |
+| 20 → 30 | 17,4 h | 8,7 h |
+| 30 → 40 | 35,7 h | 17,8 h |
+
+Kills por nivel resultantes (de ~0,3× lo que había propuesto): 12 en el 1, 56 en el 5, 120 en el 10, 267 en el 20, 430 en el 30 y 586 en el 39. Seguimos con "fácil hasta el 10 y más duro después", pero ahora el 39 → 40 son ~2,3 h para el veterano y no 15 h.
+
+Consecuencias:
+- Las **tasas de drop de 5.3 hay que recalcularlas**: con bandas mucho más cortas, la chance de único de hoy (1,5 % en pit) alcanza y no hace falta bajarla por banda. El objetivo de largo plazo pasa al equipo: set por nación, mejoras +N, runas, dificultades de dungeon, arenas y los puntos tipo Majestic al tope.
+- El tiempo hasta el 40 ya no es el cuello de la progresión: lo es **conseguir y mejorar el equipo** (5.1 a 5.9 siguen valiendo, y ahora con más urgencia).
+- Corrección: el "73 h" que viste en mi tabla era solo el tramo 30 → 40 de la fila "como hoy"; el total de esa fila rondaba las 190 h, o sea que tu reacción era correcta.
+
 ## 3. Matar en área
 
 ### 3.1 Cuánto distorsiona
