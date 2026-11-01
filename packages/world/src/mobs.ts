@@ -69,12 +69,35 @@ export const mobHpCurve = (l: number): number => 29 + 10.5 * l + 2.75 * l * l;
 export const mobDmgCurve = (l: number): number => 2.5 * l + 3;
 /** Exp por kill de un mob común de nivel `l` (curva de referencia para reescalar tipos; los MOBS base ya la siguen: ~60·l^1,5 / 11). */
 export const mobExpCurve = (l: number): number => (60 * Math.pow(l, 1.5)) / 11;
-/** Kills de un mob común del propio nivel que hacen falta para subir del nivel `l` (grindeo estilo HB: 40 en Nv1, 400 en Nv10). */
-export const killsToLevel = (l: number): number => 40 * l;
+/** Nivel máximo del personaje (docs/NIVEL_40_E_ITEMS.md §2.4 y docs/PLAN_DE_TRABAJO.md paso 1.1). */
+export const MAX_LEVEL = 40;
+/**
+ * Kills de un mob común del propio nivel que hacen falta para subir del nivel `l`: 11 en el nivel 1, ~120 en el 10, ~430 en el 30 y ~590 en el 39.
+ * Meta: un veterano que farmea en área llega al 40 en ~30 h (≈ 2 días a full); un jugador a un mob por vez, en ~60 h. Es el único mando de la curva.
+ */
+export const killsToLevel = (l: number): number => Math.round(l * (11 + 0.1 * l));
+/**
+ * Multiplicador de la exp que da CUALQUIER mob según el nivel del jugador (idea de Helbreath Evolution, a escala 40): 100 % al nivel 1 y baja en
+ * línea recta hasta ~35 % al nivel 40. Un mob "se gasta" a medida que lo superás, y por eso conviene subir de zona. La pendiente es suave a
+ * propósito: así la exp que pide cada nivel (que ya lo incluye) sigue creciendo en todo el rango.
+ */
+export const levelExpMult = (playerLvl: number): number => Math.max(0.35, 1 - 0.0167 * (Math.max(1, playerLvl) - 1));
+/**
+ * Regla de diferencia de nivel: un mob más de 5 niveles por encima del jugador da menos exp (−10 % por nivel de más, mínimo 10 %: frena
+ * que te lleven a una zona alta); uno más de 20 niveles por debajo no da nada.
+ */
+export const levelGapMult = (playerLvl: number, mobLvl: number): number => {
+    const gap = mobLvl - playerLvl;
+    if (gap > 5) return Math.max(0.1, 1 - 0.1 * (gap - 5));
+    if (-gap > 20) return 0;
+    return 1;
+};
 /** Exp real de un mob común de nivel `l`: la del tipo base de ese nivel si existe (los de nivel bajo dan algo más que la curva), si no la curva. */
 const refExp = (l: number): number => Math.max(mobExpCurve(l), ...Object.values(MOBS).filter((m) => !m.boss && m.lvl === l && m.exp < 3 * mobExpCurve(l)).map((m) => m.exp));
-/** Exp que pide subir del nivel `l` al siguiente (cliente y server usan esta misma función). */
-export const expToLevel = (l: number): number => Math.round(refExp(l) * killsToLevel(l));
+/** Exp que pide subir del nivel `l` al siguiente (cliente y server usan esta misma función). Ya incluye el multiplicador de exp del nivel. */
+export const expToLevel = (l: number): number => Math.round(refExp(l) * killsToLevel(l) * levelExpMult(l));
+/** Curva anterior (40·L kills sin multiplicador): solo para migrar la exp guardada de las cuentas viejas. */
+export const legacyExpToLevel = (l: number): number => Math.round(refExp(l) * 40 * l);
 
 const scaled = new Map<string, MobDef>();
 /**

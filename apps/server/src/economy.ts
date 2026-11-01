@@ -10,7 +10,7 @@
  */
 import {
     ATTR_RANGES, BAG_MAX, BASE_BY_NAME, BASES, KEY_IDS, KEYDEFS, POT_MAX, POTS, QUESTS, roleOf, SHARDS_PER_KEY, SHOP_SERVER_RANGE,
-    MAPS, SHOPS, SLOTS, SRV_ATTR, TRAINING, buildMap, expToLevel, mobDef, sellPrice, trainingUnlocked,
+    MAPS, SHOPS, SLOTS, SRV_ATTR, TRAINING, buildMap, expToLevel, legacyExpToLevel, levelExpMult, levelGapMult, MAX_LEVEL, mobDef, sellPrice, trainingUnlocked,
     BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BASES, UP_MAX, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
 } from '@fdn/world';
@@ -20,8 +20,9 @@ import * as M from './messages.ts';
 import type { Player } from './player.ts';
 import type { AccountRecord, Storage } from './storage.ts';
 
-export const ECON_VERSION = 2;
-export const MAX_LVL = 60;
+/** v3: nivel máximo 40 y curva de exp nueva (migra la exp guardada conservando la fracción del nivel). */
+export const ECON_VERSION = 3;
+export const MAX_LVL = MAX_LEVEL;
 /** Sin límite de oro de juego: el único techo es el técnico (entero exacto en JS / double del protocolo). */
 export const MAX_GOLD = Number.MAX_SAFE_INTEGER;
 /** Topes de la importación única desde lo que el cliente tenía guardado (cuentas anteriores a la economía del server). El oro NO tiene tope: se importa tal cual (saneado). */
@@ -185,6 +186,21 @@ export function importLegacy(json: string, trusted = false): Econ | null {
     return st;
 }
 
+/**
+ * Migra un estado guardado a la versión actual. Devuelve true si cambió algo.
+ * v2 -> v3: tope de nivel 40 y curva de exp nueva: se conserva la fracción de progreso del nivel (no se regalan ni se quitan niveles),
+ * y un nivel por encima del tope se recorta a 40 con la exp en cero.
+ */
+export function migrateEcon(st: Econ): boolean {
+    if (st.v >= 3) return false;
+    const frac = st.lvl > MAX_LVL ? 0 : Math.min(0.999, Math.max(0, st.exp / Math.max(1, legacyExpToLevel(st.lvl))));
+    st.lvl = clampInt(st.lvl, 1, MAX_LVL, 1);
+    st.exp = Math.min(expToLevel(st.lvl) - 1, Math.floor(frac * expToLevel(st.lvl)));
+    st.v = ECON_VERSION;
+    refreshUnlocks(st);
+    return true;
+}
+
 /** Abre los portales de entrenamiento que la misión entregada o el nivel justifican (los abiertos no se cierran). */
 function refreshUnlocks(st: Econ): void {
     for (const t of TRAINING) if (!st.u.includes(t.id) && trainingUnlocked(t.step, st.q.i, st.lvl)) st.u.push(t.id);
@@ -243,6 +259,7 @@ export class Economy {
                 console.log(`[Economía] ${acc.name}: importación única del guardado del cliente -> nivel ${st.lvl}, oro ${st.gold}, ${st.imported?.items} items${st.imported?.clipped.length ? `; recortado: ${st.imported.clipped.join('; ')}` : ''}.`);
             }
         }
+        if (acc.econ && migrateEcon(acc.econ)) this.storage.put(key, acc);
         return acc.econ;
     }
 
@@ -483,7 +500,9 @@ export class Economy {
     reward(p: Player, ctx: EconCtx, k: KillInfo, expMult = 1): void {
         const st = p.econ; if (!st) return;
         const def = k.def, boss = def.boss;
-        const gain = Math.max(1, Math.round(def.exp * (1 + bonus(st, 'exp') / 100) * expMult));
+        // la exp baja con tu nivel (levelExpMult) y con la diferencia de nivel contra el mob (levelGapMult: 0 si es muy inferior)
+        const lm = levelExpMult(st.lvl) * levelGapMult(st.lvl, def.lvl);
+        const gain = lm > 0 ? Math.max(1, Math.round(def.exp * (1 + bonus(st, 'exp') / 100) * expMult * lm)) : 0;
         st.exp += gain;
         let gold = 0, item: SItem | undefined, bagFull = false, potion = '', shard = '';
         const bossU = boss ? BOSS_UNIQUES[k.type] : undefined, tier = tierOfLevel(def.lvl);
