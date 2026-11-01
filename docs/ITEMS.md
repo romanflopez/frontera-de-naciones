@@ -132,3 +132,9 @@ Probabilidades iniciales (a ajustar):
 4. ¿Los ítems legacy de los jugadores se conservan tal cual o se convierten?
 5. ¿Se permite destruir el ítem al fallar mejoras altas (+10, +11) para que tenga más riesgo, o nunca?
 6. Nombres de las piedras: las mejoras de Helbreath usaban piedras con nombre propio (Merien, Xelima); decidir si se les pone nombres de ese estilo o nombres propios de ERIS.
+
+## 12. Principios de diseño (del feedback de jugadores de Dreadmyst y de la experiencia en Helbreath)
+
+- Loop buscado: limpiar mobs, mejorar el equipo, hacer mazmorras, en un ritmo tranquilo ("chill").
+- **Siempre un próximo objetivo claro**: el ítem de tal jefe, el siguiente +N, el siguiente mapa. Farmear sin objetivo aburre (pasaba en Helbreath). Hay que mostrarlo en el juego.
+- Mapa del mundo (tecla M) y wiki generada desde los datos: después de la beta.

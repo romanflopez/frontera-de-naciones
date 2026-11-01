@@ -88,3 +88,9 @@ test('uniqueItem: atributos fijos con variación ±10 %, rareza 2 (común de ban
         for (const [id, v] of u.uniq.attrs) { const got = it.a.find((x) => x.id === id)!.v; assert.ok(got >= Math.floor(v * 0.9) && got <= Math.ceil(v * 1.1) + 0, `${u.name} ${id} ${got} vs ${v}`); }
     }
 });
+
+test('ítems únicos: usan solo aspectos (look/off) que ya existen en las bases normales y de tienda', () => {
+    const uniq = new Set(UNIQUE_BASES.map((u) => u.name)), looks = new Set<string>(), offs = new Set<string>();
+    for (const b of ALL_BASES) if (!uniq.has(b.name)) { if (b.look) looks.add(b.look); if (b.off) offs.add(b.off); }
+    for (const u of UNIQUE_BASES) { assert.ok(u.look && looks.has(u.look), `${u.name}: look '${u.look}' sin usar en otra base`); if (u.off) assert.ok(offs.has(u.off), `${u.name}: off '${u.off}'`); }
+});
