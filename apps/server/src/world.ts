@@ -16,7 +16,7 @@ import { adjacentCellsAt45, distance, findNearestFreeLocation, nextGridDirection
 import type { Occupancy } from './map.ts';
 import * as M from './messages.ts';
 import { MobSim } from './mobs.ts';
-import { MOB_TYPES, type MobType, type WorldMap } from '@fdn/world';
+import { MOB_TYPES, meleeIntervalSecs, type MobType, type WorldMap } from '@fdn/world';
 import { Player, type PersistedPlayer, type Send } from './player.ts';
 import type { Economy, EconCtx } from './economy.ts';
 import { auctionHouse } from './auction.ts';
@@ -74,6 +74,8 @@ export class GameWorld {
                 after: (ms, fn) => this.setTimeout(ms, fn),
                 hurt: (p, raw, source) => this.damagePlayer(p, raw, 'phys', null, source), // los ataques de mobs son físicos (los mitiga la DF)
                 stun: (p, secs) => { const s = paralysisSecs(secs, p.combat); return applyParalysis(p.status, Date.now(), s * 1000) ? s : 0; },
+                pay: (p, c) => this.payMp(p, c),
+                heal: (p, n) => { if (p.isDead) return; p.hp = Math.min(p.combat.maxHp, p.hp + n); this.sendVitals(p, false); this.announceVitals(p); },
                 reward: (p, info) => {
                     if (!this.econ) return;
                     // party: cada compañero cerca (mismo mundo, vivo) recibe su propio botín y una parte de la exp (docs/PARTY_Y_ARENAS.md §1)
@@ -947,6 +949,7 @@ export class GameWorld {
     private restat(p: Player, login = false): void {
         const prevLvl = p.combat.lvl, st = p.econ;
         p.combat = statsFromChar(st);
+        p.pvp.meleeGapMs = meleeIntervalSecs(p.combat.aspd) * 1000; // la velocidad de ataque la fija el equipo que guarda el server
         p.prog = progressFromEcon(st);
         if (login) { p.hp = p.combat.savedHp; p.mp = p.combat.savedMp; }
         else if (p.combat.lvl > prevLvl) { p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; }

@@ -3,7 +3,7 @@
  * con las mismas fórmulas del juego, el nivel y el equipo del último guardado validado, la Furia que lleva el server,
  * y límites de recarga, alcance y ritmo por hechizo.
  */
-import { BASE_BY_NAME, MAX_LEVEL, statBonus, upMult, type Stats } from '@fdn/world';
+import { BASE_BY_NAME, MAX_LEVEL, aspdTotal, critTotal, leechTotal, meleeIntervalSecs, statBonus, upMult, type Stats } from '@fdn/world';
 export type Stat = 'mag' | 'wdmg' | 'melee';
 export interface PvpSpell {
     dmg?: [number, number]; lvlK?: number; stat?: Stat;
@@ -33,6 +33,7 @@ export const PVP_SPELLS: Record<string, PvpSpell> = {
     ventisca: { mp: 50, kind: 'blizz', dmg: [9, 14], lvlK: 2, stat: 'mag', range: 9, cd: 9.5, ticks: 6, every: 0.4, aoe: 2.7, secs: 1.5 },
     marejada: { mp: 40, kind: 'tidal', dmg: [12, 17], lvlK: 2, stat: 'mag', range: 9, cd: 7.5, ticks: 3, every: 0.6, aoe: 2.2, secs: 1.2 },
     sismo: { mp: 25, dmg: [12, 18], lvlK: 2, stat: 'wdmg', range: 2.5, cd: 5.5, aoe: 2.4 },
+    torbellino: { mp: 22, dmg: [12, 18], lvlK: 2, stat: 'wdmg', range: 2.4, cd: 5, melee: true, aoe: 2.2 },
     luz: { mp: 35, dmg: [14, 20], lvlK: 2, stat: 'mag', range: 9, cd: 6.5, ticks: 2, every: 0.7, aoe: 1.9 },
 };
 /**
@@ -56,9 +57,9 @@ export const UTIL_MP = { furia: 15, invisibilidad: 40, detectar: 30, remover: 20
 const CLASS_MP: Record<string, [number, number]> = { guerrero: [40, 4], mago: [90, 12] };
 export const potionMp = (maxMp: number) => Math.max(40, Math.round(maxMp * 0.5));
 
-export interface CombatStats { lvl: number; cls: string; /** multiplicadores de daño por Fuerza (físico) y Magia (hechizos) */ meleeMult: number; magicMult: number; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; savedHp: number; maxMp: number; savedMp: number }
+export interface CombatStats { lvl: number; cls: string; /** multiplicadores de daño por Fuerza (físico) y Magia (hechizos) */ meleeMult: number; magicMult: number; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; /** crítico total %, velocidad de ataque %, robo de vida % y chance de veneno % (ya con topes) */ crit: number; aspd: number; leech: number; poison: number; savedHp: number; maxMp: number; savedMp: number }
 const CLASS_HP: Record<string, [number, number]> = { guerrero: [140, 18], mago: [90, 10] };
-export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, rm: 0, rpar: 0, savedHp: 140, maxMp: 40, savedMp: 40 };
+export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 140, maxMp: 40, savedMp: 40 };
 
 /** Las bases de items son las compartidas de @fdn/world (el cliente usa las mismas). */
 const MELEE: Record<string, [number, number]> = { guerrero: [5, 9], mago: [2, 4] };
@@ -70,14 +71,15 @@ export interface StatSource { lvl: number; cls: string; stats?: Stats; hp?: numb
 export function statsFromChar(o: StatSource | undefined): CombatStats {
     if (!o) return { ...DEFAULT_STATS };
     const cls = o.cls === 'mago' ? 'mago' : 'guerrero', lvl = Math.max(1, Math.min(MAX_LEVEL, Number(o.lvl) || 1));
-    const s: CombatStats = { lvl, cls, meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 0, def: 0, rm: 0, rpar: 0, savedHp: 1, maxMp: 0, savedMp: 0 };
-    let bonusHp = 0, bonusMp = 0;
+    const s: CombatStats = { lvl, cls, meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 0, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 1, maxMp: 0, savedMp: 0 };
+    let bonusHp = 0, bonusMp = 0, itemCrit = 0, itemAspd = 0, itemLeech = 0;
     for (const [slot, it] of Object.entries(o.eq ?? {})) {
         if (!it) continue;
         const b = BASE_BY_NAME.get(it.n);
         if (b && b.slot === slot) { const k = upMult(it.up); if (b.dmg) s.wdmg = k === 1 ? b.dmg : [Math.round(b.dmg[0] * k), Math.round(b.dmg[1] * k)]; if (b.mag) s.mag += Math.round(b.mag * k); if (b.def) s.def += Math.round(b.def * k); if (b.rm) s.rm += Math.round(b.rm * k); }
-        for (const a of it.a ?? []) { if (a.id === 'mag') s.mag += a.v; else if (a.id === 'hp') bonusHp += a.v; else if (a.id === 'mp') bonusMp += a.v; else if (a.id === 'df') s.def += a.v; else if (a.id === 'rm' || a.id === 'fres' || a.id === 'ires') s.rm += a.v; /* fres/ires: atributos viejos, ahora valen RM 1:1 */ else if (a.id === 'rpar') s.rpar += a.v; }
+        for (const a of it.a ?? []) { if (a.id === 'mag') s.mag += a.v; else if (a.id === 'hp') bonusHp += a.v; else if (a.id === 'mp') bonusMp += a.v; else if (a.id === 'df') s.def += a.v; else if (a.id === 'rm' || a.id === 'fres' || a.id === 'ires') s.rm += a.v; /* fres/ires: atributos viejos, ahora valen RM 1:1 */ else if (a.id === 'rpar') s.rpar += a.v; else if (a.id === 'crit') itemCrit += a.v; else if (a.id === 'aspd') itemAspd += a.v; else if (a.id === 'leech') itemLeech += a.v; else if (a.id === 'poison') s.poison += a.v; }
     }
+    s.crit = critTotal(itemCrit); s.aspd = aspdTotal(itemAspd); s.leech = leechTotal(itemLeech); s.poison = Math.min(100, s.poison); // topes del paso 1.3
     const sb = statBonus(o.stats); // puntos de Fuerza, Vitalidad, Destreza y Magia
     bonusHp += sb.hp; bonusMp += sb.mp; s.def += sb.def; s.meleeMult = sb.meleeMult; s.magicMult = sb.magicMult;
     const [hp0, hpL] = CLASS_HP[cls];
@@ -141,10 +143,14 @@ export class PvpLimiter {
     private lastHit = new Map<string, number>();
     private castAt = new Map<string, number>();
     furyUntil = 0; furyCdUntil = 0;
+    /** Ms mínimos entre dos golpes cuerpo a cuerpo (depende de la velocidad de ataque del equipo; lo fija el server al calcular los stats). */
+    meleeGapMs = meleeIntervalSecs(0) * 1000;
+    private lastMelee = -1e12;
 
     /** ¿Puede pegar ahora con `id` sobre `targetId`? Registra el golpe si sí. */
     allow(id: string, targetId: bigint, now: number, pay?: (cost: number) => boolean): boolean {
         const sp = PVP_SPELLS[id]; if (!sp) return false;
+        if (id === 'ataque') { if (now - this.lastMelee < this.meleeGapMs * 0.9) return false; this.lastMelee = now; return true; } // 10 % de tolerancia por la red
         const win = sp.ticks ? sp.ticks * (sp.every ?? 0.5) + 0.7 : 0.6, b = this.bursts.get(id);
         const fresh = !b || now > b.end;
         if (fresh && b && now - b.start < sp.cd * 900) return false; // todavía en recarga

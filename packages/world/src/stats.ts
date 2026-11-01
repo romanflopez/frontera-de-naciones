@@ -41,3 +41,15 @@ export function cleanStats(raw: unknown): Stats {
     for (const id of STAT_IDS) { const v = o[id]; if (typeof v === 'number' && Number.isFinite(v)) out[id] = Math.min(STAT_CAP, Math.max(STAT_BASE, Math.floor(v))); }
     return out;
 }
+
+// ---------- atributos de combate de los ítems: topes y fórmulas (las usa el server; el cliente solo las muestra) ----------
+/** Topes del paso 1.3. El crítico es el TOTAL (5 % base + equipo); velocidad y robo de vida son la suma del equipo. */
+export const COMBAT_CAP = { crit: 35, aspd: 40, leech: 15 } as const;
+export const CRIT_BASE = 5, CRIT_MULT = 1.8, MELEE_BASE_SECS = 0.85, POISON_SECS = 4;
+const capTo = (v: number, cap: number): number => Math.max(0, Math.min(cap, Number.isFinite(v) ? v : 0));
+/** Probabilidad total de crítico (%) a partir de lo que suma el equipo. */
+export const critTotal = (itemCrit: number): number => capTo(CRIT_BASE + itemCrit, COMBAT_CAP.crit);
+export const aspdTotal = (itemAspd: number): number => capTo(itemAspd, COMBAT_CAP.aspd);
+export const leechTotal = (itemLeech: number): number => capTo(itemLeech, COMBAT_CAP.leech);
+/** Segundos mínimos entre dos golpes cuerpo a cuerpo con esa velocidad de ataque (ya topeada). */
+export const meleeIntervalSecs = (aspd: number): number => MELEE_BASE_SECS / (1 + aspdTotal(aspd) / 100);

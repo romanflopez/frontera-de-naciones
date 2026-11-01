@@ -1239,6 +1239,8 @@ message MobHitRequest {
   bool crit = 4;
   double par_secs = 5;
   double poison_secs = 6;
+  /** Hechizo o ataque ('ataque', 'golpe', 'bola'...). Desde el paso 1.3 el server calcula el daño, el crítico, el veneno y el robo de vida: `dmg`, `crit` y `poison_secs` se ignoran. */
+  string spell = 7;
 }
 /** Estado del jugador que el server necesita para los mobs (si murió, nivel para el tope de daño). */
 message PveStatusRequest {

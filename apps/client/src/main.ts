@@ -6,7 +6,7 @@
  * mobs, combate, hechizos, loot y experiencia (pasan al server en la fase 1b).
  */
 import { drawPortalFloor, drawPortalFx, PORTAL_CITY, PORTAL_ZONE } from './portal';
-import { DEFAULT_MAP, RECALL, STAT_CAP, STAT_DESC, STAT_IDS, STAT_NAMES, defaultStats, expToLevel, statBonus, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
+import { DEFAULT_MAP, RECALL, STAT_CAP, STAT_DESC, STAT_IDS, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
 import { UNIQUE_BY_NAME, UP_MAX, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Quest, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
@@ -365,15 +365,10 @@ function onServer(m: ServerPayload) {
 
 // ---------- combate ----------
 /** Pide el golpe al server: él valida alcance y tope de daño, lo aplica y avisa a todos (`mobDamaged`). */
-function damageMob(m: Mob, dmg: number, crit: boolean, src: 'melee' | 'spell', parSecs = 0) {
+function damageMob(m: Mob, spell: string, parSecs = 0) {
     if (!mobs.includes(m) || P.dead) return;
-    { const sb = statBonus(stats); dmg = Math.round(dmg * (src === 'melee' ? sb.meleeMult : sb.magicMult)); } // Fuerza / Magia
-    if (P.fury > now()) dmg = Math.round(dmg * (src === 'melee' ? 1.3 : CLS.id === 'mago' ? 1.2 : 1));
-    const t = totals();
-    if (src === 'melee' && t.leech) P.hp = Math.min(maxHp(), P.hp + Math.max(1, Math.round((dmg * t.leech) / 100))); syncHp();
-    let poisonSecs = 0;
-    if (src === 'melee' && t.poison && R() * 100 < t.poison) { poisonSecs = 4; log(`${m.name} quedó envenenado.`); }
-    net.send({ $case: 'mobHitRequest', value: { mobId: m.id, dmg, melee: src === 'melee', crit, parSecs, poisonSecs } });
+    // Desde el paso 1.3 el server calcula todo (daño, crítico, veneno, robo de vida, recarga y maná): acá solo se pide el golpe.
+    net.send({ $case: 'mobHitRequest', value: { mobId: m.id, dmg: 0, melee: spell === 'ataque', crit: false, parSecs, poisonSecs: 0, spell } });
 }
 /** Lo que se ve cuando el server confirma un golpe (propio o de otro jugador). */
 function onMobDamaged(v: { mobId: number; attackerId: bigint; dmg: number; crit: boolean; hp: number }) {
@@ -456,9 +451,7 @@ function onMobHitPlayer(v: { mobId: number; dmg: number; stun: number }) {
     }
 }
 function meleeHit(m: Mob) {
-    const t = totals(); let d = rint(CLS.melee[0], CLS.melee[1]) + P.lvl + rint(t.wdmg[0], t.wdmg[1]);
-    const crit = R() * 100 < 5 + t.crit; if (crit) d = Math.round(d * 1.8);
-    damageMob(m, d, crit, 'melee');
+        damageMob(m, 'ataque');
 }
 function explode(p: Proj) {
     fx.push({ k: 'boom', x: p.tx!, y: p.ty!, t: 0, r: p.aoe }); efx('eruption', p.tx!, p.ty!);
@@ -466,7 +459,7 @@ function explode(p: Proj) {
     if (!reduce) shake = 0.3; hitstop = Math.max(hitstop, 0.06);
     let n = 0;
     for (const o of enemiesNear(p.tx!, p.ty!, p.aoe!)) pvpDamage(o, 'bola', '');
-    for (const m of mobs.slice()) { if (Math.hypot(m.x - p.tx!, m.y - p.ty!) <= p.aoe!) { n++; damageMob(m, Math.round(p.dmg * (0.85 + R() * 0.3)), false, 'spell'); } }
+    for (const m of mobs.slice()) { if (Math.hypot(m.x - p.tx!, m.y - p.ty!) <= p.aoe!) { n++; damageMob(m, 'bola'); } }
     if (n > 1) log(`Bola de fuego: ${n} enemigos alcanzados.`, true);
 }
 /** Mitigación con rendimiento decreciente: daño × 100/(100+X), X = DF (físico) o RM (mágico). Igual que el server. */
@@ -534,9 +527,9 @@ const LIB: Record<string, SpellDef> = {
     proyectil: { name: 'Proyectil arcano', mp: 8, cd: 0.4, col: '#b9a3ff', range: 8, target: true,
         cast(m) { if (!isMob(m)) return false; const t = totals(), dmg = rint(12, 18) + P.lvl * 2 + t.mag; projs.push({ x: P.x, y: P.y, m, spd: 11, dmg, col: '#b9a3ff' }); } },
     paralisis: { name: 'Parálisis', mp: 20, cd: 4, col: '#7fd6ff', range: 6, target: true, ctrl: true,
-        cast(m) { return control(m, 3, 'Paralizaste', 'La parálisis'); } },
+        cast(m) { return control(m, 'paralisis', 3, 'Paralizaste', 'La parálisis'); } },
     aturdir: { name: 'Aturdir', mp: 18, cd: 5, col: '#ffd24a', range: 1.9, target: true, ctrl: true,
-        cast(m) { return control(m, 2.5, 'Aturdiste', 'El aturdimiento', 'turbulence'); } },
+        cast(m) { return control(m, 'aturdir', 2.5, 'Aturdiste', 'El aturdimiento', 'turbulence'); } },
     curar: { name: 'Curar', mp: 15, cd: 2, col: '#7ee08a', range: 0, target: false,
         cast() { heal(35 + P.lvl * 3); } },
     vendar: { name: 'Vendar', mp: 14, cd: 3, col: '#7ee08a', range: 0, target: false,
@@ -544,15 +537,15 @@ const LIB: Record<string, SpellDef> = {
     bola: { name: 'Bola de fuego', mp: 25, cd: 4, col: '#ff8a3d', range: 7, target: true, aoe: 1.9,
         cast(m) { if (!m) return false; const t = totals(), dmg = rint(18, 26) + P.lvl * 2 + t.mag; projs.push({ x: P.x, y: P.y, tx: m.x, ty: m.y, m: isMob(m) ? m : null, spd: 8, dmg, col: '#ff8a3d', aoe: 1.9, sx: P.x, sy: P.y }); } },
     golpe: { name: 'Golpe brutal', mp: 10, cd: 1, col: '#ffb347', range: 1.9, target: true,
-        cast(m) { if (!isMob(m)) return false; efx('crosswind', m.x, m.y, 8); damageMob(m, rint(14, 20) + P.lvl * 2 + rint(totals().wdmg[0], totals().wdmg[1]), true, 'melee'); } },
+        cast(m) { if (!isMob(m)) return false; efx('crosswind', m.x, m.y, 8); damageMob(m, 'golpe'); } },
     tajo: { name: 'Tajo salvaje', mp: 12, cd: 1, col: '#ff6b55', range: 1.9, target: true,
-        cast(m) { if (!isMob(m)) return false; efx('crosswind', m.x, m.y, 8); damageMob(m, rint(22, 30) + P.lvl * 3 + rint(totals().wdmg[0], totals().wdmg[1]), true, 'melee'); } },
+        cast(m) { if (!isMob(m)) return false; efx('crosswind', m.x, m.y, 8); damageMob(m, 'tajo'); } },
     torbellino: { name: 'Torbellino', mp: 22, cd: 5, col: '#e0e0e0', range: 0, target: false,
-        cast() { fx.push({ k: 'boom', x: P.x, y: P.y, t: 0, r: 2.2 }); efx('cyclone', P.x, P.y); let n = 0; for (const m of mobs.slice()) if (dist(P, m) <= 2.2 && !isSafe(m.x, m.y)) { n++; damageMob(m, rint(12, 18) + P.lvl * 2 + rint(totals().wdmg[0], totals().wdmg[1]), false, 'melee'); } if (!n) log('El torbellino no alcanzó a nadie.'); } },
+        cast() { fx.push({ k: 'boom', x: P.x, y: P.y, t: 0, r: 2.2 }); efx('cyclone', P.x, P.y); let n = 0; for (const m of mobs.slice()) if (dist(P, m) <= 2.2 && !isSafe(m.x, m.y)) { n++; damageMob(m, 'torbellino'); } if (!n) log('El torbellino no alcanzó a nadie.'); } },
     hoja: { name: 'Hoja de viento', mp: 14, cd: 1.5, col: '#8dffa0', range: 7, target: true,
-        cast(m) { if (!isMob(m)) return false; efx('windblade', m.x, m.y, 10); damageMob(m, rint(13, 19) + P.lvl * 2 + totals().mag, false, 'spell'); } },
+        cast(m) { if (!isMob(m)) return false; efx('windblade', m.x, m.y, 10); damageMob(m, 'hoja'); } },
     lanza: { name: 'Lanza de piedra', mp: 30, cd: 5, col: '#d9a45a', range: 7, target: true,
-        cast(m) { if (!isMob(m)) return false; efx('rocklance', m.x, m.y, 4); if (!reduce) shake = Math.max(shake, 0.2); damageMob(m, rint(30, 42) + P.lvl * 3 + totals().mag, true, 'spell'); } },
+        cast(m) { if (!isMob(m)) return false; efx('rocklance', m.x, m.y, 4); if (!reduce) shake = Math.max(shake, 0.2); damageMob(m, 'lanza'); } },
     lluvia: { name: 'Lluvia de fuego', mp: 45, cd: 9, col: '#ff7a2f', range: 7, target: true, aoe: 2.4,
         cast(m) { if (!m) return false; zone(m.x, m.y, 2.4, 4, 0.5, () => rint(11, 16) + P.lvl * 2 + totals().mag, 'cataclysm', 0, 'lluvia'); } },
     ventisca: { name: 'Ventisca', mp: 50, cd: 10, col: '#9fdcff', range: 7, target: true, aoe: 2.7,
@@ -592,14 +585,14 @@ function zone(x: number, y: number, r: number, ticks: number, every: number, dmg
         if (effect === 'blizz') { if (i === 0) { fx.push({ k: 'blizz', x, y, t: 0, r, d: ticks * every + 0.5 }); pvpSend('blizz', x, y, 0n, '', 0, r); } } else if (i === 0 || effect === 'cataclysm') efx(effect, x, y);
         if (!reduce && i === 0) shake = Math.max(shake, 0.15);
         for (const o of enemiesNear(x, y, r)) { if (sid) { pvpSend('', x, y, o.id, sid, slow && i === ticks - 1 ? slow : 0, r); } }
-        for (const m of mobs.slice()) if (Math.hypot(m.x - x, m.y - y) <= r && !isSafe(m.x, m.y)) damageMob(m, dmg(), false, 'spell', slow && m.imm <= now() && i === ticks - 1 ? slow : 0);
+        for (const m of mobs.slice()) if (Math.hypot(m.x - x, m.y - y) <= r && !isSafe(m.x, m.y)) damageMob(m, sid, slow && m.imm <= now() && i === ticks - 1 ? slow : 0);
     });
 }
 function heal(h: number, eff = 'sphere') { P.hp = Math.min(maxHp(), P.hp + h); syncHp(); float(P.x, P.y - 0.2, '+' + h, '#7ee08a'); efx(eff, P.x, P.y); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#7ee08a' }); }
-function control(m: Target | null, secs: number, verb: string, noun: string, eff = 'stop'): false | void {
+function control(m: Target | null, spell: string, secs: number, verb: string, noun: string, eff = 'stop'): false | void {
     if (!isMob(m)) return false;
     if (m.imm > now()) { log(`${m.name} es inmune al control por unos segundos.`); return false; }
-    efx(eff, m.x, m.y); net.send({ $case: 'mobHitRequest', value: { mobId: m.id, dmg: 0, melee: false, crit: false, parSecs: secs, poisonSecs: 0 } });
+    efx(eff, m.x, m.y); net.send({ $case: 'mobHitRequest', value: { mobId: m.id, dmg: 0, melee: false, crit: false, parSecs: secs, poisonSecs: 0, spell } });
     fx.push({ k: 'ring', x: m.x, y: m.y, t: 0, c: '#7fd6ff' }); log(`${verb} a ${m.name} por ${secs} s. ${noun} se rompe si lo golpean fuerte.`, true);
 }
 const cds = [0, 0, 0, 0, 0, 0];
@@ -749,10 +742,12 @@ function release(target: Mob | { x: number; y: number; pvp?: Other }) {
     fire(r.i, m || (pv ? { x: target.x, y: target.y, pvp: pv } : { x: target.x, y: target.y, ground: true }));
     return true;
 }
+/** Hechizos de daño o control que el server cobra al pegar (a mobs o a jugadores): el cliente no reporta su maná gastado. */
+const SERVER_MP_SPELLS = new Set(['proyectil', 'paralisis', 'aturdir', 'hoja', 'lanza', 'golpe', 'tajo', 'bola', 'lluvia', 'ventisca', 'marejada', 'sismo', 'luz', 'torbellino']);
 function fire(i: number, m: Target | null) {
     const s = SPELLS[i];
     if (m && 'pvp' in m && !s.aoe) { if (!pvpCast(s.id, (m as { pvp: Other }).pvp)) return; } else if (s.cast(m) === false) return;
-    const srvMp = ['furia', 'invisibilidad', 'detectar', 'remover', 'blink', 'carga', 'giro', 'grito'].includes(s.id ?? '') || (m && 'pvp' in m && !s.aoe)
+    const srvMp = SERVER_MP_SPELLS.has(s.id ?? '') || ['furia', 'invisibilidad', 'detectar', 'remover', 'blink', 'carga', 'giro', 'grito'].includes(s.id ?? '') || (m && 'pvp' in m && !s.aoe)
         || (!!s.aoe && enemiesNear(m ? m.x : P.x, m ? m.y : P.y, s.aoe + 0.5).length > 0); // si pega a un jugador, el server cobra
     spendMp(s.mp, srvMp); syncHp(); cds[i] = now() + s.cd;
     P.one = { anim: 'cast', t: now() - 0.3, until: now() + 0.12 };
@@ -1070,7 +1065,7 @@ function update(dt: number) {
             if (d > 1.6) { P.repath -= dt; if (P.repath <= 0 || !P.path.length) { moveTo(m.x, m.y); P.repath = 0.35; } }
             else if (!P.step) {
                 P.path = []; turnTo(P, m.x - P.x, m.y - P.y, dt);
-                if (T >= P.nextAtk && T >= P.frozenUntil) { const iv = 0.85 / (1 + tot.aspd / 100); P.nextAtk = T + iv; sendFacing(); oneShot(P, 'swing', Math.min(0.4, iv)); later(0.18, () => { if (mobs.includes(m) && dist(P, m) < 1.9 && !P.dead) meleeHit(m); }); }
+                if (T >= P.nextAtk && T >= P.frozenUntil) { const iv = meleeIntervalSecs(tot.aspd); P.nextAtk = T + iv; sendFacing(); oneShot(P, 'swing', Math.min(0.4, iv)); later(0.18, () => { if (mobs.includes(m) && dist(P, m) < 1.9 && !P.dead) meleeHit(m); }); }
             }
         }
         if (P.foe && !isEnemy(P.foe)) P.foe = null;
@@ -1079,7 +1074,7 @@ function update(dt: number) {
             if (d > 1.6) { P.repath -= dt; if (P.repath <= 0 || !P.path.length) { moveTo(f.x, f.y); P.repath = 0.35; } }
             else if (!P.step) {
                 P.path = []; turnTo(P, f.x - P.x, f.y - P.y, dt);
-                if (T >= P.nextAtk && T >= P.frozenUntil) { const iv = 0.85 / (1 + tot.aspd / 100); P.nextAtk = T + iv; sendFacing(); oneShot(P, 'swing', Math.min(0.4, iv)); later(0.18, () => { if (isEnemy(f) && dist(P, f) < 1.9 && !P.dead) { pvpDamage(f, 'ataque', ''); } }); }
+                if (T >= P.nextAtk && T >= P.frozenUntil) { const iv = meleeIntervalSecs(tot.aspd); P.nextAtk = T + iv; sendFacing(); oneShot(P, 'swing', Math.min(0.4, iv)); later(0.18, () => { if (isEnemy(f) && dist(P, f) < 1.9 && !P.dead) { pvpDamage(f, 'ataque', ''); } }); }
             }
         }
         // caminar: un paso por vez; el server valida cada uno
@@ -1139,7 +1134,7 @@ function update(dt: number) {
         }
         const pm = p.m!;
         if (pm.hp <= 0 || !mobs.includes(pm)) { projs.splice(projs.indexOf(p), 1); continue; }
-        const d = dist(p, pm); if (d < 0.3) { fx.push({ k: 'ring', x: pm.x, y: pm.y, t: 0, c: '#c9b6ff' }); efx('splash', pm.x, pm.y, 10); damageMob(pm, p.dmg, false, 'spell'); projs.splice(projs.indexOf(p), 1); continue; }
+        const d = dist(p, pm); if (d < 0.3) { fx.push({ k: 'ring', x: pm.x, y: pm.y, t: 0, c: '#c9b6ff' }); efx('splash', pm.x, pm.y, 10); damageMob(pm, 'proyectil'); projs.splice(projs.indexOf(p), 1); continue; }
         p.x += ((pm.x - p.x) / d) * p.spd * dt; p.y += ((pm.y - p.y) / d) * p.spd * dt;
     }
     for (const c of corpses.slice()) if (T - c.t > 3) corpses.splice(corpses.indexOf(c), 1);
@@ -1479,7 +1474,7 @@ function hud() {
         el.hidden = !!s.fury && P.fury <= T; el.classList.toggle('nomp', P.mp < s.mp); el.classList.toggle('ready', !!(P.ready && P.ready.i === i));
     });
     const tt = totals(), wd: [number, number] = tt.wdmg[1] > 0 ? tt.wdmg : CLS.melee;
-    const chips: [string, string][] = [['Nv.', String(P.lvl)], ['Exp', `${Math.floor(P.exp).toLocaleString('es-AR')} / ${expNeed().toLocaleString('es-AR')}`], ['Ataque', `${wd[0]}–${wd[1]}`], ['Defensa', `${tt.def} · RM ${tt.rm}`], ['Vel. mov.', Math.round((270 / P.stepMs) * 100) + '%'], ['Crítico', tt.crit + '%']];
+    const chips: [string, string][] = [['Nv.', String(P.lvl)], ['Exp', `${Math.floor(P.exp).toLocaleString('es-AR')} / ${expNeed().toLocaleString('es-AR')}`], ['Ataque', `${wd[0]}–${wd[1]}`], ['Defensa', `${tt.def} · RM ${tt.rm}`], ['Vel. mov.', Math.round((270 / P.stepMs) * 100) + '%'], ['Crítico', critTotal(tt.crit) + '%']];
     const ch = chips.map(([k, v]) => `<div class="chp"><u>◆</u><span>${k}</span><b>${v}</b></div>`).join('');
     if ($('chips').dataset.h !== ch) { $('chips').dataset.h = ch; $('chips').innerHTML = ch; layoutHud(); }
     const m = P.target && mobs.includes(P.target) ? P.target : null;
@@ -1550,7 +1545,7 @@ function renderChar() {
     $('lvBar').setAttribute('aria-valuenow', String(Math.floor(clamp(P.exp / need, 0, 1) * 100))); $('lvBar').setAttribute('aria-valuemin', '0'); $('lvBar').setAttribute('aria-valuemax', '100');
     const st = [
         STAT_ICON('atk', `${wd[0]}–${wd[1]}`, 'Ataque'), STAT_ICON('def', `${tt.def} (${mitigPct(tt.def)}%)`, 'Defensa (DF)'), STAT_ICON('mag', String(tt.mag), 'Daño mágico'), STAT_ICON('hp', String(maxHp()), 'Vida máx.'),
-        STAT_ICON('mp', String(maxMp()), 'Maná máx.'), STAT_ICON('crit', tt.crit + '%', 'Crítico'), STAT_ICON('aspd', tt.aspd + '%', 'Vel. ataque'), STAT_ICON('leech', tt.leech + '%', 'Robo de vida'),
+        STAT_ICON('mp', String(maxMp()), 'Maná máx.'), STAT_ICON('crit', critTotal(tt.crit) + '%', 'Crítico (tope 35 %)'), STAT_ICON('aspd', aspdTotal(tt.aspd) + '%', 'Vel. ataque (tope 40 %)'), STAT_ICON('leech', leechTotal(tt.leech) + '%', 'Robo de vida (tope 15 %)'),
         STAT_ICON('fire', `${tt.rm} (${mitigPct(tt.rm)}%)`, 'Res. mágica (RM)'), STAT_ICON('ice', `${mitigPct(tt.def)}% / ${mitigPct(tt.rm)}%`, 'Mitigación F/M'), STAT_ICON('par', tt.rpar + '%', 'Res. parálisis'), STAT_ICON('poi', tt.poison + '%', 'Veneno'),
     ].join('');
     if ($('stats').dataset.h !== st) { $('stats').dataset.h = st; $('stats').innerHTML = st; }

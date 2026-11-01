@@ -28,7 +28,7 @@ function setup(type: MobType, player: { x: number; y: number }, wall?: { x: numb
     const host: MobHost = {
         players: () => [p], playerById: (id) => (id === p.playerId ? p : undefined), nearby: () => [p],
         after: (ms, fn) => { timers.push({ at: clock + ms, fn }); },
-        hurt: (_p, raw, source) => { hurts.push({ raw, source }); }, stun: () => 0, reward: () => {},
+        hurt: (_p, raw, source) => { hurts.push({ raw, source }); }, stun: () => 0, pay: () => true, heal: () => {}, reward: () => {},
     };
     const sim = new MobSim(mapWith(type, wall, zone), host);
     const fire = () => { for (const t of timers.filter((x) => x.at <= clock)) { timers.splice(timers.indexOf(t), 1); t.fn(); } };

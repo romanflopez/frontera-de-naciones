@@ -149,7 +149,7 @@ async function main() {
     for (let i = 0; i < 3; i++) await targets[i].save({ cls: 'guerrero', lvl: 60, eq: { anillo: dfOf(cases[i]) } });
     for (let i = 0; i < 3; i++) {
         const T = targets[i], df = cases[i];
-        for (let k = 0; k < 6; k++) { A.cast('ataque', T); await sleep(330); }
+        for (let k = 0; k < 6; k++) { A.cast('ataque', T); await sleep(880); }
         const d = A.myHits(T).map((h) => h.dmg), ok = new Set<number>(); for (let raw = 7; raw <= 11; raw++) ok.add(mit(raw, df));
         check(d.length >= 5 && d.every((x) => ok.has(x)), `(a) físico, DF=${df}: daños ${[...new Set(d)].join(',')} esperados ⊂ {${[...ok].join(',')}} (${Math.round((df / (100 + df)) * 100)} % menos)`);
     }
@@ -193,7 +193,7 @@ async function main() {
     const V = targets[0]; // al lado del atacante
     await V.save({ cls: 'guerrero', lvl: 5 });
     await A.save({ cls: 'guerrero', lvl: 6 });
-    for (let k = 0; k < 14 && V.vitals.hp > V.vitals.maxHp - 110; k++) { A.cast('ataque', V); await sleep(330); }
+    for (let k = 0; k < 14 && V.vitals.hp > V.vitals.maxHp - 110; k++) { A.cast('ataque', V); await sleep(880); }
     V.send({ $case: 'hpReport', value: { hp: V.vitals.hp, mpSpent: 40, mp: 16, meditating: false } });
     await sleep(400);
     const hp0 = V.vitals.hp, mp0 = V.vitals.mp, max = V.vitals.maxHp, maxMp = V.vitals.maxMp;

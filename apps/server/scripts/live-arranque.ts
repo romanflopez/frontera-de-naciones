@@ -87,13 +87,13 @@ async function trial(cls: 'mago' | 'guerrero', lvl: number, zoneName: string) {
         if (cls === 'mago' && b.mp < 8 && b.pots.mp > 0 && now - potAt > 1700) { potAt = now; b.pots.mp--; b.send({ $case: 'potionRequest', value: { kind: 1 } }); }
         const tgt = mine.map((m) => ({ m, d: Math.hypot(b.x + 0.5 - m.x, b.y + 0.5 - m.y) })).sort((a, c) => a.d - c.d)[0];
         if (tgt && now >= nextAct) {
-            if (cls === 'mago' && b.mp >= 8 && tgt.d <= 7.5) { nextAct = now + 900; const dmg = rint(12, 18) + 2 * lvl + mag; setTimeout(() => b.send({ $case: 'mobHitRequest', value: { mobId: tgt.m.id, dmg, melee: false, crit: false, parSecs: 0, poisonSecs: 0 } }), 500 + tgt.d * 90); b.mp -= 8; }
-            else if (cls === 'guerrero' && tgt.d <= 1.9) { nextAct = now + 850; const dmg = rint(...melee) + lvl + rint(...wd); setTimeout(() => b.send({ $case: 'mobHitRequest', value: { mobId: tgt.m.id, dmg, melee: true, crit: false, parSecs: 0, poisonSecs: 0 } }), 180); }
+            if (cls === 'mago' && b.mp >= 8 && tgt.d <= 7.5) { nextAct = now + 900; const dmg = rint(12, 18) + 2 * lvl + mag; setTimeout(() => b.send({ $case: 'mobHitRequest', value: { mobId: tgt.m.id, dmg: 0, melee: false, crit: false, parSecs: 0, poisonSecs: 0, spell: 'proyectil' } }), 500 + tgt.d * 90); b.mp -= 8; }
+            else if (cls === 'guerrero' && tgt.d <= 1.9) { nextAct = now + 850; const dmg = rint(...melee) + lvl + rint(...wd); setTimeout(() => b.send({ $case: 'mobHitRequest', value: { mobId: tgt.m.id, dmg: 0, melee: true, crit: false, parSecs: 0, poisonSecs: 0, spell: 'ataque' } }), 180); }
             else if (cls === 'guerrero' && tgt.d > 1.9 && tgt.d < 5) { // sale al encuentro: un paso por vez hacia el blanco
                 const nx = b.x + Math.sign(Math.round(tgt.m.x - 0.5) - b.x), ny = b.y + Math.sign(Math.round(tgt.m.y - 0.5) - b.y);
                 if (!map.blocked[ny]?.[nx]) { b.send({ $case: 'requestMovement', value: { curX: b.x, curY: b.y, destX: nx, destY: ny, gameWorldId: '', dashAttack: false } }); b.x = nx; b.y = ny; nextAct = now + 300; }
             }
-            else if (cls === 'mago' && b.mp < 8 && tgt.d <= 1.9) { nextAct = now + 850; setTimeout(() => b.send({ $case: 'mobHitRequest', value: { mobId: tgt.m.id, dmg: rint(...melee) + lvl + rint(...wd), melee: true, crit: false, parSecs: 0, poisonSecs: 0 } }), 180); }
+            else if (cls === 'mago' && b.mp < 8 && tgt.d <= 1.9) { nextAct = now + 850; setTimeout(() => b.send({ $case: 'mobHitRequest', value: { mobId: tgt.m.id, dmg: 0, melee: true, crit: false, parSecs: 0, poisonSecs: 0, spell: 'ataque' } }), 180); }
         }
         // el guerrero espera en su sitio hasta que alguien se acerque a 4,5 celdas (los mobs lo notan solos); el mago pega primero
         if (cls === 'guerrero' && mine.length && !b.taken.length && now - t0 > 1000 && tgt && tgt.d > 5) { /* se acerca hasta 4 celdas */ }

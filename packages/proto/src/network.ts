@@ -1378,6 +1378,8 @@ export interface MobHitRequest {
   crit: boolean;
   parSecs: number;
   poisonSecs: number;
+  /** Hechizo o ataque ('ataque', 'golpe', 'bola'...). Desde el paso 1.3 el server calcula el daño, el crítico, el veneno y el robo de vida: `dmg`, `crit` y `poison_secs` se ignoran. */
+  spell: string;
 }
 
 /** Estado del jugador que el server necesita para los mobs (si murió, nivel para el tope de daño). */
@@ -18353,7 +18355,7 @@ export const PingResponse: MessageFns<PingResponse> = {
 };
 
 function createBaseMobHitRequest(): MobHitRequest {
-  return { mobId: 0, dmg: 0, melee: false, crit: false, parSecs: 0, poisonSecs: 0 };
+  return { mobId: 0, dmg: 0, melee: false, crit: false, parSecs: 0, poisonSecs: 0, spell: "" };
 }
 
 export const MobHitRequest: MessageFns<MobHitRequest> = {
@@ -18375,6 +18377,9 @@ export const MobHitRequest: MessageFns<MobHitRequest> = {
     }
     if (message.poisonSecs !== 0) {
       writer.uint32(49).double(message.poisonSecs);
+    }
+    if (message.spell !== "") {
+      writer.uint32(58).string(message.spell);
     }
     return writer;
   },
@@ -18440,6 +18445,14 @@ export const MobHitRequest: MessageFns<MobHitRequest> = {
             message.poisonSecs = reader.double();
             continue;
           }
+          case 7: {
+            if (tag !== 58) {
+              break;
+            }
+
+            message.spell = reader.string();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -18463,6 +18476,7 @@ export const MobHitRequest: MessageFns<MobHitRequest> = {
     message.crit = object.crit ?? false;
     message.parSecs = object.parSecs ?? 0;
     message.poisonSecs = object.poisonSecs ?? 0;
+    message.spell = object.spell ?? "";
     return message;
   },
 };

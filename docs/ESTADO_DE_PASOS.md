@@ -1,6 +1,6 @@
 # Estado de los pasos del plan
 
-Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última actualización: 1/11/2026.
+Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última actualización: 1/11/2026 (paso 1.3).
 
 | Paso | Estado | Detalle |
 |---|---|---|
@@ -9,7 +9,7 @@ Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última a
 | 0.3 Deploy de prueba | Pendiente | |
 | **1.1 Techo 40 y curva de nivel** | **Implementado** (faltan la simulación y la prueba manual) | Ver abajo |
 | **1.2 Puntos de stats** | **Implementado** (falta la prueba de balance con el script de combate) | Ver abajo |
-| 1.3 Atributos autoritativos y topes | Pendiente | |
+| **1.3 Atributos autoritativos y topes** | **Implementado** (faltan crítico con cargas, topes de absorción y la prueba manual) | Ver abajo |
 | 1.4 Daño en área y habilidades de mobs | Pendiente | |
 | **1.5 Tiers de zona** (paso nuevo) | Diseñado, pendiente | `TIERS_DE_ZONA.md`: cada mapa lleva un tier y de ahí salen los niveles de los mobs y la banda de ítems; con los 12 mapas actuales alcanza hasta el T6 |
 
@@ -50,3 +50,26 @@ Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última a
 **Pruebas:** `apps/server/test/stats.test.ts` (13 tests: fórmulas, asignación, concurrencia, tope, muerto, protocolo, reset, Monte Carlo de Suerte, guardado anti-trampa, migraciones). Suite del server: 164 verdes y 1 salteado. Verificado además a mano en el navegador.
 
 **Lo que falta:** correr `test-combat.ts` con distribuciones extremas (todo en Fuerza, todo en Vitalidad) y la prueba manual. El daño PvE sigue calculándose en el cliente (con tope en el server); pasa a ser autoritativo en el paso 1.3.
+
+## Paso 1.3: qué quedó
+
+**Hallazgo del spike:** el server solo topeaba el daño PvE con `120 + nivel × 20`; el crítico, la velocidad de ataque, el robo de vida y el veneno los decidía el cliente (`main.ts`). El PvP ya era autoritativo, así que el PvE pasó a usar el mismo camino.
+
+**Cómo funciona ahora.** `MobHitRequest` lleva un campo nuevo `spell` (el hechizo o `ataque`) y el server **ignora** `dmg`, `crit` y `poison_secs`. Con el hechizo, el server:
+- valida alcance, recarga (`PvpLimiter`) y **cobra el maná** (un hechizo desconocido o sin maná no pega);
+- calcula el daño con `rollSpellDamage` (nivel, arma, Magia, multiplicadores de Fuerza/Magia y Furia);
+- tira el **crítico** (solo el ataque básico, ×1,8), el **veneno** y el **robo de vida** (solo daño físico, sobre el daño que de verdad quitó) con los atributos del equipo que él guarda;
+- limita el ritmo de `ataque` por la **velocidad de ataque** del equipo (`meleeGapMs`, 10 % de tolerancia). Esto vale también para el PvP, donde antes el ataque tenía solo 0,3 s de recarga.
+- La parálisis dura lo que dice el hechizo (no lo que pide el cliente) y entra una vez por recarga.
+
+**Topes** (`packages/world/src/stats.ts`): crítico total 35 % (5 % base + equipo), velocidad de ataque 40 %, robo de vida 15 %; se aplican sobre la **suma** del equipo. La ventana de personaje muestra los valores ya topeados.
+
+**Cliente:** `damageMob` ahora solo pide el golpe con el id del hechizo; se sacó el cálculo de daño, crítico, robo de vida y veneno. Un hechizo que pega a un mob lo cobra el server, así que el cliente ya no reporta ese maná gastado (un área que no alcanza a nadie no gasta maná en el server). El torbellino quedó en la tabla de hechizos del server.
+
+**Pruebas:** `apps/server/test/combate.test.ts` (17 tests): topes y suma de varios ítems; el cliente no impone daño, crítico ni veneno; hechizo inexistente, fuera de alcance, sin maná y en recarga; spam de ataque topeado con y sin +200 % de velocidad; proporción de crítico (35 % y 5 %) y ×1,8; robo de vida topeado; veneno; parálisis; rango de daño de la fórmula. Suite del server: 181 verdes y 1 salteado. `test-combat.ts` 17/17 y `test-economy.ts` 81/81 contra un server real (se ajustaron para pedir hechizos por id y pegar a un ritmo legal).
+
+**Lo que falta**
+- **Crítico con cargas recargables:** el plan lo menciona pero no define las reglas; hay que decidirlas antes de implementarlo.
+- **Topes de absorción (60 % mágica, 80 % física por zona):** todavía no existe un atributo de absorción (hoy se mitiga con DF/RM de rendimiento decreciente); se hace cuando entre.
+- **E, prueba manual:** equiparse un arma con velocidad y crítico y comparar lo que se ve con lo que registra el server.
+- `live-arranque.ts` se adaptó al protocolo nuevo pero no se corrió.

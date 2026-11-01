@@ -6,6 +6,8 @@ import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import { MOB_AGGRO, MOB_ASSIST, MOB_TYPES, mobDef, zoneRespawnSecs, type MobDef, type MobType, type WorldMap, type Zone } from '@fdn/world';
 import * as M from './messages.ts';
 import type { Player } from './player.ts';
+import { PVP_SPELLS, rollSpellDamage, spellDmgKind } from './systems/pvpCombat.ts';
+import { CRIT_MULT, POISON_SECS } from '@fdn/world';
 
 type Pkt<K extends string> = Extract<NonNullable<ClientMessage['payload']>, { $case: K }>['value'];
 
@@ -20,6 +22,10 @@ export interface MobHost {
     /** Paraliza al jugador (si no es inmune): devuelve los segundos que quedó. */
     stun(p: Player, secs: number): number;
     /** Botín y exp del golpe final: lo decide y lo aplica el server (economía autoritativa). */
+    /** Cobra maná en el server si alcanza (devuelve false si no). */
+    pay(p: Player, cost: number): boolean;
+    /** Cura al jugador en el server (robo de vida) y avisa. */
+    heal(p: Player, n: number): void;
     reward(killer: Player, info: { mobId: number; type: MobType; def: MobDef; zoneName: string; origin: 'loose' | 'pit' | 'dungeon'; x: number; y: number; shard?: 'cripta' | 'foso' }): void;
 }
 
@@ -331,25 +337,37 @@ export class MobSim {
         b.dead = !!v.dead; b.lvl = p.combat.lvl; // el nivel es el del server, no el que diga el cliente
     }
 
+    /**
+     * Golpe de un jugador a un mob. Desde el paso 1.3 el cliente solo dice QUÉ hechizo usó y sobre quién: el daño, el crítico,
+     * el veneno, el robo de vida, la recarga y el maná los calcula el server con el equipo y los stats que él guarda.
+     */
     hit(p: Player, v: Pkt<'mobHitRequest'>) {
         const b = this.bud(p);
         const nowMs = Date.now(); b.tokens = Math.min(40, b.tokens + ((nowMs - b.t) / 1000) * 20); b.t = nowMs;
         if (b.dead || p.disconnected || b.tokens < 1) return;
         const m = this.mobs.get(v.mobId); if (!m || m.dead) return;
-        const range = v.melee ? 4.5 : 11.5;
-        if (Math.hypot(p.posX + 0.5 - m.x, p.posY + 0.5 - m.y) > range) return;
+        const spell = /^[a-z0-9]{1,16}$/.test(v.spell ?? '') ? v.spell : '', sp = PVP_SPELLS[spell];
+        if (!sp) return; // sin hechizo conocido no hay golpe
+        if (Math.hypot(p.posX + 0.5 - m.x, p.posY + 0.5 - m.y) > sp.range + (sp.aoe ?? 0) + 2.5) return;
         b.tokens -= 1;
         const T = this.now();
-        const dmg = clamp(Math.round(v.dmg) || 0, 0, 120 + p.combat.lvl * 20);
-        const parSecs = clamp(Number(v.parSecs) || 0, 0, 5), poisonSecs = clamp(Number(v.poisonSecs) || 0, 0, 5);
-        if (dmg <= 0 && parSecs <= 0 && poisonSecs <= 0) return;
+        const wantsSecs = (Number(v.parSecs) || 0) > 0;
+        if (!p.pvp.allow(spell, BigInt(m.id), nowMs, (c) => this.host.pay(p, c))) return; // recarga, ritmo de ataque o sin maná
+        let dmg = sp.dmg ? rollSpellDamage(spell, p.combat, p.pvp.fury(nowMs)) : 0, crit = false;
+        const phys = spellDmgKind(spell) === 'phys';
+        if (dmg > 0 && spell === 'ataque' && Math.random() * 100 < p.combat.crit) { crit = true; dmg = Math.round(dmg * CRIT_MULT); }
+        const parSecs = wantsSecs && sp.secs && p.pvp.allowSecs(spell, BigInt(m.id), nowMs) ? sp.secs : 0;
+        const poisonSecs = dmg > 0 && phys && p.combat.poison > 0 && Math.random() * 100 < p.combat.poison ? POISON_SECS : 0;
+        if (dmg <= 0 && parSecs <= 0) return;
         if (parSecs > 0 && m.imm <= T) { m.par = T + parSecs; m.imm = T + parSecs + 8; m.moving = false; }
         if (poisonSecs > 0) m.poison = T + poisonSecs;
         m.lastAttacker = p.playerId;
         if (dmg > 0) {
+            const dealt = Math.min(dmg, Math.max(0, m.hp));
             m.hp -= dmg;
             if (m.par > T && dmg >= m.hpMax * 0.45) m.par = 0; // un golpe fuerte rompe la parálisis
-            this.broadcastNear(m, M.mobDamaged(m.id, p.playerId, dmg, !!v.crit, Math.max(0, m.hp)));
+            this.broadcastNear(m, M.mobDamaged(m.id, p.playerId, dmg, crit, Math.max(0, m.hp)));
+            if (phys && p.combat.leech > 0 && dealt > 0) this.host.heal(p, Math.max(1, Math.round((dealt * p.combat.leech) / 100))); // robo de vida: de lo que de verdad quitó
         }
         if (m.state === 'idle' || m.target == null) this.aggro(m, p);
         if (m.hp <= 0) this.kill(m, p);

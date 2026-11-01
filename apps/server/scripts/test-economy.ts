@@ -24,6 +24,10 @@ import { buildSolmar, sellPrice, SHOPS } from '@fdn/world';
 const URL = process.argv[2] ?? 'ws://localhost:8113/ws';
 const DATA_DIR = process.env.DATA_DIR ?? '';
 const RUN = Math.random().toString(36).slice(2, 6);
+/** Desde el paso 1.3 el server calcula el daño: para matar rápido se piden varios hechizos distintos a la vez (cada uno tiene su recarga). */
+const BURST = ['lanza', 'bola', 'hoja', 'proyectil', 'golpe', 'tajo'];
+function hitBurst(b: { send: (m: never) => void }, mobId: number) { for (const spell of BURST) b.send({ $case: 'mobHitRequest', value: { mobId, dmg: 0, melee: false, crit: false, parSecs: 0, poisonSecs: 0, spell } } as never); }
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let failures = 0, checks = 0;
 const check = (ok: boolean, msg: string) => { checks++; if (!ok) failures++; console.log(`${ok ? 'OK  ' : 'FAIL'} ${msg}`); };
@@ -282,7 +286,7 @@ async function main() {
         killer.rewards.length = 0;
         const before = { ...killer.inv! }, bagBefore = killer.inv!.bag.length;
         // 4 golpes mortales pegados: el mob muere con el primero y los demás no pueden volver a cobrar
-        for (let i = 0; i < 4; i++) killer.send({ $case: 'mobHitRequest', value: { mobId: target.id, dmg: 140, melee: false, crit: false, parSecs: 0, poisonSecs: 0 } });
+        hitBurst(killer, target.id);
         await sleep(900);
         const rw = killer.rewards;
         check(rw.length === 1, `(h) exactamente un killReward por el mob (${rw.length})`);
@@ -295,7 +299,7 @@ async function main() {
         }
         // un mob que ya murió no se puede volver a matar
         killer.rewards.length = 0;
-        killer.send({ $case: 'mobHitRequest', value: { mobId: target.id, dmg: 140, melee: false, crit: false, parSecs: 0, poisonSecs: 0 } });
+        killer.send({ $case: 'mobHitRequest', value: { mobId: target.id, dmg: 140, melee: false, crit: false, parSecs: 0, poisonSecs: 0, spell: 'proyectil' } });
         await sleep(300);
         check(killer.rewards.length === 0, '(h) pegarle de nuevo al mob muerto no da botín');
     }
@@ -353,8 +357,13 @@ async function main() {
             for (let i = 0; i < 40 && !target; i++) { await sleep(100); target = K.mobs.filter((m) => Math.hypot(m.x - K.x, m.y - K.y) < 9).sort((a, b) => a.hp - b.hp)[0]; }
             if (!target) { await K.warp(kcell![0], kcell![1]); continue; }
             K.rewards.length = 0;
-            for (let i = 0; i < 3; i++) K.send({ $case: 'mobHitRequest', value: { mobId: target.id, dmg: 140, melee: false, crit: false, parSecs: 0, poisonSecs: 0 } });
-            await sleep(700);
+            // el server calcula el daño y cobra maná: se pega como un jugador (ataque cada ~0,9 s y un proyectil si alcanza el maná) hasta que muera
+            for (let k = 0; k < 14 && !K.rewards.length && K.mobs.some((m) => m.id === target!.id); k++) {
+                K.send({ $case: 'mobHitRequest', value: { mobId: target.id, dmg: 0, melee: true, crit: false, parSecs: 0, poisonSecs: 0, spell: 'ataque' } });
+                K.send({ $case: 'mobHitRequest', value: { mobId: target.id, dmg: 0, melee: false, crit: false, parSecs: 0, poisonSecs: 0, spell: 'proyectil' } });
+                await sleep(900);
+            }
+            await sleep(300);
             const rw = K.rewards[0];
             if (rw?.item && rw.bagFull) { reward = rw; dropped = await K.waitGround((g) => g.base === rw.item!.base && g.rarity === rw.item!.rarity); }
         }
