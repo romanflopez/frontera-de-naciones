@@ -24,6 +24,8 @@ export interface FlareMapData {
     zones: FlareZone[];
     /** Vínculos de Flare hacia otros mapas (`to` = id de Flare; `tx,ty` = celda de llegada allá). */
     links: FlareLinkData[];
+    /** Conexiones que Flare no trae (`to` = id de ERIS del otro mapa): portales de piedra en esta celda. */
+    extras: { to: string; cell: { x: number; y: number } }[];
     layers: { background: number[][]; object: number[][] };
     /** 1 = bloqueada. */
     blocked: number[][];

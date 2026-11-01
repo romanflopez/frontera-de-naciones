@@ -42,8 +42,8 @@ No se incluye ningún asset de ese proyecto ni del juego Helbreath original.
 
 Las dependencias npm se distribuyen bajo licencias permisivas (MIT, ISC, BSD, Apache-2.0); el aviso de cada una viene en su paquete.
 
-Mapas de Flare (Campos de Sal, Bosque de Piedra y Cañón goblin) y flare_grassland.webp: los mapas son adaptaciones de salted_field, stonewood y goblin_camp
-de Flare (flare-game, mods/empyrean_campaign) y las piezas del atlas son las del tileset de pasto de Flare a media escala, con las caras negras de los
+Mapas de Flare (Campos de Sal, Bosque de Piedra, Cañón goblin, Pantano de Merrimead, Altas de Nazia, Cementerio de Lochport y Risco del Sur) y flare_grassland.webp:
+los mapas son adaptaciones de salted_field, stonewood, goblin_camp, merrimead_swamp, nazia_highlands, lochport_cemetery y southern_ridge de Flare (flare-game, mods/empyrean_campaign) y las piezas del atlas son las del tileset de pasto de Flare a media escala, con las caras negras de los
 acantilados hechas transparentes y el agua cambiada por la del kit de ciudad. Siguen bajo CC-BY-SA 3.0 (ver arriba); autores en el CREDITS.txt de
 Flare (Clint Bellanger, Justin Jacobs, Stefan Beller y otros). Datos en packages/world/src/flare, generados por tools/src/flare/maps.ts (docs/MAPAS_FLARE.md).
 

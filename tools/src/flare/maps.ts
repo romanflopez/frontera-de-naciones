@@ -26,6 +26,8 @@ interface MapSpec {
     /** Id del mapa en Flare. */ id: string;
     /** Id del mapa en ERIS. */ eris: string; name: string; region: string; pvp: 'off' | 'faction'; lvl: [number, number];
     pits: [PitSpec, PitSpec, PitSpec]; loose: LooseSpec[];
+    /** Conexiones que Flare no trae (mapas que en Flare no se tocan): `near` = a unos pasos de la entrada, `far` = en el punto más lejano. Hay que declararlas en los dos mapas. */
+    extras?: { to: string; where: 'near' | 'far' }[];
 }
 
 /** Un mapa por entrada. Pit A = el más cerca de la entrada (el más fácil), C = el más lejos. Los nombres de zona son únicos entre mapas. */
@@ -39,6 +41,18 @@ const SPECS: MapSpec[] = [
     { id: 'goblin_camp', eris: 'canon_goblin', name: 'Cañón goblin', region: 'comun', pvp: 'faction', lvl: [2, 3],
         pits: [{ name: 'Empalizada del cañón', type: 'goblin_elite', lvl: 2 }, { name: 'Puesto de arqueros', type: 'hobgoblin_archer', lvl: 3 }, { name: 'Tienda del cabecilla', type: 'hobgoblin', lvl: 3 }],
         loose: [{ type: 'goblin', lvl: 2 }] },
+    { id: 'merrimead_swamp', eris: 'pantano_de_merrimead', name: 'Pantano de Merrimead', region: 'comun', pvp: 'faction', lvl: [3, 4],
+        pits: [{ name: 'Ciénaga de zombis', type: 'zombie', lvl: 3 }, { name: 'Pozo oscuro', type: 'zombie_dark', lvl: 4 }, { name: 'Lápidas del pantano', type: 'cursed_grave', lvl: 4 }],
+        loose: [{ type: 'zombie', lvl: 3 }], extras: [{ to: 'altas_de_nazia', where: 'far' }] },
+    { id: 'nazia_highlands', eris: 'altas_de_nazia', name: 'Altas de Nazia', region: 'comun', pvp: 'faction', lvl: [4, 5],
+        pits: [{ name: 'Nidada de crías', type: 'antlion_small', lvl: 4 }, { name: 'Hoyos de las tierras altas', type: 'antlion', lvl: 4 }, { name: 'Hormigueros ardientes', type: 'fire_ant', lvl: 5 }],
+        loose: [{ type: 'antlion_small', lvl: 4 }], extras: [{ to: 'pantano_de_merrimead', where: 'near' }] },
+    { id: 'lochport_cemetery', eris: 'cementerio_de_lochport', name: 'Cementerio de Lochport', region: 'comun', pvp: 'faction', lvl: [5, 5],
+        pits: [{ name: 'Tumbas viejas', type: 'skeleton', lvl: 5 }, { name: 'Arqueros del osario', type: 'skeleton_archer', lvl: 5 }, { name: 'Hechiceros del camposanto', type: 'skeleton_mage', lvl: 5 }],
+        loose: [{ type: 'cursed_grave', lvl: 5 }], extras: [{ to: 'risco_del_sur', where: 'far' }] },
+    { id: 'southern_ridge', eris: 'risco_del_sur', name: 'Risco del Sur', region: 'comun', pvp: 'faction', lvl: [5, 6],
+        pits: [{ name: 'Risco de las hormigas', type: 'antlion', lvl: 5 }, { name: 'Atalaya en ruinas', type: 'skeleton_mage', lvl: 6 }, { name: 'Grietas de fuego', type: 'fire_ant', lvl: 6 }],
+        loose: [{ type: 'antlion', lvl: 5 }, { type: 'skeleton', lvl: 5 }], extras: [{ to: 'cementerio_de_lochport', where: 'near' }] },
 ];
 
 /**
@@ -208,10 +222,22 @@ function convert(spec: MapSpec): object {
     // 6) Vínculos de Flare: la celda disparadora es la libre más cercana al centro de su rectángulo.
     const links = p.links.flatMap((l) => { const c = snap(Math.floor(l.x + l.w / 2), Math.floor(l.y + l.h / 2)); return c ? [{ cell: c, to: l.to, tx: l.tx, ty: l.ty, tooltip: l.tooltip }] : []; });
 
+    // 7) Conexiones extra: celda caminable con espacio alrededor, lejos de la entrada (far) o a unos pasos de ella (near), separadas de todo lo demás.
+    const taken: { x: number; y: number }[] = [entry, ...links.map((l) => l.cell)];
+    const roomy = (x: number, y: number): boolean => { let n = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (free(x + dx, y + dy)) n++; return n >= 8; };
+    const cand: { x: number; y: number }[] = [];
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (free(x, y) && roomy(x, y)) cand.push({ x, y });
+    const extras = (spec.extras ?? []).map((e) => {
+        const pool = cand.filter((c) => taken.every((t) => dist(t, c) >= 9) && (e.where === 'far' || (dist(c, entry) >= 5 && dist(c, entry) <= 12)));
+        const best = e.where === 'far' ? pool.sort((a, b) => dist(b, entry) - dist(a, entry) || a.y - b.y || a.x - b.x)[0] : pool.sort((a, b) => dist(a, entry) - dist(b, entry) || a.y - b.y || a.x - b.x)[0];
+        if (!best) throw new Error(`${spec.id}: no encontré celda para la conexión a ${e.to}`);
+        taken.push(best); return { to: e.to, cell: best };
+    });
+
     return {
         id: spec.id, eris: spec.eris, name: spec.name, region: spec.region, pvp: spec.pvp, lvl: spec.lvl, tileset: tsName, size: N, flareSize: [p.w, p.h], entry,
         source: `Flare (flare-game) mods/empyrean_campaign/maps/${spec.id}.txt`, license: 'CC-BY-SA-3.0 (adaptado: ver docs/MAPAS_FLARE.md)',
-        walkable, zones, links, layers: { background, object }, blocked: reach.map((r) => r.map((v) => (v ? 0 : 1))),
+        walkable, zones, links, extras, layers: { background, object }, blocked: reach.map((r) => r.map((v) => (v ? 0 : 1))),
     };
 }
 
@@ -219,10 +245,10 @@ if (!existsSync(mapsDir)) { console.error(`No encontré los mapas de Flare en ${
 mkdirSync(outDir, { recursive: true });
 const wanted = process.argv.slice(2);
 for (const spec of SPECS.filter((s) => !wanted.length || wanted.includes(s.id))) {
-    const out = convert(spec) as { size: number; walkable: number; zones: OutZone[]; links: unknown[] };
+    const out = convert(spec) as { size: number; walkable: number; zones: OutZone[]; links: unknown[]; extras: unknown[] };
     const header = `/**\n * Generado por tools/src/flare/maps.ts a partir del mapa '${spec.id}' de Flare (CC-BY-SA 3.0; autores en CREDITS.txt de Flare).\n * Adaptado para ERIS (relleno del vacío, pits, mobs sueltos). No editar a mano: se regenera con pnpm --filter @fdn/tools flare:maps.\n */\n`;
     writeFileSync(join(outDir, spec.id + '.ts'), `${header}import type { FlareMapData } from './types';\n\nexport const DATA: FlareMapData = ${JSON.stringify(out)};\n`);
     rmSync(join(outDir, spec.id + '.json'), { force: true });
     const pits = [0, 1, 2].map((i) => out.zones.filter((z) => z.pit === i).length), loose = out.zones.filter((z) => z.kind === 'loose').length;
-    console.log(`${spec.id} -> ${spec.eris}: ${out.size}x${out.size}, ${out.walkable} celdas caminables, pits A/B/C = ${pits.join('/')} zonas, ${loose} sueltas, ${out.links.length} vínculos`);
+    console.log(`${spec.id} -> ${spec.eris}: ${out.size}x${out.size}, ${out.walkable} celdas caminables, pits A/B/C = ${pits.join('/')} zonas, ${loose} sueltas, ${out.links.length} vínculos + ${out.extras.length} extra`);
 }

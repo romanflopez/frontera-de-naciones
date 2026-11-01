@@ -1,6 +1,6 @@
 # Mapas de Flare en ERIS: organización por nivel
 
-Estado: **3 mapas jugables en el juego** (Campos de Sal, Bosque de Piedra y Cañón goblin, con portales desde las ciudades); el resto es propuesta. Complementa a [`MUNDO.md`](MUNDO.md) (grafo y fases) y [`ZONAS.md`](ZONAS.md) (curva de niveles y mobs). Si algo de acá contradice a esos dos, hay que decidir cuál se actualiza (ver sección 9).
+Estado: **7 mapas jugables en el juego** (Campos de Sal, Bosque de Piedra, Cañón goblin, Pantano de Merrimead, Altas de Nazia, Cementerio de Lochport y Risco del Sur, con portales desde las ciudades); el resto es propuesta. Complementa a [`MUNDO.md`](MUNDO.md) (grafo y fases) y [`ZONAS.md`](ZONAS.md) (curva de niveles y mobs). Si algo de acá contradice a esos dos, hay que decidir cuál se actualiza (ver sección 9).
 
 ## 1. Marco: lo que ya manda en ERIS
 
@@ -104,16 +104,17 @@ Todo mob de dungeon necesita animaciones completas: **stance, run, ataque, golpe
 - `tools/src/flare/maps.ts` (`pnpm --filter @fdn/tools flare:maps [id…]`, usa `FLARE_DIR`): genera `packages/world/src/flare/<id>.ts` con tamaño cuadrado, capas de tiles de Flare, colisión **sin bolsillos inalcanzables** (se abre una celda en cada cruce diagonal entre paredes, porque Flare camina en 8 direcciones y ERIS en 4), el **vacío relleno de piso y bosque bloqueado** (sin partes negras), pits, sueltos y vínculos.
 - `tools/src/flare/mapatlas.ts` (`flare:mapatlas`): arma `flare_<hoja>.webp` con solo las piezas usadas, a media escala. Las caras negras de los acantilados (ids 48-71) pasan a transparentes y el agua de Flare, casi negra, se cambia por la del kit de ciudad.
 - `packages/world/src/flare/index.ts`: `buildFlareMap` (zonas seguras en entradas y vínculos, respawn de pits 10 s y sueltos 22 s) y los `MapDef`. El cliente carga cualquier grupo `flare_*` del `meta.json`.
-- Mapas: `campos_de_sal` (60x60, Nv 1-2), `bosque_de_piedra` (100x100, Nv 1-2) y `canon_goblin` (60x60, Nv 2-3), encadenados por los vínculos de Flare.
+- Mapas (los 7 se suman a los 4 de caza que ya había en `main`): `campos_de_sal` (60x60, Nv 1-2), `bosque_de_piedra` (100x100, Nv 1-2), `canon_goblin` (60x60, Nv 2-3), `pantano_de_merrimead` (80x80, Nv 3-4), `altas_de_nazia` (80x80, Nv 4-5), `cementerio_de_lochport` (80x80, Nv 5) y `risco_del_sur` (80x80, Nv 5-6). Cadena: Campos de Sal → Bosque de Piedra → Cañón goblin → Pantano; del Pantano salen Altas de Nazia (portal de piedra) y el Cementerio (camino de Flare); del Cementerio sale el Risco del Sur (portal de piedra). Los portales de piedra son conexiones que Flare no trae (`extras` en la spec): el importador elige una celda caminable con espacio alrededor, lejos de la entrada (`far`) o cerca (`near`).
 - **Portales:** en la plaza de la Villa de Solmar, 5 celdas al este del punto de aparición (`villa_a_campos`, de ida y vuelta), y en la plaza de la Ciudadela de Vhar (`ciudadela_a_campos`, de ida).
 - Validado: `validateMapGraph()` sin errores con los 28 mapas, tests del server (115 de 116, 1 salteado; 5 nuevos en `apps/server/test/flare.test.ts`), tipos, build y recorrido con navegador (crear cuenta, Villa, portal, los 3 mapas, un pit con mobs, sin errores de consola).
 
 **Falta:**
 1. `fetch.ts`: sumar `mods/empyrean_campaign/{maps,tilesetdefs,images/tilesets}` a lo que baja (hoy solo `fantasycore`). Mientras, se apunta `FLARE_DIR` al zip v1.14.
-2. Specs de los 9 mapas abiertos restantes y de los dungeons, y las hojas cueva, dungeon, nieve y ruinas en `FLARE_BASE`, con su relleno del vacío (hoy solo hay para pasto).
+2. Specs de los 5 mapas abiertos restantes (La Brecha, Stormrock, Cenizas I-III) y de los dungeons, y las hojas cueva, dungeon, nieve y ruinas en `FLARE_BASE`, con su relleno del vacío (hoy solo hay para pasto).
 3. Props con colisión propia: hoy los árboles y rocas del relleno bloquean por celda; falta afinar casos como los cruces diagonales abiertos.
 4. Portar el render de control a `tools/` (hoy es un script aparte) y el recorrido con navegador a un test del repo.
-5. Que los mobs a distancia (`hobgoblin_archer`, hoy cuerpo a cuerpo) disparen de verdad.
+5. Borde del mapa: al caminar pegado al borde la cámara muestra negro más allá del mapa (pasa igual en los mapas generados por código); se puede resolver para todos con un margen de bosque o un fondo.
+6. Que los mobs a distancia (`hobgoblin_archer`, hoy cuerpo a cuerpo) disparen de verdad.
 
 ## 8. Licencia
 

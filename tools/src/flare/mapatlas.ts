@@ -40,7 +40,9 @@ const used = new Map<string, Set<number>>();
 for (const f of files) {
     const { DATA } = (await import(pathToFileURL(join(dataDir, f)).href)) as { DATA: { tileset: string; layers: { background: number[][]; object: number[][] } } };
     const set = used.get(DATA.tileset) ?? new Set<number>(); used.set(DATA.tileset, set);
-    for (const layer of [DATA.layers.background, DATA.layers.object]) for (const row of layer) for (const id of row) if (id) set.add(id);
+    // El agua de PISO se cambia por la del kit de ciudad (no entra al atlas); el agua usada como OBJETO (juncos, espuma…) sí entra.
+    for (const row of DATA.layers.background) for (const id of row) if (id && !isFlareWater(DATA.tileset, id)) set.add(id);
+    for (const row of DATA.layers.object) for (const id of row) if (id) set.add(id);
 }
 
 const metaPath = join(out, 'meta.json'), meta = JSON.parse(readFileSync(metaPath, 'utf8'));
@@ -51,7 +53,6 @@ for (const [tileset, ids] of used) {
     const images = new Map<string, Awaited<ReturnType<typeof loadImage>>>();
     const items: { id: number; d: Def; w: number; h: number }[] = [];
     for (const id of [...ids].sort((a, b) => a - b)) {
-        if (isFlareWater(tileset, id)) continue; // el agua se cambia por la del kit de ciudad (packages/world/src/flare/index.ts)
         const d = defs.get(id); if (!d) { console.warn(`${tileset}: el id ${id} no está en la definición de la hoja`); continue; }
         if (!images.has(d.img)) { const p = find(d.img); if (!p) throw new Error(`No encontré ${d.img}`); images.set(d.img, await loadImage(readFileSync(p))); }
         items.push({ id, d, w: Math.max(1, Math.round(d.w * S)), h: Math.max(1, Math.round(d.h * S)) });

@@ -2,7 +2,8 @@
  * Mapas importados de Flare (docs/MAPAS_FLARE.md): campos de caza de nivel 1-3 al tamaño nativo del mapa original, con 3 pits de mobs
  * distintos y mobs sueltos entre medio. Los datos los genera tools/src/flare/maps.ts (CC-BY-SA 3.0, ver CREDITS) y los tiles salen del
  * atlas `flare_<hoja>.webp` (tools/src/flare/mapatlas.ts). Todo es dato fijo: cliente y server arman exactamente lo mismo.
- *   Villa de Solmar / Ciudadela de Vhar --portal--> Campos de Sal -> Bosque de Piedra -> Cañón goblin
+ *   Villa de Solmar / Ciudadela de Vhar --portal--> Campos de Sal -> Bosque de Piedra -> Cañón goblin -> Pantano de Merrimead
+ *   Pantano -> Altas de Nazia (Nv 4-5) y Pantano -> Cementerio de Lochport (Nv 5) -> Risco del Sur (Nv 5-6)
  */
 import type { Prop, WorldMap, Zone } from '../index';
 import type { MapDef, Link } from '../maps';
@@ -13,12 +14,16 @@ import { flareTile, isFlareWater, type FlareMapData } from './types';
 import { DATA as SALTED_FIELD } from './salted_field';
 import { DATA as STONEWOOD } from './stonewood';
 import { DATA as GOBLIN_CAMP } from './goblin_camp';
+import { DATA as MERRIMEAD_SWAMP } from './merrimead_swamp';
+import { DATA as NAZIA_HIGHLANDS } from './nazia_highlands';
+import { DATA as LOCHPORT_CEMETERY } from './lochport_cemetery';
+import { DATA as SOUTHERN_RIDGE } from './southern_ridge';
 
 export { flareTile, FLARE_BASE } from './types';
 export type { FlareMapData } from './types';
 
 /** En el orden de la cadena: la primera es la que une el portal de las ciudades. */
-export const FLARE_DATA: FlareMapData[] = [SALTED_FIELD, STONEWOOD, GOBLIN_CAMP];
+export const FLARE_DATA: FlareMapData[] = [SALTED_FIELD, STONEWOOD, GOBLIN_CAMP, MERRIMEAD_SWAMP, NAZIA_HIGHLANDS, LOCHPORT_CEMETERY, SOUTHERN_RIDGE];
 const byFlareId = new Map(FLARE_DATA.map((d) => [d.id, d]));
 const byEris = new Map(FLARE_DATA.map((d) => [d.eris, d]));
 export const FLARE_FIRST = FLARE_DATA[0];
@@ -49,6 +54,12 @@ function flareLinks(d: FlareMapData): Link[] {
         const arrive = nearestWalkable(to, l.tx, l.ty, to.links.map((b) => b.cell));
         const n = seen.get(to.eris) ?? 0; seen.set(to.eris, n + 1);
         out.push({ id: `${d.eris}_a_${to.eris}${n ? `_${n + 1}` : ''}`, map: d.eris, x: l.cell.x, y: l.cell.y, to: { map: to.eris, ...arrive }, kind: 'walk', msg: `Seguís el camino hacia ${to.name}.` });
+    }
+    // Conexiones que Flare no trae: portales de piedra en dos sentidos (cada mapa declara la suya).
+    for (const e of d.extras) {
+        const to = byEris.get(e.to); if (!to) throw new Error(`${d.id}: la conexión extra apunta a '${e.to}', que no existe`);
+        const avoid = [...to.links.map((b) => b.cell), ...to.extras.map((b) => b.cell), ...(to === FLARE_FIRST ? [FLARE_BACK] : [])];
+        out.push({ id: `${d.eris}_a_${to.eris}`, map: d.eris, x: e.cell.x, y: e.cell.y, to: { map: to.eris, ...nearestWalkable(to, to.entry.x, to.entry.y, avoid) }, kind: 'portal', msg: `Cruzás el portal hacia ${to.name}.` });
     }
     return out;
 }
@@ -82,6 +93,7 @@ export function buildFlareMap(d: FlareMapData): WorldMap {
     const disc = (c: Cell, r: number) => { for (let y = Math.max(0, c.y - r); y <= Math.min(N - 1, c.y + r); y++) for (let x = Math.max(0, c.x - r); x <= Math.min(N - 1, c.x + r); x++) if (Math.hypot(x - c.x, y - c.y) <= r + 0.5) safe[y][x] = true; };
     disc(d.entry, SAFE_R);
     for (const l of d.links) disc(l.cell, SAFE_R);
+    for (const e of d.extras) disc(e.cell, SAFE_R);
     if (d === FLARE_FIRST) disc(FLARE_BACK, SAFE_R);
     const zones: Zone[] = d.zones.map((z) => ({ type: z.type as MobType, x: z.x, y: z.y, r: z.r, n: z.n, name: z.name, lvl: z.lvl, respawn: z.kind === 'pit' ? PIT_RESPAWN : LOOSE_RESPAWN, aggro: z.kind === 'pit' ? 3 : 4 }));
     return { size: N, tiles, blocked, safe, props, decals: [], zones, buildings: [], npcs: [], spawn: { ...d.entry }, fire: { x: -50, y: -50 } };
