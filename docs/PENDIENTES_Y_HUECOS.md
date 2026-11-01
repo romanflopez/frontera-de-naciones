@@ -39,7 +39,7 @@ Lo que sabemos: el arte de Flare (mapas y bichos) es de 192×96 por celda y hoy 
 
 | Tema | Por qué importa | Cuándo decidirlo |
 |---|---|---|
-| ~~Clases y roles de grupo~~ **Decidido (Román, 1/11):** el **mago cura y paraliza**; por ahora no hay curandero (se ve después según lo que pida la gente en la beta). **La party no restringe por clase**: se puede entrar con 4 guerreros si quieren | Ver la sección 2.1 |
+| ~~Clases y roles de grupo~~ | **Decidido (Román, 1/11):** el **mago cura y paraliza**; por ahora no hay curandero (se ve después según lo que pida la gente en la beta). **La party no restringe por clase**: se puede entrar con 4 guerreros si quieren | Ya decidido (ver §2.1) |
 | **Buscar grupo (LFG)** | Con pocos jugadores, juntar gente tiene que ser fácil: un chat y un tablero que lo ayuden | Fase 2 (paso 2.6 del plan) |
 | **Habilidades y talentos** | Helbreath Evolution tiene árbol de talentos y 76 hechizos; ERIS tiene ~14 habilidades fijas y ningún árbol. Define el "build" que mencionaste | Después de los stats (1.2), antes de la beta |
 | **Misiones e historia por tramo** | El "objetivo claro" de cada tramo necesita misiones con sentido; hoy son pocas y casi no dan exp | Fase 2 |
