@@ -5,11 +5,11 @@ export type MobType = 'goblin' | 'zombie' | 'skeleton' | 'barbaro' | 'goblin_eli
     // tipos nuevos (docs/MOBS_NUEVOS.md): siempre al final, el protocolo manda el índice
     | 'hobgoblin' | 'hobgoblin_archer' | 'skeleton_archer' | 'zombie_dark' | 'cursed_grave' | 'ice_ant' | 'antlion_small' | 'wyvern_fire' | 'wyvern_ice'
     // jefes de mazmorra de grupo (docs/MAPAS_FLARE.md §5)
-    | 'goblin_jefe' | 'antlion_reina' | 'caballero_cripta' | 'mago_mayor' | 'wyvern_aire';
+    | 'goblin_jefe' | 'antlion_reina' | 'caballero_cripta' | 'mago_mayor' | 'wyvern_aire' | 'demonio_foso';
 /** Orden fijo: el protocolo manda el índice del tipo. */
 export const MOB_TYPES: MobType[] = ['goblin', 'zombie', 'skeleton', 'barbaro', 'goblin_elite', 'antlion', 'skeleton_mage', 'fire_ant', 'wyvern', 'minotaur', 'arana', 'golem', 'demonio',
     'hobgoblin', 'hobgoblin_archer', 'skeleton_archer', 'zombie_dark', 'cursed_grave', 'ice_ant', 'antlion_small', 'wyvern_fire', 'wyvern_ice',
-    'goblin_jefe', 'antlion_reina', 'caballero_cripta', 'mago_mayor', 'wyvern_aire'];
+    'goblin_jefe', 'antlion_reina', 'caballero_cripta', 'mago_mayor', 'wyvern_aire', 'demonio_foso'];
 /** Habilidad de boss: cada `every` s, si el jugador está a menos de `range`, carga un golpe y lo lanza a los 0,8 s. Alcanza a quien esté a menos de `r`. */
 export interface BossSpecial { name: string; every: number; range: number; r: number; dmg?: [number, number]; stun?: number; col: string }
 export interface BossDef { respawn: number; minRar: number; gold: [number, number]; special: BossSpecial }
@@ -54,6 +54,7 @@ export const MOBS: Record<MobType, MobDef> = {
     caballero_cripta: { name: 'Caballero de la cripta', lvl: 9, hp: 3500, dmg: [26, 40], spd: 1.4, ref: 2.4, exp: 900, hitR: 32, head: 70, atk: 1.7, sprite: 'skeleton', boss: { respawn: 240, minRar: 2, gold: [110, 180], special: { name: 'Golpe de escudo', every: 10, range: 3.2, r: 3, stun: 1.5, dmg: [18, 26], col: '#9aa7c7' } } },
     mago_mayor: { name: 'Mago mayor', lvl: 11, hp: 4600, dmg: [32, 48], spd: 1.3, ref: 2.4, exp: 1200, hitR: 26, head: 62, atk: 1.7, sprite: 'skeleton_mage', boss: { respawn: 300, minRar: 2, gold: [140, 230], special: { name: 'Rayo arcano', every: 8, range: 5, r: 3.4, stun: 1, dmg: [24, 34], col: '#7aa8ff' } } },
     wyvern_aire: { name: 'Wyvern del aire', lvl: 12, hp: 5200, dmg: [36, 54], spd: 1.7, ref: 2.4, exp: 1500, hitR: 36, head: 96, atk: 1.7, sprite: 'wyvern', boss: { respawn: 300, minRar: 2, gold: [170, 280], special: { name: 'Tormenta de viento', every: 9, range: 4.2, r: 3.6, stun: 1.2, dmg: [28, 40], col: '#bfe9ff' } } },
+    demonio_foso: { name: 'Señor del Foso', lvl: 12, hp: 6200, dmg: [40, 60], spd: 1.5, ref: 2.4, exp: 2000, hitR: 44, head: 120, atk: 1.7, sprite: 'demonio', boss: { respawn: 360, minRar: 3, gold: [220, 340], special: { name: 'Salto sísmico', every: 10, range: 4.5, r: 3.4, dmg: [50, 70], stun: 1.2, col: '#ff5a3c' } } },
 };
 
 /** Segundos hasta que reaparece un mob muerto. */

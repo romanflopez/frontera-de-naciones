@@ -9,7 +9,7 @@ const meta = JSON.parse(readFileSync(assets + 'meta.json', 'utf8')) as Record<st
 
 test('el protocolo manda el índice del tipo: los 13 originales no se reordenan y los nuevos van al final', () => {
     assert.deepEqual(MOB_TYPES.slice(0, 13), ['goblin', 'zombie', 'skeleton', 'barbaro', 'goblin_elite', 'antlion', 'skeleton_mage', 'fire_ant', 'wyvern', 'minotaur', 'arana', 'golem', 'demonio']);
-    assert.deepEqual(MOB_TYPES.slice(13), ['hobgoblin', 'hobgoblin_archer', 'skeleton_archer', 'zombie_dark', 'cursed_grave', 'ice_ant', 'antlion_small', 'wyvern_fire', 'wyvern_ice', 'goblin_jefe', 'antlion_reina', 'caballero_cripta', 'mago_mayor', 'wyvern_aire']);
+    assert.deepEqual(MOB_TYPES.slice(13), ['hobgoblin', 'hobgoblin_archer', 'skeleton_archer', 'zombie_dark', 'cursed_grave', 'ice_ant', 'antlion_small', 'wyvern_fire', 'wyvern_ice', 'goblin_jefe', 'antlion_reina', 'caballero_cripta', 'mago_mayor', 'wyvern_aire', 'demonio_foso']);
     assert.equal(new Set(MOB_TYPES).size, MOB_TYPES.length, 'sin tipos repetidos');
 });
 
