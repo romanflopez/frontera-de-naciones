@@ -171,7 +171,13 @@ export class MobSim {
                 if (T < m.busy) continue; // cargando la habilidad: se queda quieto
                 const sp = d.boss?.special;
                 if (sp && T >= m.nextSp && dp <= sp.range) { this.special(m, T); continue; }
-                if (dp > 1.1) this.step(m, px, py, d.spd, dt);
+                const rg = d.ranged;
+                const los = rg ? this.clearShot(m.x, m.y, px, py) : false;
+                if (rg) {
+                    // a distancia: acercarse hasta tener tiro (a rango y con línea libre), quedarse, y retroceder si lo pisan
+                    if (dp > rg.range * 0.95 || !los) this.step(m, px, py, d.spd, dt);
+                    else if (dp < rg.keep * 0.6) this.step(m, m.x + (m.x - px), m.y + (m.y - py), d.spd * 0.8, dt);
+                } else if (dp > 1.1) this.step(m, px, py, d.spd, dt);
                 for (const o of chasing) {
                     if (o === m || o.state !== 'chase') continue;
                     const sx = m.x - o.x, sy = m.y - o.y, sd = Math.hypot(sx, sy);
@@ -180,7 +186,9 @@ export class MobSim {
                         if (this.walk(Math.floor(nx), Math.floor(ny)) && !this.isSafe(nx, ny)) { m.x = nx; m.y = ny; }
                     }
                 }
-                if (dp <= 1.5 && T >= m.nextAtk) {
+                if (rg) {
+                    if (los && dp <= rg.range && T >= m.nextAtk) this.shoot(m, tgt, px, py, dp, T);
+                } else if (dp <= 1.5 && T >= m.nextAtk) {
                     m.nextAtk = T + d.atk;
                     this.broadcastNear(m, M.mobAttack(m.id, px, py));
                     const dmg = rint(d.dmg[0], d.dmg[1]), tid = tgt.playerId;
@@ -196,6 +204,31 @@ export class MobSim {
         }
         this.snapT += dt;
         if (this.snapT >= SNAP_EVERY) { this.snapT = 0; this.sendSnapshots(); }
+    }
+
+    /** ¿Hay línea libre entre (x0, y0) y (x1, y1)? Muestrea cada 0,25 celdas y corta con la primera celda bloqueada (los extremos no cuentan). */
+    clearShot(x0: number, y0: number, x1: number, y1: number): boolean {
+        const d = Math.hypot(x1 - x0, y1 - y0), n = Math.ceil(d / 0.25);
+        for (let i = 1; i < n; i++) { const k = i / n; if (!this.walk(Math.floor(x0 + (x1 - x0) * k), Math.floor(y0 + (y1 - y0) * k))) return false; }
+        return true;
+    }
+
+    /**
+     * Disparo de un mob a distancia: avisa a los cercanos (animación + proyectil visual) y el daño llega cuando el proyectil llega, con las
+     * mismas reglas de defensa que el cuerpo a cuerpo (`host.hurt`). Pega solo si el jugador sigue a menos de 1 celda del punto apuntado.
+     */
+    private shoot(m: SimMob, tgt: Player, px: number, py: number, dp: number, T: number) {
+        const rg = m.def.ranged!, d = m.def;
+        m.nextAtk = T + d.atk;
+        const travel = Math.max(120, Math.round((dp / rg.speed) * 1000));
+        this.broadcastNear(m, M.mobAttack(m.id, px, py));
+        this.broadcastNear(m, M.mobProjectile(m.id, m.x, m.y, px, py, travel, rg.kind));
+        const dmg = rint(d.dmg[0], d.dmg[1]), tid = tgt.playerId;
+        this.host.after(travel, () => {
+            const p = this.host.playerById(tid);
+            if (!this.mobs.has(m.id) || !this.eligible(p)) return;
+            if (Math.hypot(px - (p.posX + 0.5), py - (p.posY + 0.5)) < 1.0) { p.send(M.mobHitPlayer(m.id, dmg, 0)); this.host.hurt(p, dmg, d.name); }
+        });
     }
 
     /** Habilidad de boss: aviso, 0,8 s de carga y recién ahí pega a quien esté dentro del radio. */

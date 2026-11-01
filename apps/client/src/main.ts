@@ -139,6 +139,9 @@ interface Proj { x: number; y: number; m: Mob | null; spd: number; dmg: number; 
 interface Fx { k: 'ring' | 'boom' | 'burst' | 'click' | 'efx' | 'blizz'; d?: number; n?: string; dy?: number; x: number; y: number; t: number; c?: string; r?: number }
 const scorch: { x: number; y: number; t: number; r: number }[] = [];
 const mobs: Mob[] = [], corpses: { sprite: string; x: number; y: number; dir: number; t: number }[] = [], drops: Drop[] = [], projs: Proj[] = [];
+/** Proyectiles de los mobs a distancia (solo visuales: el daño lo decide el server al llegar; ver docs/MOBS_A_DISTANCIA.md). */
+interface Arrow { x0: number; y0: number; x1: number; y1: number; t0: number; dur: number; kind: number }
+const arrows: Arrow[] = [];
 const floats: { x: number; y: number; text: string; col: string; t: number; big?: boolean }[] = [], fx: Fx[] = [], pending: { t: number; fn: () => void }[] = [];
 let hitstop = 0, shake = 0;
 
@@ -265,6 +268,11 @@ function onServer(m: ServerPayload) {
         case 'mobAttack': {
             const mob = mobMap.get(m.value.mobId); if (!mob) break;
             turnTo(mob, m.value.tx - mob.x, m.value.ty - mob.y, 0, true); oneShot(mob, 'swing', 0.4);
+            break;
+        }
+        case 'mobProjectile': {
+            const v = m.value;
+            if (arrows.length < 80) arrows.push({ x0: v.fromX, y0: v.fromY, x1: v.toX, y1: v.toY, t0: now(), dur: Math.max(0.08, v.travelMs / 1000), kind: v.kind });
             break;
         }
         case 'mobHitPlayer': onMobHitPlayer(m.value); break;
@@ -1272,6 +1280,21 @@ function render() {
         const w = 34; ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - w / 2 - 1, p.y + 8, w + 2, 5); ctx.fillStyle = s.col; ctx.fillRect(p.x - w / 2, p.y + 9, w * k, 3);
     }
     drawRecall(T);
+    // proyectiles de mobs a distancia: una flecha (o virote) con estela que vuela en arco corto hasta el punto apuntado
+    for (let i = arrows.length - 1; i >= 0; i--) {
+        const a = arrows[i], k = (now() - a.t0) / a.dur;
+        if (k >= 1) { arrows.splice(i, 1); continue; }
+        const A = iso(a.x0, a.y0), B = iso(a.x1, a.y1), lift = Math.sin(Math.PI * k) * 12 + 22;
+        const hx = A.x + (B.x - A.x) * k, hy = A.y + (B.y - A.y) * k - lift, k2 = Math.max(0, k - 0.12);
+        const tx = A.x + (B.x - A.x) * k2, ty = A.y + (B.y - A.y) * k2 - (Math.sin(Math.PI * k2) * 12 + 22);
+        const bolt = a.kind === 1, col = bolt ? '#9fd0ff' : '#e8d3a2';
+        ctx.save(); ctx.lineCap = 'round';
+        ctx.globalAlpha = 0.35; ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(A.x + (B.x - A.x) * Math.max(0, k - 0.3), A.y + (B.y - A.y) * Math.max(0, k - 0.3) - (Math.sin(Math.PI * Math.max(0, k - 0.3)) * 12 + 22)); ctx.lineTo(tx, ty); ctx.stroke();
+        ctx.globalAlpha = 1; ctx.strokeStyle = '#3a2a16'; ctx.lineWidth = bolt ? 4 : 3; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke();
+        ctx.strokeStyle = col; ctx.lineWidth = bolt ? 2.5 : 1.6; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke();
+        const ang = Math.atan2(hy - ty, hx - tx); ctx.fillStyle = bolt ? '#cfe8ff' : '#f4efe0'; ctx.beginPath(); ctx.moveTo(hx + Math.cos(ang) * 5, hy + Math.sin(ang) * 5); ctx.lineTo(hx + Math.cos(ang + 2.5) * 5, hy + Math.sin(ang + 2.5) * 5); ctx.lineTo(hx + Math.cos(ang - 2.5) * 5, hy + Math.sin(ang - 2.5) * 5); ctx.closePath(); ctx.fill();
+        ctx.restore();
+    }
     for (const f of fx) if (f.k === 'boom') {
         const p = iso(f.x, f.y), k = f.t / 0.6, R2 = f.r! * TW * 0.5;
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1 - k;
@@ -2148,7 +2171,7 @@ async function boot() {
     loadBuildingImages();
     refreshLook();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, toScreen, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, perf: () => ({ ...perf }), mobCount: () => mobs.length });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, perf: () => ({ ...perf }), mobCount: () => mobs.length, arrows: () => arrows.length });
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5), recall: () => ({ on: !!recall, k: recallK(now()), cd: Math.max(0, recallCdEnd - now()) }) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();

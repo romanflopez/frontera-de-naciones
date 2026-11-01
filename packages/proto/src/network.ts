@@ -547,6 +547,9 @@ export interface ServerMessage {
     /** Cambio de mapa: el server sacó al jugador del mundo viejo y espera MapReady para meterlo en el nuevo. */
     { $case: "mapTransfer"; value: MapTransfer }
     | //
+    /** Proyectil de un mob a distancia (docs/MOBS_A_DISTANCIA.md). Los mobs cuerpo a cuerpo siguen usando MobAttack + MobHitPlayer. */
+    { $case: "mobProjectile"; value: MobProjectile }
+    | //
     /** Casa de subastas (ver docs/SUBASTAS.md). Rango propio de tags desde 300; el resultado de cada acción va en EconResult. */
     { $case: "auctionSearchResult"; value: AuctionSearchResult }
     | { $case: "auctionMyState"; value: AuctionMyState }
@@ -1373,6 +1376,17 @@ export interface MobAttack {
   mobId: number;
   tx: number;
   ty: number;
+}
+
+/** Un mob a distancia dispara: el proyectil sale de (from_x, from_y), llega a (to_x, to_y) en travel_ms y es solo visual; el daño lo decide el server al llegar (MobHitPlayer). kind: 0 flecha, 1 virote. */
+export interface MobProjectile {
+  mobId: number;
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  travelMs: number;
+  kind: number;
 }
 
 /** Solo para el jugador golpeado: daño (antes de defensa) y/o inmovilización en segundos. */
@@ -7199,6 +7213,9 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "mapTransfer":
         MapTransfer.encode(message.payload.value, writer.uint32(1202).fork()).join();
         break;
+      case "mobProjectile":
+        MobProjectile.encode(message.payload.value, writer.uint32(1210).fork()).join();
+        break;
       case "auctionSearchResult":
         AuctionSearchResult.encode(message.payload.value, writer.uint32(2402).fork()).join();
         break;
@@ -7971,6 +7988,14 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "mapTransfer", value: MapTransfer.decode(reader, reader.uint32()) };
             continue;
           }
+          case 151: {
+            if (tag !== 1210) {
+              break;
+            }
+
+            message.payload = { $case: "mobProjectile", value: MobProjectile.decode(reader, reader.uint32()) };
+            continue;
+          }
           case 300: {
             if (tag !== 2402) {
               break;
@@ -8605,6 +8630,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "mapTransfer": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "mapTransfer", value: MapTransfer.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "mobProjectile": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "mobProjectile", value: MobProjectile.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -18418,6 +18449,133 @@ export const MobAttack: MessageFns<MobAttack> = {
     message.mobId = object.mobId ?? 0;
     message.tx = object.tx ?? 0;
     message.ty = object.ty ?? 0;
+    return message;
+  },
+};
+
+function createBaseMobProjectile(): MobProjectile {
+  return { mobId: 0, fromX: 0, fromY: 0, toX: 0, toY: 0, travelMs: 0, kind: 0 };
+}
+
+export const MobProjectile: MessageFns<MobProjectile> = {
+  encode(message: MobProjectile, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mobId !== 0) {
+      writer.uint32(8).int32(message.mobId);
+    }
+    if (message.fromX !== 0) {
+      writer.uint32(21).float(message.fromX);
+    }
+    if (message.fromY !== 0) {
+      writer.uint32(29).float(message.fromY);
+    }
+    if (message.toX !== 0) {
+      writer.uint32(37).float(message.toX);
+    }
+    if (message.toY !== 0) {
+      writer.uint32(45).float(message.toY);
+    }
+    if (message.travelMs !== 0) {
+      writer.uint32(48).int32(message.travelMs);
+    }
+    if (message.kind !== 0) {
+      writer.uint32(56).int32(message.kind);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MobProjectile {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseMobProjectile();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.mobId = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 21) {
+              break;
+            }
+
+            message.fromX = reader.float();
+            continue;
+          }
+          case 3: {
+            if (tag !== 29) {
+              break;
+            }
+
+            message.fromY = reader.float();
+            continue;
+          }
+          case 4: {
+            if (tag !== 37) {
+              break;
+            }
+
+            message.toX = reader.float();
+            continue;
+          }
+          case 5: {
+            if (tag !== 45) {
+              break;
+            }
+
+            message.toY = reader.float();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.travelMs = reader.int32();
+            continue;
+          }
+          case 7: {
+            if (tag !== 56) {
+              break;
+            }
+
+            message.kind = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<MobProjectile>, I>>(base?: I): MobProjectile {
+    return MobProjectile.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MobProjectile>, I>>(object: I): MobProjectile {
+    const message = createBaseMobProjectile();
+    message.mobId = object.mobId ?? 0;
+    message.fromX = object.fromX ?? 0;
+    message.fromY = object.fromY ?? 0;
+    message.toX = object.toX ?? 0;
+    message.toY = object.toY ?? 0;
+    message.travelMs = object.travelMs ?? 0;
+    message.kind = object.kind ?? 0;
     return message;
   },
 };
