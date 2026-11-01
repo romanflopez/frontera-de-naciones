@@ -290,6 +290,8 @@ function onServer(m: ServerPayload) {
         case 'auctionSearchResult': case 'auctionMyState': case 'auctionHistory': auction.onMessage(m); break;
         case 'depositState': deposit.onMessage(m); break;
         case 'recallState': onRecallState(m.value); break;
+        case 'partyState': renderParty(m.value.members); break;
+        case 'partyInvited': break; // el server ya avisa por chat (/aceptar o /rechazar)
         case 'econResult': deposit.onResult(m.value.ok, m.value.text); if (m.value.ok) log(esc(m.value.text)); else { toast(m.value.text); log(esc(m.value.text)); } break;
         case 'killReward': onKillReward(m.value); break;
         case 'statusUpdate': onStatusUpdate(m.value); break;
@@ -969,6 +971,22 @@ cv.addEventListener('pointercancel', () => { holding = false; });
 cv.addEventListener('pointermove', (e) => { const r = cv.getBoundingClientRect(); mouse = { x: e.clientX - r.left, y: e.clientY - r.top }; });
 cv.addEventListener('pointerleave', () => { mouse = { x: -1, y: -1 }; });
 
+// ---------- party (docs/PARTY_Y_ARENAS.md): comandos de chat y panel de compañeros ----------
+const PARTY_CMDS: Record<string, string> = { invitar: 'invite', inv: 'invite', aceptar: 'accept', rechazar: 'decline', salir: 'leave', expulsar: 'kick', lider: 'leader' };
+function partyCommand(text: string): boolean {
+    const m = /^\/(\w+)(?:\s+(.+))?$/.exec(text); const action = m && PARTY_CMDS[m[1].toLowerCase()]; if (!m || !action) return false;
+    if ((action === 'invite' || action === 'kick' || action === 'leader') && !m[2]) { log(`Falta el nombre: /${m[1]} nombre`); return true; }
+    net.send({ $case: 'partyRequest', value: { action, name: (m[2] ?? '').trim() } }); return true;
+}
+function renderParty(members: { name: string; level: number; hp: number; maxHp: number; map: string; leader: boolean; online: boolean }[]): void {
+    const el = $('party'); if (!members.length) { el.hidden = true; el.innerHTML = ''; return; }
+    el.hidden = false;
+    el.innerHTML = '<div class="pt">Party</div>' + members.map((m) => {
+        const pct = Math.max(0, Math.min(100, Math.round((m.hp / Math.max(1, m.maxHp)) * 100)));
+        return `<div class="pm${m.online ? '' : ' off'}"><span class="pn">${m.leader ? '★ ' : ''}${esc(m.name)}</span><span class="pl">Nv ${m.level}</span><div class="pb"><i style="width:${pct}%"></i></div></div>`;
+    }).join('');
+}
+
 const chatIn = $('chatIn') as HTMLInputElement;
 window.addEventListener('keydown', (e) => {
     if (!connected) return;
@@ -977,7 +995,9 @@ window.addEventListener('keydown', (e) => {
             const text = chatIn.value.trim();
             if (/^\/meditar$/i.test(text)) toggleMeditate();
             else if (DEBUG && /^\/look(\s|$)/i.test(text)) lookCommand(text);
-            else if (text.startsWith('/')) log(DEBUG ? 'Comandos: /meditar, /look' : 'Comandos: /meditar');
+            else if (partyCommand(text)) { /* resuelto */ }
+            else if (/^\/(p|g)\s/i.test(text)) net.send({ $case: 'chatMessageSendRequest', value: { message: text } });
+            else if (text.startsWith('/')) log(DEBUG ? 'Comandos: /meditar, /look, party: /invitar /aceptar /rechazar /salir /expulsar /lider /p' : 'Comandos: /meditar, party: /invitar /aceptar /rechazar /salir /expulsar /lider /p');
             else if (text) net.send({ $case: 'chatMessageSendRequest', value: { message: text } });
             chatIn.value = ''; chatIn.blur(); cv.focus({ preventScroll: true }); e.preventDefault();
         } else if (e.key === 'Escape') { chatIn.blur(); cv.focus({ preventScroll: true }); }

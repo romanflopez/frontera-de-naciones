@@ -215,3 +215,6 @@ export const groundItemRemoved = (id: number): ServerMessage => msg({ $case: 'gr
 /** Estado del recall (volver a la ciudad) para el que lo usa: canalizando (con lo que falta) o nada, el enfriamiento y el motivo de un corte. */
 export const recallState = (channeling: boolean, channelMs: number, remainingMs: number, cooldownMs: number, reason = ''): ServerMessage =>
     msg({ $case: 'recallState', value: { state: channeling ? 1 : 0, channelMs, remainingMs: Math.max(0, Math.round(remainingMs)), cooldownMs: Math.max(0, Math.round(cooldownMs)), reason } });
+
+export const partyState = (members: { name: string; level: number; hp: number; maxHp: number; map: string; leader: boolean; online: boolean }[]): ServerMessage => msg({ $case: 'partyState', value: { members } });
+export const partyInvited = (fromName: string, expiresMs: number): ServerMessage => msg({ $case: 'partyInvited', value: { fromName, expiresMs: BigInt(expiresMs) } });

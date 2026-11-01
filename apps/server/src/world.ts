@@ -6,6 +6,7 @@
  * tick (cada 50 ms) solo dispara los temporizadores. Más adelante, si hace falta escalar,
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
+import { PARTY_SHARE_RANGE, partyExpMult, partyMates } from './party.ts';
 import { damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionMp, POTION_GCD_MS, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, progressFromEcon, PVP_SPELLS, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
 import { HUBS, QUESTS, RECALL, TRAINING, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef } from '@fdn/world';
 import { applyParalysis, applySlow, applyWarcry, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, hasWarcry, isSlowed, updateStatus } from './systems/statusSystem.ts';
@@ -73,7 +74,13 @@ export class GameWorld {
                 after: (ms, fn) => this.setTimeout(ms, fn),
                 hurt: (p, raw, source) => this.damagePlayer(p, raw, 'phys', null, source), // los ataques de mobs son físicos (los mitiga la DF)
                 stun: (p, secs) => { const s = paralysisSecs(secs, p.combat); return applyParalysis(p.status, Date.now(), s * 1000) ? s : 0; },
-                reward: (p, info) => { if (this.econ) this.econ.reward(p, this.econCtx, info); },
+                reward: (p, info) => {
+                    if (!this.econ) return;
+                    // party: cada compañero cerca (mismo mundo, vivo) recibe su propio botín y una parte de la exp (docs/PARTY_Y_ARENAS.md §1)
+                    const near = partyMates(p.sessionId).map((sid) => this.players.get(sid)).filter((m): m is Player => !!m && (m === p || (m.hp > 0 && Math.hypot(m.posX - p.posX, m.posY - p.posY) <= PARTY_SHARE_RANGE)));
+                    const mult = partyExpMult(near.length);
+                    for (const m of near.length ? near : [p]) this.econ.reward(m, this.econCtx, info, mult);
+                },
             });
         }
     }

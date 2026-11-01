@@ -126,6 +126,8 @@ message ClientMessage {
     DepositRequest deposit_request = 400;
     // Volver a la ciudad (recall). Rango propio de tags desde 500.
     RecallRequest recall_request = 500;
+    // Party (ver docs/PARTY_Y_ARENAS.md). Rango propio de tags desde 600.
+    PartyRequest party_request = 600;
   }
 }
 
@@ -519,7 +521,36 @@ message ServerMessage {
     DepositState deposit_state = 400;
     // Volver a la ciudad (recall). Rango propio de tags desde 500.
     RecallState recall_state = 500;
+    // Party (ver docs/PARTY_Y_ARENAS.md). Rango propio de tags desde 600.
+    PartyState party_state = 600;
+    PartyInvited party_invited = 601;
   }
+}
+
+// Party: el cliente manda una acción ('invite', 'accept', 'decline', 'leave', 'kick', 'leader') con el nombre del otro jugador cuando hace falta.
+message PartyRequest {
+  string action = 1;
+  string name = 2;
+}
+
+message PartyMember {
+  string name = 1;
+  int32 level = 2;
+  int32 hp = 3;
+  int32 max_hp = 4;
+  string map = 5;
+  bool leader = 6;
+  bool online = 7;
+}
+
+// Estado de la party del jugador (sin miembros = no tiene party).
+message PartyState {
+  repeated PartyMember members = 1;
+}
+
+message PartyInvited {
+  string from_name = 1;
+  int64 expires_ms = 2;
 }
 
 message TemporaryEffectApplied {

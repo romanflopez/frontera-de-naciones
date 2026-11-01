@@ -21,6 +21,7 @@ import { Economy, toCharSave } from './economy.ts';
 import { FileStorage, PgStorage, type Storage } from './storage.ts';
 import { AuctionHouse, setAuctionHouse } from './auction.ts';
 import { Depot, setDepot } from './deposit.ts';
+import { PartyService, setParties } from './party.ts';
 
 const MAX_INCOMING_BYTES = 24576;
 
@@ -91,6 +92,18 @@ registry.sessionHook = (sessionId) => { const s = sessionsById.get(sessionId); r
 
 function encode(m: ServerMessage): Uint8Array { return ServerMessage.encode(m).finish(); }
 
+// Party (docs/PARTY_Y_ARENAS.md): vive fuera de los mundos; la identidad es el sessionId.
+const parties = new PartyService({
+    sessionByName: (name) => { const n = name.toLowerCase(); for (const s of sessionsById.values()) if (s.socket && s.characterName.toLowerCase() === n) return s.sessionId; return undefined; },
+    send: (sid, m) => { const s = sessionsById.get(sid); if (s?.socket && s.socket.readyState === s.socket.OPEN) s.socket.send(encode(m)); },
+    info: (sid) => {
+        const s = sessionsById.get(sid), w = s ? worldOf(s) : undefined, p = w?.playerOf(sid); if (!s || !w || !p) return undefined;
+        return { name: s.characterName, faction: p.profile.split(';')[0], level: p.econ?.lvl ?? 1, hp: Math.round(p.hp), maxHp: Math.round(p.maxHp), map: w.mapId, online: !!s.socket };
+    },
+});
+setParties(parties);
+setInterval(() => parties.tick(), 1000).unref();
+
 /** Saca del mundo a los que se desconectaron y no volvieron dentro de la gracia. */
 setInterval(() => {
     const now = Date.now();
@@ -100,6 +113,7 @@ setInterval(() => {
         world?.persistVitals(s.sessionId);
         saveChar(s.networkId, world?.removePlayer(s.sessionId));
         storage.flush();
+        parties.leave(s.sessionId);
         sessionsByNetworkId.delete(s.networkId); sessionsById.delete(s.sessionId);
     }
 }, 1000).unref();
@@ -206,6 +220,10 @@ wss.on('connection', (ws, req) => {
                 worldOf(session)?.onClientSave(session.sessionId, payload.value.data);
                 return;
             }
+            case 'partyRequest': {
+                parties.handle(session.sessionId, payload.value.action.slice(0, 16), payload.value.name);
+                return;
+            }
             case 'portalRequest': {
                 // cruce de mapa: el server valida distancia, requisitos y estado; el cliente solo manda el id del vínculo
                 registry.handlePortal(session, payload.value.portalId.slice(0, 64), saveOf(session));
@@ -236,7 +254,7 @@ wss.on('connection', (ws, req) => {
         saveChar(session.networkId, world?.snapshot(session.sessionId));
         storage.flush(); // la economía se guarda ya al desconectar
         world?.playerDisconnected(session.sessionId, remainsActive);
-        if (!remainsActive) { sessionsByNetworkId.delete(session.networkId); sessionsById.delete(session.sessionId); }
+        if (!remainsActive) { parties.leave(session.sessionId); sessionsByNetworkId.delete(session.networkId); sessionsById.delete(session.sessionId); }
     });
 
     ws.on('error', (err) => console.error(`[Server] Error de WebSocket (${remote}):`, err.message));
@@ -247,6 +265,10 @@ function handleChat(sender: Session, raw: string, reply: (m: ServerMessage) => v
     const text = raw.trim();
     if (!text) { reply(M.sendMessage('El mensaje no puede estar vacío.')); return; }
     if (text.length > settings.chatMessageMaxLength) { reply(M.sendMessage(`El mensaje no puede pasar los ${settings.chatMessageMaxLength} caracteres.`)); return; }
+    if (/^\/(p|g)\s/i.test(text)) { // chat de party
+        if (!parties.chat(sender.sessionId, text.slice(3).trim(), sender.characterName)) reply(M.sendMessage('No estás en una party.'));
+        return;
+    }
     const data = encode(M.chatMessageReceived(sender.characterName, text));
     for (const s of sessionsByNetworkId.values()) if (s.socket?.readyState === s.socket?.OPEN) s.socket?.send(data);
 }

@@ -148,6 +148,9 @@ export interface ClientMessage {
     | //
     /** Volver a la ciudad (recall). Rango propio de tags desde 500. */
     { $case: "recallRequest"; value: RecallRequest }
+    | //
+    /** Party (ver docs/PARTY_Y_ARENAS.md). Rango propio de tags desde 600. */
+    { $case: "partyRequest"; value: PartyRequest }
     | undefined;
 }
 
@@ -560,7 +563,37 @@ export interface ServerMessage {
     | //
     /** Volver a la ciudad (recall). Rango propio de tags desde 500. */
     { $case: "recallState"; value: RecallState }
+    | //
+    /** Party (ver docs/PARTY_Y_ARENAS.md). Rango propio de tags desde 600. */
+    { $case: "partyState"; value: PartyState }
+    | { $case: "partyInvited"; value: PartyInvited }
     | undefined;
+}
+
+/** Party: el cliente manda una acción ('invite', 'accept', 'decline', 'leave', 'kick', 'leader') con el nombre del otro jugador cuando hace falta. */
+export interface PartyRequest {
+  action: string;
+  name: string;
+}
+
+export interface PartyMember {
+  name: string;
+  level: number;
+  hp: number;
+  maxHp: number;
+  map: string;
+  leader: boolean;
+  online: boolean;
+}
+
+/** Estado de la party del jugador (sin miembros = no tiene party). */
+export interface PartyState {
+  members: PartyMember[];
+}
+
+export interface PartyInvited {
+  fromName: string;
+  expiresMs: bigint;
 }
 
 export interface TemporaryEffectApplied {
@@ -1883,6 +1916,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "recallRequest":
         RecallRequest.encode(message.payload.value, writer.uint32(4002).fork()).join();
         break;
+      case "partyRequest":
+        PartyRequest.encode(message.payload.value, writer.uint32(4802).fork()).join();
+        break;
     }
     return writer;
   },
@@ -2561,6 +2597,14 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "recallRequest", value: RecallRequest.decode(reader, reader.uint32()) };
             continue;
           }
+          case 600: {
+            if (tag !== 4802) {
+              break;
+            }
+
+            message.payload = { $case: "partyRequest", value: PartyRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -3101,6 +3145,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "recallRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "recallRequest", value: RecallRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "partyRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "partyRequest", value: PartyRequest.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -7231,6 +7281,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "recallState":
         RecallState.encode(message.payload.value, writer.uint32(4002).fork()).join();
         break;
+      case "partyState":
+        PartyState.encode(message.payload.value, writer.uint32(4802).fork()).join();
+        break;
+      case "partyInvited":
+        PartyInvited.encode(message.payload.value, writer.uint32(4810).fork()).join();
+        break;
     }
     return writer;
   },
@@ -8039,6 +8095,22 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "recallState", value: RecallState.decode(reader, reader.uint32()) };
             continue;
           }
+          case 600: {
+            if (tag !== 4802) {
+              break;
+            }
+
+            message.payload = { $case: "partyState", value: PartyState.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 601: {
+            if (tag !== 4810) {
+              break;
+            }
+
+            message.payload = { $case: "partyInvited", value: PartyInvited.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -8672,7 +8744,338 @@ export const ServerMessage: MessageFns<ServerMessage> = {
         }
         break;
       }
+      case "partyState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "partyState", value: PartyState.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "partyInvited": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "partyInvited", value: PartyInvited.fromPartial(object.payload.value) };
+        }
+        break;
+      }
     }
+    return message;
+  },
+};
+
+function createBasePartyRequest(): PartyRequest {
+  return { action: "", name: "" };
+}
+
+export const PartyRequest: MessageFns<PartyRequest> = {
+  encode(message: PartyRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.action !== "") {
+      writer.uint32(10).string(message.action);
+    }
+    if (message.name !== "") {
+      writer.uint32(18).string(message.name);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PartyRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBasePartyRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.action = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.name = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<PartyRequest>, I>>(base?: I): PartyRequest {
+    return PartyRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PartyRequest>, I>>(object: I): PartyRequest {
+    const message = createBasePartyRequest();
+    message.action = object.action ?? "";
+    message.name = object.name ?? "";
+    return message;
+  },
+};
+
+function createBasePartyMember(): PartyMember {
+  return { name: "", level: 0, hp: 0, maxHp: 0, map: "", leader: false, online: false };
+}
+
+export const PartyMember: MessageFns<PartyMember> = {
+  encode(message: PartyMember, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.name !== "") {
+      writer.uint32(10).string(message.name);
+    }
+    if (message.level !== 0) {
+      writer.uint32(16).int32(message.level);
+    }
+    if (message.hp !== 0) {
+      writer.uint32(24).int32(message.hp);
+    }
+    if (message.maxHp !== 0) {
+      writer.uint32(32).int32(message.maxHp);
+    }
+    if (message.map !== "") {
+      writer.uint32(42).string(message.map);
+    }
+    if (message.leader !== false) {
+      writer.uint32(48).bool(message.leader);
+    }
+    if (message.online !== false) {
+      writer.uint32(56).bool(message.online);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PartyMember {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBasePartyMember();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.name = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.level = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.hp = reader.int32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.maxHp = reader.int32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.map = reader.string();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.leader = reader.bool();
+            continue;
+          }
+          case 7: {
+            if (tag !== 56) {
+              break;
+            }
+
+            message.online = reader.bool();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<PartyMember>, I>>(base?: I): PartyMember {
+    return PartyMember.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PartyMember>, I>>(object: I): PartyMember {
+    const message = createBasePartyMember();
+    message.name = object.name ?? "";
+    message.level = object.level ?? 0;
+    message.hp = object.hp ?? 0;
+    message.maxHp = object.maxHp ?? 0;
+    message.map = object.map ?? "";
+    message.leader = object.leader ?? false;
+    message.online = object.online ?? false;
+    return message;
+  },
+};
+
+function createBasePartyState(): PartyState {
+  return { members: [] };
+}
+
+export const PartyState: MessageFns<PartyState> = {
+  encode(message: PartyState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.members) {
+      PartyMember.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PartyState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBasePartyState();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.members.push(PartyMember.decode(reader, reader.uint32()));
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<PartyState>, I>>(base?: I): PartyState {
+    return PartyState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PartyState>, I>>(object: I): PartyState {
+    const message = createBasePartyState();
+    message.members = object.members?.map((e) => PartyMember.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBasePartyInvited(): PartyInvited {
+  return { fromName: "", expiresMs: 0n };
+}
+
+export const PartyInvited: MessageFns<PartyInvited> = {
+  encode(message: PartyInvited, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.fromName !== "") {
+      writer.uint32(10).string(message.fromName);
+    }
+    if (message.expiresMs !== 0n) {
+      if (BigInt.asIntN(64, message.expiresMs) !== message.expiresMs) {
+        throw new globalThis.Error("value provided for field message.expiresMs of type int64 too large");
+      }
+      writer.uint32(16).int64(message.expiresMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PartyInvited {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBasePartyInvited();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.fromName = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.expiresMs = reader.int64() as bigint;
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<PartyInvited>, I>>(base?: I): PartyInvited {
+    return PartyInvited.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PartyInvited>, I>>(object: I): PartyInvited {
+    const message = createBasePartyInvited();
+    message.fromName = object.fromName ?? "";
+    message.expiresMs = (object.expiresMs !== undefined && object.expiresMs !== null) ? BigInt(object.expiresMs) : 0n;
     return message;
   },
 };

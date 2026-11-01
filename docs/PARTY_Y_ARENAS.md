@@ -1,6 +1,10 @@
 # Party y arenas (borrador de diseño)
 
-Estado: **borrador**. Orden de trabajo acordado: 1) party, 2) mejoras +1..+5 (`docs/ITEMS.md`), 3) arenas 1v1 y 2v2 con cola, 4) runas.
+Estado: **party implementada (paso 1)**; arenas y mazmorras en grupo pendientes.
+
+Hecho de la party: `apps/server/src/party.ts` (`PartyService`), mensajes `PartyRequest`/`PartyState`/`PartyInvited` (tags 600/601), comandos de chat en el cliente (`/invitar nombre`, `/aceptar`, `/rechazar`, `/salir`, `/expulsar nombre`, `/lider nombre`, `/p texto`), panel de compañeros en el HUD, exp compartida (total ×(1+0,1 por compañero extra), en partes iguales) y botín propio de cada compañero cercano (≤20 celdas, mismo mapa, vivo). Pendiente de la party: que la puerta de una mazmorra lleve a toda la party junta, clic derecho para invitar, y barras de los compañeros en el minimapa.
+
+Estado anterior: **borrador**. Orden de trabajo acordado: 1) party, 2) mejoras +1..+5 (`docs/ITEMS.md`), 3) arenas 1v1 y 2v2 con cola, 4) runas.
 Hoy no hay party ni colas. Lo que existe: PvP entre facciones y una arena de todos contra todos escrita a mano en el mapa viejo (`isEnemyPair` en `apps/server/src/world.ts`, `docs/COMBATE.md`).
 
 ## 1. Party

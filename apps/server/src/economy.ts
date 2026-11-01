@@ -443,10 +443,10 @@ export class Economy {
     }
 
     /** El server decide el botín del golpe final: exp, item o oro, poción, esquirla y avance de misión. Se llama una sola vez por mob muerto. */
-    reward(p: Player, ctx: EconCtx, k: KillInfo): void {
+    reward(p: Player, ctx: EconCtx, k: KillInfo, expMult = 1): void {
         const st = p.econ; if (!st) return;
         const def = k.def, boss = def.boss;
-        const gain = Math.round(def.exp * (1 + bonus(st, 'exp') / 100));
+        const gain = Math.max(1, Math.round(def.exp * (1 + bonus(st, 'exp') / 100) * expMult));
         st.exp += gain;
         let gold = 0, item: SItem | undefined, bagFull = false, potion = '', shard = '';
         const bossU = boss ? BOSS_UNIQUES[k.type] : undefined, tier = tierOfLevel(def.lvl);
