@@ -8,6 +8,7 @@ import { WorldRegistry, type TransferSession } from '../src/registry.ts';
 import { resolveSaved, restPosition } from '../src/persist.ts';
 import type { PersistedPlayer, Player } from '../src/player.ts';
 import type { GameWorld } from '../src/world.ts';
+import { PartyService, setParties } from '../src/party.ts';
 import { LEGACY_VILLA_LINK, PRUEBA_CAZA, PRUEBA_MAZMORRA } from '@fdn/world';
 
 const settings = loadSettings(), catalogs = loadCatalogs();
@@ -308,4 +309,63 @@ test('respawn en otro mapa: la muerte dispara un cruce de dos fases con la vida 
     reg.completeTransfer(J.session.sessionId, 'solmar_legacy', reg.hashOf('solmar_legacy'));
     const legacy = reg.get('solmar_legacy')!;
     assert.deepEqual([legacy.playerOf(J.session.sessionId)!.posX, legacy.playerOf(J.session.sessionId)!.posY], [11, 12]);
+});
+
+test('mazmorra: cada party entra junta a su propia instancia; los demás, a la suya', () => {
+    const { reg, eco } = fresh();
+    const caza = reg.ensure('prueba_caza');
+    const A = join(reg, eco, caza, 'ana', { x: 57, y: 6 }), B = join(reg, eco, caza, 'beto', { x: 55, y: 8 });
+    const C = join(reg, eco, caza, 'carla', { x: 57, y: 5 }), D = join(reg, eco, caza, 'dani', { x: 10, y: 10 });
+    for (const j of [A, B, C, D]) j.p.prog.lvl = 5;
+    const people = new Map([[A, 'ana'], [B, 'beto'], [C, 'carla'], [D, 'dani']].map(([j, n]) => [(j as typeof A).session.sessionId, n as string]));
+    const inbox = new Map<string, ServerMessage[]>();
+    const svc = new PartyService({
+        sessionByName: (n) => [...people].find(([, v]) => v === n.toLowerCase())?.[0],
+        send: (sid, m) => { (inbox.get(sid) ?? inbox.set(sid, []).get(sid)!).push(m); },
+        info: (sid) => (people.has(sid) ? { name: people.get(sid)!, faction: 'solmar', level: 5, hp: 100, maxHp: 100, map: 'prueba_caza', online: true } : undefined),
+    });
+    setParties(svc);
+    reg.sessionHook = (sid) => { const j = [A, B, C, D].find((x) => x.session.sessionId === sid); return j && { session: j.session, save }; };
+    try {
+        svc.handle(A.session.sessionId, 'invite', 'beto'); svc.handle(B.session.sessionId, 'accept', '');
+        assert.equal(reg.handlePortal(A.session, 'caza_a_mazmorra', save), null);
+        const keyA = A.session.worldId;
+        assert.match(keyA, /^prueba_mazmorra#p\d+$/);
+        assert.equal(B.session.worldId, keyA, 'el compañero cercano cruza a la misma instancia');
+        assert.equal(D.session.worldId, 'prueba_caza', 'quien no está en la party no cruza');
+        // alguien sin party: instancia propia, distinta
+        assert.equal(reg.handlePortal(C.session, 'caza_a_mazmorra', save), null);
+        assert.match(C.session.worldId, /^prueba_mazmorra#u/); assert.notEqual(C.session.worldId, keyA);
+        for (const j of [A, B, C]) reg.completeTransfer(j.session.sessionId, 'prueba_mazmorra', reg.hashOf('prueba_mazmorra'));
+        assert.equal(reg.get(keyA)!.playerCount, 2);
+        assert.equal(reg.get(C.session.worldId)!.playerCount, 1);
+        assert.equal(reg.get('prueba_mazmorra'), undefined, 'no se crea el mundo compartido de la mazmorra');
+        // un compañero lejos de la puerta no es arrastrado ni cuenta para la instancia
+        const caza2 = reg.get('prueba_caza')!; assert.equal(caza2.playerCount, 1);
+        // salir de la mazmorra vuelve al mundo compartido
+        const ap = reg.get(keyA)!.playerOf(A.session.sessionId)!; ap.setPosition(PRUEBA_MAZMORRA.exit.x, PRUEBA_MAZMORRA.exit.y);
+        assert.equal(reg.handlePortal(A.session, 'mazmorra_a_caza', save), null);
+        assert.equal(A.session.worldId, 'prueba_caza');
+    } finally { setParties(undefined); }
+});
+
+test('mazmorra: un compañero que no cumple el requisito no entra y se avisa', () => {
+    const { reg, eco } = fresh();
+    const caza = reg.ensure('prueba_caza');
+    const A = join(reg, eco, caza, 'ana', { x: 57, y: 6 }), B = join(reg, eco, caza, 'beto', { x: 55, y: 8 });
+    A.p.prog.lvl = 5; B.p.prog.lvl = 1;
+    const people = new Map([[A.session.sessionId, 'ana'], [B.session.sessionId, 'beto']]);
+    const svc = new PartyService({
+        sessionByName: (n) => [...people].find(([, v]) => v === n.toLowerCase())?.[0], send: () => {},
+        info: (sid) => ({ name: people.get(sid)!, faction: 'solmar', level: 5, hp: 100, maxHp: 100, map: 'prueba_caza', online: true }),
+    });
+    setParties(svc);
+    reg.sessionHook = (sid) => { const j = [A, B].find((x) => x.session.sessionId === sid); return j && { session: j.session, save }; };
+    try {
+        svc.handle(A.session.sessionId, 'invite', 'beto'); svc.handle(B.session.sessionId, 'accept', '');
+        B.log.length = 0;
+        reg.handlePortal(A.session, 'caza_a_mazmorra', save);
+        assert.match(A.session.worldId, /#p/); assert.equal(B.session.worldId, 'prueba_caza');
+        assert.ok(kinds(B.log).includes('sendMessage'));
+    } finally { setParties(undefined); }
 });

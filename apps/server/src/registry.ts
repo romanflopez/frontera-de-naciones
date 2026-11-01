@@ -4,15 +4,16 @@
  *   1. beginTransfer: saca al jugador del mundo A (queda fuera de todo mundo, no se lo puede atacar), guarda el personaje con
  *      el destino y le manda MapTransfer;
  *   2. completeTransfer (cuando llega MapReady, o por tiempo): lo mete en B, que le manda el estado inicial.
- * La clave de un mundo es `mapId` (mundo compartido) o `mapId#instanceId` (instancia privada: todavía no se usa, pero el registro
- * ya la soporta, incluida la baja de instancias vacías).
+ * La clave de un mundo es `mapId` (mundo compartido) o `mapId#instanceId` (instancia privada). Las mazmorras (`MapDef.temporary`) son
+ * una instancia por party (`p<id>`) o una propia si el jugador no tiene party (`u<sessionId>`); ver docs/DUNGEONS_INSTANCIAS.md.
  */
-import { getMapDef, mapHash, type Link, type WorldMap } from '@fdn/world';
+import { QUESTS, getMapDef, linkGateReason, mapHash, type Link, type WorldMap } from '@fdn/world';
 import type { Catalogs, GameWorldConfig, Settings } from './config.ts';
 import type { Economy } from './economy.ts';
 import { occupancyFromGrid } from './map.ts';
 import * as M from './messages.ts';
 import type { PersistedPlayer, Player } from './player.ts';
+import { PARTY_SHARE_RANGE, partyIdOf, partyMates } from './party.ts';
 import { GameWorld } from './world.ts';
 
 export interface RegistryOptions {
@@ -34,7 +35,7 @@ export interface TransferDest { map: string; x: number; y: number; instanceId?: 
 interface Pending { player: Player; session: TransferSession; map: string; key: string; x: number; y: number; direction?: number; hash: string; since: number }
 
 export const DEFAULT_HIBERNATE_MS = 15_000;
-export const DEFAULT_INSTANCE_TTL_MS = 120_000;
+export const DEFAULT_INSTANCE_TTL_MS = 300_000; // una instancia de mazmorra vacía vive 5 min (por si alguien vuelve de la ciudad)
 export const DEFAULT_TRANSFER_TIMEOUT_MS = 20_000;
 
 export const worldKey = (mapId: string, instanceId = ''): string => (instanceId ? `${mapId}#${instanceId}` : mapId);
@@ -193,15 +194,49 @@ export class WorldRegistry {
         const r = w.checkLink(p, portalId);
         if (!('link' in r)) { if (r.why) p.send(M.sendMessage(r.why)); return r.why; }
         const link: Link = r.link;
-        if (!this.beginTransfer(s, { map: link.to.map, x: link.to.x, y: link.to.y }, save)) return null;
+        const srcKey = s.worldId, instanceId = this.instanceFor(s, link.to.map);
+        if (!this.beginTransfer(s, { map: link.to.map, x: link.to.x, y: link.to.y, instanceId: instanceId || undefined }, save)) return null;
         w.consumeLinkKey(p, link); // la llave se descuenta al cruzar, como las escaleras con llave del mapa original
+        if (instanceId) this.bringParty(s.sessionId, srcKey, link, instanceId);
         return null;
+    }
+
+    /**
+     * Instancia a la que lleva un cruce hacia `destMap`: '' (mundo compartido) si no es mazmorra; si el jugador ya está en una
+     * instancia de mazmorra (cambio de piso, reaparición en la entrada) se queda en ella; si no, la de su party o una propia.
+     */
+    private instanceFor(s: TransferSession, destMap: string): string {
+        if (!getMapDef(destMap)?.temporary) return '';
+        const i = s.worldId.indexOf('#');
+        if (i >= 0 && getMapDef(s.worldId.slice(0, i))?.temporary) return s.worldId.slice(i + 1);
+        const pid = partyIdOf(s.sessionId);
+        return pid !== undefined ? `p${pid}` : `u${s.sessionId}`;
+    }
+
+    /**
+     * Los compañeros de party que están cerca del portal (mismo mundo, vivos, a PARTY_SHARE_RANGE celdas o menos) cruzan juntos a la
+     * misma instancia. Cada uno tiene que cumplir los requisitos del vínculo (nivel, misión, llave) y paga su propia llave.
+     */
+    private bringParty(leaderSid: string, srcKey: string, link: Link, instanceId: string): void {
+        const src = this.worlds.get(srcKey); if (!src) return;
+        const lead = this.sessionHook?.(leaderSid);
+        for (const sid of partyMates(leaderSid)) {
+            if (sid === leaderSid || this.pending.has(sid)) continue;
+            const h = this.sessionHook?.(sid), m = src.playerOf(sid);
+            if (!h || !m || h.session.worldId !== srcKey || m.isDead || m.disconnected) continue;
+            if (Math.hypot(m.posX - link.x, m.posY - link.y) > PARTY_SHARE_RANGE) continue;
+            const why = linkGateReason(link, m.prog, (i) => QUESTS[i]?.name);
+            if (why) { m.send(M.sendMessage(`No entrás con tu party: ${why}`)); if (lead) src.playerOf(leaderSid)?.send(M.sendMessage(`${m.characterName} no puede entrar: ${why}`)); continue; }
+            if (!this.beginTransfer(h.session, { map: link.to.map, x: link.to.x, y: link.to.y, instanceId }, h.save)) continue;
+            src.consumeLinkKey(m, link);
+        }
     }
 
     /** Respawn/teletransporte iniciado por el propio mundo (muerte con punto de reaparición en otro mapa). */
     private transferFromWorld(sessionId: string, dest: TransferDest): void {
         const s = this.sessionHook?.(sessionId); if (!s) return;
-        this.beginTransfer(s.session, dest, s.save);
+        const instanceId = dest.instanceId ?? (this.instanceFor(s.session, dest.map) || undefined);
+        this.beginTransfer(s.session, { ...dest, instanceId }, s.save);
     }
     /** index.ts lo setea: resuelve la sesión (y cómo guardarla) a partir de su id. */
     sessionHook?: (sessionId: string) => { session: TransferSession; save?: (state: PersistedPlayer) => void } | undefined;

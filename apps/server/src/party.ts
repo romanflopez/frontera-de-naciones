@@ -165,3 +165,5 @@ export class PartyService {
 let active: PartyService | undefined;
 export const setParties = (svc: PartyService | undefined): void => { active = svc; };
 export const partyMates = (sid: string): string[] => active?.mates(sid) ?? [sid];
+
+export const partyIdOf = (sid: string): number | undefined => active?.partyIdOf(sid);
