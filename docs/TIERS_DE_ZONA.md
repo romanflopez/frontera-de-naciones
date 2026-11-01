@@ -39,7 +39,7 @@ Los 12 mapas abiertos de hoy están apretados en los niveles 1-11 (uno por nivel
 | T5 | Cenizas I, Cenizas II |
 | T6 | Cenizas III |
 
-Faltan mapas para el T7 (niveles 31-40) y más variedad en los tiers altos: salen de la reserva de Flare. Las 6 mazmorras se reasignan una por tier (los jefes no se reescalan solos, hay que subirles el nivel: ver paso 3.1).
+Faltan mapas para el T7 (niveles 31-40) y más variedad en los tiers altos: salen de la reserva de Flare. Hoy hay 12 mapas de mazmorra (niveles 2 a 12, de la Cueva goblin al Foso del demonio): se reparten dos por tier y los jefes no se reescalan solos, hay que subirles el nivel a mano (ver paso 3.1).
 
 ## 4. Cómo se implementa
 
