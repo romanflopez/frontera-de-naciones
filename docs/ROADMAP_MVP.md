@@ -91,6 +91,8 @@ El techo pasa de 12 a **40**. Más mapas y más contenido, curva más amable has
 
 ## 6. Orden recomendado
 
+El plan detallado, paso por paso y con las pruebas de cada uno, está en [`PLAN_DE_TRABAJO.md`](PLAN_DE_TRABAJO.md).
+
 1. Fase 0 en paralelo (legal y CI) porque es lo único que puede frenar la beta.
 2. Fase 1 (cerrar party, probar con 2 jugadores, jefes y balance).
 3. Fase 2 (ítems únicos T4-T6, +6..+11, llaves, runas).
