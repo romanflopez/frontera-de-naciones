@@ -16,7 +16,7 @@ import { adjacentCellsAt45, distance, findNearestFreeLocation, nextGridDirection
 import type { Occupancy } from './map.ts';
 import * as M from './messages.ts';
 import { MobSim } from './mobs.ts';
-import type { WorldMap } from '@fdn/world';
+import { MOB_TYPES, type MobType, type WorldMap } from '@fdn/world';
 import { Player, type PersistedPlayer, type Send } from './player.ts';
 import type { Economy, EconCtx } from './economy.ts';
 import { auctionHouse } from './auction.ts';
@@ -889,6 +889,60 @@ export class GameWorld {
     }
 
     /** Stats de combate del jugador a partir del personaje del server (equipo y nivel autoritativos). */
+    /**
+     * SOLO GM: comandos de /gm que actúan dentro de este mundo (el cruce de mapa lo hace index.ts). Devuelve las líneas a mostrarle.
+     * El server decide quién es GM (FDN_GM); acá ya se asume autorizado.
+     */
+    gmCommand(sessionId: string, cmd: string, args: string[]): string[] {
+        const p = this.players.get(sessionId); if (!p || !this.map) return ['No estás en un mundo.'];
+        const num = (s: string | undefined) => (s !== undefined && /^-?\d+$/.test(s) ? parseInt(s, 10) : undefined);
+        switch (cmd) {
+            case 'nivel': {
+                const n = num(args[0]); if (n === undefined) return ['Uso: /gm nivel <1-60>'];
+                if (!this.econ?.gmSet(p, { lvl: n })) return ['Tu personaje todavía no tiene economía.'];
+                this.restat(p); p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; this.sendVitals(p, true); this.econ.snapshot(p);
+                return [`Nivel ${p.combat.lvl}, vida y maná al máximo.`];
+            }
+            case 'oro': {
+                const n = num(args[0]); if (n === undefined) return ['Uso: /gm oro <cantidad> (puede ser negativa)'];
+                if (!this.econ?.gmSet(p, { gold: n })) return ['Tu personaje todavía no tiene economía.'];
+                this.econ.snapshot(p); return [`Oro: ${n >= 0 ? '+' : ''}${n}.`];
+            }
+            case 'llaves': {
+                const n = num(args[0]) ?? 20;
+                if (!this.econ?.gmSet(p, { keys: n })) return ['Tu personaje todavía no tiene economía.'];
+                this.restat(p); this.econ.snapshot(p); return [`Llaves de mazmorra: ${n} de cada una.`];
+            }
+            case 'curar':
+                p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; this.sendVitals(p, true); return ['Vida y maná al máximo.'];
+            case 'dios':
+                p.godMode = !p.godMode; return [p.godMode ? 'Modo dios: ON (no recibís daño).' : 'Modo dios: OFF.'];
+            case 'pos': {
+                const x = num(args[0]), y = num(args[1]);
+                if (x === undefined || y === undefined) return [`Estás en ${this.mapId} (${p.posX}, ${p.posY}). Uso: /gm pos <x> <y> para moverte dentro del mapa.`];
+                const free = findNearestFreeLocation((cx, cy) => this.cellWalkable(cx, cy) && this.occupancy.isFree(cx, cy), x, y, 6);
+                if (!free) return ['No hay una celda libre cerca de ahí.'];
+                this.moveTo(p, p.posX, p.posY, free.x, free.y, false, true); p.send(M.playerTeleported(free.x, free.y));
+                return [`Teletransportado a (${free.x}, ${free.y}).`];
+            }
+            case 'mobs': return ['Tipos: ' + MOB_TYPES.join(', ')];
+            case 'mob': {
+                if (!this.mobSim) return ['Este mapa no tiene simulación de mobs.'];
+                const type = args[0] as MobType;
+                if (!MOB_TYPES.includes(type)) return ['Uso: /gm mob <tipo> [nivel] [cantidad]. Tipos con /gm mobs.'];
+                const lvl = num(args[1]), n = Math.min(20, Math.max(1, num(args[2]) ?? 1));
+                // el cliente dibuja el mob con una zona del mapa: la del mismo tipo si hay, si no la más cercana
+                const zs = this.map.zones; let zi = zs.findIndex((z) => z.type === type);
+                if (zi < 0) { let bd = Infinity; zs.forEach((z, i) => { const d = Math.hypot(z.x - p.posX, z.y - p.posY); if (d < bd) { bd = d; zi = i; } }); }
+                if (zi < 0) return ['Este mapa no tiene zonas de mobs: no puedo dibujarlos en el cliente.'];
+                const got = this.mobSim.summon(type, lvl && lvl > 0 ? Math.min(lvl, 60) : undefined, p.posX + 0.5, p.posY + 0.5, n, zi);
+                return [`Invocados ${got} ${type}${lvl ? ' nivel ' + lvl : ''}. Con /gm limpiar los sacás.`];
+            }
+            case 'limpiar': return [`Mobs de GM sacados: ${this.mobSim?.clearGm() ?? 0}.`];
+            default: return [];
+        }
+    }
+
     private restat(p: Player, login = false): void {
         const prevLvl = p.combat.lvl, st = p.econ;
         p.combat = statsFromChar(st);
@@ -921,7 +975,7 @@ export class GameWorld {
     }
     /** Le saca vida a un jugador: DF (físico) o RM (mágico) del server, daño × 100/(100+X); si llega a 0 muere. Devuelve el daño aplicado. */
     private damagePlayer(p: Player, raw: number, kind: DmgKind, killer: Player | null, source = ''): number {
-        if (p.isDead || p.spawnProtection || raw <= 0) return 0;
+        if (p.isDead || p.spawnProtection || p.godMode || raw <= 0) return 0;
         const dmg = damageAfterDefense(raw, hasWarcry(p.status, Date.now()) ? { ...p.combat, def: p.combat.def + WARCRY_DEF } : p.combat, kind); // el Grito de guerra suma a la defensa antes de la fórmula
         p.hp = Math.max(0, p.hp - dmg); p.meditating = false;
         if (dmg > 0) this.cancelRecall(p, 'Te pegaron: se cortó el regreso a la ciudad.');

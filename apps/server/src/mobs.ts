@@ -29,6 +29,8 @@ interface SimMob {
     state: 'idle' | 'chase' | 'return'; target: bigint | null; lastAttacker: bigint | null;
     wx: number; wy: number; wait: number; nextAtk: number; nextSp: number; busy: number;
     par: number; imm: number; slow: number; poison: number; poisonTick: number; moving: boolean; dead: boolean;
+    /** Invocado con /gm mob: no reaparece al morir. */
+    gm?: boolean;
 }
 
 interface Budget { tokens: number; t: number; dead: boolean; lvl: number }
@@ -94,6 +96,34 @@ export class MobSim {
                 par: 0, imm: 0, slow: 0, poison: 0, poisonTick: 0, moving: false, dead: false,
             });
         }
+    }
+
+    /**
+     * SOLO GM (/gm mob): invoca `n` mobs de `type` alrededor de (cx, cy), sin reaparición. `zoneIdx` es la zona del mapa que el cliente usa
+     * para dibujarlos (escala y sprite); devuelve cuántos pudo poner.
+     */
+    summon(type: MobType, lvl: number | undefined, cx: number, cy: number, n: number, zoneIdx: number): number {
+        const zone: Zone = { type, x: cx, y: cy, r: 4, n: 0, name: 'GM', lvl };
+        let done = 0;
+        for (let k = 0; k < n; k++) for (let i = 0; i < 60; i++) {
+            const x = Math.floor(cx + (Math.random() * 2 - 1) * (2 + i / 8)), y = Math.floor(cy + (Math.random() * 2 - 1) * (2 + i / 8));
+            if (!this.walk(x, y) || this.map.safe[y]?.[x] || (x === Math.floor(cx) && y === Math.floor(cy))) continue;
+            const d = mobDef(type, zone), T = this.now(), id = this.nextId++;
+            this.mobs.set(id, {
+                id, type, def: d, typeIdx: MOB_TYPES.indexOf(type), zone, zoneIdx, x: x + 0.5, y: y + 0.5, hp: d.hp, hpMax: d.hp,
+                state: 'idle', target: null, lastAttacker: null, wx: x + 0.5, wy: y + 0.5, wait: 0, nextAtk: 0, nextSp: T + 4, busy: 0,
+                par: 0, imm: 0, slow: 0, poison: 0, poisonTick: 0, moving: false, dead: false, gm: true,
+            });
+            done++; break;
+        }
+        return done;
+    }
+
+    /** SOLO GM (/gm limpiar): saca los mobs invocados con /gm mob. */
+    clearGm(): number {
+        let n = 0;
+        for (const [id, m] of this.mobs) if (m.gm) { this.mobs.delete(id); n++; }
+        return n;
     }
 
     private eligible(p: Player | undefined): p is Player {
@@ -253,7 +283,7 @@ export class MobSim {
         m.dead = true; this.mobs.delete(m.id);
         if (killer) this.host.reward(killer, { mobId: m.id, type: m.type, def: m.def, zoneName: m.zone.name, origin: m.zone.tier === 'dungeon' ? 'dungeon' : m.zone.name.startsWith('Merodeadores') ? 'loose' : 'pit', x: m.x, y: m.y, shard: m.zone.drops?.shard }); // una sola vez: el mob ya salió del mapa
         this.broadcastNear(m, M.mobDied(m.id, killer ? killer.playerId : 0n, m.x, m.y, m.typeIdx, m.zoneIdx));
-        this.host.after(zoneRespawnSecs(m.type, m.zone) * 1000, () => this.spawn(m.zone, m.zoneIdx));
+        if (!m.gm) this.host.after(zoneRespawnSecs(m.type, m.zone) * 1000, () => this.spawn(m.zone, m.zoneIdx));
     }
 
     private sendSnapshots() {

@@ -277,6 +277,16 @@ export class Economy {
 
     private touch(p: Player): void { const acc = this.acc(p.accountKey); if (acc && p.econ) { acc.econ = p.econ; this.storage.put(p.accountKey, acc); } }
 
+    /** SOLO GM: fija el nivel (exp a 0) y/o suma oro. */
+    gmSet(p: Player, o: { lvl?: number; gold?: number; keys?: number }): boolean {
+        const st = p.econ; if (!st) return false;
+        if (o.lvl !== undefined) { st.lvl = clampInt(o.lvl, 1, MAX_LVL); st.exp = 0; refreshUnlocks(st); }
+        if (o.gold !== undefined) addGold(st, o.gold);
+        if (o.keys !== undefined) for (const k of Object.keys(st.q.keys) as KeyId[]) st.q.keys[k] = clampInt(o.keys, 0, 99);
+        this.touch(p);
+        return true;
+    }
+
     /** Guarda vida y maná del jugador en su estado (al salir y en cada guardado periódico). */
     persistVitals(p: Player): void {
         const st = p.econ; if (!st) return;

@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { ClientMessage, ServerMessage } from '@fdn/proto';
 import { DATA_DIR, loadCatalogs, loadSettings, type GameWorldConfig } from './config.ts';
-import { MAPS, getMapDef } from '@fdn/world';
+import { MAPS, MOB_TYPES, getMapDef } from '@fdn/world';
 import { loadPosition, resolveSaved, savePosition } from './persist.ts';
 import * as M from './messages.ts';
 import type { PersistedPlayer } from './player.ts';
@@ -260,9 +260,80 @@ wss.on('connection', (ws, req) => {
     ws.on('error', (err) => console.error(`[Server] Error de WebSocket (${remote}):`, err.message));
 });
 
+// ---------- comandos de GM (solo pruebas) ----------
+// Por defecto solo es GM la cuenta 'rowena'. FDN_GM=nombre1,nombre2 → solo esos personajes; FDN_GM=1 → cualquier cuenta (server local de pruebas); FDN_GM= (vacío) → nadie.
+const GM_ENV = (process.env.FDN_GM ?? 'rowena').trim().toLowerCase();
+const isGm = (name: string) => GM_ENV === '1' || GM_ENV === 'all' || GM_ENV.split(',').map((x) => x.trim()).filter(Boolean).includes(name.toLowerCase());
+const GM_HELP = [
+    'Comandos GM: /gm mapas · /gm ir <mapa> [x y] · /gm pos [x y] · /gm nivel <n> · /gm oro <n> · /gm curar · /gm dios',
+    '/gm mobs · /gm mob <tipo> [nivel] [cantidad] · /gm limpiar · /gm llaves [n] · /gm traer <jugador> · /gm ira <jugador> · /gm menu (o F9)',
+];
+/** Prefijo con el que el server le manda al cliente el contenido del menú GM (el cliente lo abre en vez de mostrarlo en el chat). */
+const GM_MENU_TAG = '\u0001GMMENU';
+/** Sesión conectada por nombre de personaje (exacto o por prefijo, sin importar mayúsculas). */
+function findOnline(name: string | undefined): Session | undefined {
+    const q = (name ?? '').toLowerCase(); if (!q) return undefined;
+    const live = [...sessionsByNetworkId.values()].filter((x) => x.socket?.readyState === x.socket?.OPEN);
+    return live.find((x) => x.characterName.toLowerCase() === q) ?? live.find((x) => x.characterName.toLowerCase().startsWith(q));
+}
+/** Primera celda caminable en espiral desde (x, y), para no caer en una pared al viajar. */
+function nearestWalkable(map: ReturnType<WorldRegistry['mapOf']>, x: number, y: number): { x: number; y: number } | undefined {
+    for (let r = 0; r < 40; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const cx = x + dx, cy = y + dy;
+        if (cx >= 0 && cy >= 0 && cx < map.size && cy < map.size && !map.blocked[cy][cx]) return { x: cx, y: cy };
+    }
+    return undefined;
+}
+function handleGm(s: Session, text: string, reply: (m: ServerMessage) => void): void {
+    const say = (...lines: string[]) => { for (const l of lines) reply(M.sendMessage(l)); };
+    if (!isGm(s.characterName)) { say('No sos GM.'); return; }
+    const [, cmd = 'ayuda', ...args] = text.split(/\s+/);
+    const c = cmd.toLowerCase();
+    if (c === 'ayuda' || c === 'help') { say(...GM_HELP); return; }
+    if (c === 'mapas') {
+        say(...Object.values(MAPS).map((d) => `${d.id} — ${d.name} (${d.lvl ? `Nv ${d.lvl[0]}-${d.lvl[1]}` : 'sin nivel'}${d.temporary ? ', mazmorra' : ''})`));
+        return;
+    }
+    if (c === 'ir') {
+        const def = getMapDef(args[0]);
+        if (!def) { say('Mapa desconocido. Los ids salen con /gm mapas.'); return; }
+        const rx = Number(args[1]), ry = Number(args[2]);
+        const map = registry.mapOf(def.id);
+        const spot = nearestWalkable(map, Number.isFinite(rx) && args[1] !== undefined ? rx : def.spawn.x, Number.isFinite(ry) && args[2] !== undefined ? ry : def.spawn.y);
+        if (!spot) { say('No encontré una celda caminable.'); return; }
+        if (!registry.beginTransfer(s, { map: def.id, x: spot.x, y: spot.y }, saveOf(s))) say('No pude viajar ahora (¿ya estás cruzando o estás muerto?).');
+        else say(`Viajando a ${def.name} (${spot.x}, ${spot.y})…`);
+        return;
+    }
+    if (c === 'menu') {
+        const maps = Object.values(MAPS).map((d) => ({ id: d.id, name: d.name, lvl: d.lvl ? `${d.lvl[0]}-${d.lvl[1]}` : '', dungeon: !!d.temporary }));
+        const here = worldOf(s)?.mapId ?? '';
+        const players = [...sessionsByNetworkId.values()].filter((x) => x.socket?.readyState === x.socket?.OPEN && x !== s).map((x) => ({ name: x.characterName, map: registry.get(x.worldId)?.mapId ?? '' }));
+        reply(M.sendMessage(GM_MENU_TAG + JSON.stringify({ maps, players, here, mobs: MOB_TYPES })));
+        return;
+    }
+    if (c === 'traer' || c === 'ira') {
+        const other = findOnline(args[0]);
+        if (!other || other === s) { say('No encontré a ese jugador conectado (podés escribir el principio del nombre).'); return; }
+        const [mover, anchor] = c === 'traer' ? [other, s] : [s, other];
+        const aw = worldOf(anchor), ap = aw?.playerOf(anchor.sessionId);
+        if (!aw || !ap) { say('No pude ubicar el destino.'); return; }
+        const spot = nearestWalkable(registry.mapOf(aw.mapId), ap.posX + 1, ap.posY);
+        if (!spot) { say('No encontré una celda libre cerca.'); return; }
+        if (!registry.beginTransfer(mover, { map: aw.mapId, x: spot.x, y: spot.y }, saveOf(mover))) say('No se pudo mover (¿está cruzando o muerto?).');
+        else say(c === 'traer' ? `Trajiste a ${other.characterName}.` : `Fuiste con ${other.characterName}.`);
+        return;
+    }
+    const out = worldOf(s)?.gmCommand(s.sessionId, c, args);
+    if (!out || out.length === 0) say('Comando GM desconocido. /gm ayuda');
+    else say(...out);
+}
+
 /** Chat global: le llega a todos los conectados. Port de GlobalWorld.HandleChatMessageSendRequest. */
 function handleChat(sender: Session, raw: string, reply: (m: ServerMessage) => void): void {
     const text = raw.trim();
+    if (/^\/gm(\s|$)/i.test(text)) { handleGm(sender, text, reply); return; }
     if (!text) { reply(M.sendMessage('El mensaje no puede estar vacío.')); return; }
     if (text.length > settings.chatMessageMaxLength) { reply(M.sendMessage(`El mensaje no puede pasar los ${settings.chatMessageMaxLength} caracteres.`)); return; }
     if (/^\/(p|g)\s/i.test(text)) { // chat de party

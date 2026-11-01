@@ -343,6 +343,7 @@ function onServer(m: ServerPayload) {
             toast(`El server te frenó ${m.value.durationSeconds} s.`);
             break;
         case 'sendMessage':
+            if (m.value.message.startsWith(GM_TAG)) { try { renderGm(JSON.parse(m.value.message.slice(GM_TAG.length))); } catch { /* menú GM mal formado: se ignora */ } break; }
             log(esc(m.value.message), false, 'sys');
             break;
         case 'chatMessageReceived':
@@ -1002,6 +1003,7 @@ window.addEventListener('keydown', (e) => {
             else if (DEBUG && /^\/look(\s|$)/i.test(text)) lookCommand(text);
             else if (partyCommand(text)) { /* resuelto */ }
             else if (/^\/(p|g)\s/i.test(text)) net.send({ $case: 'chatMessageSendRequest', value: { message: text } });
+            else if (/^\/gm(\s|$)/i.test(text)) net.send({ $case: 'chatMessageSendRequest', value: { message: text } }); // comandos de GM: los resuelve el server (FDN_GM)
             else if (text.startsWith('/')) log(DEBUG ? 'Comandos: /meditar, /look, party: /invitar /aceptar /rechazar /salir /expulsar /lider /p' : 'Comandos: /meditar, party: /invitar /aceptar /rechazar /salir /expulsar /lider /p');
             else if (text) net.send({ $case: 'chatMessageSendRequest', value: { message: text } });
             chatIn.value = ''; chatIn.blur(); cv.focus({ preventScroll: true }); e.preventDefault();
@@ -1010,6 +1012,7 @@ window.addEventListener('keydown', (e) => {
     }
     if (e.target instanceof HTMLInputElement) return;
     if (e.key === 'Enter') { e.preventDefault(); chatIn.focus(); return; }
+    if (e.key === 'F9') { e.preventDefault(); toggleGm(); return; }
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'q' || e.key === 'Q')) { usePotion('hp'); return; }
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'e' || e.key === 'E')) { usePotion('mp'); return; }
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'h' || e.key === 'H')) { toggleRecall(); return; }
@@ -2005,6 +2008,38 @@ function wpTick() {
     else if (wpInside !== on.id && !P.step && now() >= portalLock) { wpInside = on.id; if (!wpOpen) openWp(on); }
 }
 $('wpClose').addEventListener('click', closeWp);
+
+// ---------- menú GM (F9 o /gm menu): solo abre si el server te reconoce como GM (FDN_GM); todo se resuelve con comandos /gm ----------
+const GM_TAG = '\u0001GMMENU';
+interface GmData { maps: { id: string; name: string; lvl: string; dungeon: boolean }[]; players: { name: string; map: string }[]; here: string; mobs: string[] }
+let gmLast: GmData | null = null;
+const gmSend = (cmd: string) => net.send({ $case: 'chatMessageSendRequest', value: { message: '/gm ' + cmd } });
+function toggleGm() { const el = $('gmmenu'); if (!el.hidden) { el.hidden = true; return; } gmSend('menu'); }
+function renderGm(d: GmData) {
+    gmLast = d;
+    const el = $('gmmenu'); el.hidden = false;
+    const btn = (cmd: string, label: string) => `<button type="button" data-gm="${esc(cmd)}">${label}</button>`;
+    const mapRow = (x: GmData['maps'][number]) => `<button type="button" class="gmmap${x.id === d.here ? ' cur' : ''}" data-gm="ir ${esc(x.id)}"><span>${esc(x.name)}</span><small>${x.dungeon ? 'mazmorra · ' : ''}${x.lvl ? 'Nv ' + esc(x.lvl) : ''}</small></button>`;
+    el.innerHTML = `<h2><span>Menú GM</span><button type="button" id="gmClose" aria-label="Cerrar">×</button></h2>
+      <h3>Rápido</h3><div class="gmrow">${btn('curar', 'Curar')}${btn('dios', 'Modo dios')}${btn('llaves 20', 'Llaves ×20')}${btn('oro 10000', '+10.000 oro')}${btn('nivel 12', 'Nv 12')}${btn('nivel 30', 'Nv 30')}${btn('limpiar', 'Limpiar mobs')}</div>
+      <h3>Jugadores conectados</h3>${d.players.length ? d.players.map((p) => `<div class="gmrow"><span>${esc(p.name)} <small>${esc(p.map)}</small></span>${btn('traer ' + p.name, 'Traer acá')}${btn('ira ' + p.name, 'Ir con él')}</div>`).join('') : '<small>No hay nadie más conectado.</small>'}
+      <div class="gmrow">${btn('menu', 'Actualizar')}</div>
+      <h3>Invocar mob</h3><div class="gmrow"><select id="gmMob">${d.mobs.map((t) => `<option>${esc(t)}</option>`).join('')}</select><input id="gmLvl" type="number" min="1" max="60" placeholder="Nv"><input id="gmN" type="number" min="1" max="20" value="1"><button type="button" id="gmSummon">Invocar</button></div>
+      <h3>Mapas</h3>${d.maps.filter((x) => !x.dungeon).map(mapRow).join('')}
+      <h3>Mazmorras</h3>${d.maps.filter((x) => x.dungeon).map(mapRow).join('') || '<small>Todavía no hay.</small>'}`;
+}
+$('gmmenu').addEventListener('click', (e) => {
+    const t = e.target as HTMLElement, b = t.closest('button'); if (!b) return;
+    if (b.id === 'gmClose') { $('gmmenu').hidden = true; return; }
+    if (b.id === 'gmSummon') {
+        const type = ($('gmMob') as HTMLSelectElement).value, lvl = ($('gmLvl') as HTMLInputElement).value.trim(), n = ($('gmN') as HTMLInputElement).value.trim() || '1';
+        gmSend(`mob ${type} ${lvl || '0'} ${n}`); return;
+    }
+    const cmd = b.dataset.gm; if (!cmd) return;
+    gmSend(cmd);
+    if (cmd.startsWith('ir ')) $('gmmenu').hidden = true;                            // viajar: el menú se cierra
+    else if (/^(traer|ira) /.test(cmd) && gmLast) setTimeout(() => gmSend('menu'), 700); // y se refresca la lista de jugadores
+});
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && wpOpen) closeWp(); });
 /** Niebla del mapa (`WorldMap.fog`, Camposanto Viejo): velo gris y bancos de niebla que se desplazan despacio con parallax. En pantalla. */
 function drawFog(k: number, T: number) {

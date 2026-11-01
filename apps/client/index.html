@@ -217,6 +217,15 @@ button.sl:not(.dis):hover,.cl:hover{border-color:#e0b765;filter:brightness(1.15)
 #wpmenu header{padding:11px 12px 8px;border-bottom:1px solid #4a3a1a;background:radial-gradient(120% 140% at 50% -40%,rgba(226,176,74,.22),transparent 70%)}
 #wpmenu h2{margin:0;font-family:var(--f-cinzel);font-weight:700;font-size:17px;letter-spacing:.09em;text-transform:uppercase;color:var(--brass);display:flex;align-items:center;gap:8px;text-shadow:0 0 10px rgba(214,164,69,.45)}
 #wpmenu h2 button{margin-left:auto;padding:0 8px;line-height:22px;font-size:16px}
+#gmmenu{top:calc(56px + env(safe-area-inset-top,0px));right:12px;width:min(360px,calc(100vw - 24px));max-height:calc(100% - 120px);overflow:auto;padding:10px;display:grid;gap:6px;background:linear-gradient(180deg,rgba(26,22,14,.97),rgba(12,14,12,.97));border:1px solid #8a6a2a;box-shadow:0 0 0 1px #000,0 6px 28px rgba(0,0,0,.65)}
+#gmmenu h2{margin:0;font-size:15px;color:var(--brass);display:flex;align-items:center;gap:8px}
+#gmmenu h2 button{margin-left:auto;padding:0 8px;line-height:22px;font-size:16px}
+#gmmenu h3{margin:8px 0 2px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+#gmmenu .gmrow{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+#gmmenu .gmmap{display:flex;width:100%;justify-content:space-between;gap:8px;text-align:left}
+#gmmenu .gmmap.cur{outline:1px solid var(--brass)}
+#gmmenu .gmmap small{color:var(--muted)}
+#gmmenu input[type=number]{width:54px} #gmmenu select{max-width:150px}
 #wpSub{font-family:var(--f-inter);font-size:11.5px;color:var(--muted);margin-top:2px}
 #wpList{display:grid;gap:3px;padding:8px;overflow:auto;font-family:var(--f-inter)}
 .wprow{display:flex;align-items:center;gap:10px;padding:7px 9px;text-align:left;background:#15181a;border:1px solid #2b312c;border-left:3px solid var(--zc,#d6a445);border-radius:3px;color:var(--text);cursor:pointer;font-family:var(--f-inter)}
@@ -349,6 +358,8 @@ canvas:focus{outline:none}
     <header><h2><span id="wpTitle">Portal de Frontera</span><button id="wpClose" type="button" aria-label="Cerrar">×</button></h2><div id="wpSub"></div></header>
     <div id="wpList"></div>
   </div>
+
+  <div id="gmmenu" class="hud box" hidden role="dialog" aria-label="Menú GM"></div>
 
   <div id="qdlg" class="hud box" hidden>
     <h2><span id="qdName">Capitán</span><button id="qdClose" type="button" aria-label="Cerrar">×</button></h2>

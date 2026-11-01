@@ -100,6 +100,8 @@ export class Player {
     hairStyleIndex = 0;
     underwearColorIndex = 0;
     spawnProtection = false;
+    /** SOLO GM (/gm dios): no recibe daño. */
+    godMode = false;
     runningMode = true;
     attackMode = true;
     attackStunDurationMs = 500;
