@@ -394,9 +394,15 @@ function render(key: string, rarCol: string, rarK: number, art: (c: Ctx) => void
     const url = cv.toDataURL('image/png'); cache.set(key, url); return url;
 }
 
+/** Íconos pintados de los sets (assets/icons/<look>.png). Si todavía no cargaron se usa el dibujado por código, y el ícono con arte se arma recién cuando están listos. */
+const ART = new Map<string, HTMLImageElement>();
+if (typeof Image !== 'undefined') for (const l of ['sol_malla', 'sol_placas', 'vhar_malla', 'vhar_placas']) for (const sfx of ['', '_helm']) { const im = new Image(); im.src = `assets/icons/${l}${sfx}.png`; ART.set(l + sfx, im); }
+
 /** Ícono (data URL) del item. `look` es la pieza del paperdoll (shortsword, plate, mage_hood…); `slot` decide el símbolo. */
 export function itemIcon(look: string | undefined, slot: string, rarCol: string, rarK: number): string {
-    return render(`${look}|${slot}|${rarCol}`, rarCol, rarK, (c) => {
+    const artIm = look ? ART.get(look) : undefined, useArt = !!artIm && artIm.complete && artIm.naturalWidth > 0 && (slot === 'armadura' || slot === 'cabeza');
+    return render(`${look}|${slot}|${rarCol}${useArt ? '|art' : ''}`, rarCol, rarK, (c) => {
+        if (useArt) { c.drawImage(artIm!, 10, 10, 108, 108); return; }
         const l = look ?? '', m = RAMP[LOOK_RAMP[l] ?? 'iron'];
         if (slot === 'arma') {
             if (l === 'shortsword') sword(c, m, 'short'); else if (l === 'zweihander') sword(c, m, 'two'); else if (/sword/.test(l)) sword(c, m, 'long');

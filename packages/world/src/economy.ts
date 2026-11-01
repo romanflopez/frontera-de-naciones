@@ -50,6 +50,11 @@ export const SHOP_BASES: Base[] = [
     { name: 'Anillo de cobre', slot: 'anillo', look: 'ring_copper' }, { name: 'Anillo de plata', slot: 'anillo', look: 'ring_silver' }, { name: 'Anillo de jade', slot: 'anillo', look: 'ring_jade' },
     { name: 'Anillo del filo', slot: 'anillo', look: 'ring_ruby' }, { name: 'Sello del veloz', slot: 'anillo', look: 'ring_gold' },
     { name: 'Amuleto del cazador', slot: 'anillo', look: 'amulet_bone' },
+    // sets de armadura Solmar y Vhar (tools/src/sets/build_sets.py): armadura de 4 piezas + cabeza, con su propio aspecto al equiparlos
+    { name: 'Malla alada del Alba', slot: 'armadura', def: 24, rm: 9, look: 'sol_malla' }, { name: 'Yelmo alado del Alba', slot: 'cabeza', def: 9, rm: 3, look: 'sol_malla_helm' },
+    { name: 'Placas del Sol', slot: 'armadura', def: 36, rm: 13, look: 'sol_placas' }, { name: 'Yelmo del Sol', slot: 'cabeza', def: 13, rm: 5, look: 'sol_placas_helm' },
+    { name: 'Malla de Ceniza', slot: 'armadura', def: 24, rm: 9, look: 'vhar_malla' }, { name: 'Yelmo astado de Ceniza', slot: 'cabeza', def: 9, rm: 3, look: 'vhar_malla_helm' },
+    { name: 'Placas de Brasa', slot: 'armadura', def: 36, rm: 13, look: 'vhar_placas' }, { name: 'Yelmo de Brasa', slot: 'cabeza', def: 13, rm: 5, look: 'vhar_placas_helm' },
 ];
 export const ALL_BASES: Base[] = [...BASES, ...SHOP_BASES];
 export const BASE_BY_NAME = new Map(ALL_BASES.map((b) => [b.name, b]));
@@ -82,6 +87,8 @@ export const SHOPS: Record<string, ShopDef> = {
         stock: [
             { base: 'Ropas de tela', price: 20, lvl: 1 }, { base: 'Capucha de cuero', price: 30, lvl: 1 }, { base: 'Coraza de cuero', price: 70, lvl: 2 }, { base: 'Cofia de malla', price: 90, lvl: 4 },
             { base: 'Yelmo de hierro', price: 190, lvl: 6 }, { base: 'Cota de malla', price: 230, lvl: 5 }, { base: 'Armadura de placas', price: 520, lvl: 9 },
+            { base: 'Yelmo alado del Alba', price: 130, lvl: 5 }, { base: 'Malla alada del Alba', price: 320, lvl: 6 }, { base: 'Yelmo del Sol', price: 260, lvl: 8 }, { base: 'Placas del Sol', price: 680, lvl: 10 },
+            { base: 'Yelmo astado de Ceniza', price: 130, lvl: 5 }, { base: 'Malla de Ceniza', price: 320, lvl: 6 }, { base: 'Yelmo de Brasa', price: 260, lvl: 8 }, { base: 'Placas de Brasa', price: 680, lvl: 10 },
         ],
     },
     joyero: {

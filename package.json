@@ -10,7 +10,8 @@
     "assets:boss": "pnpm --filter @fdn/tools boss",
     "assets:dungeon": "pnpm --filter @fdn/tools dungeon",
     "assets:town": "pnpm --filter @fdn/tools town",
-    "assets:flare": "pnpm --filter @fdn/tools flare:fetch && pnpm --filter @fdn/tools atlas",
+    "assets:flare": "pnpm --filter @fdn/tools flare:fetch && pnpm --filter @fdn/tools atlas && pnpm assets:sets",
+    "assets:sets": "python3 tools/src/sets/build_sets.py",
     "proto": "pnpm --filter @fdn/proto generate",
     "typecheck": "pnpm -r typecheck"
   },

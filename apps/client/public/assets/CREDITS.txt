@@ -40,3 +40,7 @@ Copyright (c) Ion Fraction OÜ. El texto completo de esa licencia está en LICEN
 No se incluye ningún asset de ese proyecto ni del juego Helbreath original.
 
 Las dependencias npm se distribuyen bajo licencias permisivas (MIT, ISC, BSD, Apache-2.0); el aviso de cada una viene en su paquete.
+
+Sets de armadura (sol_malla, sol_placas, vhar_malla, vhar_placas): las hojas de piezas son las piezas de Flare repintadas por tools/src/sets/build_sets.py
+(siguen bajo CC-BY-SA 3.0, ver arriba). Los íconos de assets/icons salen de una ilustración de referencia del dueño del proyecto generada con una herramienta de IA:
+revisar sus términos de uso antes del lanzamiento (docs/LICENCIAS_AUDITORIA.md).
