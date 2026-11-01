@@ -11,6 +11,7 @@
     "town": "tsx src/town/atlas.ts",
     "flare:fetch": "tsx src/flare/fetch.ts",
     "flare:maps": "tsx src/flare/maps.ts",
+    "flare:mapatlas": "tsx src/flare/mapatlas.ts",
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {

@@ -167,3 +167,4 @@ export { INTERIORS, TEMPLE_RESPAWN, roomOf } from './solmar/interiors';
 export { HUNT_ARRIVALS, LLANOS, FRONTERA, CAMPOSANTO, PARAMO, HuntMap } from './hunt';
 export { VHAR, VHAR_CITADEL_ID, VHAR_BUILDINGS, vharDoor, type VharBuilding } from './vhar/citadel';
 export { VHAR_INTERIORS, VHAR_RESPAWN } from './vhar/interiors';
+export { FLARE_DATA, FLARE_FIRST, FLARE_ARRIVAL, FLARE_BACK, flareTile, FLARE_BASE, type FlareMapData } from './flare';

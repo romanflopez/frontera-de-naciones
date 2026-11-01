@@ -2132,7 +2132,8 @@ async function boot() {
         const meta = JSON.parse(metaTxt);
         WORLD = meta.world; delete meta.world;
         BUILD = meta.buildings ?? {}; delete meta.buildings;
-        for (const k of ['dungeon', 'terrain', 'town']) {
+        // atlas de tiles: los de siempre y los de los mapas importados de Flare (flare_<hoja>, tools/src/flare/mapatlas.ts)
+        for (const k of ['dungeon', 'terrain', 'town', ...Object.keys(meta).filter((g) => g.startsWith('flare_'))]) {
             const m = meta[k]; delete meta[k]; if (!m) continue;
             try { const im = await load(`assets/${k}.webp`); for (const [id, p] of Object.entries(m.pos as Record<string, number[]>)) EXT[Number(id)] = { im, p }; } catch { /* sin ese atlas se ve el mapa sin esas piezas */ }
         }

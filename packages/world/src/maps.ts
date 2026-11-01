@@ -14,6 +14,7 @@ import { HUNT_ARRIVALS, huntMaps, LLANOS, PARAMO } from './hunt';
 import { buildVharCiudadela, VHAR, VHAR_CITADEL_ID, VHAR_N, vharDoor, type VharBuilding } from './vhar/citadel';
 import { LEGACY_FROM_VHAR, LEGACY_VHAR_LINK } from './vhar/legacy';
 import { buildVharInterior, VHAR_INTERIORS, VHAR_RESPAWN } from './vhar/interiors';
+import { FLARE_ARRIVAL, FLARE_FIRST, flareMaps } from './flare';
 
 /** Rectángulo de celdas con los dos extremos incluidos (igual que `WorldMap.dungeon`). */
 export interface MapRect { x0: number; y0: number; x1: number; y1: number }
@@ -89,6 +90,13 @@ export const LEGACY_VILLA_LINK = { x: 8, y: 26 }, LEGACY_FROM_VILLA = { x: 8, y:
 /** En el páramo viejo, junto a la salida de la Cripta: portal de vuelta al Páramo Reseco (Fase 3). Llegada a la Cripta desde el páramo nuevo. */
 export const LEGACY_PARAMO_LINK = { x: 44, y: 50 }, LEGACY_CRYPT_ARRIVAL = { x: 46, y: 18 };
 
+/**
+ * Portal a los mapas de Flare (docs/MAPAS_FLARE.md): al este del punto de aparición de cada ciudad, en la plaza. Lleva a los Campos de Sal;
+ * la vuelta aterriza en la plaza de Solmar (el portal de la Ciudadela es de ida: Vhar vuelve por el Portal de Frontera o con H).
+ */
+export const VILLA_FLARE = { x: VILLA.spawn.x + 5, y: VILLA.spawn.y }, VILLA_FLARE_BACK = { x: VILLA.spawn.x + 5, y: VILLA.spawn.y + 2 };
+export const VHAR_FLARE = { x: VHAR.spawn.x + 5, y: VHAR.spawn.y };
+
 /** Camino entre la Ciudadela de Vhar y el mapa viejo: sale por el portón sur y llega junto a la puerta de la ciudad vieja de Vhar. */
 export { LEGACY_VHAR_LINK, LEGACY_FROM_VHAR };
 
@@ -97,6 +105,7 @@ function vharMaps(): Record<string, MapDef> {
     const out: Record<string, MapDef> = {};
     const links: Link[] = [
         { id: 'ciudadela_a_legacy', map: VHAR_CITADEL_ID, ...VHAR.toLegacy, to: { map: 'solmar_legacy', ...LEGACY_FROM_VHAR }, kind: 'walk', msg: 'Tomás el Camino de Ceniza hacia las tierras de caza.' },
+        { id: 'ciudadela_a_campos', map: VHAR_CITADEL_ID, ...VHAR_FLARE, to: { map: FLARE_FIRST.eris, ...FLARE_ARRIVAL }, kind: 'oneway', msg: 'Cruzás el portal hacia los Campos de Sal.' },
     ];
     for (const it of VHAR_INTERIORS) {
         const d = vharDoor(it.building as VharBuilding), r = roomOf(it);
@@ -120,6 +129,7 @@ function solmarMaps(): Record<string, MapDef> {
     const out: Record<string, MapDef> = {};
     const villaLinks: Link[] = [
         { id: 'villa_a_llanos', map: VILLA_ID, ...VILLA.toLegacy, to: { map: LLANOS.id, ...LLANOS.fromVilla }, kind: 'walk', msg: 'Tomás el Camino de la Marea hacia los Llanos del Alba.' },
+        { id: 'villa_a_campos', map: VILLA_ID, ...VILLA_FLARE, to: { map: FLARE_FIRST.eris, ...FLARE_ARRIVAL }, kind: 'portal', msg: 'Cruzás el portal hacia los Campos de Sal.' },
     ];
     for (const it of INTERIORS) {
         const d = villaDoor(it.building as VillaBuilding), r = roomOf(it);
@@ -181,6 +191,8 @@ export const MAPS: Record<string, MapDef> = {
         legacy: { id: 'solmar_legacy', toLlanos: LEGACY_VILLA_LINK, fromLlanos: LEGACY_FROM_VILLA, toParamo: LEGACY_PARAMO_LINK, crypt: LEGACY_CRYPT_ARRIVAL },
     }),
     ...vharMaps(),
+    // mapas importados de Flare: Campos de Sal -> Bosque de Piedra -> Cañón goblin (docs/MAPAS_FLARE.md)
+    ...flareMaps({ map: VILLA_ID, to: VILLA_FLARE_BACK }),
 };
 
 export const getMapDef = (id: string | undefined): MapDef | undefined => { const c = canonicalMapId(id); return c ? MAPS[c] : undefined; };

@@ -1,6 +1,6 @@
 # Mapas de Flare en ERIS: organización por nivel
 
-Estado: **propuesta + primera prueba del importador** (3 mapas convertidos a datos, sin tiles en el atlas de ERIS todavía). Complementa a [`MUNDO.md`](MUNDO.md) (grafo y fases) y [`ZONAS.md`](ZONAS.md) (curva de niveles y mobs). Si algo de acá contradice a esos dos, hay que decidir cuál se actualiza (ver sección 9).
+Estado: **3 mapas jugables en el juego** (Campos de Sal, Bosque de Piedra y Cañón goblin, con portales desde las ciudades); el resto es propuesta. Complementa a [`MUNDO.md`](MUNDO.md) (grafo y fases) y [`ZONAS.md`](ZONAS.md) (curva de niveles y mobs). Si algo de acá contradice a esos dos, hay que decidir cuál se actualiza (ver sección 9).
 
 ## 1. Marco: lo que ya manda en ERIS
 
@@ -100,20 +100,20 @@ Todo mob de dungeon necesita animaciones completas: **stance, run, ataque, golpe
 
 ## 7. Importador
 
-**Hecho (primera prueba):**
-- `tools/src/flare/maps.ts` + script `pnpm --filter @fdn/tools flare:maps [id…]` (usa `FLARE_DIR`; sin dependencias nativas; tipos OK en modo estricto).
-- Genera `packages/world/src/flare/<id>.json`: tamaño cuadrado, capas `background` y `object` con los ids de tiles de Flare, `blocked` (de la capa `collision`), `zones` (pits + sueltos), `links` (de los `[event] intermap`), `entry`, `source` y `license`.
-- Probado con `salted_field`, `stonewood` y `goblin_camp`: 0 zonas con el centro en una pared, mismo JSON en dos corridas, tipos de mob validados contra `MOB_TYPES`. Render de control de cada mapa (con pits, sueltos, entrada y portales) generado fuera del repo, en `~/Downloads/flare-analysis/imports/`.
-- En las pruebas se usaron solo los tipos que ya existen (en `goblin_camp` el pit C es goblin Nv3 en vez del hobgoblin previsto, y en `salted_field` el zombie Nv1 hace de slime).
+**Hecho y verificado en el juego (navegador real contra server y cliente):**
+- `tools/src/flare/maps.ts` (`pnpm --filter @fdn/tools flare:maps [id…]`, usa `FLARE_DIR`): genera `packages/world/src/flare/<id>.ts` con tamaño cuadrado, capas de tiles de Flare, colisión **sin bolsillos inalcanzables** (se abre una celda en cada cruce diagonal entre paredes, porque Flare camina en 8 direcciones y ERIS en 4), el **vacío relleno de piso y bosque bloqueado** (sin partes negras), pits, sueltos y vínculos.
+- `tools/src/flare/mapatlas.ts` (`flare:mapatlas`): arma `flare_<hoja>.webp` con solo las piezas usadas, a media escala. Las caras negras de los acantilados (ids 48-71) pasan a transparentes y el agua de Flare, casi negra, se cambia por la del kit de ciudad.
+- `packages/world/src/flare/index.ts`: `buildFlareMap` (zonas seguras en entradas y vínculos, respawn de pits 10 s y sueltos 22 s) y los `MapDef`. El cliente carga cualquier grupo `flare_*` del `meta.json`.
+- Mapas: `campos_de_sal` (60x60, Nv 1-2), `bosque_de_piedra` (100x100, Nv 1-2) y `canon_goblin` (60x60, Nv 2-3), encadenados por los vínculos de Flare.
+- **Portales:** en la plaza de la Villa de Solmar, 5 celdas al este del punto de aparición (`villa_a_campos`, de ida y vuelta), y en la plaza de la Ciudadela de Vhar (`ciudadela_a_campos`, de ida).
+- Validado: `validateMapGraph()` sin errores con los 28 mapas, tests del server (115 de 116, 1 salteado; 5 nuevos en `apps/server/test/flare.test.ts`), tipos, build y recorrido con navegador (crear cuenta, Villa, portal, los 3 mapas, un pit con mobs, sin errores de consola).
 
 **Falta:**
 1. `fetch.ts`: sumar `mods/empyrean_campaign/{maps,tilesetdefs,images/tilesets}` a lo que baja (hoy solo `fantasycore`). Mientras, se apunta `FLARE_DIR` al zip v1.14.
-2. Specs de los 9 mapas abiertos restantes y de los dungeons.
-3. `atlas.ts`: empaquetar los tilesets cave, dungeon, snow y ruins a 0,5 con ids propios (hoy solo grassland), y pasar los ids de tiles de Flare a los de ERIS.
-4. `buildFlareMap(id)` que lea el JSON, `props` desde la capa `object`, vínculos de Flare → `Link`, zona segura en la entrada, y alta en `MAPS` (así `validateMapGraph()` y `mapHash()` lo cubren).
-5. Portar el render de control a `tools/` (hoy es un script aparte).
-6. Relleno del vacío (ver sección 4) dentro del importador, con los ids por tileset.
-7. Verificar cada mapa en el juego con navegador antes de habilitar los portales.
+2. Specs de los 9 mapas abiertos restantes y de los dungeons, y las hojas cueva, dungeon, nieve y ruinas en `FLARE_BASE`, con su relleno del vacío (hoy solo hay para pasto).
+3. Props con colisión propia: hoy los árboles y rocas del relleno bloquean por celda; falta afinar casos como los cruces diagonales abiertos.
+4. Portar el render de control a `tools/` (hoy es un script aparte) y el recorrido con navegador a un test del repo.
+5. Que los mobs a distancia (`hobgoblin_archer`, hoy cuerpo a cuerpo) disparen de verdad.
 
 ## 8. Licencia
 
