@@ -34,6 +34,8 @@ interface MapSpec {
     boss?: { type: string; lvl: number; name: string };
     /** Vínculos de Flare a descartar (id de Flare del destino) y nivel mínimo para los que quedan (id de Flare del destino -> nivel). */
     dropLinks?: string[]; linkGates?: Record<string, number>;
+    /** Rectángulos [x,y,w,h] que se abren (puertas trabadas de Flare que se abren con un evento): sin colisión ni objeto. */
+    open?: [number, number, number, number][];
 }
 
 /** Un mapa por entrada. Pit A = el más cerca de la entrada (el más fácil), C = el más lejos. Los nombres de zona son únicos entre mapas. */
@@ -54,6 +56,13 @@ const SPECS: MapSpec[] = [
     { id: 'perdition_mines', eris: 'minas_goblin', name: 'Minas goblin', region: 'mazmorra', pvp: 'off', lvl: [3, 4], dungeon: true, respawnMap: 'cueva_goblin', dropLinks: ['salted_field'],
         pits: [{ name: 'Picadores goblin', type: 'goblin_elite', lvl: 3 }, { name: 'Capataces hobgoblin', type: 'hobgoblin', lvl: 3 }, { name: 'Ballesteros de las minas', type: 'hobgoblin_archer', lvl: 4 }],
         loose: [{ type: 'goblin_elite', lvl: 3 }], boss: { type: 'goblin_jefe', lvl: 4, name: 'Sala del Jefe goblin' }, extras: [{ to: 'cueva_goblin', where: 'near' }] },
+    // D2: Nido de hormiga león (2 pisos, Nv 6-8, jefe: la Reina en las ruinas). La entrada es la de La Brecha (Nv 6).
+    { id: 'antlion_nest', eris: 'nido_hormiga_leon', name: 'Nido de hormiga león', region: 'mazmorra', pvp: 'off', lvl: [6, 7], dungeon: true,
+        pits: [{ name: 'Criadero', type: 'antlion_small', lvl: 6 }, { name: 'Cámara de las hormigas', type: 'antlion', lvl: 6 }, { name: 'Brasas del nido', type: 'fire_ant', lvl: 7 }],
+        loose: [{ type: 'antlion', lvl: 7 }], extras: [{ to: 'ruinas_de_stormrock', where: 'far' }] },
+    { id: 'stormrock_ruins', eris: 'ruinas_de_stormrock', name: 'Ruinas de Stormrock', region: 'mazmorra', pvp: 'off', lvl: [7, 8], dungeon: true, respawnMap: 'nido_hormiga_leon',
+        pits: [{ name: 'Galerías infestadas', type: 'antlion', lvl: 7 }, { name: 'Salón de las brasas', type: 'fire_ant', lvl: 8 }, { name: 'Guardia no-muerta', type: 'skeleton_archer', lvl: 8 }],
+        loose: [{ type: 'zombie_dark', lvl: 7 }], boss: { type: 'antlion_reina', lvl: 8, name: 'Cámara de la Reina' }, open: [[47, 68, 2, 2], [43, 69, 1, 1]], extras: [{ to: 'nido_hormiga_leon', where: 'near' }] },
     { id: 'merrimead_swamp', eris: 'pantano_de_merrimead', name: 'Pantano de Merrimead', region: 'comun', pvp: 'faction', lvl: [3, 4],
         pits: [{ name: 'Ciénaga de zombis', type: 'zombie', lvl: 3 }, { name: 'Pozo oscuro', type: 'zombie_dark', lvl: 4 }, { name: 'Lápidas del pantano', type: 'cursed_grave', lvl: 4 }],
         loose: [{ type: 'zombie', lvl: 3 }], extras: [{ to: 'altas_de_nazia', where: 'far' }] },
@@ -65,7 +74,7 @@ const SPECS: MapSpec[] = [
         loose: [{ type: 'cursed_grave', lvl: 5 }], extras: [{ to: 'risco_del_sur', where: 'far' }] },
     { id: 'the_breach', eris: 'la_brecha', name: 'La Brecha', region: 'comun', pvp: 'faction', lvl: [6, 7],
         pits: [{ name: 'Túneles de hormiga león', type: 'antlion', lvl: 6 }, { name: 'Hormigueros de la brecha', type: 'fire_ant', lvl: 6 }, { name: 'Mineros caídos', type: 'zombie_dark', lvl: 7 }],
-        loose: [{ type: 'antlion_small', lvl: 6 }, { type: 'fire_ant', lvl: 6 }], extras: [{ to: 'risco_del_sur', where: 'near' }] },
+        loose: [{ type: 'antlion_small', lvl: 6 }, { type: 'fire_ant', lvl: 6 }], extras: [{ to: 'risco_del_sur', where: 'near' }], linkGates: { antlion_nest: 6 } },
     { id: 'southern_ridge', eris: 'risco_del_sur', name: 'Risco del Sur', region: 'comun', pvp: 'faction', lvl: [5, 6],
         pits: [{ name: 'Risco de las hormigas', type: 'antlion', lvl: 5 }, { name: 'Atalaya en ruinas', type: 'skeleton_mage', lvl: 6 }, { name: 'Grietas de fuego', type: 'fire_ant', lvl: 6 }],
         loose: [{ type: 'antlion', lvl: 5 }, { type: 'skeleton', lvl: 5 }], extras: [{ to: 'cementerio_de_lochport', where: 'near' }, { to: 'la_brecha', where: 'far' }] },
@@ -84,6 +93,11 @@ const FILLS: Record<string, { floor: number[]; deco: [number, number[]][] }> = {
     cave: {
         floor: [216, 217, 218, 219],
         deco: [[0.40, [64, 65, 68, 69, 72, 76, 77, 80, 84, 86, 96, 97, 98, 99, 100, 101, 102, 112, 113, 114, 115]], [0.46, [144, 145, 146, 147, 148, 149]], [0.50, [150, 151, 152, 153]]],
+    },
+    // Mazmorra de piedra: piso liso (16-19, 21, 23) con muñones de muro (cara negra transparente), huesos y calaveras.
+    dungeon: {
+        floor: [16, 17, 18, 19, 21, 23],
+        deco: [[0.30, [48, 49, 50, 56, 57, 58, 59, 60, 61]], [0.36, [66, 67, 68, 69, 70]], [0.38, [144, 145, 146, 147, 148]]],
     },
 };
 
@@ -138,6 +152,7 @@ function convert(spec: MapSpec): object {
     const N = Math.max(p.w, p.h);
     const grid = (name: string): number[][] => Array.from({ length: N }, (_, y) => Array.from({ length: N }, (_, x) => (y < p.h && x < p.w ? p.layers[name]?.[y]?.[x] ?? 0 : 0)));
     const background = grid('background'), object = grid('object'), collision = grid('collision');
+    for (const [ox, oy, ow, oh] of spec.open ?? []) for (let y = oy; y < oy + oh; y++) for (let x = ox; x < ox + ow; x++) { collision[y][x] = 0; object[y][x] = 0; }
 
     // 1) Colisión: lo que no es de Flare (relleno a cuadrado) y toda colisión != 0 bloquea. Solo se queda lo alcanzable a pie desde la entrada.
     const hardBlock = collision.map((row, y) => row.map((v, x) => y >= p.h || x >= p.w || v !== 0));

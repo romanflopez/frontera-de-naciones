@@ -5,11 +5,11 @@ export type MobType = 'goblin' | 'zombie' | 'skeleton' | 'barbaro' | 'goblin_eli
     // tipos nuevos (docs/MOBS_NUEVOS.md): siempre al final, el protocolo manda el índice
     | 'hobgoblin' | 'hobgoblin_archer' | 'skeleton_archer' | 'zombie_dark' | 'cursed_grave' | 'ice_ant' | 'antlion_small' | 'wyvern_fire' | 'wyvern_ice'
     // jefes de mazmorra de grupo (docs/MAPAS_FLARE.md §5)
-    | 'goblin_jefe';
+    | 'goblin_jefe' | 'antlion_reina';
 /** Orden fijo: el protocolo manda el índice del tipo. */
 export const MOB_TYPES: MobType[] = ['goblin', 'zombie', 'skeleton', 'barbaro', 'goblin_elite', 'antlion', 'skeleton_mage', 'fire_ant', 'wyvern', 'minotaur', 'arana', 'golem', 'demonio',
     'hobgoblin', 'hobgoblin_archer', 'skeleton_archer', 'zombie_dark', 'cursed_grave', 'ice_ant', 'antlion_small', 'wyvern_fire', 'wyvern_ice',
-    'goblin_jefe'];
+    'goblin_jefe', 'antlion_reina'];
 /** Habilidad de boss: cada `every` s, si el jugador está a menos de `range`, carga un golpe y lo lanza a los 0,8 s. Alcanza a quien esté a menos de `r`. */
 export interface BossSpecial { name: string; every: number; range: number; r: number; dmg?: [number, number]; stun?: number; col: string }
 export interface BossDef { respawn: number; minRar: number; gold: [number, number]; special: BossSpecial }
@@ -50,6 +50,7 @@ export const MOBS: Record<MobType, MobDef> = {
     wyvern_ice: { name: 'Wyvern de hielo', lvl: 8, hp: 289, dmg: [18, 28], spd: 1.6, ref: 2.3, exp: 123, hitR: 32, head: 90, atk: 1.7 },
     // Jefe final de la Cueva y minas goblin (D1): vida ~11x la curva de su nivel (pensado para grupo), reusa el sprite del goblin de élite.
     goblin_jefe: { name: 'Jefe goblin', lvl: 4, hp: 1260, dmg: [14, 22], spd: 1.5, ref: 2.4, exp: 320, hitR: 30, head: 64, atk: 1.6, sprite: 'goblin_elite', boss: { respawn: 180, minRar: 1, gold: [40, 70], special: { name: 'Grito de guerra', every: 10, range: 3.4, r: 3, stun: 1, dmg: [8, 12], col: '#ff9a3c' } } },
+    antlion_reina: { name: 'Reina hormiga león', lvl: 8, hp: 2800, dmg: [22, 34], spd: 1.5, ref: 2.4, exp: 700, hitR: 34, head: 60, atk: 1.7, sprite: 'antlion', boss: { respawn: 240, minRar: 2, gold: [90, 150], special: { name: 'Chorro de ácido', every: 9, range: 4, r: 3.2, stun: 1, dmg: [14, 20], col: '#9be04a' } } },
 };
 
 /** Segundos hasta que reaparece un mob muerto. */

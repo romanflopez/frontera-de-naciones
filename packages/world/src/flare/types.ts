@@ -34,7 +34,7 @@ export interface FlareMapData {
 }
 
 /** Ids de ERIS de las piezas de cada hoja de Flare: base + id de Flare (los ids de Flare son < 1000). */
-export const FLARE_BASE: Record<string, number> = { grassland: 20000, cave: 21000 };
+export const FLARE_BASE: Record<string, number> = { grassland: 20000, cave: 21000, dungeon: 22000 };
 export const flareTile = (tileset: string, id: number): number => (FLARE_BASE[tileset] ?? 0) + id;
 
 /**
@@ -48,5 +48,5 @@ export const isFlareWater = (tileset: string, id: number): boolean => { const r 
  * Acantilados de cada hoja (rango de ids): Flare pinta de negro la cara de atrás porque detrás iba el vacío. Como el vacío se rellena
  * con bosque, esos píxeles negros se hacen transparentes al armar el atlas (tools/src/flare/mapatlas.ts).
  */
-export const FLARE_CLIFF: Record<string, [number, number]> = { grassland: [48, 71], cave: [64, 121] };
-export const isFlareCliff = (tileset: string, id: number): boolean => { const r = FLARE_CLIFF[tileset]; return !!r && id >= r[0] && id <= r[1]; };
+export const FLARE_CLIFF: Record<string, [number, number][]> = { grassland: [[48, 71]], cave: [[64, 121]], dungeon: [[48, 117], [208, 223], [280, 283]] };
+export const isFlareCliff = (tileset: string, id: number): boolean => !!FLARE_CLIFF[tileset]?.some((r) => id >= r[0] && id <= r[1]);
