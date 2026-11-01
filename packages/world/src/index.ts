@@ -17,6 +17,7 @@ export { TRAINING, TRAINING_IDS, WAYPOINT_RANGE, CITY_PORTAL_OFFSET, LEGACY_CITY
 import type { MobType } from './mobs';
 export * from './mobs';
 export * from './economy';
+export * from './uniques';
 export * from './auction';
 export * from './deposit';
 export * from './maps';

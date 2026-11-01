@@ -1,6 +1,8 @@
 # Ítems, runas y mejoras (borrador de diseño)
 
-Estado: **borrador para revisar**. No hay código todavía. Los números son puntos de partida para probar, no valores finales.
+Estado: **paso 1 del MVP implementado** (ítems únicos de T1 a T3 + ítems de los jefes D1-D3 + tabla de drops). Runas y mejoras +N siguen en diseño. Los números son puntos de partida para probar, no valores finales.
+
+Implementación: `packages/world/src/uniques.ts` (catálogo; cada único es una `Base` más y entra en `ALL_BASES`), `apps/server/src/economy.ts` (`reward`, `uniqueItem`, `UNIQUE_CHANCE`, `COMMON_CHANCE`, `GOLD_CHANCE`). Rareza en el juego: los únicos de banda son rareza 2 (se muestra "Raro") y los de jefe rareza 3 ("Épico"); no se cambiaron los nombres de la interfaz.
 Depende de: `docs/MAPAS_FLARE.md` (mapas, mazmorras y jefes), `docs/ECONOMIA_SERVER.md` (el server valida precios, stock y atributos) y `docs/ZONAS.md` (curvas de vida/exp por nivel).
 
 ## 1. Idea general
@@ -55,16 +57,18 @@ Chances por muerte, a probar y ajustar con el juego andando.
 
 | Origen | Normal | Único de la banda | De jefe | Runas |
 |---|---|---|---|---|
-| Mob suelto (mapa abierto) | 3 % | 0,5 % | — | 1 % |
-| Pit de mapa abierto (mobs agrupados) | 3 % | 1,5 % | — | 2 % |
-| Mob de mazmorra (tier dungeon) | — | 4 % | — | 5 % |
-| Jefe de mazmorra | — | 100 % (1 ítem) | 25 % | 100 % (1 runa) |
+| Mob suelto (mapa abierto) | 6 % | 0,5 % | — | 1 % |
+| Pit de mapa abierto (mobs agrupados) | 6 % | 1,5 % | — | 2 % |
+| Mob de mazmorra (tier dungeon) | 6 % | 4 % | — | 5 % |
+| Jefe de mazmorra | — | — | 100 % (1 ítem de los suyos) | 100 % (1 runa) |
 
 Reglas:
 - El nivel de ítem sale del nivel del mob (como hoy), pero cada mob solo suelta ítems de su banda o de la anterior. No cae equipo de bandas altas en mapas bajos.
 - Los pits dan mejor chance que los mobs sueltos: es el motivo para ir a los pits.
 - Las mazmorras suben la chance de únicos, porque se hacen en grupo y los mobs son más fuertes (`DUNGEON_MULT`).
 - El oro y la exp siguen la curva actual; este cuadro solo cambia equipo y runas.
+- Implementado hoy (bandas T1 a T3, niveles 1-6): 6 % ítem común sin atributos, la chance de único de la tabla, 45 % oro y el resto nada. Los mobs de nivel 7+ y los jefes sin ítems propios (D4-D6, bosses viejos) siguen con el botín viejo hasta que existan sus ítems. Los jefes D1-D3 ya no dan esquirlas de la llave vieja.
+- Pendiente: la runa de los jefes y un segundo ítem extra del jefe.
 
 ## 6. Runas
 

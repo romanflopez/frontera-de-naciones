@@ -4,6 +4,7 @@
  * el cliente solo las usa para dibujar. Ver docs/ECONOMIA_SERVER.md.
  */
 import type { MobType } from './mobs';
+import { UNIQUE_BASES, uniqueValue } from './uniques';
 
 export type Slot = 'arma' | 'armadura' | 'cabeza' | 'anillo';
 export const SLOTS: Slot[] = ['arma', 'armadura', 'cabeza', 'anillo'];
@@ -56,7 +57,8 @@ export const SHOP_BASES: Base[] = [
     { name: 'Malla de Ceniza', slot: 'armadura', def: 24, rm: 9, look: 'vhar_malla' }, { name: 'Yelmo astado de Ceniza', slot: 'cabeza', def: 9, rm: 3, look: 'vhar_malla_helm' },
     { name: 'Placas de Brasa', slot: 'armadura', def: 36, rm: 13, look: 'vhar_placas' }, { name: 'Yelmo de Brasa', slot: 'cabeza', def: 13, rm: 5, look: 'vhar_placas_helm' },
 ];
-export const ALL_BASES: Base[] = [...BASES, ...SHOP_BASES];
+/** Los ítems únicos (packages/world/src/uniques.ts) son bases más, con atributos fijos al caer. */
+export const ALL_BASES: Base[] = [...BASES, ...SHOP_BASES, ...UNIQUE_BASES];
 export const BASE_BY_NAME = new Map(ALL_BASES.map((b) => [b.name, b]));
 
 /** Rarezas: índice 0..3 (Común, Mágico, Raro, Épico). */
@@ -126,6 +128,7 @@ export const SHOP_SERVER_RANGE = TALK_RANGE + 2;
 /** Valor base de cada item de tienda (precio de lista): el precio de venta es una fracción de esto. */
 export const VALUE: Record<string, number> = {};
 for (const sh of Object.values(SHOPS)) for (const st of sh.stock) if (st.base && VALUE[st.base] == null) VALUE[st.base] = st.price;
+for (const u of UNIQUE_BASES) VALUE[u.name] = uniqueValue(u.uniq.tier, !!u.uniq.boss);
 export const SELL_PRICE = [4, 15, 50, 150]; // oro por rareza (Común, Mágico, Raro, Épico), más un cuarto del valor de lista
 export const sellPrice = (baseName: string, rarity: number): number => Math.round((SELL_PRICE[rarity] ?? 1) + (VALUE[baseName] ?? 0) * 0.25);
 

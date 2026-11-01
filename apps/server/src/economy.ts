@@ -11,6 +11,7 @@
 import {
     ATTR_RANGES, BAG_MAX, BASE_BY_NAME, BASES, KEY_IDS, KEYDEFS, POT_MAX, POTS, QUESTS, roleOf, SHARDS_PER_KEY, SHOP_SERVER_RANGE,
     MAPS, SHOPS, SLOTS, SRV_ATTR, TRAINING, buildMap, expToLevel, mobDef, sellPrice, trainingUnlocked,
+    BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
 } from '@fdn/world';
 import { RARITY_INDEX, rollMobDrop, type GeneratedItem } from './loot/itemGenerator.ts';
@@ -73,6 +74,17 @@ export function attrCap(id: AttrId): number {
 // ---------- items ----------
 function newItem(st: Econ, base: string, r: number, a: SItem['a']): SItem { return { u: st.nextUid++, n: base, r, a }; }
 
+/** Probabilidades de botín de los mobs de bandas con ítems únicos (docs/ITEMS.md §5). El resto del tiempo cae oro. */
+export const UNIQUE_CHANCE = { loose: 0.005, pit: 0.015, dungeon: 0.04 };
+export const COMMON_CHANCE = 0.06;
+export const GOLD_CHANCE = 0.45;
+const pick = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
+/** Un ítem único con sus atributos fijos y una variación de ±10 %. Los de jefe son rareza 3 (Épico); los demás, 2 (Raro). */
+export function uniqueItem(st: Econ, u: UniqueBase): SItem {
+    const a = u.uniq.attrs.map(([id, v]) => ({ id, v: Math.max(1, Math.round(v * (1 + (Math.random() * 2 - 1) * UNIQUE_VARIATION))) }));
+    return newItem(st, u.name, u.uniq.boss ? 3 : 2, a);
+}
+
 /** Item que sale del generador de botín del server (rareza + atributos + semilla de base). */
 export function itemFromRoll(st: Econ, gen: GeneratedItem): SItem {
     const base = BASES[gen.baseSeed % BASES.length], attrs: SItem['a'] = [];
@@ -89,8 +101,13 @@ function cleanImportItem(st: Econ, v: unknown, clipped: string[], trusted = fals
     if (!v || typeof v !== 'object') return null;
     const o = v as Record<string, unknown>;
     const base = typeof o.n === 'string' ? BASE_BY_NAME.get(o.n) : undefined; if (!base) return null;
-    const r = clampInt(o.r, 0, 3), isShop = !BASES.includes(base);
+    const r = clampInt(o.r, 0, 3), uniq = UNIQUE_BY_NAME.get(base.name), isShop = !BASES.includes(base) && !uniq;
     const a: SItem['a'] = [];
+    if (uniq && !trusted) { // únicos: solo con sus atributos fijos (se aceptan los del cliente si caen en la variación permitida)
+        const lim = UNIQUE_VARIATION + 0.05, given = new Map<string, number>(); for (const x of Array.isArray(o.a) ? o.a : []) { const e = (x ?? {}) as Record<string, unknown>; if (typeof e.id === 'string') given.set(e.id, clampInt(e.v, 1, 1e6)); }
+        for (const [id, v] of uniq.uniq.attrs) { const g = given.get(id); a.push({ id, v: g !== undefined && g >= Math.floor(v * (1 - lim)) && g <= Math.ceil(v * (1 + lim)) ? g : v }); }
+        return newItem(st, base.name, uniq.uniq.boss ? 3 : 2, a);
+    }
     if (isShop && !trusted) { // bases de tienda: solo existen con los atributos fijos de su línea de stock
         const line = Object.values(SHOPS).flatMap((s) => s.stock).find((x) => x.base === base.name);
         for (const [id, val] of line?.attrs ?? []) a.push({ id, v: val });
@@ -196,7 +213,7 @@ export interface EconCtx {
     /** Botín en el suelo del mundo del jugador. */
     ground: GroundApi;
 }
-export interface KillInfo { mobId: number; type: MobType; def: MobDef; zoneName: string; x: number; y: number; /** esquirla que suelta el boss de la zona (Zone.drops); si falta, se decide por el nombre */ shard?: KeyId }
+export interface KillInfo { mobId: number; type: MobType; def: MobDef; zoneName: string; /** de dónde sale el mob: suelto, de un pit o de una mazmorra (docs/ITEMS.md) */ origin?: 'loose' | 'pit' | 'dungeon'; x: number; y: number; /** esquirla que suelta el boss de la zona (Zone.drops); si falta, se decide por el nombre */ shard?: KeyId }
 
 const fail = (code: string, text: string) => ({ ok: false as const, code, text });
 type Outcome = { ok: true; code: string; text: string; stats?: boolean } | { ok: false; code: string; text: string };
@@ -432,8 +449,16 @@ export class Economy {
         const gain = Math.round(def.exp * (1 + bonus(st, 'exp') / 100));
         st.exp += gain;
         let gold = 0, item: SItem | undefined, bagFull = false, potion = '', shard = '';
+        const bossU = boss ? BOSS_UNIQUES[k.type] : undefined, tier = tierOfLevel(def.lvl);
         if (boss) {
-            item = itemFromRoll(st, rollMobDrop(def.lvl, boss.minRar)); gold = rint(boss.gold[0], boss.gold[1]);
+            // los jefes de mazmorra con ítems propios sueltan uno de ellos (siempre); los demás, el botín de siempre
+            item = bossU ? uniqueItem(st, pick(bossU)) : itemFromRoll(st, rollMobDrop(def.lvl, boss.minRar)); gold = rint(boss.gold[0], boss.gold[1]);
+        } else if (tier <= UNIQUE_TIERS_READY) {
+            // bandas con ítems únicos: casi siempre oro; a veces un ítem común y, con poca chance, un único de la banda (más en pits y mazmorras)
+            const r = Math.random(), uc = UNIQUE_CHANCE[k.origin ?? 'pit'];
+            if (r < uc) item = uniqueItem(st, pick(UNIQUES_BY_TIER[tier]));
+            else if (r < uc + COMMON_CHANCE) item = itemFromRoll(st, { rarity: 'comun', attributes: [], baseSeed: Math.floor(Math.random() * 1_000_000) });
+            else if (r < uc + COMMON_CHANCE + GOLD_CHANCE) gold = rint(3, 8) * def.lvl;
         } else if (Math.random() < 0.62) item = itemFromRoll(st, rollMobDrop(def.lvl, 0));
         else gold = rint(3, 8) * def.lvl;
         if (gold) addGold(st, gold);
@@ -442,7 +467,7 @@ export class Economy {
             else { bagFull = true; ctx.ground.add(item, Math.floor(p.posX) + 0.5, Math.floor(p.posY) + 0.5, [p.accountKey], LOOT_FREE_MS); } // nada se destruye: cae junto al jugador
         }
         if (Math.random() < 0.14) { const kind: PotKind = Math.random() < 0.6 ? 'hp' : 'mp'; if (st.pots[kind] < POT_MAX) { st.pots[kind]++; potion = kind; } }
-        if (boss) { const kid: KeyId = k.shard ?? (k.zoneName === 'Cripta olvidada' ? 'foso' : 'cripta'); st.q.shards[kid] = Math.min(99, st.q.shards[kid] + 1); shard = kid; }
+        if (boss && !bossU) { const kid: KeyId = k.shard ?? (k.zoneName === 'Cripta olvidada' ? 'foso' : 'cripta'); st.q.shards[kid] = Math.min(99, st.q.shards[kid] + 1); shard = kid; }
         let questReady = false, questProg = 0;
         const q = QUESTS[st.q.i];
         if (q && st.q.st === 'active' && q.type === k.type) {

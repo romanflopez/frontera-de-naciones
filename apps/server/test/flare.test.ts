@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { FLARE_DATA, FLARE_FIRST, MAPS, MOB_TYPES, buildMap, mobDef, flareTile, mapHash, type MobType } from '@fdn/world';
+import { ALL_BASES, BASE_BY_NAME, BOSS_UNIQUES, FLARE_DATA, FLARE_FIRST, MAPS, MOB_TYPES, UNIQUES_BY_TIER, UNIQUE_BASES, UNIQUE_TIERS_READY, buildMap, mobDef, tierOfLevel, flareTile, mapHash, type MobType } from '@fdn/world';
 
 /** Mapas importados de Flare (docs/MAPAS_FLARE.md): datos de tools/src/flare/maps.ts y atlas de tools/src/flare/mapatlas.ts. */
 const meta = JSON.parse(readFileSync(new URL('../../client/public/assets/meta.json', import.meta.url), 'utf8')) as Record<string, { pos?: Record<string, number[]> }>;
@@ -66,4 +66,25 @@ test('mazmorra D1: puerta con nivel mínimo, jefe, tier de mazmorra y mapas temp
     assert.ok(buildMap('minas_goblin').zones.some((z) => z.type === 'goblin_jefe'));
     const n = mobDef('goblin', { lvl: 3 }), g = mobDef('goblin', { lvl: 3, tier: 'dungeon' });
     assert.ok(g.hp > n.hp * 2.4 && g.exp > n.exp * 1.9);
+});
+
+test('ítems únicos: catálogo coherente, tier por nivel y jefes de D1-D3 con sus ítems', () => {
+    const names = ALL_BASES.map((b) => b.name); assert.equal(new Set(names).size, names.length, 'nombres repetidos');
+    assert.equal(tierOfLevel(1), 1); assert.equal(tierOfLevel(2), 1); assert.equal(tierOfLevel(3), 2); assert.equal(tierOfLevel(12), 6);
+    for (let t = 1; t <= UNIQUE_TIERS_READY; t++) assert.equal(UNIQUES_BY_TIER[t].length, 10, `banda ${t}: 10 únicos`);
+    for (const b of ['goblin_jefe', 'antlion_reina', 'caballero_cripta'] as const) assert.ok(BOSS_UNIQUES[b]!.length >= 2, b);
+    for (const u of UNIQUE_BASES) { assert.equal(u.uniq.attrs.length, 2, u.name); assert.ok(u.uniq.attrs.every(([, v]) => v >= 1), u.name); assert.ok(BASE_BY_NAME.get(u.name) === u); }
+    // los jefes superan al único del mismo arquetipo de su banda
+    const w = UNIQUE_BASES.find((u) => u.name === 'Espada del Cañón')!, wb = UNIQUE_BASES.find((u) => u.name === 'Cuchilla del Jefe goblin')!;
+    assert.ok(wb.dmg![1] > w.dmg![1]);
+});
+
+test('uniqueItem: atributos fijos con variación ±10 %, rareza 2 (común de banda) o 3 (jefe)', async () => {
+    const { uniqueItem, newEcon } = await import('../src/economy.ts');
+    const st = newEcon('guerrero', 'solmar');
+    for (const u of UNIQUE_BASES) {
+        const it = uniqueItem(st, u);
+        assert.equal(it.r, u.uniq.boss ? 3 : 2);
+        for (const [id, v] of u.uniq.attrs) { const got = it.a.find((x) => x.id === id)!.v; assert.ok(got >= Math.floor(v * 0.9) && got <= Math.ceil(v * 1.1) + 0, `${u.name} ${id} ${got} vs ${v}`); }
+    }
 });

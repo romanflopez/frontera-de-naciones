@@ -20,7 +20,7 @@ export interface MobHost {
     /** Paraliza al jugador (si no es inmune): devuelve los segundos que quedó. */
     stun(p: Player, secs: number): number;
     /** Botín y exp del golpe final: lo decide y lo aplica el server (economía autoritativa). */
-    reward(killer: Player, info: { mobId: number; type: MobType; def: MobDef; zoneName: string; x: number; y: number; shard?: 'cripta' | 'foso' }): void;
+    reward(killer: Player, info: { mobId: number; type: MobType; def: MobDef; zoneName: string; origin: 'loose' | 'pit' | 'dungeon'; x: number; y: number; shard?: 'cripta' | 'foso' }): void;
 }
 
 interface SimMob {
@@ -251,7 +251,7 @@ export class MobSim {
 
     private kill(m: SimMob, killer: Player | null) {
         m.dead = true; this.mobs.delete(m.id);
-        if (killer) this.host.reward(killer, { mobId: m.id, type: m.type, def: m.def, zoneName: m.zone.name, x: m.x, y: m.y, shard: m.zone.drops?.shard }); // una sola vez: el mob ya salió del mapa
+        if (killer) this.host.reward(killer, { mobId: m.id, type: m.type, def: m.def, zoneName: m.zone.name, origin: m.zone.tier === 'dungeon' ? 'dungeon' : m.zone.name.startsWith('Merodeadores') ? 'loose' : 'pit', x: m.x, y: m.y, shard: m.zone.drops?.shard }); // una sola vez: el mob ya salió del mapa
         this.broadcastNear(m, M.mobDied(m.id, killer ? killer.playerId : 0n, m.x, m.y, m.typeIdx, m.zoneIdx));
         this.host.after(zoneRespawnSecs(m.type, m.zone) * 1000, () => this.spawn(m.zone, m.zoneIdx));
     }
