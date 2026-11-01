@@ -138,4 +138,6 @@ Los mapas de Flare son datos CC-BY-SA 3.0 o posterior: hay que atribuir (autores
 - D4 (Torre del hechicero / Cámaras de investigación, jefe `mago_mayor`) en main; la puerta está en La Brecha hasta que haya mapas abiertos de Nv8-9.
 - D5 (Templo de Mez / Salón principal de Mez, jefe `wyvern_aire`) en main.
 - D6 (Fortaleza infernal / Foso del demonio, jefe `demonio_foso`) en main: las 6 mazmorras están hechas.
-- Falta: 4 mapas abiertos de Nv8-12 (Stormrock y Cenizas I-III) y revisar la distribución de farmeo y de niveles de items por mob.
+- Los 4 mapas abiertos de Nv7-11 están en main: Paso de Stormrock (nieve, unido a La Brecha por 2 de sus 4 caminos de Flare; los otros 2 apuntaban a celdas selladas) y Cenizas I-III (cuevas; el Paso lleva a Cenizas I por portal de piedra). Total: 12 mapas abiertos + 6 mazmorras de 2 pisos. Cenizas III es de 136x136 con 3 pits muy poblados (15/18/14 zonas): si se siente apretado, bajar las zonas.
+- Pendiente (a decidir con calma): modelo de ítems. La idea del usuario es ítem ÚNICO con buenos stats (estilo Helbreath/Evolution) en vez de rarezas con atributos al azar; de eso depende la tabla de drops por mob y jefe. Gear score: por ahora NO (con ítems únicos el nombre ya dice el poder); si hace falta para pedir equipo mínimo en mazmorras o inspeccionar en PvP, alcanza la suma de niveles de ítem equipados.
+- Pendiente: distribución de farmeo y niveles de ítems por mob (después de definir el modelo de ítems).

@@ -32,12 +32,16 @@ import { DATA as TEMPLE_OF_MEZ_1 } from './temple_of_mez_1';
 import { DATA as TEMPLE_OF_MEZ_2 } from './temple_of_mez_2';
 import { DATA as UNDERWORLD_STRONGHOLD_1 } from './underworld_stronghold_1';
 import { DATA as THE_PIT } from './the_pit';
+import { DATA as STORMROCK_PASS } from './stormrock_pass';
+import { DATA as UNDERWORLD } from './underworld';
+import { DATA as UNDERWORLD_CATACOMBS } from './underworld_catacombs';
+import { DATA as UNDERWORLD_MINES } from './underworld_mines';
 
 export { flareTile, FLARE_BASE } from './types';
 export type { FlareMapData } from './types';
 
 /** En el orden de la cadena: la primera es la que une el portal de las ciudades. */
-export const FLARE_DATA: FlareMapData[] = [SALTED_FIELD, STONEWOOD, GOBLIN_CAMP, MERRIMEAD_SWAMP, NAZIA_HIGHLANDS, LOCHPORT_CEMETERY, SOUTHERN_RIDGE, THE_BREACH, GOBLIN_CAVE, PERDITION_MINES, ANTLION_NEST, STORMROCK_RUINS, ST_MARIA_2, ST_MARIA_3, WIZARDS_TOWER_1, WIZARDS_TOWER_2, TEMPLE_OF_MEZ_1, TEMPLE_OF_MEZ_2, UNDERWORLD_STRONGHOLD_1, THE_PIT];
+export const FLARE_DATA: FlareMapData[] = [SALTED_FIELD, STONEWOOD, GOBLIN_CAMP, MERRIMEAD_SWAMP, NAZIA_HIGHLANDS, LOCHPORT_CEMETERY, SOUTHERN_RIDGE, THE_BREACH, GOBLIN_CAVE, PERDITION_MINES, ANTLION_NEST, STORMROCK_RUINS, ST_MARIA_2, ST_MARIA_3, WIZARDS_TOWER_1, WIZARDS_TOWER_2, TEMPLE_OF_MEZ_1, TEMPLE_OF_MEZ_2, UNDERWORLD_STRONGHOLD_1, THE_PIT, STORMROCK_PASS, UNDERWORLD, UNDERWORLD_CATACOMBS, UNDERWORLD_MINES];
 const byFlareId = new Map(FLARE_DATA.map((d) => [d.id, d]));
 const byEris = new Map(FLARE_DATA.map((d) => [d.eris, d]));
 export const FLARE_FIRST = FLARE_DATA[0];

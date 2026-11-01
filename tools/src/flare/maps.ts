@@ -33,6 +33,8 @@ interface MapSpec {
     /** Jefe final: una zona de 1 mob en el punto más lejano de las entradas. */
     boss?: { type: string; lvl: number; name: string };
     /** Vínculos de Flare a descartar (id de Flare del destino) y nivel mínimo para los que quedan (id de Flare del destino -> nivel). */
+    /** Vínculos de Flare que se descartan por destino exacto [mapa, tx, ty] (apuntan a una celda que en ERIS quedó sellada). */
+    skipLinks?: [string, number, number][];
     dropLinks?: string[]; linkGates?: Record<string, number>;
     /** Rectángulos [x,y,w,h] que se abren (puertas trabadas de Flare que se abren con un evento): sin colisión ni objeto. */
     open?: [number, number, number, number][];
@@ -62,7 +64,7 @@ const SPECS: MapSpec[] = [
         loose: [{ type: 'antlion', lvl: 7 }], extras: [{ to: 'ruinas_de_stormrock', where: 'far' }], dropLinks: ['temple_of_mez_1'] },
     { id: 'stormrock_ruins', eris: 'ruinas_de_stormrock', name: 'Ruinas de Stormrock', region: 'mazmorra', pvp: 'off', lvl: [7, 8], dungeon: true, respawnMap: 'nido_hormiga_leon',
         pits: [{ name: 'Galerías infestadas', type: 'antlion', lvl: 7 }, { name: 'Salón de las brasas', type: 'fire_ant', lvl: 8 }, { name: 'Guardia no-muerta', type: 'skeleton_archer', lvl: 8 }],
-        loose: [{ type: 'zombie_dark', lvl: 7 }], boss: { type: 'antlion_reina', lvl: 8, name: 'Cámara de la Reina' }, open: [[47, 68, 2, 2], [43, 69, 1, 1]], extras: [{ to: 'nido_hormiga_leon', where: 'near' }] },
+        loose: [{ type: 'zombie_dark', lvl: 7 }], boss: { type: 'antlion_reina', lvl: 8, name: 'Cámara de la Reina' }, dropLinks: ['stormrock_pass'], open: [[47, 68, 2, 2], [43, 69, 1, 1]], extras: [{ to: 'nido_hormiga_leon', where: 'near' }] },
     // D3: Cripta olvidada (2 pisos, Nv 7-9, jefe: el Caballero de la cripta). La entrada es una puerta del Cementerio de Lochport (Nv 6).
     { id: 'st_maria_2', eris: 'cripta_olvidada', name: 'Cripta olvidada', region: 'mazmorra', pvp: 'off', lvl: [7, 8], dungeon: true,
         pits: [{ name: 'Nichos de huesos', type: 'skeleton', lvl: 7 }, { name: 'Sepultureros', type: 'zombie_dark', lvl: 7 }, { name: 'Arqueros de la cripta', type: 'skeleton_archer', lvl: 8 }],
@@ -76,7 +78,7 @@ const SPECS: MapSpec[] = [
         loose: [{ type: 'skeleton', lvl: 9 }], extras: [{ to: 'la_brecha', where: 'near' }], open: [[39, 57, 2, 2], [39, 37, 2, 2], [59, 61, 2, 2], [77, 47, 2, 2], [59, 35, 2, 2]] },
     { id: 'wizards_tower_2', eris: 'camaras_de_investigacion', name: 'Cámaras de investigación', region: 'mazmorra', pvp: 'off', lvl: [10, 11], dungeon: true, respawnMap: 'torre_del_hechicero',
         pits: [{ name: 'Salamandras invocadas', type: 'wyvern_fire', lvl: 11 }, { name: 'Hechiceros del laboratorio', type: 'skeleton_mage', lvl: 10 }, { name: 'Tumbas arcanas', type: 'cursed_grave', lvl: 10 }],
-        loose: [{ type: 'zombie_dark', lvl: 10 }], boss: { type: 'mago_mayor', lvl: 11, name: 'Sala del Mago mayor' }, open: [[35, 23, 2, 2]] },
+        loose: [{ type: 'zombie_dark', lvl: 10 }], boss: { type: 'mago_mayor', lvl: 11, name: 'Sala del Mago mayor' }, dropLinks: ['underworld'], open: [[35, 23, 2, 2]] },
     // D5: Templo de Mez (2 pisos, Nv 10-12, jefe: el Wyvern del aire). La entrada es una puerta de La Brecha (Nv 10); interruptores y puertas trabadas abiertos.
     { id: 'temple_of_mez_1', eris: 'templo_de_mez', name: 'Templo de Mez', region: 'mazmorra', pvp: 'off', lvl: [10, 11], dungeon: true, dropLinks: ['antlion_nest'],
         pits: [{ name: 'Nidos de wyvern', type: 'wyvern', lvl: 10 }, { name: 'Cámara helada', type: 'wyvern_ice', lvl: 10 }, { name: 'Guardia del sótano', type: 'skeleton_archer', lvl: 11 }],
@@ -87,10 +89,23 @@ const SPECS: MapSpec[] = [
     // D6: Fortaleza infernal y Foso del demonio (2 pisos, Nv 11-12, jefe: el Señor del Foso). La entrada es una puerta de La Brecha (Nv 11); Flare no los une (usa el cuartel), así que van por una puerta propia.
     { id: 'underworld_stronghold_1', eris: 'fortaleza_infernal', name: 'Fortaleza infernal', region: 'mazmorra', pvp: 'off', lvl: [11, 12], dungeon: true,
         pits: [{ name: 'Brasas del cuartel', type: 'wyvern_fire', lvl: 11 }, { name: 'Centinelas hechiceros', type: 'skeleton_mage', lvl: 11 }, { name: 'Arqueros infernales', type: 'skeleton_archer', lvl: 12 }],
-        loose: [{ type: 'skeleton', lvl: 11 }], extras: [{ to: 'foso_del_demonio', where: 'far' }, { to: 'la_brecha', where: 'near' }], open: [[27, 31, 2, 2], [21, 25, 2, 2]] },
+        loose: [{ type: 'skeleton', lvl: 11 }], extras: [{ to: 'foso_del_demonio', where: 'far' }, { to: 'la_brecha', where: 'near' }], open: [[27, 31, 2, 2], [21, 25, 2, 2]], dropLinks: ['underworld_mines'] },
     { id: 'the_pit', eris: 'foso_del_demonio', name: 'Foso del demonio', region: 'mazmorra', pvp: 'off', lvl: [12, 12], dungeon: true, respawnMap: 'fortaleza_infernal',
         pits: [{ name: 'Fosa de brasas', type: 'fire_ant', lvl: 12 }, { name: 'Cuevas de fuego', type: 'wyvern_fire', lvl: 12 }, { name: 'Condenados', type: 'zombie_dark', lvl: 12 }],
         loose: [{ type: 'skeleton_mage', lvl: 12 }], boss: { type: 'demonio_foso', lvl: 12, name: 'Trono del Señor del Foso' }, extras: [{ to: 'fortaleza_infernal', where: 'near' }] },
+    // Mapas abiertos de Nv 7-11 (la cadena de abajo de La Brecha): el Paso de Stormrock (nieve; Flare lo une a La Brecha por 4 caminos) y las Cenizas I-III (cuevas, la zona de abajo de Flare).
+    { id: 'stormrock_pass', eris: 'paso_de_stormrock', name: 'Paso de Stormrock', region: 'comun', pvp: 'faction', lvl: [7, 8], dropLinks: ['stormrock_ruins'], skipLinks: [['the_breach', 23, 14], ['the_breach', 76, 41]],
+        pits: [{ name: 'Riscos de wyvern', type: 'wyvern', lvl: 7 }, { name: 'Hormigueros helados', type: 'ice_ant', lvl: 7 }, { name: 'Cumbre helada', type: 'wyvern_ice', lvl: 8 }],
+        loose: [{ type: 'skeleton_archer', lvl: 7 }], extras: [{ to: 'cenizas_i', where: 'far' }] },
+    { id: 'underworld', eris: 'cenizas_i', name: 'Cenizas I', region: 'comun', pvp: 'faction', lvl: [8, 9],
+        pits: [{ name: 'Brasas de la ceniza', type: 'fire_ant', lvl: 8 }, { name: 'Hechiceros de ceniza', type: 'skeleton_mage', lvl: 8 }, { name: 'Muertos calcinados', type: 'zombie_dark', lvl: 9 }],
+        loose: [{ type: 'skeleton', lvl: 8 }], extras: [{ to: 'paso_de_stormrock', where: 'near' }] },
+    { id: 'underworld_catacombs', eris: 'cenizas_ii', name: 'Cenizas II', region: 'comun', pvp: 'faction', lvl: [9, 10],
+        pits: [{ name: 'Osario', type: 'skeleton', lvl: 9 }, { name: 'Tumbas ardientes', type: 'cursed_grave', lvl: 9 }, { name: 'Arqueros de las catacumbas', type: 'skeleton_archer', lvl: 10 }],
+        loose: [{ type: 'zombie_dark', lvl: 9 }] },
+    { id: 'underworld_mines', eris: 'cenizas_iii', name: 'Cenizas III', region: 'comun', pvp: 'faction', lvl: [10, 11], dropLinks: ['underworld_stronghold_1'],
+        pits: [{ name: 'Mineros condenados', type: 'zombie_dark', lvl: 10 }, { name: 'Hornos de wyvern', type: 'wyvern_fire', lvl: 11 }, { name: 'Galerías de brasas', type: 'fire_ant', lvl: 10 }],
+        loose: [{ type: 'skeleton_mage', lvl: 10 }] },
     { id: 'merrimead_swamp', eris: 'pantano_de_merrimead', name: 'Pantano de Merrimead', region: 'comun', pvp: 'faction', lvl: [3, 4],
         pits: [{ name: 'Ciénaga de zombis', type: 'zombie', lvl: 3 }, { name: 'Pozo oscuro', type: 'zombie_dark', lvl: 4 }, { name: 'Lápidas del pantano', type: 'cursed_grave', lvl: 4 }],
         loose: [{ type: 'zombie', lvl: 3 }], extras: [{ to: 'altas_de_nazia', where: 'far' }] },
@@ -121,6 +136,11 @@ const FILLS: Record<string, { floor: number[]; deco: [number, number[]][] }> = {
     cave: {
         floor: [216, 217, 218, 219],
         deco: [[0.40, [64, 65, 68, 69, 72, 76, 77, 80, 84, 86, 96, 97, 98, 99, 100, 101, 102, 112, 113, 114, 115]], [0.46, [144, 145, 146, 147, 148, 149]], [0.50, [150, 151, 152, 153]]],
+    },
+    // Nieve: el vacío es nieve lisa (16-31) con árboles pelados, rocas nevadas y piedras (los acantilados 48-71 tienen la cara de atrás transparente).
+    snowplains: {
+        floor: Array.from({ length: 16 }, (_, i) => 16 + i),
+        deco: [[0.12, [245, 246, 247, 244]], [0.18, [92, 93, 95, 198, 199, 202]], [0.22, [193, 194, 195]]],
     },
     // Mazmorra de piedra: piso liso (16-19, 21, 23) con muñones de muro (cara negra transparente), huesos y calaveras.
     dungeon: {
@@ -284,7 +304,7 @@ function convert(spec: MapSpec): object {
     for (const z of zones) if (!knownMobs.has(z.type)) throw new Error(`${spec.id}: tipo de mob desconocido "${z.type}" (agregalo a MOB_TYPES o cambialo en SPECS)`);
 
     // 6) Vínculos de Flare: la celda disparadora es la libre más cercana al centro de su rectángulo.
-    const links = p.links.filter((l) => !spec.dropLinks?.includes(l.to)).flatMap((l) => { const c = snap(Math.floor(l.x + l.w / 2), Math.floor(l.y + l.h / 2)); return c ? [{ cell: c, to: l.to, tx: l.tx, ty: l.ty, tooltip: l.tooltip, ...(spec.linkGates?.[l.to] ? { gate: spec.linkGates[l.to] } : {}) }] : []; });
+    const links = p.links.filter((l) => !spec.dropLinks?.includes(l.to) && !spec.skipLinks?.some(([m, x, y]) => m === l.to && x === l.tx && y === l.ty)).flatMap((l) => { const c = snap(Math.floor(l.x + l.w / 2), Math.floor(l.y + l.h / 2)); return c ? [{ cell: c, to: l.to, tx: l.tx, ty: l.ty, tooltip: l.tooltip, ...(spec.linkGates?.[l.to] ? { gate: spec.linkGates[l.to] } : {}) }] : []; });
 
     // 7) Conexiones extra: celda caminable con espacio alrededor, lejos de la entrada (far) o a unos pasos de ella (near), separadas de todo lo demás.
     const taken: { x: number; y: number }[] = [entry, ...links.map((l) => l.cell)];

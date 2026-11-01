@@ -57,3 +57,4 @@ Mazmorra Nv7-9 (Cripta olvidada y Sepulcro profundo): mapas "st_maria_2" y "st_m
 Mazmorra Nv9-11 (Torre del hechicero y Cámaras de investigación): mapas "wizards_tower_1" y "wizards_tower_2" de Flare (flare-game), CC-BY-SA 3.0, modificados (puertas abiertas, mobs, jefe) para ERIS.
 Mazmorra Nv10-12 (Templo de Mez y Salón principal de Mez): mapas "temple_of_mez_1" y "temple_of_mez_2" de Flare (flare-game), CC-BY-SA 3.0, modificados (puertas abiertas, mobs, jefe) para ERIS.
 Mazmorra Nv11-12 (Fortaleza infernal y Foso del demonio): mapas "underworld_stronghold_1" y "the_pit" de Flare (flare-game), CC-BY-SA 3.0, modificados (puertas abiertas, conexión propia, mobs, jefe) para ERIS.
+Mapas abiertos Nv7-11 (Paso de Stormrock, Cenizas I-III): mapas "stormrock_pass", "underworld", "underworld_catacombs" y "underworld_mines" y tileset de nieve de Flare (flare-game), CC-BY-SA 3.0, modificados (recortes de vínculos, relleno del vacío, mobs) para ERIS.
