@@ -90,7 +90,7 @@ Curva común: `hp(L) = 29 + 10,5·L + 2,75·L²` (`mobs.ts`).
 
 Todo mob de dungeon necesita animaciones completas: **stance, run, ataque, golpe recibido y muerte**, ×8 direcciones (más cast para magos).
 
-**Hecho (ya en `main`, detalle en `docs/MOBS_NUEVOS.md`):** los 9 tipos nuevos de Flare están en `MOB_TYPES` con su sprite en 8 direcciones (`hobgoblin` y `hobgoblin_archer` ya se usan en Bosque de Piedra y Cañón goblin; el resto todavía no) y la auditoría de los mobs de OpenGameArt está en ese doc. Los arqueros pelean cuerpo a cuerpo hasta que `MobSim` tenga ataque a distancia, y `cursed_grave` es una lápida sin animación de andar (se desliza lento).
+**Hecho (ya en `main`, detalle en `docs/MOBS_NUEVOS.md`):** los 9 tipos nuevos de Flare están en `MOB_TYPES` con su sprite en 8 direcciones (`hobgoblin` y `hobgoblin_archer` ya se usan en Bosque de Piedra y Cañón goblin; el resto todavía no) y la auditoría de los mobs de OpenGameArt está en ese doc. Los arqueros disparan de verdad (ataque a distancia en `MobSim`, ver `docs/MOBS_A_DISTANCIA.md`), y `cursed_grave` es una lápida sin animación de andar (se desliza lento).
 
 - **Los de Flare cumplen** (las definiciones de `animations/enemies/*.txt` traen todas, p. ej. goblin: 8 direcciones × 4 frames de reposo). Las sheets vienen empaquetadas (no son grilla): hay que cortarlas con los rectángulos de esas definiciones, no con una grilla fija.
 - **Tipos nuevos para `MOB_TYPES`** (se agregan al **final** de la lista: el protocolo manda el índice): `hobgoblin`, `hobgoblin_archer`, `skeleton_archer`, `zombie_dark`, `cursed_grave`, `ice_ant`, `antlion_small`, `wyvern_fire`, `wyvern_ice`. Los sprites ya están en Flare y salen del mismo pipeline de `atlas.ts`.
@@ -115,7 +115,7 @@ Todo mob de dungeon necesita animaciones completas: **stance, run, ataque, golpe
 3. Props con colisión propia: hoy los árboles y rocas del relleno bloquean por celda; falta afinar casos como los cruces diagonales abiertos.
 4. Portar el render de control a `tools/` (hoy es un script aparte) y el recorrido con navegador a un test del repo.
 5. Borde del mapa: al caminar pegado al borde la cámara muestra negro más allá del mapa (pasa igual en los mapas generados por código); se puede resolver para todos con un margen de bosque o un fondo.
-6. Que los mobs a distancia (`hobgoblin_archer`, hoy cuerpo a cuerpo) disparen de verdad.
+6. Magos con proyectil propio, y balance de los arqueros (conservan el daño de cuerpo a cuerpo: conviene bajarlo ~20-30 % tras probarlos en un pit real).
 
 ## 8. Licencia
 
