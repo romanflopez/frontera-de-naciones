@@ -50,9 +50,12 @@ const SPECS: MapSpec[] = [
     { id: 'lochport_cemetery', eris: 'cementerio_de_lochport', name: 'Cementerio de Lochport', region: 'comun', pvp: 'faction', lvl: [5, 5],
         pits: [{ name: 'Tumbas viejas', type: 'skeleton', lvl: 5 }, { name: 'Arqueros del osario', type: 'skeleton_archer', lvl: 5 }, { name: 'Hechiceros del camposanto', type: 'skeleton_mage', lvl: 5 }],
         loose: [{ type: 'cursed_grave', lvl: 5 }], extras: [{ to: 'risco_del_sur', where: 'far' }] },
+    { id: 'the_breach', eris: 'la_brecha', name: 'La Brecha', region: 'comun', pvp: 'faction', lvl: [6, 7],
+        pits: [{ name: 'Túneles de hormiga león', type: 'antlion', lvl: 6 }, { name: 'Hormigueros de la brecha', type: 'fire_ant', lvl: 6 }, { name: 'Mineros caídos', type: 'zombie_dark', lvl: 7 }],
+        loose: [{ type: 'antlion_small', lvl: 6 }, { type: 'fire_ant', lvl: 6 }], extras: [{ to: 'risco_del_sur', where: 'near' }] },
     { id: 'southern_ridge', eris: 'risco_del_sur', name: 'Risco del Sur', region: 'comun', pvp: 'faction', lvl: [5, 6],
         pits: [{ name: 'Risco de las hormigas', type: 'antlion', lvl: 5 }, { name: 'Atalaya en ruinas', type: 'skeleton_mage', lvl: 6 }, { name: 'Grietas de fuego', type: 'fire_ant', lvl: 6 }],
-        loose: [{ type: 'antlion', lvl: 5 }, { type: 'skeleton', lvl: 5 }], extras: [{ to: 'cementerio_de_lochport', where: 'near' }] },
+        loose: [{ type: 'antlion', lvl: 5 }, { type: 'skeleton', lvl: 5 }], extras: [{ to: 'cementerio_de_lochport', where: 'near' }, { to: 'la_brecha', where: 'far' }] },
 ];
 
 /**
@@ -63,6 +66,11 @@ const FILLS: Record<string, { floor: number[]; deco: [number, number[]][] }> = {
     grassland: {
         floor: Array.from({ length: 16 }, (_, i) => 16 + i),
         deco: [[0.17, [248, 249, 250, 251]], [0.24, [252, 253, 254, 255]], [0.29, [240, 241, 242, 243]], [0.33, [128, 129, 130, 131]], [0.45, [112, 113, 124, 125, 126, 127]]],
+    },
+    // Cueva: el vacío es roca maciza. Piso verde oscuro (216-219) cubierto de columnas de roca (64-121, con la cara de atrás transparente), estalagmitas y piedras.
+    cave: {
+        floor: [216, 217, 218, 219],
+        deco: [[0.40, [64, 65, 68, 69, 72, 76, 77, 80, 84, 86, 96, 97, 98, 99, 100, 101, 102, 112, 113, 114, 115]], [0.46, [144, 145, 146, 147, 148, 149]], [0.50, [150, 151, 152, 153]]],
     },
 };
 

@@ -3,7 +3,7 @@
  * distintos y mobs sueltos entre medio. Los datos los genera tools/src/flare/maps.ts (CC-BY-SA 3.0, ver CREDITS) y los tiles salen del
  * atlas `flare_<hoja>.webp` (tools/src/flare/mapatlas.ts). Todo es dato fijo: cliente y server arman exactamente lo mismo.
  *   Villa de Solmar / Ciudadela de Vhar --portal--> Campos de Sal -> Bosque de Piedra -> Cañón goblin -> Pantano de Merrimead
- *   Pantano -> Altas de Nazia (Nv 4-5) y Pantano -> Cementerio de Lochport (Nv 5) -> Risco del Sur (Nv 5-6)
+ *   Pantano -> Altas de Nazia (Nv 4-5) y Pantano -> Cementerio de Lochport (Nv 5) -> Risco del Sur (Nv 5-6) -> La Brecha (Nv 6-7, cueva)
  */
 import type { Prop, WorldMap, Zone } from '../index';
 import type { MapDef, Link } from '../maps';
@@ -18,12 +18,13 @@ import { DATA as MERRIMEAD_SWAMP } from './merrimead_swamp';
 import { DATA as NAZIA_HIGHLANDS } from './nazia_highlands';
 import { DATA as LOCHPORT_CEMETERY } from './lochport_cemetery';
 import { DATA as SOUTHERN_RIDGE } from './southern_ridge';
+import { DATA as THE_BREACH } from './the_breach';
 
 export { flareTile, FLARE_BASE } from './types';
 export type { FlareMapData } from './types';
 
 /** En el orden de la cadena: la primera es la que une el portal de las ciudades. */
-export const FLARE_DATA: FlareMapData[] = [SALTED_FIELD, STONEWOOD, GOBLIN_CAMP, MERRIMEAD_SWAMP, NAZIA_HIGHLANDS, LOCHPORT_CEMETERY, SOUTHERN_RIDGE];
+export const FLARE_DATA: FlareMapData[] = [SALTED_FIELD, STONEWOOD, GOBLIN_CAMP, MERRIMEAD_SWAMP, NAZIA_HIGHLANDS, LOCHPORT_CEMETERY, SOUTHERN_RIDGE, THE_BREACH];
 const byFlareId = new Map(FLARE_DATA.map((d) => [d.id, d]));
 const byEris = new Map(FLARE_DATA.map((d) => [d.eris, d]));
 export const FLARE_FIRST = FLARE_DATA[0];
