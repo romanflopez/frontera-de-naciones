@@ -51,6 +51,7 @@ Tamaños: S = menos de un día, M = 1-3 días, L = más de 3.
 5. Versión solo de al menos D1-D2 para quien no tiene party. (M)
 
 ### Fase 2 — Ítems y economía (el corazón del "chill loop")
+0. **Pasar a nivel 40 antes de seguir con ítems:** `MAX_LVL` 40, nueva curva de kills por nivel, poder de ítems por nivel de ítem, 8 bandas de 5 niveles, topes de atributos, tasas de drop por banda (ver `NIVEL_40_E_ITEMS.md`). (M-L)
 1. Únicos T4-T6 y ítems de los jefes D4-D6 (el arte se reutiliza, es sobre todo dato). (M)
 2. Mejora +6..+11 con riesgo alto estilo Merien/Xelima, y piedras como sumidero. (M)
 3. **Runas (sockets)**, con la regla tuya: completar el set no depende de nada carísimo que falle. (L)
@@ -83,8 +84,8 @@ Tamaños: S = menos de un día, M = 1-3 días, L = más de 3.
 ### 5.1 El objetivo claro (el problema de Helbreath y la queja de Dreadmyst)
 Cada tramo necesita algo que perseguir. Propuesta mínima: por cada banda T1-T6, **un set o único "de la nación" que se arma con drops de pit + jefe de dungeon + una mejora**; al terminar el T6 el objetivo pasa a ser +N alto, runas y ranking de arena. Así el farmeo siempre apunta a una pieza concreta, no a "subir porque sí".
 
-### 5.2 Nv12 como techo
-Con 12 niveles, el juego se agota rápido (Dreadmyst llega a nivel 25 y aun así le reclaman endgame). Opciones: subir el techo, o dejar el 12 y mover todo el endgame a ítems (+N, runas, dificultades de dungeon, arena). Yo iría por lo segundo para el MVP: es más barato y encaja con tu idea de ítem único.
+### 5.2 Nivel máximo: 40 (decidido el 1/11/2026)
+El techo pasa de 12 a **40**. Más mapas y más contenido, curva más amable hasta el 10 y más dura después, y el farmeo en área revisado. El análisis con números, la curva propuesta y los 7 problemas de ítems que hay que arreglar para que funcione a 40 niveles están en [`NIVEL_40_E_ITEMS.md`](NIVEL_40_E_ITEMS.md). Esto reemplaza la idea de dejar el 12 como techo.
 
 ## 6. Orden recomendado
 
