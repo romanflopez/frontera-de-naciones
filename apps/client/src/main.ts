@@ -346,8 +346,11 @@ function onServer(m: ServerPayload) {
             if (m.value.message.startsWith(GM_TAG)) { try { renderGm(JSON.parse(m.value.message.slice(GM_TAG.length))); } catch { /* menú GM mal formado: se ignora */ } break; }
             log(esc(m.value.message), false, 'sys');
             break;
-        case 'chatMessageReceived':
-            log(`<b>${esc(m.value.senderCharacterName)}:</b> ${esc(m.value.message)}`, false, 'chat');
+        case 'chatMessageReceived': {
+            const ch = CHAT_CH.find((c) => c.name === m.value.channel) ?? CHAT_CH[0];
+            log(`<span class="ch">[${ch.label}]</span><b>${esc(m.value.senderCharacterName)}:</b> ${esc(m.value.message)}`, false, `chat ch-${ch.name}`);
+            break;
+        }
             break;
         case 'pingResponse':
             playersOnline = m.value.playersInMap;
@@ -977,6 +980,11 @@ cv.addEventListener('pointercancel', () => { holding = false; });
 cv.addEventListener('pointermove', (e) => { const r = cv.getBoundingClientRect(); mouse = { x: e.clientX - r.left, y: e.clientY - r.top }; });
 cv.addEventListener('pointerleave', () => { mouse = { x: -1, y: -1 }; });
 
+// ---------- chat por canales: Global, Nación (tu facción), Party; Guild llega más adelante ----------
+const CHAT_CH = [{ name: 'global', key: 'g', label: 'Global' }, { name: 'nacion', key: 'n', label: 'Nación' }, { name: 'party', key: 'p', label: 'Party' }];
+let chatCh = 0;
+function setChatCh(i: number) { chatCh = (i + CHAT_CH.length) % CHAT_CH.length; const b = $('chatCh'); b.textContent = CHAT_CH[chatCh].label; b.className = CHAT_CH[chatCh].name; }
+$('chatCh').addEventListener('click', () => { setChatCh(chatCh + 1); chatIn.focus(); });
 // ---------- party (docs/PARTY_Y_ARENAS.md): comandos de chat y panel de compañeros ----------
 const PARTY_CMDS: Record<string, string> = { invitar: 'invite', inv: 'invite', aceptar: 'accept', rechazar: 'decline', salir: 'leave', expulsar: 'kick', lider: 'leader' };
 function partyCommand(text: string): boolean {
@@ -1002,12 +1010,13 @@ window.addEventListener('keydown', (e) => {
             if (/^\/meditar$/i.test(text)) toggleMeditate();
             else if (DEBUG && /^\/look(\s|$)/i.test(text)) lookCommand(text);
             else if (partyCommand(text)) { /* resuelto */ }
-            else if (/^\/(p|g)\s/i.test(text)) net.send({ $case: 'chatMessageSendRequest', value: { message: text } });
             else if (/^\/gm(\s|$)/i.test(text)) net.send({ $case: 'chatMessageSendRequest', value: { message: text } }); // comandos de GM: los resuelve el server (FDN_GM)
-            else if (text.startsWith('/')) log(DEBUG ? 'Comandos: /meditar, /look, party: /invitar /aceptar /rechazar /salir /expulsar /lider /p' : 'Comandos: /meditar, party: /invitar /aceptar /rechazar /salir /expulsar /lider /p');
-            else if (text) net.send({ $case: 'chatMessageSendRequest', value: { message: text } });
+            else if (/^\/(gu|g|n|p)\s/i.test(text)) net.send({ $case: 'chatMessageSendRequest', value: { message: text } }); // canal explícito
+            else if (text.startsWith('/')) log(DEBUG ? 'Comandos: /meditar, /look, chat: /g global, /n nación, /p party, /gu guild (pronto); party: /invitar /aceptar /rechazar /salir /expulsar /lider' : 'Comandos: /meditar, chat: /g global, /n nación, /p party, /gu guild (pronto); party: /invitar /aceptar /rechazar /salir /expulsar /lider');
+            else if (text) net.send({ $case: 'chatMessageSendRequest', value: { message: `/${CHAT_CH[chatCh].key} ${text}` } }); // va por el canal elegido
             chatIn.value = ''; chatIn.blur(); cv.focus({ preventScroll: true }); e.preventDefault();
         } else if (e.key === 'Escape') { chatIn.blur(); cv.focus({ preventScroll: true }); }
+        else if (e.key === 'Tab') { e.preventDefault(); setChatCh(chatCh + (e.shiftKey ? -1 : 1)); }
         return;
     }
     if (e.target instanceof HTMLInputElement) return;

@@ -1190,6 +1190,8 @@ export interface ChatMessageReceived {
   senderCharacterName: string;
   timestampMs: bigint;
   message: string;
+  /** Canal: 'global', 'nacion', 'party' o 'guild' (vacío = global). */
+  channel: string;
 }
 
 export interface PlayerEnteredRange {
@@ -16114,7 +16116,7 @@ export const ChatMessageSendRequest: MessageFns<ChatMessageSendRequest> = {
 };
 
 function createBaseChatMessageReceived(): ChatMessageReceived {
-  return { senderCharacterName: "", timestampMs: 0n, message: "" };
+  return { senderCharacterName: "", timestampMs: 0n, message: "", channel: "" };
 }
 
 export const ChatMessageReceived: MessageFns<ChatMessageReceived> = {
@@ -16130,6 +16132,9 @@ export const ChatMessageReceived: MessageFns<ChatMessageReceived> = {
     }
     if (message.message !== "") {
       writer.uint32(26).string(message.message);
+    }
+    if (message.channel !== "") {
+      writer.uint32(34).string(message.channel);
     }
     return writer;
   },
@@ -16171,6 +16176,14 @@ export const ChatMessageReceived: MessageFns<ChatMessageReceived> = {
             message.message = reader.string();
             continue;
           }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.channel = reader.string();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -16193,6 +16206,7 @@ export const ChatMessageReceived: MessageFns<ChatMessageReceived> = {
       ? BigInt(object.timestampMs)
       : 0n;
     message.message = object.message ?? "";
+    message.channel = object.channel ?? "";
     return message;
   },
 };

@@ -290,11 +290,18 @@ canvas:focus{outline:none}
 #party .pb{height:5px;background:#2a1618;border-radius:3px;margin-top:2px;overflow:hidden}
 #party .pb i{display:block;height:100%;background:#c0463a}
 #chat{bottom:calc(var(--hud-h) + 12px);left:max(12px,env(safe-area-inset-left,0px));width:min(320px,70vw)}
-#chat input{width:100%;box-sizing:border-box;font:inherit;font-size:13px;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:6px 8px}
+#chat{display:flex;gap:4px;pointer-events:auto}
+#chatCh{flex:none;font:inherit;font-size:11px;letter-spacing:.04em;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:0 7px;cursor:pointer}
+#chatCh.nacion{color:#e0b04a}#chatCh.party{color:#7fb6ff}
+#chat input{flex:1;min-width:0;width:100%;box-sizing:border-box;font:inherit;font-size:13px;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:6px 8px}
 #chat input:focus{outline:1px solid var(--brass)}
 #log{bottom:calc(var(--hud-h) + 50px);width:min(320px,70vw)}
 #log p.chat{color:#e9dfc0}
 #log p.chat b{color:var(--brass);font-weight:600}
+#log p.chat .ch{font-size:11px;opacity:.9;margin-right:3px}
+#log p.ch-nacion{color:#f0d9a0}#log p.ch-nacion .ch{color:#e0b04a}
+#log p.ch-party{color:#cfe3ff}#log p.ch-party .ch{color:#7fb6ff}
+#log p.ch-global .ch{color:#9aa3ad}
 #log p.sys{color:#8fb6f0}
 #net{top:calc(10px + env(safe-area-inset-top,0px));right:calc(max(12px,env(safe-area-inset-right,0px)) + 330px);font-size:12px;color:var(--muted);padding:9px 10px;pointer-events:none}
 #net.off{color:#ff8a6b}
@@ -482,7 +489,7 @@ canvas:focus{outline:none}
 </div>
   <div id="party" class="hud" hidden></div>
   <div id="log" class="hud"></div>
-  <div id="chat" class="hud"><input id="chatIn" maxlength="200" autocomplete="off" placeholder="Enter para chatear" aria-label="Chat"></div>
+  <div id="chat" class="hud"><button id="chatCh" type="button" title="Canal de chat (Tab para cambiar): Global, Nación, Party. Guild: próximamente" aria-label="Canal de chat">Global</button><input id="chatIn" maxlength="200" autocomplete="off" placeholder="Enter para chatear" aria-label="Chat"></div>
   <div id="net" class="hud" aria-live="polite"></div>
   <div id="help" class="hud"><span id="helpKeys"></span><br>Arte: <a href="https://github.com/flareteam/flare-game" target="_blank" rel="noopener">Flare</a> (CC-BY-SA 3.0) · Efectos: TOMAS de Miradin (CC-BY-SA)</div>
   <div id="loading">Cargando el mundo…</div>

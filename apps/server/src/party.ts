@@ -143,7 +143,7 @@ export class PartyService {
     /** Chat de party: lo recibe cada miembro. Devuelve false si no tiene party. */
     chat(sid: string, text: string, senderName: string): boolean {
         const party = this.parties.get(this.partyOf.get(sid) ?? -1); if (!party) return false;
-        for (const m of party.members) this.h.send(m, M.chatMessageReceived(`[Party] ${senderName}`, text));
+        for (const m of party.members) this.h.send(m, M.chatMessageReceived(senderName, text, 'party'));
         return true;
     }
 

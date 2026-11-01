@@ -161,8 +161,8 @@ export const logoutResponse = (wait: number): ServerMessage => msg({ $case: 'log
 export const pingResponse = (sequence: number, gameWorldQueueLength: number, playersInMap: number, pingVariance: number): ServerMessage =>
     msg({ $case: 'pingResponse', value: { sequence, gameWorldQueueLength, playersInMap, pingVariance } });
 
-export const chatMessageReceived = (senderCharacterName: string, text: string): ServerMessage =>
-    msg({ $case: 'chatMessageReceived', value: { senderCharacterName, timestampMs: BigInt(Date.now()), message: text } });
+export const chatMessageReceived = (senderCharacterName: string, text: string, channel = 'global'): ServerMessage =>
+    msg({ $case: 'chatMessageReceived', value: { senderCharacterName, timestampMs: BigInt(Date.now()), message: text, channel } });
 
 export const playerProfileChanged = (p: Player): ServerMessage =>
     msg({ $case: 'playerProfileChanged', value: { playerId: p.playerId, profile: p.profile } });

@@ -1054,6 +1054,8 @@ message ChatMessageReceived {
   string sender_character_name = 1;
   int64 timestamp_ms = 2;
   string message = 3;
+  // Canal: 'global', 'nacion', 'party' o 'guild' (vacío = global).
+  string channel = 4;
 }
 
 message PlayerEnteredRange {

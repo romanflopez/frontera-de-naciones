@@ -82,8 +82,8 @@ export const COMMON_CHANCE = 0.06;
 /** Piedras de forja: chance por muerte según el origen del mob, y cantidad que suelta un jefe. */
 export const FORGE_CHANCE = { loose: 0.05, pit: 0.08, dungeon: 0.18 };
 export const FORGE_BOSS: [number, number] = [3, 5];
-/** Probabilidad de éxito de cada mejora (+1 .. +UP_MAX). Solo vive en el server. Al fallar el ítem no baja (hasta +5), se pierden las piedras y el oro. */
-export const UP_RATE = [1, 1, 1, 0.8, 0.6];
+/** Probabilidad de éxito de cada mejora (+1 .. +UP_MAX), como Helbreath: arranca en 33 % para que la gente pueda "limar". Solo vive en el server. Al fallar el ítem no baja (hasta +5), se pierden las piedras y el oro. */
+export const UP_RATE = [0.33, 0.33, 0.33, 0.25, 0.2];
 export const GOLD_CHANCE = 0.45;
 const pick = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
 /** Un ítem único con sus atributos fijos y una variación de ±10 %. Los de jefe son rareza 3 (Épico); los demás, 2 (Raro). */

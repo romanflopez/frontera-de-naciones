@@ -74,6 +74,8 @@ test('party: chat de party solo llega a los miembros; sin party devuelve false',
     join(svc, 'a', 'b', 'Beto'); assert.equal(svc.chat('a', 'hola', 'Ana'), true);
     const got = (sid: string) => inbox.get(sid)!.filter((m) => m.payload?.$case === 'chatMessageReceived').length;
     assert.equal(got('a'), 1); assert.equal(got('b'), 1); assert.equal(got('c'), 0);
+    const m = inbox.get('b')!.find((x) => x.payload?.$case === 'chatMessageReceived')!.payload as { value: { channel: string; senderCharacterName: string } };
+    assert.equal(m.value.channel, 'party'); assert.equal(m.value.senderCharacterName, 'Ana');
 });
 
 test('party: la exp total crece 10 % por compañero extra y se reparte en partes iguales', () => {

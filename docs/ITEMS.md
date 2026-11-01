@@ -142,7 +142,7 @@ Probabilidades iniciales (a ajustar):
 ## 13. Estado de la mejora +N (implementado)
 
 - Solo ítems únicos (de banda y de jefe), en la bolsa o equipados, en un herrero (armero o armadurero), con el botón "Mejorar" del tooltip.
-- MVP: de +1 a +5 (`UP_MAX`). Éxito: +1 a +3 100 %, +4 80 %, +5 60 % (`UP_RATE`, solo en el server). Si falla, el ítem no baja: se pierden las piedras y el oro del intento. Costo de pasar de +n a +n+1: n+1 piedras de forja y `40 × banda × (n+1)` de oro.
+- MVP: de +1 a +5 (`UP_MAX`). Éxito (como Helbreath, arranca en 33 % para que la gente pueda "limar"): +1 a +3 33 %, +4 25 %, +5 20 % (`UP_RATE`, solo en el server). Costo esperado de llegar a +5: ~59 piedras y ~59 × 40 × banda de oro (a revisar contra el ritmo real de drops de piedras). Si falla, el ítem no baja: se pierden las piedras y el oro del intento. Costo de pasar de +n a +n+1: n+1 piedras de forja y `40 × banda × (n+1)` de oro.
 - Cada nivel suma +4 % a daño, defensa, RM y daño mágico base (`upMult`); los atributos fijos no escalan.
 - Piedras de forja: 5 % mob suelto, 8 % pit, 18 % mob de mazmorra (1 piedra); los jefes con ítems propios sueltan 3 a 5. Se guardan en la cuenta (`Econ.forge`).
 - El nivel de mejora se conserva al guardar en el depósito, subastar y comprar en la subasta.

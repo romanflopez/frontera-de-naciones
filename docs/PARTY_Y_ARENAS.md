@@ -60,3 +60,8 @@ Necesaria ya para las 6 mazmorras de grupo (`docs/MAPAS_FLARE.md`) y para el 2v2
 3. ¿El equipo cuenta o se normaliza? (hoy cuenta; revisar con +N).
 4. ¿Cola entre facciones o separada por facción?
 5. ¿Qué dan los puntos de arena (cosméticos, ítems de PvP, nada por ahora)?
+
+## 5. Chat por canales (implementado)
+
+Cuatro canales, como Helbreath y Dreadmyst: **Global** (por defecto), **Nación** (tu facción), **Party** y **Guild** (todavía no existe: responde "Las guilds llegan próximamente"). Comandos: `/g`, `/n`, `/p`, `/gu` más el texto; sin prefijo el mensaje va por el canal elegido en el selector de la barra de chat (clic o Tab para cambiar entre Global, Nación y Party). Cada mensaje llega con su canal (`ChatMessageReceived.channel`) y se pinta con una etiqueta de color. Server: `handleChat` en `apps/server/src/index.ts`.
+Pendiente: pestañas para filtrar por canal, ignorar jugadores, límite de ritmo anti-spam y el canal de guild cuando existan las guilds.

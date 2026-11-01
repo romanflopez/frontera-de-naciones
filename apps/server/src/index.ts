@@ -331,18 +331,28 @@ function handleGm(s: Session, text: string, reply: (m: ServerMessage) => void): 
 }
 
 /** Chat global: le llega a todos los conectados. Port de GlobalWorld.HandleChatMessageSendRequest. */
+/**
+ * Chat por canales (docs/PARTY_Y_ARENAS.md §3): global (por defecto, o `/g `), nación (`/n `, la facción), party (`/p `) y guild (`/gu `, todavía no existe).
+ * El canal manda en el mensaje (`channel`) para que el cliente lo pinte distinto.
+ */
 function handleChat(sender: Session, raw: string, reply: (m: ServerMessage) => void): void {
-    const text = raw.trim();
-    if (/^\/gm(\s|$)/i.test(text)) { handleGm(sender, text, reply); return; }
+    let text = raw.trim(), channel: 'global' | 'nacion' | 'party' | 'guild' = 'global';
+    if (/^\/gm(\s|$)/i.test(text)) { handleGm(sender, text, reply); return; } // comandos de GM (modo GM)
+    const pre = /^\/(gu|g|n|p)\s+/i.exec(text);
+    if (pre) { channel = ({ gu: 'guild', g: 'global', n: 'nacion', p: 'party' } as const)[pre[1].toLowerCase() as 'gu' | 'g' | 'n' | 'p']; text = text.slice(pre[0].length).trim(); }
     if (!text) { reply(M.sendMessage('El mensaje no puede estar vacío.')); return; }
     if (text.length > settings.chatMessageMaxLength) { reply(M.sendMessage(`El mensaje no puede pasar los ${settings.chatMessageMaxLength} caracteres.`)); return; }
-    if (/^\/(p|g)\s/i.test(text)) { // chat de party
-        if (!parties.chat(sender.sessionId, text.slice(3).trim(), sender.characterName)) reply(M.sendMessage('No estás en una party.'));
+    if (channel === 'guild') { reply(M.sendMessage('Las guilds llegan próximamente.')); return; }
+    if (channel === 'party') { if (!parties.chat(sender.sessionId, text, sender.characterName)) reply(M.sendMessage('No estás en una party.')); return; }
+    const data = encode(M.chatMessageReceived(sender.characterName, text, channel));
+    if (channel === 'nacion') {
+        const fac = factionOfSession(sender); if (!fac) { reply(M.sendMessage('Todavía no tenés nación.')); return; }
+        for (const s of sessionsByNetworkId.values()) if (s.socket?.readyState === s.socket?.OPEN && factionOfSession(s) === fac) s.socket?.send(data);
         return;
     }
-    const data = encode(M.chatMessageReceived(sender.characterName, text));
     for (const s of sessionsByNetworkId.values()) if (s.socket?.readyState === s.socket?.OPEN) s.socket?.send(data);
 }
+const factionOfSession = (s: Session): string | undefined => worldOf(s)?.playerOf(s.sessionId)?.profile.split(';')[0] || undefined;
 
 async function shutdown(): Promise<void> {
     console.log('[Server] Cerrando: guardando personajes…');
