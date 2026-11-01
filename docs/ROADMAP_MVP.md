@@ -168,6 +168,86 @@ Salen de las páginas de Helbreath que pasaste (mecánicas de mobs, personaje y 
 4. **Evolución a un estado final** al llegar al +15 (cambia el aspecto, no los stats), para tener un cierre claro.
 5. **Elegir el stat** que suma entre las cuatro opciones de la clase (vida, daño, magia, crítico), con los mismos topes que el resto del equipo.
 
+**Ojo:** la otra versión (Helbreath Evolution, §9.7) usa ángeles con poderes de combate en vez de stats; es más simple y probablemente mejor para ERIS. Las ideas de arriba (aura, segundo camino, ángel por nación) valen para las dos.
+
 Cuidados: que el bonus pueda superar el tope de stats (como en Helbreath) solo si los topes del server lo permiten, y que nada de esto se pueda comprar con dinero real.
+
+## 9. Segunda tanda de ideas (Helbreath Evolution, 2/11)
+
+Las páginas nuevas son de **Helbreath Evolution**, otro servidor distinto al de las primeras (que hablaba de Olympia Coins y tenía 20 rebirths; Evolution tiene 30 y cambia varias cosas). Cuando difieren, anoto las dos.
+
+### 9.1 Exp: lo que cambia el diseño
+- **La exp de cada bicho baja con tu nivel, en línea recta:** el mismo bicho da 100 % a nivel 1, 79 % a nivel 20, 56 % a nivel 40, 34 % a nivel 60 y 11 % de nivel 81 en adelante (≈ −1,12 % por nivel). Verificado con 8 bichos, siempre las mismas proporciones.
+- **Escalera de tiers:** de la tier 1 (Orc, 266 de exp) a la tier 11 (Abaddon, 1,6 millones) la exp base crece unas 6.000 veces, ≈ ×2,4 por tier. La gente sube de nivel yendo a bichos de tier más alta, no matando muchos más del mismo.
+- **Kills por nivel resultantes** (tabla de exp de HB y exp real de sus bichos): nivel 1 → entre 4 y 63 kills según el bicho; nivel 20 → 36 (Troll), 98 (Stone Golem) o 242 (Skeleton); nivel 60 → 44 (Demonio) o ~190 (Werewolf); nivel 81+ → entre 5 (Abaddon) y 200 (Demonio) kills. O sea **muchos menos kills por nivel que en ERIS (12 a 590), pero con bichos que dan más según su tier**.
+- **Salvajes dan +25 %**; **mutantes dan ×3 de exp y ×2 de chance de drop**: una variante fuerte de los bichos de un pit, con una habilidad según el pit (tóxico, explosivo, explosivo masivo, rayo).
+- Regla del 30: matar a alguien (jugador) 30 niveles por debajo no da exp ni drops; a un mismo jugador se lo premia hasta 2 veces en 6 horas.
+
+### 9.2 Asignación de puntos (falta hacerla en ERIS)
+Hoy ERIS no tiene puntos de stats: la vida, el maná y el daño salen de la clase y del nivel (`CLASS_HP`, `CLASS_MP`). Propuesta, basada en Evolution:
+
+| Stat | Qué da en ERIS (propuesta) |
+|---|---|
+| Fuerza | Daño cuerpo a cuerpo (+0,2 % por punto) y vida (+0,67 por punto) |
+| Vitalidad | Vida (+2,5 por punto) y regeneración; reduce el daño recibido |
+| Destreza | Puntería y evasión (si se adopta la tirada de acierto) o velocidad de ataque; crítico |
+| Magia | Maná (+2 por punto), daño mágico (+0,3 % por punto) y velocidad de lanzamiento |
+| Suerte | +0,1 % de chance de drop de ítems y oro por punto, y chance de golpe aplastante (0,33 % por punto) |
+
+(Evolution fusiona carisma y suerte en un solo stat; su Inteligencia solo abre hechizos, que en ERIS no se usan así, por eso la saco.)
+
+- **Presupuesto:** 10 por stat al crear + 10 libres; +3 por nivel. Con tope 40 son ~190 puntos en total contra 487 al nivel 140 de Helbreath, así que el tope por stat tiene que bajar de 200 a ~100.
+- **Reasignar:** un ticket de cambio de stats o gratis hasta el nivel 10 (en Helbreath se cambian por el sistema de Majestic, por rebirth o con un ticket).
+- Se calcula **todo en el server**, junto con los topes de atributos de §5.6 de `NIVEL_40_E_ITEMS.md`.
+- Cuándo: **Fase 2**, después de pasar a nivel 40 y antes de los ítems T4+.
+
+### 9.3 Arenas y duelos (ajusta la Fase 3)
+| Idea | Para qué |
+|---|---|
+| Solo 2v2 en cola, con party de exactamente 2; grupos por nivel (promedio de los dos); una sola cola y 6 arenas activas a la vez | Simple de armar |
+| **Rating Glicko-2 por jugador** (el equipo es el promedio), por temporadas de unos meses; el rating no se borra, vuelve hacia el medio si jugaste 10 partidas; se necesitan 10 partidas para aparecer en el ranking | Mejor que el ELO simple que propuse |
+| **Sin premios materiales:** solo títulos permanentes (Líder, Top 10 al 50) al cerrar la temporada, sin ventaja en el juego | Nadie puede farmear la arena |
+| Partida: 30 s para aceptar, 1 min de preparación en jaulas (los buffs se sacan al entrar), 15 min de pelea, 5 s de festejo; se gana dejando en el piso a los dos rivales, si no es empate | Reglas claras |
+| **La curación y la regeneración pierden 20 % cada 3 minutos** de pelea (100 % → 20 %) | Evita dos sanadores que no mueren |
+| Sin consumibles, sin recall, sin resurrección, ni mascotas ni intercambios; invisibilidad limitada a 3 usos por jugador | Reglas parejas |
+| Para aceptar el combate: 15 s sin pelear con otro jugador, 10 s quieto y visible | La cola no sirve para escapar de una pelea |
+| La muerte es gratis (sin pérdida de exp ni drops ni kills); desconectarse descalifica con 60 s para volver | Sin castigo por jugar |
+| Se vuelve al punto exacto desde donde se entró | Comodidad |
+| **Duelo 1v1 por nombre**: reglas que se negocian (hasta 10 rondas, 60 s por turno) y apuesta de oro de 0 a 1.000.000; el ganador cobra el pozo menos 5 % (ese 5 % sale del juego) | Sumidero de oro; sin rating |
+| 6 arenas distintas (coliseo, dos mesetas con un puente, pradera con muros, recinto cerrado, crestas con cobertura, plataformas de piedra con calzada) | Variedad táctica |
+
+### 9.4 Combate y hechizos
+| Idea | Para qué | Cuándo |
+|---|---|---|
+| **El escudo solo bloquea si mirás al atacante** (frente y las dos diagonales); chance de bloqueo = mitad de la maestría; bloquear absorbe 1,5× | Posicionamiento | Post-beta |
+| **Nada es inmune:** siempre pasa una parte del golpe; los bichos de tier 7 o más ignoran 30 % de tu absorción (+10 % por tier, hasta 70 % en la 11) | Evita el equipo que lo anula todo; freno natural al apilado | Fase 2 |
+| Topes: absorción mágica de jugadores 60 % (general + elemental sumados), bichos 80 % | Topes de atributos | Fase 2 |
+| Golpe aplastante físico y mágico son stats distintos | Claridad de equipo | Post-beta |
+| Concentración: chance de que no te interrumpan al lanzar (sube con Inteligencia y un poco con Vitalidad); un golpe de 5 o más interrumpe el hechizo | Profundidad del mago | Post-beta |
+| Recall se bloquea 10 s después de que un jugador te ataque y exige 3 s quieto | Evita escapar | Fase 3 |
+| Asistencias: se cuenta una asistencia por dañar, curar a un aliado que golpea o paralizar | PvP de naciones | Fase 3 |
+| Críticos con puntos recargables; encadenar golpes da bonus parejo para todas las armas | Ya anotado | Fase 2 |
+| Hambre ya no frena la regeneración, solo la corta en cero | Descartar hambre | Descartado |
+| Hechizos: 76 repartidos en 10 círculos, cada uno con un nivel de inteligencia mínimo; 57 se compran con oro, 12 por talento, 5 por manual y 5 por varita; 30 se pueden ascender en la Torre de Magia | Estructura de la magia | Post-beta; ERIS tiene ~14 hoy |
+| Regeneración por tandas (vida cada 15 s, maná cada 20 s, stamina cada 12 s) | Valor de las pociones | Ya parecido |
+
+### 9.5 Ítems y afijos
+- **Afijos primarios y secundarios sobre ítems no únicos:** 15 primarios (crítico, veneno, recto, ágil, ligero, filo, fuerte, antiguo, especial, conversión de maná, aplastante, robo de vida, robo de maná, experiencia, oro) y 12 secundarios (resistencia al veneno, puntería, defensa, recuperación de vida/stamina/maná, resistencia mágica, absorción física y mágica, daño aplastante, experiencia y oro). Armas, varitas, armaduras, escudos y capas pueden salir con uno, y a veces con uno secundario; arcos, anillos y collares no. El **encantado** sube el número pero nunca agrega un afijo nuevo, con un techo por propiedad.
+- **Únicos legendarios (49 armas):** nombre fijo, habilidad especial con el texto exacto del tooltip, **aura animada** que se ve en la mano, en la bolsa y en el piso; nunca salen con afijos; tienen su propio camino de mejora. Versiones **frágiles** (7 a 14 días, intercambiables solo por fichas) con la misma aura.
+- **Variantes:** grupos de ítems que comparten el aspecto y difieren en nombre o color (+1, +2 ya incluidos; tope +7 sumando piedras). Calidad "Maestra" y "Perfecta" se forja en la herrería.
+- **Recompensas por mérito:** ítems "de héroe" que se compran con kills enemigos y contribución; recompensa "oscura" gratis al nivel 140.
+- Rutas de obtención de un ítem: drop, tienda, tienda de pago (cosmética), vaso de fabricación, héroe, oscura, forja (manufactura), pesca, granja y ropa inicial. 557 ítems obtenibles de 591 definidos; **lo que no se puede conseguir no se lista**.
+- **Para ERIS:** el sistema de afijos resuelve a la vez la variedad de ítems comunes (sin tantos únicos), la tasa de drop y el cuello de basura que marqué en §5.5. Los únicos legendarios con aura calzan con la idea del ángel.
+
+### 9.6 Economía
+| Idea | Para qué | Cuándo |
+|---|---|---|
+| Seis monedas: **Oro** (juego), **EVO Coins** (premium: solo conveniencia y cosméticos, "lo que decide peleas se gana jugando"), **Contribución** (por misiones, para mejoras y servicios de ciudad), **Majestics** (pesados: rebirth, armas oscuras, ángeles), **Fichas de evento** y **Reputación** (no se gasta, la ven los demás) | Marco de monedas y de "sin pay2win" | Definir |
+| Tiendas base que fijan el piso (3 tiendas con 220 ítems); lo caro sale de drops y comercio | Economía sana | Ya parecido |
+| **Subasta con listados de 1 a 3 días** (online u offline) y **correo de hasta 20 ítems** | Comercio asincrónico | Fase 2 |
+| Precios de tienda: pociones 10 y 65 oro; recall 120; mejoras +1 ya vendidas hechas | Referencia de escala | Cuando se rebalancee el oro |
+
+### 9.7 Ángel tutelar (versión Evolution)
+En Evolution el ángel **no da puntos de stat**: da **poderes de combate** (procs, ahorro de maná, curación). Hay **tres** (Guerra, Protección, Magia), se usan de a uno, se entregan en la sala de mando al llegar al nivel máximo (cuentan los rebirths) y crecen en **3 niveles**, cada uno con un poder más. Cuesta 50 Majestics y las mejoras 100 y 300 (400 en total), **sin tirada de fallo**. Es más simple y más característico que la versión de +15 de la otra página; para ERIS es mi opción preferida.
 
 Fuentes de las referencias: ficha de Dreadmyst en Steam y notas de lanzamiento (clases, dungeons por llave y dificultad, arenas 1v1/2v2, tope de nivel 25), y notas de prensa sobre Apogea (MMO isométrico estilo Tibia, sin pay2win, housing, crítica a inventario y comercio tediosos). Helbreath: tus notas del proyecto y mi conocimiento del juego.
