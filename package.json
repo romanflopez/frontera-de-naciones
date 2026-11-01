@@ -12,6 +12,8 @@
     "assets:town": "pnpm --filter @fdn/tools town",
     "assets:flare": "pnpm --filter @fdn/tools flare:fetch && pnpm --filter @fdn/tools atlas && pnpm assets:sets",
     "assets:sets": "python3 tools/src/sets/build_sets.py",
+    "sets:preview": "python3 tools/src/sets/preview.py",
+    "sets:dev": "python3 tools/src/sets/build_sets.py --fast",
     "proto": "pnpm --filter @fdn/proto generate",
     "typecheck": "pnpm -r typecheck"
   },

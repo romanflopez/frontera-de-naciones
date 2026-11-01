@@ -809,16 +809,31 @@ function composeLook(names: string[]): HTMLCanvasElement | null {
     });
     return c;
 }
-/** Piezas que lleva puesto el personaje, según su equipo. */
-function lookOf(): string[] {
-    const set = PAPER.sets[P.eq.armadura?.look ?? 'default'] ?? PAPER.sets.default, w = P.eq.arma;
-    return [...set, CLS.head, ...(P.eq.cabeza?.look ? [P.eq.cabeza.look] : []), ...(w?.look ? [w.look] : []), ...(w?.off ? [w.off] : [])];
+/** Modo de pruebas (?debug): habilita /look. */
+const DEBUG = new URLSearchParams(location.search).has('debug');
+/** Set de armadura que se está probando con /look (solo se ve en esta pantalla: no se manda a los demás). */
+let debugLook: string | null = null;
+const HELM_OF_BASE: Record<string, string> = { leather: 'leather_hood', chain: 'chain_coif', plate: 'plate_helm', mage: 'mage_hood' };
+/** Piezas que lleva puesto el personaje, según su equipo. `real` ignora el set de prueba (lo que ven los demás). */
+function lookOf(real = false): string[] {
+    const dbg = !real && debugLook ? debugLook : null;
+    const set = PAPER.sets[dbg ?? P.eq.armadura?.look ?? 'default'] ?? PAPER.sets.default, w = P.eq.arma;
+    const helm = dbg ? (PAPER.pieces[`${dbg}_helm`] ? `${dbg}_helm` : HELM_OF_BASE[dbg]) : P.eq.cabeza?.look;
+    return [...set, CLS.head, ...(helm ? [helm] : []), ...(w?.look ? [w.look] : []), ...(w?.off ? [w.off] : [])];
+}
+/** /look <set> | /look off | /look: prueba un set de armadura puesto sin comprarlo (solo con ?debug). */
+function lookCommand(text: string) {
+    const arg = text.split(/\s+/)[1]?.toLowerCase(), sets = Object.keys(PAPER.sets).filter((n) => n !== 'default');
+    if (!arg) { log(`/look <set> prueba un set puesto, /look off vuelve. Sets: ${sets.join(', ')}`); return; }
+    if (arg === 'off') { debugLook = null; log('Aspecto normal.'); refreshLook(); return; }
+    if (!PAPER.sets[arg]) { log(`No existe el set "${arg}". Sets: ${sets.join(', ')}`); return; }
+    debugLook = arg; log(`Probando el set ${arg} (solo lo ves vos). /look off para volver.`); refreshLook();
 }
 // ---------- bando y perfil visible para los demás ----------
 const FACTIONS = [{ id: 'solmar', name: 'Solmar', col: '#6fb3ff', desc: 'Reino del sol y el mar' }, { id: 'vhar', name: 'Vhar', col: '#ff7a6b', desc: 'Tierras del hierro y la ceniza' }];
 let selectedFaction = 'solmar';
 const factionCol = (id: string) => FACTIONS.find((f) => f.id === id)?.col ?? '#e9dfc0';
-const profileOf = () => `${selectedFaction};${CLS.id};${lookOf().join(',')}`;
+const profileOf = () => `${selectedFaction};${CLS.id};${lookOf(true).join(',')}`;
 function sendProfile() { if (connected) net.send({ $case: 'changePlayerProfileRequest', value: { profile: profileOf() } }); }
 const otherLooks = new Map<string, HTMLCanvasElement>();
 /** Sprite del muñeco de otro jugador según el equipo que anunció (o uno por defecto mientras cargan las piezas). */
@@ -953,7 +968,8 @@ window.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             const text = chatIn.value.trim();
             if (/^\/meditar$/i.test(text)) toggleMeditate();
-            else if (text.startsWith('/')) log('Comandos: /meditar');
+            else if (DEBUG && /^\/look(\s|$)/i.test(text)) lookCommand(text);
+            else if (text.startsWith('/')) log(DEBUG ? 'Comandos: /meditar, /look' : 'Comandos: /meditar');
             else if (text) net.send({ $case: 'chatMessageSendRequest', value: { message: text } });
             chatIn.value = ''; chatIn.blur(); cv.focus({ preventScroll: true }); e.preventDefault();
         } else if (e.key === 'Escape') { chatIn.blur(); cv.focus({ preventScroll: true }); }

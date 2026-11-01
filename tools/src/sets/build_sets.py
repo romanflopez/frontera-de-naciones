@@ -4,7 +4,8 @@ Genera los sets de armadura de ERIS repintando las piezas base de Flare (apps/cl
 los ribetes y los agregados (emblema, tabardo, alas, cuernos, cresta) de cada set. Mantiene la forma, las 8 direcciones y todas
 las animaciones de la pieza base: cada agregado se calcula cuadro por cuadro a partir de la caja de la pieza, así sigue el movimiento.
 
-  python3 tools/src/sets/build_sets.py [--out DIR] [--only sol_placas,...] [--register-only]
+  python3 tools/src/sets/build_sets.py [sets...] [--out DIR] [--fast] [--register-only]
+  (los comandos de uso diario están en el package.json raíz: assets:sets, sets:dev y sets:preview)
 
 Necesita numpy, scipy y Pillow. No toca los assets base: escribe <look>_boots|greaves|gloves|cuirass|helm.webp en --out.
 Rehace los mismos archivos cada vez (determinista).
@@ -262,7 +263,7 @@ def add_head(sheet, masks, cfg):
                 blit(sheet, r, c, gb); blit(sheet, r, c, g, clip=m.astype(float))
             # acento del casco (gema de frente / ranura): ya incluido arriba
 
-def build(look: str, out_dir: str) -> dict[str, np.ndarray]:
+def build(look: str, out_dir: str, fast: bool = False) -> dict[str, Image.Image]:
     cfg = SETS[look]; pcs = PIECES[cfg['base']]; made = {}
     for part, base_name in pcs.items():
         sheet, masks = restyle(base_name, cfg)
@@ -272,7 +273,7 @@ def build(look: str, out_dir: str) -> dict[str, np.ndarray]:
         res = Image.fromarray(np.clip(sheet, 0, 255).astype(np.uint8), 'RGBA')
         name = f'{look}_{SUFFIX[part]}'
         if out_dir:
-            os.makedirs(out_dir, exist_ok=True); res.save(os.path.join(out_dir, f'{name}.webp'), lossless=True, quality=100, method=6)
+            os.makedirs(out_dir, exist_ok=True); res.save(os.path.join(out_dir, f'{name}.webp'), lossless=True, quality=50 if fast else 100, method=0 if fast else 6)
         made[part] = res
     return made
 
@@ -288,11 +289,13 @@ def register_meta(looks: list[str]) -> None:
     json.dump(meta, open(path, 'w'), separators=(',', ':'), ensure_ascii=False)
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument('--out', default=os.path.join(ASSETS, 'paper')); ap.add_argument('--only', default=''); ap.add_argument('--preview', default=''); ap.add_argument('--register-only', action='store_true', help='solo registrar en meta.json (las hojas ya están hechas)')
-    a = ap.parse_args(); only = [s for s in a.only.split(',') if s] or list(SETS)
+    ap = argparse.ArgumentParser(); ap.add_argument('sets', nargs='*', help='sets a generar (por defecto todos)'); ap.add_argument('--out', default=os.path.join(ASSETS, 'paper')); ap.add_argument('--only', default=''); ap.add_argument('--preview', default=''); ap.add_argument('--register-only', action='store_true', help='solo registrar en meta.json (las hojas ya están hechas)'); ap.add_argument('--fast', action='store_true', help='guarda sin comprimir bien (20 veces más rápido, archivos de ~2 MB): para probar. El final se genera sin --fast')
+    a = ap.parse_args(); only = a.sets or [s for s in a.only.split(',') if s] or list(SETS)
+    bad = [n for n in only if n not in SETS]
+    if bad: raise SystemExit(f'Set desconocido: {", ".join(bad)}. Disponibles: {", ".join(SETS)}')
     if not a.register_only:
         for look in only:
-            build(look, a.out); print('ok', look)
+            build(look, a.out, a.fast); print('ok', look, '(rápido, sin comprimir)' if a.fast else '')
     register_meta(only); print('meta.json actualizado con', ', '.join(only))
 
 if __name__ == '__main__':

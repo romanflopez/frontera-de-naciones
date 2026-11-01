@@ -35,7 +35,20 @@ Otros comandos:
 | `pnpm assets` | Vuelve a generar los assets provisorios |
 | `pnpm proto` | Regenera el protocolo TypeScript desde `packages/proto/network.proto` |
 | `pnpm build` | Build de producción del cliente |
+| `pnpm sets:preview [sets...]` | Genera los sets de armadura en memoria y guarda una imagen con cada uno en 8 direcciones y varias animaciones (`tools/out/sets-preview/`). No toca el juego |
+| `pnpm sets:dev [sets...]` | Escribe las hojas de los sets en `assets/paper` sin comprimir (rápido, para probar en el juego) |
+| `pnpm assets:sets` | Igual pero con la compresión final: es el que se commitea |
 | `pnpm typecheck` | Chequeo de tipos de todo el repo |
+
+### Probar los sets de armadura
+
+Los sets (`sol_malla`, `sol_placas`, `vhar_malla`, `vhar_placas`) se generan con `tools/src/sets/build_sets.py` repintando las piezas de Flare. Necesita Python 3 con `pip install -r tools/src/sets/requirements.txt`.
+
+1. Para ver cómo quedan: `pnpm sets:preview sol_placas` (unos 30 s por set; sin nombres, hace todos).
+2. Para verlos en el juego: `pnpm sets:dev sol_placas`, abrí el cliente con `?debug` (por ejemplo http://localhost:8080/?debug), entrá y escribí en el chat `/look sol_placas`. `/look` lista los sets, `/look off` vuelve al equipo real. Solo lo ves vos: no se manda a los demás.
+3. Para dejarlos finales: `pnpm assets:sets` y commit (los archivos de `sets:dev` pesan unas 8 veces más).
+
+Para sumar un set nuevo se agrega su paleta y sus agregados en `SETS` de `build_sets.py`, y sus ítems en `packages/world/src/economy.ts`.
 
 ## Estructura
 

@@ -15,3 +15,7 @@ apps/server/data/maps/*.amd
 # Cuentas y progreso guardados (ver docs/PERSISTENCIA.md)
 apps/server/data/accounts/
 /data/
+
+# Vistas previas de los sets (pnpm sets:preview)
+tools/out/
+__pycache__/
