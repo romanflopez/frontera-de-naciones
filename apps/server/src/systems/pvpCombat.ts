@@ -70,7 +70,9 @@ export const AOE_FALLOFF = 0.12, AOE_MIN_MULT = 0.5, AOE_GROUP_MS = 250;
 export const aoeMult = (index: number): number => Math.max(AOE_MIN_MULT, 1 - AOE_FALLOFF * Math.max(0, index));
 /** Grito de guerra: duración (ms), radio de aliados y defensa plana que suma. */
 export const WARCRY_MS = 10000, WARCRY_RADIUS = 5, WARCRY_DEF = 15;
-export const FURY_MS = 10000, FURY_CD_MS = 18000;
+export const FURY_MS = 60000, FURY_CD_MS = 90000;
+/** Furia por clase: el mago la tira más fuerte (todo su daño), el guerrero más débil. */
+export const FURY_MULT: Record<string, number> = { mago: 1.35, guerrero: 1.15 };
 /** Costos de maná de los hechizos de utilidad que cobra el server (iguales a los del cliente). */
 export const UTIL_MP = { furia: 15, invisibilidad: 40, detectar: 30, remover: 20 } as const;
 /** Maná por clase (base, por nivel) y poción: mismas cuentas que el cliente. */
@@ -156,7 +158,7 @@ export function rollSpellDamage(id: string, s: CombatStats, fury: boolean): numb
         : rint(sp.dmg[0], sp.dmg[1]) + s.lvl * (sp.lvlK ?? 0) + (sp.stat === 'mag' ? s.mag : sp.stat === 'wdmg' ? rint(s.wdmg[0], s.wdmg[1]) : 0);
     d = Math.round(d * (id === 'ataque' || sp.stat === 'wdmg' || sp.stat === 'melee' || sp.melee ? s.meleeMult : sp.stat === 'mag' ? s.magicMult : 1)); // Fuerza / Magia
     if (sp.aoe && (sp.stat === 'mag' && id === 'bola')) d = Math.round(d * (0.85 + Math.random() * 0.3));
-    if (fury) d = Math.round(d * (sp.melee ? 1.3 : s.cls === 'mago' ? 1.2 : 1));
+    if (fury) d = Math.round(d * (FURY_MULT[s.cls] ?? 1.15));
     return Math.max(1, d);
 }
 
