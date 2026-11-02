@@ -20,7 +20,7 @@ Cadena a pie: Campos de Sal → Bosque de Piedra → Cañón goblin → Pantano 
 
 ## 2. Hecho
 
-- [x] 24 mapas de Flare importados al tamaño nativo, con 3 pits por mapa más mobs sueltos (1/11).
+- [x] 27 mapas de Flare importados al tamaño nativo (15 abiertos y 6 mazmorras de 2 pisos), con 3 pits por mapa más mobs sueltos (1-2/11).
 - [x] Sin partes negras: el vacío se rellena con bosque, roca o nieve; el agua es la de Flare teñida y las cuevas tienen piso de roca oscura (2/11).
 - [x] Tiers T1-T7 (paso 1.5): un tier por mapa, niveles de los pits automáticos, jefes en el tope de su tier, banda de ítems por tier y validador con tests (2/11).
 - [x] Cada mazmorra sale de un mapa de su tier (2/11).
