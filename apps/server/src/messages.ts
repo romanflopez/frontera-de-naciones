@@ -210,4 +210,7 @@ export const partyInvited = (fromName: string, expiresMs: number, partyId = ''):
 export const partyStatsUpdate = (name: string, hp: number, mp: number): ServerMessage => msg({ $case: 'partyStatsUpdate', value: { name, hp, mp } });
 
 /** El server no aceptó el inicio del cast (corriendo, paralizado o muerto). */
+/** Canal y recarga del Segundo aliento ('aliento') o del bloqueo de pociones ('pocion'), para el que lo usa (K6). */
+export const abilityState = (id: string, v: { channeling?: boolean; channelMs?: number; remainingMs?: number; cooldownMs?: number; cooldownTotalMs?: number; reason?: string }): ServerMessage =>
+    msg({ $case: 'abilityState', value: { id, channeling: !!v.channeling, channelMs: Math.round(v.channelMs ?? 0), remainingMs: Math.max(0, Math.round(v.remainingMs ?? 0)), cooldownMs: Math.max(0, Math.round(v.cooldownMs ?? 0)), cooldownTotalMs: Math.round(v.cooldownTotalMs ?? 0), reason: v.reason ?? '' } });
 export const spellCastFailed = (): ServerMessage => msg({ $case: 'spellCastFailed', value: {} });

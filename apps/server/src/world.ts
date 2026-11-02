@@ -7,7 +7,7 @@
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
 import { PARTY_SHARE_RANGE, partyExpMult, partyMates } from './party.ts';
-import { AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionMp, POTION_GCD_MS, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, progressFromEcon, PVP_SPELLS, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
+import { AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionLockMs, potionMp, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, POTION_LOCK_PVP_MS, PVP_COMBAT_MS, pvpCap, pvpScale, pvpVsCtrl, RECALL_PVP_LOCK_MS, INVIS_CD_MS, DETECT_CD_MS, SECOND_WIND, secondWindHeal, progressFromEcon, PVP_SPELLS, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
 import { HUBS, QUESTS, RECALL, TRAINING, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef, checkSkill, skillDeniedText } from '@fdn/world';
 import { applyParalysis, applySlow, applyWarcry, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, hasWarcry, isSlowed, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
@@ -37,6 +37,11 @@ const RECALL_BREAKERS: Record<string, string> = {
     requestMovement: 'Te moviste', playerTeleportRequested: 'Te moviste', waypointRequest: 'Usaste el portal',
     pvpHitRequest: 'Atacaste', mobHitRequest: 'Atacaste', skillRequest: 'Usaste una habilidad', blinkRequest: 'Usaste una habilidad',
     invisibilityRequest: 'Lanzaste un hechizo', detectInvisibleRequest: 'Lanzaste un hechizo', removerRequest: 'Lanzaste un hechizo',
+};
+
+/** Paquetes que cortan el Segundo aliento (K6): lo mismo que el recall, más empezar a castear, tomar una poción o pedir el recall. */
+const WIND_BREAKERS: Record<string, string> = {
+    ...RECALL_BREAKERS, spellCastStartRequest: 'Empezaste a lanzar', potionRequest: 'Tomaste una poción', recallRequest: 'Pediste volver a la ciudad',
 };
 
 export class GameWorld {
@@ -170,6 +175,7 @@ export class GameWorld {
             expireTimed(pl.status, now);
             if (pl.status.dirty) { pl.status.dirty = false; this.announceStatus(pl); }
             this.regenMana(pl, now);
+            if (pl.windUntil && pl.isParalyzed(now)) this.cancelWind(pl, 'Te controlaron: se cortó el Segundo aliento.');
         }
         if (this.mobSim) this.safe('mobs', () => this.mobSim!.update());
         if (now - this.lastGroundSync >= 400) this.safe('suelo', () => this.syncGround(now));
@@ -441,6 +447,10 @@ export class GameWorld {
                 const why = RECALL_BREAKERS[payload.$case] ?? (payload.$case === 'hpReport' && Number(payload.value.mpSpent) > 0 ? 'Lanzaste un hechizo' : '');
                 if (why) this.cancelRecall(p, `${why}: se cortó el regreso a la ciudad.`);
             }
+            if (p.windUntil) {
+                const why = WIND_BREAKERS[payload.$case] ?? '';
+                if (why && !(payload.$case === 'skillRequest' && payload.value.skill === 'aliento')) this.cancelWind(p, `${why}: se cortó el Segundo aliento.`);
+            }
             switch (payload.$case) {
                 case 'pingRequest':
                     p.send(M.pingResponse(payload.value.sequence, 0, this.players.size, p.pingVariance));
@@ -498,9 +508,11 @@ export class GameWorld {
                         if (dTgt > sp.range + 2.5) break;                                  // muy lejos del que lanza
                         if (sp.aoe && Math.hypot(tgt.posX - x, tgt.posY - y) > sp.aoe + 2) break; // fuera del área
                         if (p.isDead || !p.pvp.allow(spell, tgt.playerId, now, (c) => this.payMp(p, c))) break; // recarga, ritmo o sin maná
-                        dmg = rollSpellDamage(spell, p.combat, p.pvp.fury(now));
-                        if (sp.vsCtrl && tgt.isParalyzed(now)) dmg = Math.round(dmg * sp.vsCtrl); // Esquirla, Juicio, Escudo contra un controlado
-                        if (sp.vsBurn && tgt.burnUntil > now) dmg = Math.round(dmg * sp.vsBurn); // Bola de fuego sobre un quemado
+                        // K6: sin ventaja de abridor. Contra alguien que no estaba en combate PvP no valen Furia ni los bonus sobre controlado o quemado.
+                        const opener = !this.inPvp(tgt, now);
+                        dmg = rollSpellDamage(spell, p.combat, !opener && p.pvp.fury(now));
+                        if (!opener && sp.vsCtrl && tgt.isParalyzed(now)) dmg = Math.round(dmg * pvpVsCtrl(sp.vsCtrl)); // Esquirla, Juicio, Escudo contra un controlado (tope 1,2× en PvP)
+                        if (!opener && sp.vsBurn && tgt.burnUntil > now) dmg = Math.round(dmg * sp.vsBurn); // Bola de fuego sobre un quemado
                         if (v.secs > 0 && p.pvp.allowSecs(spell, tgt.playerId, now)) secs = sp.secs ?? 0;
                         this.changeStatus(p, () => breakInvisibility(p.status));
                         if (secs > 0) secs = paralysisSecs(secs, tgt.combat); // la RM (y la resistencia a parálisis) del que recibe acortan la duración
@@ -538,8 +550,22 @@ export class GameWorld {
                 case 'auctionRequest': auctionHouse()?.handle(p, this.ctx, payload.value); break; // casa de subastas (docs/SUBASTAS.md)
                 case 'depositRequest': depotService()?.handle(p, this.ctx, payload.value); break; // depósito por cuenta (docs/DEPOSITO.md)
                 case 'respawnRequest': this.respawn(p); break;
-                case 'invisibilityRequest': { if (p.isDead || !this.kitOk(p, 'invisibilidad') || !this.payMp(p, UTIL_MP.invisibilidad)) break; this.changeStatus(p, () => castInvisibility(p.status, Date.now())); break; }
-                case 'detectInvisibleRequest': { if (p.isDead || !this.kitOk(p, 'detectar') || !this.payMp(p, UTIL_MP.detectar)) break; this.changeStatus(p, () => castDetectInvisible(p.status, Date.now())); break; }
+                case 'invisibilityRequest': { // K6: para escapar, no para emboscar. Recarga larga y se corta al atacar, castear o recibir daño.
+                    const now = Date.now();
+                    if (p.isDead || !this.kitOk(p, 'invisibilidad')) break;
+                    if (now < p.invisCdUntil - 1000) { p.send(M.sendMessage(`La invisibilidad se está recargando (faltan ${Math.ceil((p.invisCdUntil - now) / 1000)} s).`)); break; }
+                    if (!this.payMp(p, UTIL_MP.invisibilidad)) break;
+                    p.invisCdUntil = now + INVIS_CD_MS; this.cancelWind(p, '');
+                    this.changeStatus(p, () => castInvisibility(p.status, now)); break;
+                }
+                case 'detectInvisibleRequest': {
+                    const now = Date.now();
+                    if (p.isDead || !this.kitOk(p, 'detectar')) break;
+                    if (now < p.detectCdUntil - 1000) { p.send(M.sendMessage(`Detectar invisible se está recargando (faltan ${Math.ceil((p.detectCdUntil - now) / 1000)} s).`)); break; }
+                    if (!this.payMp(p, UTIL_MP.detectar)) break;
+                    p.detectCdUntil = now + DETECT_CD_MS;
+                    this.changeStatus(p, () => castDetectInvisible(p.status, now)); break;
+                }
                 case 'removerRequest': {
                     if (!this.kitOk(p, 'remover') || p.mp < UTIL_MP.remover || !castRemover(p.status, Date.now())) break;
                     this.payMp(p, UTIL_MP.remover);
@@ -637,6 +663,7 @@ export class GameWorld {
         if (!this.kitOk(p, spell)) { p.cast = null; p.send(M.spellCastFailed()); return; }
         if (p.isDead || p.isParalyzed(now) || !p.canCast) { p.cast = null; p.send(M.spellCastFailed()); return; }
         const ms = castMsOf(spell);
+        this.changeStatus(p, () => breakInvisibility(p.status)); // K6: castear corta la invisibilidad
         p.cast = { spell, okAt: now + ms - CAST_SLACK_MS, until: now + ms + CAST_READY_MS, fired: false };
     }
 
@@ -756,12 +783,13 @@ export class GameWorld {
 
     /** Paladin: Carga / Tajo giratorio / Grito de guerra. */
     private handleSkill(p: Player, skill: string, targetId: bigint, mobId: number): void {
+        if (skill === 'aliento') return this.startWind(p);
         if (!['carga', 'giro', 'grito', 'nova', 'mandato', 'aura'].includes(skill)) return;
         if (!this.skillGate(p, skill)) return;
         const sp = SKILLS[skill], now = Date.now();
-        const rollDmg = () => rollSpellDamage(skill, p.combat, p.pvp.fury(now));
+        const rollDmg = (tgt?: Player) => rollSpellDamage(skill, p.combat, p.pvp.fury(now) && (!tgt || this.inPvp(tgt, now))); // K6: la Furia no vale en el primer golpe
         const hitPlayer = (tgt: Player, control: boolean) => {
-            const dmg = this.damagePlayer(tgt, rollDmg(), 'phys', p, '', skill);
+            const dmg = this.damagePlayer(tgt, rollDmg(tgt), 'phys', p, '', skill);
             if (control && sp.slow && applySlow(tgt.status, now, sp.slow * 1000) > 0) this.announceStatus(tgt);
             const secs = control && sp.stun ? applyParalysis(tgt.status, now, sp.stun * 1000, 'aturdir') / 1000 : 0; // Carga sagrada: aturde al llegar (con DR)
             p.send(M.pvpHit(p.playerId, { fx: '', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs, r: 0 })); // número para el que pega
@@ -789,7 +817,7 @@ export class GameWorld {
             const cx = p.posX + 0.5, cy = p.posY + 0.5;
             for (const o of this.nearbyPlayers(p.posX, p.posY, p.sessionId)) {
                 if (!this.isEnemyPair(p, o) || o.isDead || Math.hypot(o.posX + 0.5 - cx, o.posY + 0.5 - cy) > sp.aoe!) continue;
-                const dmg = this.damagePlayer(o, rollDmg(), 'magic', p, '', 'nova');
+                const dmg = this.damagePlayer(o, rollDmg(o), 'magic', p, '', 'nova');
                 const secs = applyParalysis(o.status, now, sp.freeze! * 1000, 'paralisis') / 1000;
                 this.broadcastNear(p, M.pvpHit(p.playerId, { fx: 'blizz', x: o.posX, y: o.posY, targetId: o.playerId, dmg, secs, r: 0 }));
             }
@@ -807,7 +835,7 @@ export class GameWorld {
                 const cx = p.posX + 0.5, cy = p.posY + 0.5, t = Date.now(); let dealt = 0;
                 for (const o of this.nearbyPlayers(p.posX, p.posY, p.sessionId)) {
                     if (!this.isEnemyPair(p, o) || o.isDead || Math.hypot(o.posX + 0.5 - cx, o.posY + 0.5 - cy) > sp.aoe!) continue;
-                    dealt += this.damagePlayer(o, rollSpellDamage('aura', p.combat, p.pvp.fury(t)), 'phys', p, '', 'aura');
+                    dealt += this.damagePlayer(o, rollSpellDamage('aura', p.combat, p.pvp.fury(t) && this.inPvp(o, t)), 'phys', p, '', 'aura');
                 }
                 if (!this.cellSafe(p.posX, p.posY)) for (const m of (this.mobSim?.near(cx, cy, sp.aoe!) ?? []).slice(0, AOE_MAX_TARGETS.aura)) {
                     const d = rollSpellDamage('aura', p.combat, p.pvp.fury(t)); dealt += d; this.mobSim!.skillHit(p, m.id, d, 0, 'aura');
@@ -959,6 +987,7 @@ export class GameWorld {
         if (p.disconnected || p.world !== this) return;
         if (now < p.recallCdUntil) return deny(`Todavía no podés volver a la ciudad (faltan ${Math.ceil((p.recallCdUntil - now) / 1000)} s).`);
         const arena = recallBlockedReason(this.def, p.posX, p.posY); if (arena) return deny(arena);
+        if (now - p.pvpHurtAt < RECALL_PVP_LOCK_MS) return deny(`Te pegó un jugador: no podés volver a la ciudad por ${Math.ceil((RECALL_PVP_LOCK_MS - (now - p.pvpHurtAt)) / 1000)} s.`);
         if (p.isParalyzed(now)) return deny('Estás paralizado.');
         const home = factionHome(this.factionOf(p));
         if (!home) return deny('No tenés ciudad a la que volver.');
@@ -1135,8 +1164,15 @@ export class GameWorld {
 
     private damagePlayer(p: Player, raw: number, kind: DmgKind, killer: Player | null, source = '', spell = '', srcId = ''): number {
         if (p.isDead || p.spawnProtection || p.godMode || raw <= 0) return 0;
-        const dmg = damageAfterDefense(raw, hasWarcry(p.status, Date.now()) ? { ...p.combat, def: p.combat.def + WARCRY_DEF } : p.combat, kind); // el Grito de guerra suma a la defensa antes de la fórmula
+        const now = Date.now(), pvp = !!killer && killer !== p; // K6: las reglas de PvP valen solo contra jugadores
+        if (pvp) raw = pvpScale(raw); // multiplicador PvP global, antes de la defensa
+        let dmg = damageAfterDefense(raw, hasWarcry(p.status, now) ? { ...p.combat, def: p.combat.def + WARCRY_DEF } : p.combat, kind); // el Grito de guerra suma a la defensa antes de la fórmula
+        if (pvp) { dmg = pvpCap(dmg, p.combat.maxHp); p.pvpHurtAt = now; this.markPvp(p, now); this.markPvp(killer!, now); } // tope por golpe
         p.hp = Math.max(0, p.hp - dmg); p.meditating = false;
+        if (dmg > 0) {
+            this.changeStatus(p, () => breakInvisibility(p.status)); // recibir daño corta la invisibilidad
+            if (spell !== 'quemadura') this.cancelWind(p, 'Te pegaron: se cortó el Segundo aliento.'); // un golpe directo corta el Segundo aliento (la quemadura no)
+        }
         this.combatText(p, dmg, false, killer ? M.pid(killer.playerId) : srcId, spell);
         if (dmg > 0) this.cancelRecall(p, 'Te pegaron: se cortó el regreso a la ciudad.');
         if (killer) p.lastDamager = { id: killer.playerId, name: killer.characterName, t: Date.now() };
@@ -1147,7 +1183,7 @@ export class GameWorld {
     }
     private killPlayer(p: Player): void {
         p.hp = 0; p.deadAt = Date.now(); p.potionEpoch++; this.econ?.onDeath(p); // corta la curación en el tiempo de pociones
-        this.cancelRecall(p, '');
+        this.cancelRecall(p, ''); this.cancelWind(p, ''); p.potionReadyAt = 0; // al morir se libera el bloqueo de pociones (el cliente hace lo mismo)
         this.changeStatus(p, () => breakInvisibility(p.status));
         p.status.isParalyzed = false;
         const k = p.lastDamager && Date.now() - p.lastDamager.t < 15000 ? p.lastDamager : null;
@@ -1205,31 +1241,88 @@ export class GameWorld {
 
     // ---------- pociones (las cura el server) ----------
     /**
-     * Poción de vida (kind 0) o de maná (kind 1). Delay global de 1,75 s entre cualquier poción (con 100 ms de margen por la red),
-     * como mucho 5 por ventana de 10 s. Vida: 20 % al instante y el resto en 4 ticks de 0,5 s (2 s); maná: todo al instante.
+     * Poción de vida (kind 0) o de maná (kind 1). Bloqueo compartido (K6): 1 min en PvE (Valdrys) y 10 s si estás en combate contra
+     * jugadores, con pociones de la mitad (la pelea dura y se maneja el recurso, pero no se spamea). 100 ms de margen por la red.
+     * Vida: 20 % al instante y el resto en 4 ticks de 0,5 s (2 s); maná: todo al instante.
      */
     private usePotion(p: Player, kind: number): void {
         if (p.isDead || p.disconnected || (kind !== 0 && kind !== 1)) return;
         const now = Date.now();
-        if (now - p.lastPotionAt < POTION_GCD_MS - POTION_GCD_SLACK_MS) return;
-        p.potionLog = p.potionLog.filter((t) => now - t < 10000);
-        if (p.potionLog.length >= 5) return;
+        if (now < p.potionReadyAt - POTION_GCD_SLACK_MS) { this.sendPotionLock(p, now); return; }
         const max = kind === 0 ? p.combat.maxHp : p.combat.maxMp;
-        if ((kind === 0 ? p.hp : p.mp) >= max) return; // lleno: no se gasta el delay
+        if ((kind === 0 ? p.hp : p.mp) >= max) return; // lleno: no se gasta el bloqueo
         const pk = kind === 0 ? 'hp' : 'mp';
         if (this.econ) { // las pociones salen del inventario del server
             if (!this.econ.hasPotion(p, pk)) { p.send(M.sendMessage(`No tenés ${pk === 'hp' ? 'pociones de vida' : 'pociones de maná'}.`)); this.econ.snapshot(p); return; }
             this.econ.spendPotion(p, pk);
         }
-        p.lastPotionAt = now; p.potionLog.push(now);
+        const pvp = this.inPvp(p, now);
+        p.lastPotionAt = now; p.potionReadyAt = now + potionLockMs(pvp);
         this.econ?.snapshot(p);
-        if (kind === 1) { p.mp = Math.min(max, p.mp + potionMp(max)); this.sendVitals(p, false); return; }
-        const [first, ...ticks] = potionHpSplit(potionHp(max)), epoch = p.potionEpoch;
+        this.sendPotionLock(p, now);
+        if (kind === 1) { p.mp = Math.min(max, p.mp + potionMp(max, pvp)); this.sendVitals(p, false); return; }
+        const [first, ...ticks] = potionHpSplit(potionHp(max, pvp)), epoch = p.potionEpoch;
         const heal = (w: GameWorld, n: number) => { const got = Math.min(p.combat.maxHp, p.hp + n) - p.hp; p.hp += got; w.sendVitals(p, false); w.announceVitals(p); w.combatText(p, got, true, ''); };
         heal(this, first);
         // la curación en el tiempo sigue al jugador: si cruza de mapa, la termina el mundo donde esté
         ticks.forEach((n, i) => this.playerTimer(p, (i + 1) * POTION_HOT_EVERY_MS, (w) => { if (!p.disconnected && !p.isDead && p.potionEpoch === epoch) heal(w, n); }));
     }
+    private sendPotionLock(p: Player, now: number): void {
+        p.send(M.abilityState('pocion', { cooldownMs: p.potionReadyAt - now, cooldownTotalMs: p.potionReadyAt - p.lastPotionAt }));
+    }
+
+    // ---------- K6: combate contra jugadores ----------
+    /** ¿Pegó o recibió daño de otro jugador en los últimos 10 s? */
+    private inPvp(p: Player, now: number): boolean { return now < p.pvpCombatUntil; }
+    /**
+     * Marca a `p` en combate PvP. Al entrar, el bloqueo de pociones que venía del PvE (1 min) se acorta al de PvP (10 s desde la última),
+     * así nadie arranca una pelea con el minuto entero encima. Nunca se alarga.
+     */
+    private markPvp(p: Player, now: number): void {
+        const was = this.inPvp(p, now);
+        p.pvpCombatUntil = now + PVP_COMBAT_MS;
+        if (was) return;
+        const short = p.lastPotionAt + POTION_LOCK_PVP_MS;
+        if (p.potionReadyAt > short) { p.potionReadyAt = short; this.sendPotionLock(p, now); }
+    }
+
+    // ---------- Segundo aliento (común a todas las clases) ----------
+    /** Casteo de 3 s quieto; lo cortan un golpe directo, un control, moverse o hacer otra cosa. Recarga de 3,5 min al terminar. */
+    private startWind(p: Player): void {
+        const now = Date.now();
+        const deny = (why: string) => p.send(M.abilityState('aliento', { cooldownMs: p.windCdUntil - now, cooldownTotalMs: SECOND_WIND.cdMs, reason: why }));
+        if (p.windUntil) { p.send(M.abilityState('aliento', { channeling: true, channelMs: SECOND_WIND.castMs, remainingMs: p.windUntil - now })); return; }
+        if (p.isDead || p.disconnected || p.world !== this) return;
+        if (!this.kitOk(p, 'aliento')) return;
+        if (now < p.windCdUntil - 1000) return deny(`El Segundo aliento se está recargando (faltan ${Math.ceil((p.windCdUntil - now) / 1000)} s).`);
+        if (p.isParalyzed(now)) return deny('Estás paralizado.');
+        if (p.hp >= p.combat.maxHp && p.mp >= p.combat.maxMp) return deny('Ya tenés la vida y el maná llenos.');
+        p.cast = null; p.meditating = false;
+        this.changeStatus(p, () => breakInvisibility(p.status));
+        p.windUntil = now + SECOND_WIND.castMs; const epoch = ++p.windEpoch;
+        p.send(M.abilityState('aliento', { channeling: true, channelMs: SECOND_WIND.castMs, remainingMs: SECOND_WIND.castMs }));
+        this.skillBroadcast(p, 'aliento', p.posX, p.posY);
+        this.playerTimer(p, SECOND_WIND.castMs, (w) => w.finishWind(p, epoch));
+    }
+    /** Corta el Segundo aliento en curso (sin recarga). `why` = aviso para el jugador ('' = en silencio). */
+    private cancelWind(p: Player, why: string): void {
+        if (!p.windUntil) return;
+        p.windUntil = 0; p.windEpoch++;
+        p.send(M.abilityState('aliento', { cooldownMs: p.windCdUntil - Date.now(), cooldownTotalMs: SECOND_WIND.cdMs, reason: why }));
+    }
+    private finishWind(p: Player, epoch: number): void {
+        if (p.windEpoch !== epoch || !p.windUntil || p.world !== this) return;
+        const now = Date.now();
+        p.windUntil = 0; p.windEpoch++;
+        if (p.isDead || p.disconnected) return;
+        p.windCdUntil = now + SECOND_WIND.cdMs;
+        p.send(M.abilityState('aliento', { cooldownMs: SECOND_WIND.cdMs, cooldownTotalMs: SECOND_WIND.cdMs }));
+        const h = secondWindHeal(p.combat.maxHp, p.combat.maxMp, this.isPoisoned(p));
+        p.mp = Math.min(p.combat.maxMp, p.mp + h.mp);
+        this.healPlayer(p, h.hp); this.sendVitals(p, false);
+    }
+    /** Veneno sobre jugadores (−30 % de curación): todavía no existe; llega con el healer (K5). */
+    private isPoisoned(_p: Player): boolean { return false; }
 
 
     // ---------- maná (lo lleva el server) ----------
