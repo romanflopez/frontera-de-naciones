@@ -381,6 +381,7 @@ function onMobDamaged(v: { mobId: number; attackerId: bigint; dmg: number; crit:
     const m = mobMap.get(v.mobId); if (!m) return;
     const mine = v.attackerId === myId, poisonTick = v.dmg === 3 && !v.crit && m.poison > now();
     m.hp = v.hp; m.flash = 0.12;
+    if (mine && !poisonTick && /goblin/.test(m.sprite ?? '')) sfx('goblin-hit', 0.6); // quejido del goblin (y de sus variantes) al recibir un golpe mío
     if (mine && !poisonTick && CLS.id === 'guerrero' && now() - lastMeleeReq < 0.6) {
         sfx('sword-hit', v.crit ? 0.85 : 0.5);
         // crítico con el skin del caballero: golpe desde arriba (arranca con la espada ya levantada para que caiga junto con el número)
