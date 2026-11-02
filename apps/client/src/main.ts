@@ -385,7 +385,7 @@ function onMobDamaged(v: { mobId: number; attackerId: bigint; dmg: number; crit:
     if (mine && !poisonTick && CLS.id === 'guerrero' && now() - lastMeleeReq < 0.6) {
         sfx(v.crit ? 'sword-crit' : 'sword-attack', v.crit ? 0.85 : 0.5);
         // crítico con el skin del caballero: golpe desde arriba (arranca con la espada ya levantada para que caiga junto con el número)
-        if (v.crit && heroKey() === 'hero_knight') P.one = { anim: 'crit', t: now() - 0.1, until: now() + 0.65 };
+        if (v.crit && heroKey() === 'hero_knight') P.one = { anim: 'crit', t: now() - 0.15, until: now() + 0.65 };
     }
     if (!poisonTick && !(m.one && (m.one.anim === 'swing' || m.one.anim === 'special') && now() < m.one.until) && !(m.boss && R() < 0.6)) oneShot(m, 'hit', 0.2);
     float(m.x, m.y, poisonTick ? '3' : (v.crit ? '¡' : '') + v.dmg + (v.crit ? '!' : ''), poisonTick ? '#8fd14f' : v.crit ? '#ffd24a' : '#fff', v.crit);
@@ -915,13 +915,13 @@ async function initKnight() {
     if (knightTried || !skinOn()) return; knightTried = true; console.info('[skin] cargando caballero…');
     try {
         const ims = await Promise.all(KNIGHT_SHEETS.map(([, f]) => load(`assets/skins/caballero/${f}.png`)));
-        ims.push(await load('assets/skins/caballero/Melee2.png').catch(() => { console.warn('[skin] falta assets/skins/caballero/Melee2.png: el crítico usa el golpe normal'); return ims[2]; })); // golpe crítico (desde arriba); sin Melee2.png se reusa el golpe normal
+        ims.push(await load('assets/skins/caballero/Special1.png').catch(() => { console.warn('[skin] falta assets/skins/caballero/Special1.png: el crítico usa el golpe normal'); return ims[2]; })); // golpe crítico (Special1: espada arriba y salto); sin Special1.png se reusa el golpe normal
         const c = document.createElement('canvas'), g = c.getContext('2d')!; c.width = 15 * 128; c.height = (KNIGHT_SHEETS.length + 1) * 8 * 128;
         // las hojas rotan en sentido horario desde el este; el juego usa 0=O,1=NO,2=N,... => la dirección d toma la fila (d+4)%8
         ims.forEach((im, i) => { for (let d = 0; d < 8; d++) g.drawImage(im, 0, ((d + 4) % 8) * 128, 15 * 128, 128, 0, (i * 8 + d) * 128, 15 * 128, 128); });
         const A = (row: number, dur: number, type: string): Anim => ({ row, n: 15, dur, type });
         IMG.hero_knight = c;
-        SPR.hero_knight = { cw: 128, ch: 128, ax: 64, ay: 96, sc: 1.3, anims: { stance: A(0, 1500, 'looped'), run: A(8, 640, 'looped'), swing: A(16, 400, 'play_once'), hit: A(24, 250, 'play_once'), die: A(32, 1000, 'play_once'), cast: A(40, 290, 'play_once'), crit: A(48, 750, 'play_once') } };
+        SPR.hero_knight = { cw: 128, ch: 128, ax: 64, ay: 96, sc: 1.3, anims: { stance: A(0, 1500, 'looped'), run: A(8, 640, 'looped'), swing: A(16, 400, 'play_once'), hit: A(24, 250, 'play_once'), die: A(32, 1000, 'play_once'), cast: A(40, 290, 'play_once'), crit: A(48, 800, 'play_once') } };
         knightReady = true; console.info('[skin] caballero activo');
     } catch (e) { console.warn('[skin] caballero no cargó (se ve el muñeco normal). Revisá assets/skins/caballero/*.png:', e); }
 }
