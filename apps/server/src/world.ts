@@ -73,7 +73,7 @@ export class GameWorld {
                 nearby: (cx, cy) => this.nearbyPlayers(cx, cy),
                 after: (ms, fn) => this.setTimeout(ms, fn),
                 hurt: (p, raw, source) => this.damagePlayer(p, raw, 'phys', null, source), // los ataques de mobs son físicos (los mitiga la DF)
-                stun: (p, secs) => { const s = paralysisSecs(secs, p.combat); return applyParalysis(p.status, Date.now(), s * 1000) ? s : 0; },
+                stun: (p, secs) => { const ms = applyParalysis(p.status, Date.now(), paralysisSecs(secs, p.combat) * 1000, 'aturdir'); return ms / 1000; },
                 pay: (p, c) => this.payMp(p, c),
                 heal: (p, n) => { if (p.isDead) return; p.hp = Math.min(p.combat.maxHp, p.hp + n); this.sendVitals(p, false); this.announceVitals(p); },
                 reward: (p, info) => {
@@ -490,8 +490,11 @@ export class GameWorld {
                         if (v.secs > 0 && p.pvp.allowSecs(spell, tgt.playerId, now)) secs = sp.secs ?? 0;
                         this.changeStatus(p, () => breakInvisibility(p.status));
                         if (secs > 0) secs = paralysisSecs(secs, tgt.combat); // la RM (y la resistencia a parálisis) del que recibe acortan la duración
-                        if (secs > 0 && !applyParalysis(tgt.status, now, secs * 1000)) { p.send(M.pvpHit(tgt.playerId, { fx: 'resist', x: tgt.posX, y: tgt.posY, targetId: 0n, dmg: 0, secs: 0, r: 0 })); secs = 0; if (dmg <= 0) break; }
-                        if (!this.isEnemyPair(p, tgt)) break;                              // mismo bando o zona segura
+                        if (!this.isEnemyPair(p, tgt)) break;                              // mismo bando o zona segura (antes del CC: no gasta DR en aliados)
+                        if (secs > 0) { // DR por tipo de CC (15 s): full / 50 % / 25 % / inmune
+                            secs = applyParalysis(tgt.status, now, secs * 1000, spell === 'aturdir' ? 'aturdir' : 'paralisis') / 1000;
+                            if (secs <= 0) { p.send(M.pvpHit(tgt.playerId, { fx: 'resist', x: tgt.posX, y: tgt.posY, targetId: 0n, dmg: 0, secs: 0, r: 0 })); if (dmg <= 0) break; }
+                        }
                         if (dmg > 0) dmg = this.damagePlayer(tgt, dmg, spellDmgKind(spell), p);              // la vida del que recibe la lleva el server
                         if (dmg > 0 || secs > 0) p.send(M.pvpHit(p.playerId, { fx: '', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs, r: 0 })); // para que el que pega vea el número
                     } else if (v.targetId) break; // daño sin hechizo conocido: se descarta
@@ -634,7 +637,7 @@ export class GameWorld {
         const sp = SKILLS[id], now = Date.now();
         if (!sp || !this.map) return false;
         if (p.isDead) { this.skillDenied(p, id, ''); return false; }
-        if (p.combat.cls !== sp.cls) { this.skillDenied(p, id, `Esa habilidad es de ${sp.cls === 'mago' ? 'Mago' : 'Guerrero'}.`); return false; }
+        if (p.combat.cls !== sp.cls) { this.skillDenied(p, id, `Esa habilidad es de ${sp.cls === 'mago' ? 'Mago' : 'Paladin'}.`); return false; }
         if (p.isParalyzed(now)) { this.skillDenied(p, id, 'Estás paralizado.'); return false; }
         if (!p.pvp.skillReady(id, now)) { this.skillDenied(p, id, 'Todavía se está recargando.'); return false; }
         if (p.mp < sp.mp) { this.skillDenied(p, id, 'No te alcanza el maná.'); return false; }
@@ -657,7 +660,7 @@ export class GameWorld {
     }
 
     /**
-     * Mago: Blink. Hasta 4 celdas hacia (x, y), atraviesa jugadores y mobs, pero no muros: la línea no puede cruzar celdas
+     * Mago: Blink. Hasta 7 tiles hacia (x, y), atraviesa jugadores y mobs, pero no muros: la línea no puede cruzar celdas
      * bloqueadas, y el destino tiene que ser caminable, libre (sin jugador ni mob), sin portal y del mismo lado de la zona segura.
      */
     private handleBlink(p: Player, x: number, y: number): void {
@@ -665,7 +668,7 @@ export class GameWorld {
         const sp = SKILLS.blink, fx = p.posX, fy = p.posY;
         if (!Number.isInteger(x) || !Number.isInteger(y)) return this.skillDenied(p, 'blink', '');
         const d = Math.hypot(x - fx, y - fy);
-        if (d < 1 || d > sp.range) return this.skillDenied(p, 'blink', d < 1 ? '' : 'Está muy lejos para el Blink (máx. 4 celdas).');
+        if (d < 1 || d > sp.range) return this.skillDenied(p, 'blink', d < 1 ? '' : 'Está muy lejos para el Blink (máx. 7 tiles).');
         if (!this.cellWalkable(x, y) || !this.occupancy.isFreeAndNotTeleportCell(x, y) || this.isPortalCell(x, y) || this.mobSim?.near(x + 0.5, y + 0.5, 0.75).length)
             return this.skillDenied(p, 'blink', 'No podés aparecer ahí: la celda está ocupada o bloqueada.');
         if (this.cellSafe(x, y) !== this.cellSafe(fx, fy)) return this.skillDenied(p, 'blink', 'No podés cruzar la zona segura con el Blink.');
@@ -704,7 +707,7 @@ export class GameWorld {
         return -1;
     }
 
-    /** Guerrero: Carga / Tajo giratorio / Grito de guerra. */
+    /** Paladin: Carga / Tajo giratorio / Grito de guerra. */
     private handleSkill(p: Player, skill: string, targetId: bigint, mobId: number): void {
         if (skill !== 'carga' && skill !== 'giro' && skill !== 'grito') return;
         if (!this.skillGate(p, skill)) return;
@@ -712,7 +715,7 @@ export class GameWorld {
         const rollDmg = () => rollSpellDamage(skill, p.combat, p.pvp.fury(now));
         const hitPlayer = (tgt: Player, slow: boolean) => {
             const dmg = this.damagePlayer(tgt, rollDmg(), 'phys', p);
-            if (slow && sp.slow) { applySlow(tgt.status, now, sp.slow * 1000); this.announceStatus(tgt); }
+            if (slow && sp.slow && applySlow(tgt.status, now, sp.slow * 1000) > 0) this.announceStatus(tgt);
             p.send(M.pvpHit(p.playerId, { fx: '', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs: 0, r: 0 })); // número para el que pega
             this.broadcastNear(p, M.pvpHit(p.playerId, { fx: 'crosswind', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs: 0, r: 0 }));
             return dmg;

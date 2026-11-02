@@ -193,7 +193,7 @@ function totals() {
 // ---------- clases ----------
 interface ClassDef { id: string; name: string; hidden?: boolean; desc: string; head: string; armor?: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; spells: string[] }
 const CLASSES: ClassDef[] = [
-    { id: 'guerrero', name: 'Guerrero', desc: 'Resistente, pega cuerpo a cuerpo y frena enemigos.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'tajo', 'aturdir', 'vendar', 'torbellino', 'sismo', 'furia', 'remover', 'carga', 'giro', 'grito'] },
+    { id: 'guerrero', name: 'Paladin', desc: 'Resistente, pega cuerpo a cuerpo y frena enemigos.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'tajo', 'aturdir', 'vendar', 'torbellino', 'sismo', 'furia', 'remover', 'carga', 'giro', 'grito'] },
     { id: 'mago', name: 'Mago', desc: 'Frágil pero con hechizos a distancia, parálisis y cura.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'paralisis', 'curar', 'bola', 'hoja', 'lanza', 'lluvia', 'ventisca', 'marejada', 'luz', 'curar2', 'furia', 'remover', 'invisibilidad', 'detectar', 'blink'] },
 ];
 let CLS: ClassDef = CLASSES[0];
@@ -509,28 +509,28 @@ function syncHp() {
 
 // ---------- hechizos ----------
 type Target = Mob | { x: number; y: number; ground: true } | { x: number; y: number; pvp: Other };
-interface Spell { id?: string; instant?: boolean; ctrl?: boolean; fury?: boolean; key: string; name: string; mp: number; cd: number; col: string; range: number; target: boolean; aoe?: number; cast: (m: Target | null) => false | void }
+interface Spell { id?: string; instant?: boolean; /** cast propio (s); sin esto, CAST_T */ castT?: number; ctrl?: boolean; fury?: boolean; key: string; name: string; mp: number; cd: number; col: string; range: number; target: boolean; aoe?: number; cast: (m: Target | null) => false | void }
 const isMob = (t: Target | null): t is Mob => !!t && 'hp' in t;
 interface SpellDef extends Omit<Spell, 'key'> { ctrl?: boolean }
-/** Mago, Blink: celda de destino hacia el cursor (o hacia donde mira), a lo sumo 4 celdas, caminable y sin nadie encima. Prueba más cerca si la ideal no sirve. */
+/** Mago, Blink: celda de destino hacia el cursor (o hacia donde mira), a lo sumo 7 tiles, caminable y sin nadie encima. Prueba más cerca si la ideal no sirve. */
 function blinkDest(): Cell | null {
     const from = P.cell; let dx: number, dy: number;
     if (mouse.x >= 0) { const g = toGrid(mouse.x, mouse.y); dx = Math.floor(g.x) - from.x; dy = Math.floor(g.y) - from.y; }
-    else { const a = P.ang ?? 0, sx = Math.cos(a), sy = Math.sin(a) * 2, v = GRID_VEC[gridDir((sx + sy) / 2, (sy - sx) / 2)]; dx = v[0] * 4; dy = v[1] * 4; }
+    else { const a = P.ang ?? 0, sx = Math.cos(a), sy = Math.sin(a) * 2, v = GRID_VEC[gridDir((sx + sy) / 2, (sy - sx) / 2)]; dx = v[0] * 7; dy = v[1] * 7; }
     const len = Math.hypot(dx, dy); if (len < 0.5) return null;
-    for (let r = Math.min(4, len); r >= 2; r -= 0.5) {
+    for (let r = Math.min(7, len); r >= 2; r -= 0.5) {
         const x = from.x + Math.round((dx / len) * r), y = from.y + Math.round((dy / len) * r);
-        if (Math.hypot(x - from.x, y - from.y) > 4.25 || !freeForMe(x, y) || mobs.some((m) => Math.hypot(m.x - x - 0.5, m.y - y - 0.5) < 0.75)) continue;
+        if (Math.hypot(x - from.x, y - from.y) > 7.25 || !freeForMe(x, y) || mobs.some((m) => Math.hypot(m.x - x - 0.5, m.y - y - 0.5) < 0.75)) continue;
         return { x, y };
     }
     return null;
 }
 const skillSend = (skill: string, targetId = 0n, mobId = 0) => net.send({ $case: 'skillRequest', value: { skill, targetId, mobId } });
 const LIB: Record<string, SpellDef> = {
-    proyectil: { name: 'Proyectil arcano', mp: 8, cd: 0.4, col: '#b9a3ff', range: 8, target: true,
+    proyectil: { name: 'Proyectil arcano', mp: 8, cd: 0.4, col: '#b9a3ff', range: 15, castT: 1.5, target: true, // Firebolt
         cast(m) { if (!isMob(m)) return false; const t = totals(), dmg = rint(12, 18) + P.lvl * 2 + t.mag; projs.push({ x: P.x, y: P.y, m, spd: 11, dmg, col: '#b9a3ff' }); } },
-    paralisis: { name: 'Parálisis', mp: 20, cd: 4, col: '#7fd6ff', range: 6, target: true, ctrl: true,
-        cast(m) { return control(m, 'paralisis', 3, 'Paralizaste', 'La parálisis'); } },
+    paralisis: { name: 'Parálisis', mp: 20, cd: 15, col: '#7fd6ff', range: 6, castT: 1, target: true, ctrl: true, // Chains of Ice
+        cast(m) { return control(m, 'paralisis', 5, 'Paralizaste', 'La parálisis'); } },
     aturdir: { name: 'Aturdir', mp: 18, cd: 5, col: '#ffd24a', range: 1.9, target: true, ctrl: true,
         cast(m) { return control(m, 'aturdir', 2.5, 'Aturdiste', 'El aturdimiento', 'turbulence'); } },
     curar: { name: 'Curar', mp: 15, cd: 2, col: '#7ee08a', range: 0, target: false,
@@ -539,7 +539,7 @@ const LIB: Record<string, SpellDef> = {
         cast() { heal(30 + P.lvl * 4, 'godsbreath'); } },
     bola: { name: 'Bola de fuego', mp: 25, cd: 4, col: '#ff8a3d', range: 7, target: true, aoe: 1.9,
         cast(m) { if (!m) return false; const t = totals(), dmg = rint(18, 26) + P.lvl * 2 + t.mag; projs.push({ x: P.x, y: P.y, tx: m.x, ty: m.y, m: isMob(m) ? m : null, spd: 8, dmg, col: '#ff8a3d', aoe: 1.9, sx: P.x, sy: P.y }); } },
-    golpe: { name: 'Golpe brutal', mp: 10, cd: 1, col: '#ffb347', range: 1.9, target: true,
+    golpe: { name: 'Golpe brutal', mp: 10, cd: 1, col: '#ffb347', range: 2, target: true, instant: true, // Strike
         cast(m) { if (!isMob(m)) return false; efx('crosswind', m.x, m.y, 8); damageMob(m, 'golpe'); } },
     tajo: { name: 'Tajo salvaje', mp: 12, cd: 1, col: '#ff6b55', range: 1.9, target: true,
         cast(m) { if (!isMob(m)) return false; efx('crosswind', m.x, m.y, 8); damageMob(m, 'tajo'); } },
@@ -714,7 +714,7 @@ function cast(i: number) {
     if (P.mp < s.mp) { toast('No te alcanza el maná.'); return; }
     if (s.instant) { instantCast(i); return; }
     P.ready = null; P.engage = false; P.queued = null; P.path = []; holding = false;
-    const T = now(); P.casting = { i, start: T, end: T + CAST_T, len: CAST_T };
+    const T = now(), len = s.castT ?? CAST_T; P.casting = { i, start: T, end: T + len, len };
 }
 /** Habilidades de clase sin casteo: salen al instante (las de objetivo toman el seleccionado, el del cursor o el enemigo más cercano). */
 function instantCast(i: number) {

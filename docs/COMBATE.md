@@ -78,3 +78,14 @@ Reglas:
 ## Pendiente de código (P0)
 - Borrar handler changePlayerMovementSpeedRequest (world.ts:441) y el mensaje del proto si nadie lo manda. El server calcula la velocidad.
 - Cap duro de movement_speed_ms en 200 ms/celda dentro de combate/PvP.
+
+## Mapeo doc → código (P0-B1)
+| Doc | Código (id) | Valores actuales |
+|---|---|---|
+| Firebolt (Mago) | `proyectil` | cast 1.5s (cliente `castT`), rango 15 tiles, 12–18 + 2×lvl + MAG, 8 maná, cd 0.35s |
+| Strike (Paladin) | `golpe` | sin cast (`instant`), melee 2 tiles (server tolera 2.8), 14–20 + 2×lvl + arma, 10 maná, cd 0.9s |
+| Chains of Ice (Mago) | `paralisis` | cast 1s, freeze 5s, cd 15s, 20 maná, rango 7.5 |
+| Paladin | clase `guerrero` | id interno sin cambiar (está persistido en personajes); solo cambia el nombre visible |
+
+DR (statusSystem.ts `drApply`): por tipo (`paralisis`, `aturdir`, `slow`) y por target, ventana 15s desde el último CC que entró.
+Reemplaza la inmunidad fija de 8s al terminar una parálisis (la del Remover se mantiene).

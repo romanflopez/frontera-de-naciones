@@ -21,12 +21,12 @@ export type DmgKind = 'phys' | 'magic';
 export const spellDmgKind = (id: string): DmgKind => { const sp = PVP_SPELLS[id]; return sp && (sp.stat === 'melee' || sp.stat === 'wdmg' || sp.melee) ? 'phys' : 'magic'; };
 export const PVP_SPELLS: Record<string, PvpSpell> = {
     ataque: { mp: 0, dmg: [0, 0], lvlK: 1, stat: 'melee', range: 2.6, cd: 0.3, melee: true },
-    proyectil: { mp: 8, dmg: [12, 18], lvlK: 2, stat: 'mag', range: 9.5, cd: 0.35 },
-    paralisis: { mp: 20, secs: 3, range: 7.5, cd: 4 },
+    proyectil: { mp: 8, dmg: [12, 18], lvlK: 2, stat: 'mag', range: 15, cd: 0.35 }, // Firebolt: cast 1.5 s (cliente), 14–17 tiles
+    paralisis: { mp: 20, secs: 5, range: 7.5, cd: 15 }, // Chains of Ice: cast 1 s (cliente), freeze 5 s, cd 15 s
     aturdir: { mp: 18, secs: 2.5, range: 2.8, cd: 5 },
     hoja: { mp: 14, dmg: [13, 19], lvlK: 2, stat: 'mag', range: 8.5, cd: 1.4 },
     lanza: { mp: 30, dmg: [30, 42], lvlK: 3, stat: 'mag', range: 8.5, cd: 4.5 },
-    golpe: { mp: 10, dmg: [14, 20], lvlK: 2, stat: 'wdmg', range: 2.8, cd: 0.9, melee: true },
+    golpe: { mp: 10, dmg: [14, 20], lvlK: 2, stat: 'wdmg', range: 2.8, cd: 0.9, melee: true }, // Strike: melee 2 tiles (+0.8 de tolerancia), sin cast
     tajo: { mp: 12, dmg: [22, 30], lvlK: 3, stat: 'wdmg', range: 2.8, cd: 0.9, melee: true },
     bola: { mp: 25, kind: 'eruption', dmg: [18, 26], lvlK: 2, stat: 'mag', range: 9, cd: 3.6, aoe: 1.9 },
     lluvia: { mp: 45, kind: 'cataclysm', dmg: [11, 16], lvlK: 2, stat: 'mag', range: 9, cd: 8.5, ticks: 4, every: 0.5, aoe: 2.4 },
@@ -37,13 +37,13 @@ export const PVP_SPELLS: Record<string, PvpSpell> = {
     luz: { mp: 35, dmg: [14, 20], lvlK: 2, stat: 'mag', range: 9, cd: 6.5, ticks: 2, every: 0.7, aoe: 1.9 },
 };
 /**
- * Habilidades de clase (las valida y cobra el server): Mago = blink; Guerrero = carga, giro, grito.
+ * Habilidades de clase (las valida y cobra el server): Mago = blink; Paladin (id interno 'guerrero', persistido) = carga, giro, grito.
  * Van aparte de PVP_SPELLS a propósito: no se pueden pedir por pvpHitRequest para pegar sin moverse.
  */
 export interface ClassSkill extends PvpSpell { cls: 'mago' | 'guerrero'; /** ralentización (s) que aplica */ slow?: number }
 export const SKILLS: Record<string, ClassSkill> = {
-    // blink: ≈ 39 % del maná base del Mago a nivel 1 (90); alcance en celdas
-    blink: { cls: 'mago', mp: 35, range: 4.25, cd: 12 },
+    // blink: ≈ 39 % del maná base del Mago a nivel 1 (90); alcance 7 tiles (+0.25 por redondeo de diagonales)
+    blink: { cls: 'mago', mp: 35, range: 7.25, cd: 12 },
     carga: { cls: 'guerrero', mp: 15, dmg: [14, 20], lvlK: 2, stat: 'wdmg', range: 6.3, cd: 10, melee: true, slow: 1.5 },
     giro: { cls: 'guerrero', mp: 8, dmg: [16, 22], lvlK: 2, stat: 'wdmg', range: 0, cd: 4, melee: true, aoe: 1.9 },
     grito: { cls: 'guerrero', mp: 20, range: 0, cd: 25 },
