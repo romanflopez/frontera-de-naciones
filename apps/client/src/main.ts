@@ -2048,7 +2048,7 @@ function renderGm(d: GmData) {
     const btn = (cmd: string, label: string) => `<button type="button" data-gm="${esc(cmd)}">${label}</button>`;
     const mapRow = (x: GmData['maps'][number]) => `<button type="button" class="gmmap${x.id === d.here ? ' cur' : ''}" data-gm="ir ${esc(x.id)}"><span>${esc(x.name)}</span><small>${x.dungeon ? 'mazmorra · ' : ''}${x.lvl ? 'Nv ' + esc(x.lvl) : ''}</small></button>`;
     el.innerHTML = `<h2><span>Menú GM</span><button type="button" id="gmClose" aria-label="Cerrar">×</button></h2>
-      <h3>Rápido</h3><div class="gmrow">${btn('curar', 'Curar')}${btn('dios', 'Modo dios')}${btn('llaves 20', 'Llaves ×20')}${btn('oro 10000', '+10.000 oro')}${btn('nivel 12', 'Nv 12')}${btn('nivel 30', 'Nv 30')}${btn('limpiar', 'Limpiar mobs')}</div>
+      <h3>Rápido</h3><div class="gmrow">${btn('curar', 'Curar')}${btn('dios', 'Modo dios')}${btn('llaves 20', 'Llaves ×20')}${btn('oro 10000', '+10.000 oro')}${btn('nivel 12', 'Nv 12')}${btn('nivel 30', 'Nv 30')}${btn('bis', 'Set BiS mago')}${btn('limpiar', 'Limpiar mobs')}</div>
       <h3>Jugadores conectados</h3>${d.players.length ? d.players.map((p) => `<div class="gmrow"><span>${esc(p.name)} <small>${esc(p.map)}</small></span>${btn('traer ' + p.name, 'Traer acá')}${btn('ira ' + p.name, 'Ir con él')}</div>`).join('') : '<small>No hay nadie más conectado.</small>'}
       <div class="gmrow">${btn('menu', 'Actualizar')}</div>
       <h3>Invocar mob</h3><div class="gmrow"><select id="gmMob">${d.mobs.map((t) => `<option>${esc(t)}</option>`).join('')}</select><input id="gmLvl" type="number" min="1" max="60" placeholder="Nv"><input id="gmN" type="number" min="1" max="20" value="1"><button type="button" id="gmSummon">Invocar</button></div>

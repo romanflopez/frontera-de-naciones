@@ -310,6 +310,25 @@ export class Economy {
         return true;
     }
 
+    /**
+     * SOLO GM (/gm bis): equipa el mejor set que existe hoy para la clase, con las tiradas al máximo y +5. Lo que llevaba puesto vuelve a la bolsa.
+     * Mago: Báculo del camposanto, Mortaja bordada, Capuchón de duelo y un anillo armado con lo mejor para hechizos (Magia, maná y vida).
+     */
+    gmBis(p: Player, cls: string): string[] | null {
+        const st = p.econ; if (!st || cls !== 'mago') return null;
+        const top = (name: string, extra: SItem['a'] = []): SItem => {
+            const u = UNIQUE_BY_NAME.get(name); if (!u) throw new Error(`BiS: no existe ${name}`);
+            const it = newItem(st, name, u.uniq.boss ? 3 : 2, [...u.uniq.attrs.map(([id, v]) => ({ id, v: Math.round(v * (1 + UNIQUE_VARIATION)) })), ...extra]);
+            it.up = UP_MAX; return it;
+        };
+        const ring = newItem(st, 'Anillo opaco', 3, [{ id: 'mag', v: ATTR_RANGES.mag[1] }, { id: 'mp', v: ATTR_RANGES.mp[1] }, { id: 'hp', v: ATTR_RANGES.hp[1] }]);
+        ring.up = UP_MAX;
+        const set: Record<Slot, SItem> = { arma: top('Báculo del camposanto'), armadura: top('Mortaja bordada'), cabeza: top('Capuchón de duelo'), anillo: ring };
+        for (const slot of SLOTS) { const prev = st.eq[slot]; if (prev && st.bag.length < BAG_MAX) st.bag.push(prev); st.eq[slot] = set[slot]; }
+        this.touch(p);
+        return SLOTS.map((sl) => set[sl].n);
+    }
+
     /** Guarda vida y maná del jugador en su estado (al salir y en cada guardado periódico). */
     persistVitals(p: Player): void {
         const st = p.econ; if (!st) return;

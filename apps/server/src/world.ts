@@ -919,6 +919,12 @@ export class GameWorld {
                 if (!this.econ?.gmSet(p, { keys: n })) return ['Tu personaje todavía no tiene economía.'];
                 this.restat(p); this.econ.snapshot(p); return [`Llaves de mazmorra: ${n} de cada una.`];
             }
+            case 'bis': {
+                const names = this.econ?.gmBis(p, p.combat.cls);
+                if (!names) return ['El set completo todavía solo existe para el Mago (y hace falta tener economía).'];
+                this.restat(p); p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; this.sendVitals(p, true); this.econ!.snapshot(p);
+                return [`Equipado (+5, tiradas máximas): ${names.join(', ')}.`];
+            }
             case 'curar':
                 p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; this.sendVitals(p, true); return ['Vida y maná al máximo.'];
             case 'dios':
