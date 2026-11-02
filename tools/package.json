@@ -12,7 +12,8 @@
     "flare:fetch": "tsx src/flare/fetch.ts",
     "flare:maps": "tsx src/flare/maps.ts",
     "flare:mapatlas": "tsx src/flare/mapatlas.ts",
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p .",
+    "maps:tiled": "tsx src/maps/tiled_to_ts.ts"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.65"

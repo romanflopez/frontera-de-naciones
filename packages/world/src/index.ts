@@ -23,6 +23,7 @@ export * from './stats';
 export * from './auction';
 export * from './deposit';
 export * from './maps';
+export { TILED_DATA } from './tiledmaps';
 export { PRUEBA_CAZA, PRUEBA_MAZMORRA } from './testmaps';
 
 export const MAP_SIZE = 40;

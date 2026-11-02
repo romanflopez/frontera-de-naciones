@@ -15,6 +15,7 @@ import { buildVharCiudadela, VHAR, VHAR_CITADEL_ID, VHAR_N, vharDoor, type VharB
 import { LEGACY_FROM_VHAR, LEGACY_VHAR_LINK } from './vhar/legacy';
 import { buildVharInterior, VHAR_INTERIORS, VHAR_RESPAWN } from './vhar/interiors';
 import { FLARE_ARRIVAL, FLARE_FIRST, flareMaps } from './flare';
+import { tiledMaps } from './tiledmaps';
 
 /** Rectángulo de celdas con los dos extremos incluidos (igual que `WorldMap.dungeon`). */
 export interface MapRect { x0: number; y0: number; x1: number; y1: number }
@@ -194,6 +195,8 @@ export const MAPS: Record<string, MapDef> = {
     // mapas importados de Flare: Campos de Sal -> Bosque de Piedra -> Cañón goblin (docs/MAPAS_FLARE.md)
     ...flareMaps({ map: VILLA_ID, to: VILLA_FLARE_BACK }),
 };
+// mapas importados de Tiled (pnpm maps:tiled): van después porque sus conexiones llegan al spawn de mapas ya definidos
+Object.assign(MAPS, tiledMaps(MAPS));
 
 export const getMapDef = (id: string | undefined): MapDef | undefined => { const c = canonicalMapId(id); return c ? MAPS[c] : undefined; };
 /** Arma el mapa `id` desde cero (cada llamada devuelve un `WorldMap` propio). */

@@ -14,6 +14,7 @@
     "assets:sets": "python3 tools/src/sets/build_sets.py",
     "sets:preview": "python3 tools/src/sets/preview.py",
     "sets:dev": "python3 tools/src/sets/build_sets.py --fast",
+    "maps:tiled": "pnpm --filter @fdn/tools maps:tiled",
     "proto": "pnpm --filter @fdn/proto generate",
     "typecheck": "pnpm -r typecheck"
   },
