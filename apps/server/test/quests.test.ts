@@ -180,9 +180,10 @@ test('encargos del día en el server: se cobran solos sin NPC, el primero da ese
 });
 
 test('pits del encargo: solo cuentan los de tu banda o más alta', () => {
-    const { st, kill } = setup();
+    const { st, kill, eco } = setup();
+    const evs: unknown[] = [], orig = eco.questEvent.bind(eco); eco.questEvent = (pp, ss, e) => { evs.push(e); return orig(pp, ss, e); };
     st.lvl = 5; const b = st.qb!; b.d = { day: questDay(Date.now()), ids: ['pits'], prog: { pits: 0 }, done: [], ess: false, pvp: [] };
-    kill('goblin', { def: { ...mobDef('goblin'), lvl: 1 } }); assert.equal(b.d.prog.pits, 0, `T1 para alguien T3 no cuenta: ${JSON.stringify({ lvl: st.lvl, d: b.d, same: st.qb === b, now: Date.now() })}`);
+    kill('goblin', { def: { ...mobDef('goblin'), lvl: 1 } }); assert.equal(b.d.prog.pits, 0, `T1 para alguien T3 no cuenta: ${JSON.stringify({ lvl: st.lvl, d: b.d, same: st.qb === b, evs })}`);
     kill('goblin', { def: { ...mobDef('goblin'), lvl: 6 } }); assert.equal(b.d.prog.pits, 1);
     kill('goblin', { def: { ...mobDef('goblin'), lvl: 6 }, origin: 'loose' }); assert.equal(b.d.prog.pits, 1, 'los sueltos no son de pit');
 });
