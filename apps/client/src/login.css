@@ -96,6 +96,7 @@
 
 /* tarjetas clase / facción */
 #login .cards{position:absolute;left:50%;top:186px;margin-left:-400px;width:800px;height:446px;display:flex;gap:40px;align-items:stretch}
+#login #clsCards{margin-left:-510px;width:1020px;gap:28px} /* 3 clases (K5) */
 #login .card{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;padding:18px 20px 16px;text-align:center;color:#d8cad6;cursor:pointer;background:linear-gradient(180deg,rgba(38,16,78,.62),rgba(12,5,30,.84));border:1px solid color-mix(in srgb,var(--c) 45%,rgba(150,100,220,.3));border-radius:12px;box-shadow:var(--gshadow);backdrop-filter:blur(6px);overflow:visible;transition:box-shadow .25s,transform .25s,border-color .25s,background .25s}
 #login .card:hover{transform:translateY(-4px);border-color:var(--c);box-shadow:0 0 26px color-mix(in srgb,var(--c) 40%,transparent),0 16px 40px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.14)}
 #login .card.on{transform:translateY(-4px);border-color:var(--c);background:linear-gradient(180deg,color-mix(in srgb,var(--c) 22%,rgba(38,16,78,.7)),rgba(12,5,30,.88));box-shadow:0 0 0 1px var(--c),0 0 44px color-mix(in srgb,var(--c) 60%,transparent),0 16px 40px rgba(0,0,0,.55),inset 0 0 70px color-mix(in srgb,var(--c) 18%,transparent)}

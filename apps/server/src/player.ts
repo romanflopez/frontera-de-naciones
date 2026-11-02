@@ -59,6 +59,8 @@ export class Player {
     /** Quemadura (K3): hasta cuándo dura y número de la última (la nueva reemplaza a la vieja). */
     burnUntil = 0;
     burnSeq = 0;
+    /** Renovar (healer): una sola cura en el tiempo por jugador; la nueva reemplaza a la vieja. */
+    renewSeq = 0;
     /** Stats de combate sacados del último guardado validado, y límites del PvP. */
     combat: CombatStats = { ...DEFAULT_STATS };
     /** Progreso del último guardado validado, para decidir si un portal deja pasar (misiones entregadas, nivel, llaves, portales abiertos). */

@@ -3,7 +3,7 @@
  * con las mismas fórmulas del juego, el nivel y el equipo del último guardado validado, la Furia que lleva el server,
  * y límites de recarga, alcance y ritmo por hechizo.
  */
-import { BASE_BY_NAME, CRIT_BASE, MAX_LEVEL, aspdTotal, critTotal, leechTotal, meleeIntervalSecs, statBonus, upMult, type Stats } from '@fdn/world';
+import { isClass, type ClassId, BASE_BY_NAME, CRIT_BASE, MAX_LEVEL, aspdTotal, critTotal, leechTotal, meleeIntervalSecs, statBonus, upMult, type Stats } from '@fdn/world';
 export type Stat = 'mag' | 'wdmg' | 'melee';
 export interface PvpSpell {
     dmg?: [number, number]; lvlK?: number; stat?: Stat;
@@ -27,6 +27,8 @@ export interface PvpSpell {
     taunt?: number;
     /** Paralización (s) sobre el objetivo; solo se aplica si el cliente la pide (último tick) y no más seguido que `cd`. */
     secs?: number;
+    /** Maná que devuelve si el golpe entra (Castigo: 9 de 18). */
+    refund?: number;
     /** Costo de maná (igual al del cliente); se cobra una vez por ráfaga. */
     mp: number;
     range: number; cd: number; ticks?: number; every?: number; aoe?: number; melee?: boolean;
@@ -43,7 +45,8 @@ export const WALK_MS = 333, RUN_MS = 200, MOVE_CAP_MS = 200;
 export const CAST_FAST_MS = 750, CAST_NORMAL_MS = 1000, CAST_HEAVY_MS = 1500, CAST_TELEGRAPH_MS = 2400;
 /** true si el hechizo es un cast (no golpe cuerpo a cuerpo): esos no se pueden lanzar corriendo. */
 /** Cast time de cada hechizo (ms); los que no figuran usan CAST_FAST_MS. Lo decide el server: el cliente no lo puede cambiar. */
-export const CAST_MS: Record<string, number> = { proyectil: CAST_FAST_MS, esquirla: CAST_NORMAL_MS, paralisis: CAST_NORMAL_MS, bola: CAST_HEAVY_MS, lluvia: CAST_TELEGRAPH_MS, juicio: CAST_NORMAL_MS };
+export const CAST_MS: Record<string, number> = { proyectil: CAST_FAST_MS, esquirla: CAST_NORMAL_MS, paralisis: CAST_NORMAL_MS, bola: CAST_HEAVY_MS, lluvia: CAST_TELEGRAPH_MS, juicio: CAST_NORMAL_MS,
+    castigo: CAST_NORMAL_MS, curacion: CAST_HEAVY_MS, orbe: CAST_HEAVY_MS };
 export const castMsOf = (id: string): number => CAST_MS[id] ?? CAST_FAST_MS;
 /** Margen de red al validar que el cast terminó (ms). */
 export const CAST_SLACK_MS = 150;
@@ -66,12 +69,21 @@ export const PVP_SPELLS: Record<string, PvpSpell> = {
     juicio: { mp: 15, dmg: [14, 20], k: 1.5, stat: 'wdmg', range: 4, cd: 1.4, cast: true, lifesteal: 0.5, vsCtrl: 1.5, threat: 3 }, // Juicio: cast 1 s
     escudo: { mp: 36, dmg: [14, 20], k: 2.3, stat: 'wdmg', secs: 3, range: 10, cd: 9, cast: false, vsCtrl: 1.5, threat: 5 },    // Escudo vengador: aturde 3 s
     aturdir: { mp: 30, dmg: [14, 20], k: 0.8, stat: 'wdmg', secs: 3, range: 8, cd: 11, taunt: 3 },                     // Martillo de justicia: aturde y provoca 3 s
+    // Healer (K5): el healer sagrado de Valdrys. Daño mágico, como el mago.
+    castigo: { mp: 18, refund: 9, dmg: [14, 21], k: 1.4, stat: 'mag', range: 15, cd: 0.95, lifesteal: 0.35, vsCtrl: 1.5 }, // Castigo: cast 1 s, se cura el 35 %
+    reprender: { mp: 30, dmg: [14, 21], k: 0.8, stat: 'mag', secs: 3, range: 15, cd: 15, cast: false },              // Reprender: instantáneo, aturde 3 s
 };
+/** Hechizos cuyo control es un aturdido (no una parálisis): llevan su propio rendimiento decreciente. */
+export const STUN_SPELLS = new Set(['aturdir', 'escudo', 'reprender']);
 /**
  * Habilidades de clase (las valida y cobra el server): Mago = blink; Paladin (id interno 'guerrero', persistido) = carga, giro, grito.
  * Van aparte de PVP_SPELLS a propósito: no se pueden pedir por pvpHitRequest para pegar sin moverse.
  */
-export interface ClassSkill extends PvpSpell { cls: 'mago' | 'guerrero'; /** aturdimiento (s) al llegar */ stun?: number; /** congelado (s) a los que alcanza (Nova) */ freeze?: number; /** barridos seguidos (Barrido: 2, a 0,25 s) */ sweeps?: number; /** pulsos de un aura (Aura sagrada: 20, uno cada `every` s) */ pulses?: number }
+export interface ClassSkill extends PvpSpell { cls: ClassId;
+    /** Cura directa: fracción de la vida máxima del objetivo (más la misma fracción del poder de curación). */ heal?: number;
+    /** Cura en el tiempo (Renovar): pulsos, cada cuánto (s) y fracción de la vida máxima por pulso. */ hot?: { ticks: number; every: number; frac: number };
+    /** Bendición sagrada: duración (s). */ bless?: number;
+    /** El que lanza se cura esta fracción del daño de área (Nova sagrada 12 %). */ selfHeal?: number; /** aturdimiento (s) al llegar */ stun?: number; /** congelado (s) a los que alcanza (Nova) */ freeze?: number; /** barridos seguidos (Barrido: 2, a 0,25 s) */ sweeps?: number; /** pulsos de un aura (Aura sagrada: 20, uno cada `every` s) */ pulses?: number }
 export const SKILLS: Record<string, ClassSkill> = {
     blink: { cls: 'mago', mp: 0, range: 7.25, cd: 12 },                                                                  // Parpadeo: sin maná (Valdrys)
     nova: { cls: 'mago', mp: 60, dmg: [14, 21], k: 0.8, stat: 'mag', range: 0, cd: 8, aoe: 3, freeze: 2, cast: false }, // Nova de escarcha: congela 2 s alrededor
@@ -80,9 +92,27 @@ export const SKILLS: Record<string, ClassSkill> = {
     mandato: { cls: 'guerrero', mp: 42, range: 0, cd: 6, aoe: 6, taunt: 7 },                                              // Mandato: provoca a los monstruos cercanos 7 s
     aura: { cls: 'guerrero', mp: 48, dmg: [14, 20], k: 0.25, stat: 'wdmg', range: 0, cd: 15, melee: true, aoe: 3, pulses: 20, every: 0.5, threat: 3 }, // Aura sagrada: 10 s de pulsos
     grito: { cls: 'guerrero', mp: 20, range: 0, cd: 25 },                                                                  // pasa a Bendición de poder en K8
+    // Healer (K5). Maná: los costos de Valdrys escalados al pool de ERIS (Castigo queda igual: 18).
+    curacion: { cls: 'healer', mp: 48, range: 12, cd: 5, cast: true, heal: 0.4 },                                         // Curación: cast 1,5 s, 40 % de la vida
+    renovar: { cls: 'healer', mp: 26, range: 12, cd: 3, cast: false, hot: { ticks: 6, every: 1, frac: 0.0625 }, burn: true }, // Renovar: aliado cura en 6 s; enemigo, quemadura
+    bendicion: { cls: 'healer', mp: 30, range: 12, cd: 20, cast: false, bless: 10 },                                     // Bendición sagrada: 10 s
+    novasagrada: { cls: 'healer', mp: 36, dmg: [14, 21], k: 1.2, stat: 'mag', range: 0, cd: 6, aoe: 4.5, cast: false, selfHeal: 0.12 }, // Nova sagrada
+    orbe: { cls: 'healer', mp: 56, range: 12, cd: 10, cast: true, aoe: 4, heal: 0.2 },                                   // Orbe sagrado: cast 1,5 s, 20 % en área
 };
+/** Habilidades del healer que se piden por skillRequest. */
+export const HEALER_SKILLS = ['curacion', 'renovar', 'bendicion', 'novasagrada', 'orbe'] as const;
+/** Bendición sagrada: daño recibido ×0,8 y curación recibida ×1,3 mientras dura; inmune a congelado y aturdido. */
+export const BLESS_DMG_TAKEN = 0.8, BLESS_HEAL_TAKEN = 1.3;
+/** Veneno sobre un jugador: la curación que recibe ×0,7 (Valdrys: −30 %). Es la herramienta contra los healers en PvP. */
+export const POISON_HEAL_TAKEN = 0.7;
+/** Amenaza que genera curar: fracción de lo curado, sobre los monstruos que están peleando con el curado. */
+export const HEAL_THREAT = 0.5;
+/** Poder de curación: el Daño base mágico sin la tirada (nivel × 2 + Magia), con el multiplicador de Magia. */
+export const healPower = (s: CombatStats): number => Math.round((s.lvl * BASE_LVL_K + s.mag) * s.magicMult);
+/** Cura de una habilidad: `frac` de la vida máxima del objetivo más `frac` del poder de curación del que la lanza. */
+export const healAmount = (frac: number, caster: CombatStats, targetMaxHp: number): number => Math.max(1, Math.round(targetMaxHp * frac + healPower(caster) * frac));
 /** Golpes de área contra mobs (paso 1.4): máximo de objetivos por lanzamiento (los más cercanos al centro) y caída de daño por cada objetivo extra. */
-export const AOE_MAX_TARGETS: Record<string, number> = { lluvia: 5, giro: 4, nova: 5, aura: 5 };
+export const AOE_MAX_TARGETS: Record<string, number> = { lluvia: 5, giro: 4, nova: 5, aura: 5, novasagrada: 5 };
 /** Quemadura: pulsos, cada cuánto (s) y fracción del Daño base por pulso (6 × ¼ = 1,5×). */
 export const BURN_TICKS = 6, BURN_EVERY = 0.5, BURN_K = 0.25;
 /** Aura sagrada: el paladín se cura esta fracción del daño de cada pulso (Valdrys no da el número). */
@@ -98,22 +128,22 @@ export const aoeMult = (index: number): number => Math.max(AOE_MIN_MULT, 1 - AOE
 export const WARCRY_MS = 10000, WARCRY_RADIUS = 5, WARCRY_DEF = 15;
 export const FURY_MS = 60000, FURY_CD_MS = 90000;
 /** Furia por clase: el mago la tira más fuerte (todo su daño), el guerrero más débil. */
-export const FURY_MULT: Record<string, number> = { mago: 1.35, guerrero: 1.15 };
+export const FURY_MULT: Record<string, number> = { mago: 1.35, guerrero: 1.15, healer: 1.2 };
 /** Costos de maná de los hechizos de utilidad que cobra el server (iguales a los del cliente). */
 export const UTIL_MP = { furia: 15, invisibilidad: 40, detectar: 30, remover: 20 } as const;
 /** Maná por clase (base, por nivel) y poción: mismas cuentas que el cliente. */
 /** Regen de maná fuera de ciudad (incluye combate): 1 % del pool por segundo, mínimo 2/s (el piso viejo). */
 export const COMBAT_MP_REGEN_PCT = 0.01;
 export const combatMpRegen = (maxMp: number): number => Math.max(2, Math.round(maxMp * COMBAT_MP_REGEN_PCT));
-const CLASS_MP: Record<string, [number, number]> = { guerrero: [40, 4], mago: [90, 12] };
+const CLASS_MP: Record<string, [number, number]> = { guerrero: [40, 4], mago: [90, 12], healer: [110, 13] };
 export const potionMp = (maxMp: number, pvp = false) => Math.max(pvp ? 20 : 40, Math.round(maxMp * 0.5 * (pvp ? POTION_PVP_MULT : 1)));
 
 export interface CombatStats { lvl: number; cls: string; /** multiplicadores de daño por Fuerza (físico) y Magia (hechizos) */ meleeMult: number; magicMult: number; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; /** crítico total %, velocidad de ataque %, robo de vida % y chance de veneno % (ya con topes) */ crit: number; aspd: number; leech: number; poison: number; savedHp: number; maxMp: number; savedMp: number }
-const CLASS_HP: Record<string, [number, number]> = { guerrero: [593, 76], mago: [381, 42] };
+const CLASS_HP: Record<string, [number, number]> = { guerrero: [593, 76], mago: [381, 42], healer: [470, 54] };
 export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 140, maxMp: 40, savedMp: 40 };
 
 /** Las bases de items son las compartidas de @fdn/world (el cliente usa las mismas). */
-const MELEE: Record<string, [number, number]> = { guerrero: [5, 9], mago: [2, 4] };
+const MELEE: Record<string, [number, number]> = { guerrero: [5, 9], mago: [2, 4], healer: [3, 6] };
 
 /** Lo mínimo del personaje que hace falta para calcular los stats de combate: nivel, clase, vida/maná guardados y el EQUIPO. */
 export interface StatSource { lvl: number; cls: string; stats?: Stats; hp?: number; mp?: number; eq: Partial<Record<string, { n: string; a?: { id: string; v: number }[]; up?: number } | null>> }
@@ -121,7 +151,7 @@ export interface StatSource { lvl: number; cls: string; stats?: Stats; hp?: numb
 /** Stats de combate a partir del personaje del server (equipo autoritativo, ver economy.ts). */
 export function statsFromChar(o: StatSource | undefined, uncapCrit = false): CombatStats {
     if (!o) return { ...DEFAULT_STATS };
-    const cls = o.cls === 'mago' ? 'mago' : 'guerrero', lvl = Math.max(1, Math.min(MAX_LEVEL, Number(o.lvl) || 1));
+    const cls = isClass(o.cls) ? o.cls : 'guerrero', lvl = Math.max(1, Math.min(MAX_LEVEL, Number(o.lvl) || 1));
     const s: CombatStats = { lvl, cls, meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 0, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 1, maxMp: 0, savedMp: 0 };
     let bonusHp = 0, bonusMp = 0, itemCrit = 0, itemAspd = 0, itemLeech = 0;
     for (const [slot, it] of Object.entries(o.eq ?? {})) {

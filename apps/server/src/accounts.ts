@@ -49,7 +49,7 @@ export function authenticate(storage: Storage, rawName: string, password: string
 const num = (v: unknown, lo: number, hi: number, def = lo): number => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.floor(v))) : def);
 const word = (v: unknown, max: number): string | null => (typeof v === 'string' && v.length > 0 && v.length <= max && /^[\p{L}\p{N}_\- ().']+$/u.test(v) ? v : null);
 const KEYS = ['cripta', 'foso'] as const;
-const CLASSES = ['guerrero', 'mago'];
+const CLASSES = ['guerrero', 'mago', 'healer'];
 const SLOTS = ['arma', 'armadura', 'cabeza', 'anillo'] as const;
 
 interface SavedItem { n: string; r: number; a: { id: string; v: number }[] }

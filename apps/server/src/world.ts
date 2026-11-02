@@ -7,16 +7,16 @@
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
 import { PARTY_SHARE_RANGE, partyExpMult, partyMates } from './party.ts';
-import { AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionLockMs, potionMp, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, POTION_LOCK_PVP_MS, PVP_COMBAT_MS, pvpCap, pvpScale, pvpVsCtrl, RECALL_PVP_LOCK_MS, INVIS_CD_MS, DETECT_CD_MS, SECOND_WIND, secondWindHeal, progressFromEcon, PVP_SPELLS, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
+import { AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionLockMs, potionMp, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, POTION_LOCK_PVP_MS, PVP_COMBAT_MS, pvpCap, pvpScale, pvpVsCtrl, RECALL_PVP_LOCK_MS, INVIS_CD_MS, DETECT_CD_MS, SECOND_WIND, secondWindHeal, progressFromEcon, PVP_SPELLS, BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, POISON_HEAL_TAKEN, HEAL_THREAT, HEALER_SKILLS, STUN_SPELLS, healAmount, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
 import { HUBS, QUESTS, RECALL, TRAINING, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef, checkSkill, skillDeniedText } from '@fdn/world';
-import { applyParalysis, applySlow, applyWarcry, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, hasWarcry, isSlowed, updateStatus } from './systems/statusSystem.ts';
+import { applyParalysis, applySlow, applyBless, applyPoison, applyWarcry, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, hasWarcry, isBlessed, isPoisoned, isSlowed, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import type { GameWorldConfig, Settings } from './config.ts';
 import { adjacentCellsAt45, distance, findNearestFreeLocation, nextGridDirection } from './location.ts';
 import type { Occupancy } from './map.ts';
 import * as M from './messages.ts';
 import { MobSim } from './mobs.ts';
-import { MOB_TYPES, meleeIntervalSecs, type MobType, type WorldMap } from '@fdn/world';
+import { MOB_TYPES, POISON_SECS, meleeIntervalSecs, type MobType, type WorldMap } from '@fdn/world';
 import { Player, type PersistedPlayer, type Send } from './player.ts';
 import type { Economy, EconCtx } from './economy.ts';
 import { auctionHouse } from './auction.ts';
@@ -82,7 +82,9 @@ export class GameWorld {
                 hurt: (p, raw, source, srcId) => this.damagePlayer(p, raw, 'phys', null, source, '', srcId), // los ataques de mobs son físicos (los mitiga la DF)
                 stun: (p, secs) => { const ms = applyParalysis(p.status, Date.now(), paralysisSecs(secs, p.combat) * 1000, 'aturdir'); return ms / 1000; },
                 pay: (p, c) => this.payMp(p, c),
-                heal: (p, n) => this.healPlayer(p, n), // robo de vida y Juicio
+                heal: (p, n) => this.healPlayer(p, n), // robo de vida, Juicio y Castigo
+                refundMp: (p, n) => this.refundMp(p, n), // Castigo
+                poison: (p, secs) => this.poisonPlayer(p, secs), // mobs tóxicos
                 mobDied: (info) => { if (!info.gm) this.dropLoot(info.type, info.def.name, info.def.lvl, info.x, info.y); },
                 reward: (p, info) => {
                     if (!this.econ) return;
@@ -241,7 +243,7 @@ export class GameWorld {
     /** Estado visible de `p` (invisible, detectar, furia, grito de guerra, ralentizado) para `p` y los cercanos. */
     private statusMsg(p: Player): ServerMessage {
         const now = Date.now();
-        return M.statusUpdate(p.playerId, p.status.isInvisible, p.status.hasDetectInvisible, p.pvp.fury(now), hasWarcry(p.status, now), isSlowed(p.status, now));
+        return M.statusUpdate(p.playerId, p.status.isInvisible, p.status.hasDetectInvisible, p.pvp.fury(now), hasWarcry(p.status, now), isSlowed(p.status, now), isBlessed(p.status, now), isPoisoned(p.status, now));
     }
     private announceStatus(p: Player): void { const m = this.statusMsg(p); p.send(m); this.broadcastNear(p, m); }
 
@@ -518,7 +520,7 @@ export class GameWorld {
                         if (secs > 0) secs = paralysisSecs(secs, tgt.combat); // la RM (y la resistencia a parálisis) del que recibe acortan la duración
                         if (!this.isEnemyPair(p, tgt)) break;                              // mismo bando o zona segura (antes del CC: no gasta DR en aliados)
                         if (secs > 0) { // DR por tipo de CC (15 s): full / 50 % / 25 % / inmune
-                            secs = applyParalysis(tgt.status, now, secs * 1000, spell === 'aturdir' || spell === 'escudo' ? 'aturdir' : 'paralisis') / 1000;
+                            secs = applyParalysis(tgt.status, now, secs * 1000, STUN_SPELLS.has(spell) ? 'aturdir' : 'paralisis') / 1000;
                             if (secs <= 0) { p.send(M.pvpHit(tgt.playerId, { fx: 'resist', x: tgt.posX, y: tgt.posY, targetId: 0n, dmg: 0, secs: 0, r: 0 })); if (dmg <= 0) break; }
                         }
                         if (dmg > 0) dmg = this.damagePlayer(tgt, dmg, spellDmgKind(spell), p, '', spell === 'ataque' ? '' : spell);              // la vida del que recibe la lleva el server
@@ -526,6 +528,8 @@ export class GameWorld {
                             if (sp.slow && applySlow(tgt.status, now, sp.slow * 1000) > 0) this.announceStatus(tgt);
                             if (sp.burn) this.burnPlayer(tgt, p);
                             if (sp.lifesteal) this.healPlayer(p, Math.round(dmg * sp.lifesteal));
+                            if (sp.refund) this.refundMp(p, sp.refund);
+                            if (spellDmgKind(spell) === 'phys' && p.combat.poison > 0 && Math.random() * 100 < p.combat.poison) this.poisonPlayer(tgt, POISON_SECS); // chance de veneno del equipo, como contra los mobs
                         }
                         if (dmg > 0 || secs > 0) p.send(M.pvpHit(p.playerId, { fx: '', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs, r: 0 })); // para que el que pega vea el número
                     } else if (v.targetId) break; // daño sin hechizo conocido: se descarta
@@ -784,9 +788,10 @@ export class GameWorld {
     /** Paladin: Carga / Tajo giratorio / Grito de guerra. */
     private handleSkill(p: Player, skill: string, targetId: bigint, mobId: number): void {
         if (skill === 'aliento') return this.startWind(p);
-        if (!['carga', 'giro', 'grito', 'nova', 'mandato', 'aura'].includes(skill)) return;
+        if (!['carga', 'giro', 'grito', 'nova', 'mandato', 'aura'].includes(skill) && !(HEALER_SKILLS as readonly string[]).includes(skill)) return;
         if (!this.skillGate(p, skill)) return;
         const sp = SKILLS[skill], now = Date.now();
+        if (sp.cls === 'healer') return this.healerSkill(p, skill, targetId, mobId, now);
         const rollDmg = (tgt?: Player) => rollSpellDamage(skill, p.combat, p.pvp.fury(now) && (!tgt || this.inPvp(tgt, now))); // K6: la Furia no vale en el primer golpe
         const hitPlayer = (tgt: Player, control: boolean) => {
             const dmg = this.damagePlayer(tgt, rollDmg(tgt), 'phys', p, '', skill);
@@ -1145,11 +1150,97 @@ export class GameWorld {
         tgt.send(m);
         for (const o of this.nearbyPlayers(tgt.posX, tgt.posY, tgt.sessionId)) if (!this.hiddenFrom(o, tgt)) o.send(m);
     }
-    /** Cura del server a un jugador (robo de vida, Juicio, Aura sagrada). */
-    private healPlayer(p: Player, n: number): void {
-        if (p.isDead || n <= 0) return;
-        const got = Math.min(p.combat.maxHp, p.hp + n) - p.hp; if (got <= 0) return;
-        p.hp += got; this.sendVitals(p, false); this.announceVitals(p); this.combatText(p, got, true, M.pid(p.playerId));
+    /**
+     * Cura del server a un jugador (robo de vida, Juicio, Aura sagrada, curas del healer). La Bendición sagrada la sube un 30 %.
+     * Si la tira otro (`by`, el healer), los monstruos que pelean con el curado le suman amenaza. Devuelve lo que curó de verdad.
+     */
+    private healPlayer(p: Player, n: number, by?: Player, spell = ''): number {
+        if (p.isDead || n <= 0) return 0;
+        const now = Date.now();
+        if (isBlessed(p.status, now)) n = Math.round(n * BLESS_HEAL_TAKEN);
+        if (isPoisoned(p.status, now)) n = Math.round(n * POISON_HEAL_TAKEN); // veneno: −30 %
+        const got = Math.min(p.combat.maxHp, p.hp + n) - p.hp; if (got <= 0) return 0;
+        p.hp += got; this.sendVitals(p, false); this.announceVitals(p); this.combatText(p, got, true, M.pid((by ?? p).playerId), spell);
+        if (by) this.mobSim?.healThreat(by, p, Math.round(got * HEAL_THREAT));
+        return got;
+    }
+    /** Devuelve maná (Castigo que pega): nunca pasa del máximo. */
+    private refundMp(p: Player, n: number): void {
+        if (p.isDead || n <= 0 || p.mp >= p.combat.maxMp) return;
+        p.mp = Math.min(p.combat.maxMp, p.mp + n); this.sendVitals(p, false);
+    }
+
+    // ---------- healer (K5) ----------
+    /** Aliado al que el healer puede curar o bendecir: él mismo o alguien de su nación, vivo, que no sea su enemigo en este lugar (arena, todos contra todos). */
+    private isAlly(p: Player, o: Player): boolean {
+        if (o === p) return true;
+        return !o.disconnected && !o.isDead && this.factionOf(o) === this.factionOf(p) && !this.isEnemyPair(p, o);
+    }
+    /** Objetivo aliado de una cura: `targetId` 0 (o el propio) es uno mismo. Valida nación, vida y alcance. */
+    private allyTarget(p: Player, targetId: bigint, range: number): Player | string {
+        if (!targetId || targetId === p.playerId) return p;
+        const o = this.playersById.get(targetId);
+        if (!o || this.hiddenFrom(p, o) || !this.isAlly(p, o)) return 'Solo podés curar a los de tu nación.';
+        if (Math.hypot(o.posX - p.posX, o.posY - p.posY) > range + 1.5) return 'Está muy lejos.';
+        return o;
+    }
+    /** Curación, Renovar, Bendición sagrada, Nova sagrada y Orbe sagrado. Castigo y Reprender van por pvpHitRequest y mobHitRequest. */
+    private healerSkill(p: Player, skill: string, targetId: bigint, mobId: number, now: number): void {
+        const sp = SKILLS[skill];
+        if (sp.cast && !this.castOk(p, skill, now)) return this.skillDenied(p, skill, ''); // Curación y Orbe se castean (1,5 s) y el server lo cuenta
+        const fx = (o: Player) => this.broadcastNear(p, M.pvpHit(p.playerId, { fx: skill === 'bendicion' ? 'spread' : 'sphere', x: o.posX, y: o.posY, targetId: o.playerId, dmg: 0, secs: 0, r: 0 }));
+        if (skill === 'novasagrada') { // 1,2× a los enemigos cerca y se cura el 12 % de lo que hizo
+            this.skillCommit(p, skill);
+            const cx = p.posX + 0.5, cy = p.posY + 0.5, roll = (tgt?: Player) => rollSpellDamage(skill, p.combat, p.pvp.fury(now) && (!tgt || this.inPvp(tgt, now))); let dealt = 0; // K6: la Furia no vale en el primer golpe a un jugador
+            for (const o of this.nearbyPlayers(p.posX, p.posY, p.sessionId)) {
+                if (!this.isEnemyPair(p, o) || o.isDead || Math.hypot(o.posX + 0.5 - cx, o.posY + 0.5 - cy) > sp.aoe!) continue;
+                const d = this.damagePlayer(o, roll(o), 'magic', p, '', skill); dealt += d;
+                this.broadcastNear(p, M.pvpHit(p.playerId, { fx: 'spread', x: o.posX, y: o.posY, targetId: o.playerId, dmg: d, secs: 0, r: 0 }));
+            }
+            if (!this.cellSafe(p.posX, p.posY)) {
+                const hits = (this.mobSim?.near(cx, cy, sp.aoe!) ?? []).sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy)).slice(0, AOE_MAX_TARGETS.novasagrada);
+                hits.forEach((m, i) => { const d = Math.max(1, Math.round(roll() * aoeMult(i))); dealt += d; this.mobSim!.skillHit(p, m.id, d, 0, skill); });
+            }
+            if (dealt > 0) this.healPlayer(p, Math.round(dealt * sp.selfHeal!), undefined, skill);
+            this.skillBroadcast(p, skill, p.posX, p.posY);
+            return;
+        }
+        if (skill === 'renovar') { // sobre un enemigo (jugador o monstruo): quemadura; sobre un aliado: cura en el tiempo
+            const foe = targetId ? this.playersById.get(targetId) : undefined;
+            if (mobId || (foe && foe !== p && !this.isAlly(p, foe))) {
+                if (foe) {
+                    if (foe.isDead || this.hiddenFrom(p, foe) || !this.isEnemyPair(p, foe)) return this.skillDenied(p, skill, 'No podés usar eso sobre ese objetivo.');
+                    if (Math.hypot(foe.posX - p.posX, foe.posY - p.posY) > sp.range + 1.5) return this.skillDenied(p, skill, 'Está muy lejos.');
+                    this.skillCommit(p, skill); this.burnPlayer(foe, p); fx(foe);
+                } else {
+                    const m = this.mobSim?.get(mobId);
+                    if (!m) return this.skillDenied(p, skill, 'Elegí un objetivo.');
+                    if (Math.hypot(m.x - p.posX - 0.5, m.y - p.posY - 0.5) > sp.range + 1.5) return this.skillDenied(p, skill, 'Está muy lejos.');
+                    this.skillCommit(p, skill); this.mobSim!.burnMob(p, mobId);
+                }
+                this.skillBroadcast(p, skill, p.posX, p.posY);
+                return;
+            }
+        }
+        const tgt = this.allyTarget(p, targetId, sp.range);
+        if (typeof tgt === 'string') return this.skillDenied(p, skill, tgt);
+        this.skillCommit(p, skill);
+        if (skill === 'curacion') this.healPlayer(tgt, healAmount(sp.heal!, p.combat, tgt.combat.maxHp), p, skill);
+        else if (skill === 'renovar') {
+            const seq = ++tgt.renewSeq, hot = sp.hot!, per = healAmount(hot.frac, p.combat, tgt.combat.maxHp);
+            for (let k = 1; k <= hot.ticks; k++) this.playerTimer(tgt, k * hot.every * 1000, (w) => {
+                if (tgt.renewSeq !== seq || tgt.isDead || tgt.disconnected) return;
+                const healer = w.playersById.get(p.playerId);
+                w.healPlayer(tgt, per, healer && !healer.disconnected ? healer : undefined, skill);
+            });
+        } else if (skill === 'bendicion') { applyBless(tgt.status, now, sp.bless! * 1000); this.announceStatus(tgt); }
+        else if (skill === 'orbe') { // al objetivo y a los aliados a 4 celdas de él
+            const near = [tgt, ...this.nearbyPlayers(tgt.posX, tgt.posY, tgt.sessionId)].filter((o) => (o === tgt || Math.hypot(o.posX - tgt.posX, o.posY - tgt.posY) <= sp.aoe!) && this.isAlly(p, o) && !this.hiddenFrom(p, o));
+            if (p !== tgt && !near.includes(p) && Math.hypot(p.posX - tgt.posX, p.posY - tgt.posY) <= sp.aoe!) near.push(p);
+            for (const o of near) this.healPlayer(o, healAmount(sp.heal!, p.combat, o.combat.maxHp), p, skill);
+        }
+        fx(tgt);
+        this.skillBroadcast(p, skill, tgt.posX, tgt.posY);
     }
     /** Quemadura sobre un jugador: 6 pulsos de ¼ del Daño base de quien la puso, uno cada 0,5 s. Una sola: la nueva reemplaza a la vieja. */
     private burnPlayer(tgt: Player, src: Player): void {
@@ -1165,6 +1256,7 @@ export class GameWorld {
     private damagePlayer(p: Player, raw: number, kind: DmgKind, killer: Player | null, source = '', spell = '', srcId = ''): number {
         if (p.isDead || p.spawnProtection || p.godMode || raw <= 0) return 0;
         const now = Date.now(), pvp = !!killer && killer !== p; // K6: las reglas de PvP valen solo contra jugadores
+        if (isBlessed(p.status, now)) raw = Math.max(1, Math.round(raw * BLESS_DMG_TAKEN)); // Bendición sagrada: −20 % de daño recibido
         if (pvp) raw = pvpScale(raw); // multiplicador PvP global, antes de la defensa
         let dmg = damageAfterDefense(raw, hasWarcry(p.status, now) ? { ...p.combat, def: p.combat.def + WARCRY_DEF } : p.combat, kind); // el Grito de guerra suma a la defensa antes de la fórmula
         if (pvp) { dmg = pvpCap(dmg, p.combat.maxHp); p.pvpHurtAt = now; this.markPvp(p, now); this.markPvp(killer!, now); } // tope por golpe
@@ -1321,8 +1413,14 @@ export class GameWorld {
         p.mp = Math.min(p.combat.maxMp, p.mp + h.mp);
         this.healPlayer(p, h.hp); this.sendVitals(p, false);
     }
-    /** Veneno sobre jugadores (−30 % de curación): todavía no existe; llega con el healer (K5). */
-    private isPoisoned(_p: Player): boolean { return false; }
+    /** Veneno sobre jugadores (K5): −30 % de curación recibida (curas, robo de vida y Segundo aliento). */
+    private isPoisoned(p: Player): boolean { return isPoisoned(p.status, Date.now()); }
+    /** Envenena a un jugador `secs` segundos y avisa si recién empieza. */
+    private poisonPlayer(p: Player, secs: number): void {
+        if (p.isDead || secs <= 0) return;
+        applyPoison(p.status, Date.now(), secs * 1000);
+        if (p.status.dirty) { p.status.dirty = false; this.announceStatus(p); }
+    }
 
 
     // ---------- maná (lo lleva el server) ----------

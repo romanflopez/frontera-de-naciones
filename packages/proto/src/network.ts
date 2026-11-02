@@ -741,6 +741,8 @@ export interface StatusUpdate {
   fury: boolean;
   warcry: boolean;
   slow: boolean;
+  blessed: boolean;
+  poisoned: boolean;
 }
 
 /** Mago: Blink a la celda (x, y) (máx. 4 celdas). El server valida y responde con PlayerTeleported + SkillEffect. */
@@ -749,7 +751,10 @@ export interface BlinkRequest {
   y: number;
 }
 
-/** Habilidades de clase del Guerrero: skill = carga | giro | grito. carga necesita target_id (jugador) o mob_id. */
+/**
+ * Habilidades de clase: carga, giro, grito, nova, mandato, aura y las del healer (curacion, renovar, bendicion, novasagrada, orbe).
+ *  carga necesita target_id (jugador) o mob_id; las curas del healer, target_id del aliado (0 = a sí mismo); renovar a un enemigo, target_id o mob_id.
+ */
 export interface SkillRequest {
   skill: string;
   targetId: bigint;
@@ -10260,7 +10265,16 @@ export const LootRoll: MessageFns<LootRoll> = {
 };
 
 function createBaseStatusUpdate(): StatusUpdate {
-  return { playerId: 0n, invisible: false, detect: false, fury: false, warcry: false, slow: false };
+  return {
+    playerId: 0n,
+    invisible: false,
+    detect: false,
+    fury: false,
+    warcry: false,
+    slow: false,
+    blessed: false,
+    poisoned: false,
+  };
 }
 
 export const StatusUpdate: MessageFns<StatusUpdate> = {
@@ -10285,6 +10299,12 @@ export const StatusUpdate: MessageFns<StatusUpdate> = {
     }
     if (message.slow !== false) {
       writer.uint32(48).bool(message.slow);
+    }
+    if (message.blessed !== false) {
+      writer.uint32(56).bool(message.blessed);
+    }
+    if (message.poisoned !== false) {
+      writer.uint32(64).bool(message.poisoned);
     }
     return writer;
   },
@@ -10350,6 +10370,22 @@ export const StatusUpdate: MessageFns<StatusUpdate> = {
             message.slow = reader.bool();
             continue;
           }
+          case 7: {
+            if (tag !== 56) {
+              break;
+            }
+
+            message.blessed = reader.bool();
+            continue;
+          }
+          case 8: {
+            if (tag !== 64) {
+              break;
+            }
+
+            message.poisoned = reader.bool();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -10373,6 +10409,8 @@ export const StatusUpdate: MessageFns<StatusUpdate> = {
     message.fury = object.fury ?? false;
     message.warcry = object.warcry ?? false;
     message.slow = object.slow ?? false;
+    message.blessed = object.blessed ?? false;
+    message.poisoned = object.poisoned ?? false;
     return message;
   },
 };
