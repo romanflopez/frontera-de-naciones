@@ -203,8 +203,8 @@ function totals() {
 // ---------- clases ----------
 interface ClassDef { id: string; name: string; hidden?: boolean; desc: string; head: string; armor?: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; spells: string[] }
 const CLASSES: ClassDef[] = [
-    { id: 'guerrero', name: 'Paladin', desc: 'Tanque: aguanta, aturde y pega cuerpo a cuerpo.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'juicio', 'giro', 'escudo', 'mandato', 'aturdir', 'aura', 'carga', 'furia', 'remover', 'grito'] },
-    { id: 'mago', name: 'Mago', desc: 'Frágil: frío para frenar, fuego para rematar.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'esquirla', 'paralisis', 'nova', 'ignicion', 'bola', 'lluvia', 'furia', 'remover', 'invisibilidad', 'detectar', 'blink'] },
+    { id: 'guerrero', name: 'Paladin', desc: 'Tanque: aguanta, aturde y pega cuerpo a cuerpo.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'juicio', 'giro', 'escudo', 'mandato', 'aturdir', 'aura', 'carga', 'furia', 'remover', 'grito', 'aliento'] },
+    { id: 'mago', name: 'Mago', desc: 'Frágil: frío para frenar, fuego para rematar.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'esquirla', 'paralisis', 'nova', 'ignicion', 'bola', 'lluvia', 'furia', 'remover', 'invisibilidad', 'detectar', 'blink', 'aliento'] },
 ];
 let CLS: ClassDef = CLASSES[0];
 const maxHp = () => CLS.hp + (P.lvl - 1) * CLS.hpL + totals().hp;
@@ -313,6 +313,7 @@ function onServer(m: ServerPayload) {
         case 'auctionSearchResult': case 'auctionMyState': case 'auctionHistory': auction.onMessage(m); break;
         case 'depositState': deposit.onMessage(m); break;
         case 'recallState': onRecallState(m.value); break;
+        case 'abilityState': onAbilityState(m.value); break;
         case 'partyState': renderParty(m.value.members); break;
         case 'combatTextEvent': onCombatText(m.value); break;
         case 'partyStatsUpdate': updatePartyStats(m.value.name, m.value.hp, m.value.mp); break;
@@ -429,6 +430,7 @@ function onSkillEffect(v: { casterId: bigint; skill: string; fromX: number; from
         case 'carga': efxLocal('crosswind', fx0, fy0, 6); fx.push({ k: 'burst', x: fx0, y: fy0, t: 0, c: '#ff9a4a' }); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 1.2, c: '#ff9a4a' }); if (!reduce && v.casterId === myId) shake = Math.max(shake, 0.2); break;
         case 'giro': efxLocal('cyclone', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 1.9, c: '#ffd0a0' }); break;
         case 'nova': efxLocal('spread', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 3, c: '#bfe8ff' }); break;
+        case 'aliento': fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#7fe0a0' }); efxLocal('sphere', tx, ty); break;
         case 'mandato': fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ff7a5a' }); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 6, c: '#ff7a5a' }); break;
         case 'aura': efxLocal('sphere', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffe9a0' }); break;
         case 'grito': efxLocal('godsbreath', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#c78bff' }); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffe27a' }); break;
@@ -613,11 +615,13 @@ const LIB: Record<string, SpellDef> = {
         cast() { skillSend('giro'); } },
     grito: { name: 'Grito de guerra', mp: 20, cd: 25, col: '#c78bff', range: 0, target: false, instant: true,
         cast() { skillSend('grito'); } },
+    aliento: { name: 'Segundo aliento', mp: 0, cd: 210, col: '#7fe0a0', range: 0, target: false, instant: true, // Second Wind (Valdrys): 3 s quieto, la mitad de vida y maná
+        cast() { if (P.hp >= maxHp() && P.mp >= maxMp()) { toast('Ya tenés la vida y el maná llenos.'); return false; } P.path = []; P.target = null; P.engage = false; P.pickup = null; P.queued = null; cancelCast(); skillSend('aliento'); } },
     furia: { name: 'Furia', mp: 15, cd: 90, col: '#ff3b2f', range: 0, target: false,
         cast() { sfx('berserk', 0.7); efxLocal('flamme', P.x, P.y); pvpSend('flamme', P.x, P.y, 0n, 'furia'); P.fury = now() + 60; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log(`Furia: +${selectedClass === 'mago' ? 35 : 15}% de daño por 60 s.`, true); } },
 };
 let SPELLS: Spell[] = [];
-const SPECIAL_KEY: Record<string, string | undefined> = { remover: 'r', invisibilidad: 'f', detectar: 'g', blink: 'b', carga: 'z', giro: 'x', grito: 'v' };
+const SPECIAL_KEY: Record<string, string | undefined> = { remover: 'r', invisibilidad: 'f', detectar: 'g', blink: 'b', carga: 'z', giro: 'x', grito: 'v', aliento: 'y' };
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
 /** Hechizo de área estilo Blizzard: varios golpes sobre las celdas cercanas al punto elegido. */
 function zone(x: number, y: number, r: number, ticks: number, every: number, dmg: () => number, effect: string, slow = 0, sid = '') {
@@ -645,16 +649,19 @@ function autoTarget(range: number) {
     return best;
 }
 // ---------- pociones de vida y maná ----------
-const pots = { hp: 3, mp: 3, cd: 0 };
-/** Delay global entre pociones (vida o maná), aparte de la recarga de los hechizos. Vida: 20 % al instante y el resto en 4 ticks de 0,5 s. El server valida y cura. */
-const POTION_GCD = 1.75, POT_HOT_TICKS = 4, POT_HOT_EVERY = 0.5;
+const pots = { hp: 3, mp: 3, cd: 0, total: 1 };
+/**
+ * Bloqueo compartido entre pociones (vida o maná), aparte de la recarga de los hechizos: 1 min en PvE y 10 s peleando contra jugadores (K6).
+ * Lo decide el server y llega en AbilityState('pocion'); acá solo se frena el doble toque hasta que responda. Vida: 20 % al instante y el resto en 4 ticks de 0,5 s.
+ */
+const POTION_TAP_GUARD = 0.5, POT_HOT_TICKS = 4, POT_HOT_EVERY = 0.5;
 let potEpoch = 0;
 function usePotion(k: 'hp' | 'mp') {
     if (P.dead) return;
     if (pots[k] < 1) { toast(`No tenés ${POTS[k].name.toLowerCase()}s. Comprá en el Mercader.`); return; }
-    if (pots.cd > now()) return;
+    if (pots.cd > now()) { if (pots.cd - now() > POTION_TAP_GUARD) toast(`Pociones: faltan ${Math.ceil(pots.cd - now())} s.`); return; }
     if (k === 'hp' ? P.hp >= maxHp() : P.mp >= maxMp()) { toast(k === 'hp' ? 'Ya tenés la vida llena.' : 'Ya tenés el maná lleno.'); return; }
-    pots.cd = now() + POTION_GCD; // el server descuenta la poción (llega en inventoryState)
+    if (connected) { pots.cd = now() + POTION_TAP_GUARD; pots.total = POTION_TAP_GUARD; } else { pots.cd = now() + 60; pots.total = 60; } // conectado, el bloqueo real llega del server
     const epoch = ++potEpoch, local = !connected; // conectado: la vida y el maná los cura el server (llegan en Vitals); sin server curo yo
     if (connected) net.send({ $case: 'potionRequest', value: { kind: k === 'hp' ? 0 : 1 } });
     if (k === 'hp') {
@@ -665,11 +672,34 @@ function usePotion(k: 'hp' | 'mp') {
     } else { const m = Math.max(40, Math.round(maxMp() * 0.5)); if (local) { P.mp = Math.min(maxMp(), P.mp + m); mpLocalAt = now(); } float(P.x, P.y - 0.2, '+' + m + ' maná', '#7fb7ff'); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#4a8fe0' }); }
     syncHp(); efx('sphere', P.x, P.y); renderPots();
 }
+/** Segundo aliento: canal en curso según el server (en segundos de `now()`). */
+let wind: { start: number; end: number } | null = null;
+/** AbilityState del server (K6): bloqueo de pociones y Segundo aliento (canal, recarga y por qué se cortó). */
+function onAbilityState(v: { id: string; channeling: boolean; channelMs: number; remainingMs: number; cooldownMs: number; cooldownTotalMs: number; reason: string }) {
+    const T = now();
+    if (v.id === 'pocion') { pots.cd = T + v.cooldownMs / 1000; pots.total = Math.max(0.1, v.cooldownTotalMs / 1000); potCdTick(); return; }
+    if (v.id !== 'aliento') return;
+    const i = SPELLS.findIndex((x) => x.id === 'aliento');
+    if (v.channeling) { const len = v.channelMs / 1000; wind = { start: T - (len - v.remainingMs / 1000), end: T + v.remainingMs / 1000 }; if (i >= 0) cds[i] = 0; return; }
+    const was = !!wind; wind = null;
+    if (i >= 0) cds[i] = T + v.cooldownMs / 1000;
+    if (v.reason) { toast(v.reason); log(esc(v.reason), true); }
+    else if (was && v.cooldownMs > 0) log('Segundo aliento: recuperaste vida y maná.', true);
+}
+/** Barra verde sobre el personaje mientras canaliza el Segundo aliento. */
+function drawWind(T: number) {
+    if (!wind) return;
+    const k = clamp((T - wind.start) / Math.max(0.01, wind.end - wind.start), 0, 1), p = iso(P.x, P.y), w = 76, y = p.y - 92;
+    ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(p.x - w / 2 - 2, y - 2, w + 4, 9);
+    ctx.fillStyle = '#14402a'; ctx.fillRect(p.x - w / 2, y, w, 5);
+    ctx.fillStyle = '#7fe0a0'; ctx.fillRect(p.x - w / 2, y, w * k, 5);
+    nameTag(`Segundo aliento ${Math.max(0, wind.end - T).toFixed(1)} s`, p.x, y - 5, '#c8f5d8', 1, 10);
+}
 /** Overlay del delay global sobre los chips de pociones (Q/E) y sus slots en la bolsa. */
 function potCdTick() {
-    const left = Math.max(0, pots.cd - now()), t = left > 0 ? left.toFixed(1) : '';
+    const left = Math.max(0, pots.cd - now()), t = left <= 0 ? '' : left >= 10 ? String(Math.ceil(left)) : left.toFixed(1);
     document.querySelectorAll<HTMLElement>('.cdv[data-gcd]').forEach((el) => {
-        if (left > 0) { el.style.display = 'flex'; el.style.background = `conic-gradient(rgba(0,0,0,0) 0 ${(1 - left / POTION_GCD) * 100}%, rgba(5,3,8,.74) 0 100%)`; if (el.textContent !== t) el.textContent = t; }
+        if (left > 0) { el.style.display = 'flex'; el.style.background = `conic-gradient(rgba(0,0,0,0) 0 ${(1 - left / Math.max(0.1, pots.total)) * 100}%, rgba(5,3,8,.74) 0 100%)`; if (el.textContent !== t) el.textContent = t; }
         else if (el.style.display) { el.style.display = ''; el.textContent = ''; }
     });
 }
@@ -794,7 +824,7 @@ const SERVER_MP_SPELLS = new Set(['proyectil', 'esquirla', 'paralisis', 'ignicio
 function fire(i: number, m: Target | null) {
     const s = SPELLS[i];
     if (m && 'pvp' in m && !s.aoe) { if (!pvpCast(s.id, (m as { pvp: Other }).pvp)) return; } else if (s.cast(m) === false) return;
-    const srvMp = SERVER_MP_SPELLS.has(s.id ?? '') || ['furia', 'invisibilidad', 'detectar', 'remover', 'blink', 'carga', 'giro', 'grito', 'nova', 'mandato', 'aura'].includes(s.id ?? '') || (m && 'pvp' in m && !s.aoe)
+    const srvMp = SERVER_MP_SPELLS.has(s.id ?? '') || ['furia', 'invisibilidad', 'detectar', 'remover', 'blink', 'carga', 'giro', 'grito', 'nova', 'mandato', 'aura', 'aliento'].includes(s.id ?? '') || (m && 'pvp' in m && !s.aoe)
         || (!!s.aoe && enemiesNear(m ? m.x : P.x, m ? m.y : P.y, s.aoe + 0.5).length > 0); // si pega a un jugador, el server cobra
     spendMp(s.mp, srvMp); syncHp(); cds[i] = now() + s.cd;
     P.one = { anim: 'cast', t: now() - 0.3, until: now() + 0.12 };
@@ -1485,7 +1515,7 @@ function render() {
         const c = P.casting, s = SPELLS[c.i], p = iso(P.x, P.y), k = clamp((T - c.start) / (c.end - c.start), 0, 1);
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(p.x, p.y - 34, 0, p.x, p.y - 34, 8 + k * 10); g.addColorStop(0, '#fff'); g.addColorStop(0.3, s.col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y - 34, 8 + k * 10, 0, Math.PI * 2); ctx.fill(); ctx.restore();
     }
-    drawRecall(T);
+    drawRecall(T); drawWind(T);
     // proyectiles de mobs a distancia: una flecha (o virote) con estela que vuela en arco corto hasta el punto apuntado
     for (let i = arrows.length - 1; i >= 0; i--) {
         const a = arrows[i], k = (now() - a.t0) / a.dur;

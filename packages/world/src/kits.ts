@@ -3,7 +3,7 @@
  * Lo usan el server (rechaza lo que no corresponde) y el cliente (bloquea el botón y avisa el nivel).
  *
  * Los niveles salen de los kits de Valdrys (hasta nivel 12 completos desde K3; el healer llega en K5).
- * Furia, invisibilidad y detectar son utilidad compartida (recargas en K6).
+ * Furia, invisibilidad y detectar son utilidad compartida (recargas en K6). Segundo aliento (`aliento`) es común a todas las clases.
  */
 
 export type ClassId = 'guerrero' | 'mago';
@@ -12,11 +12,11 @@ export type ClassId = 'guerrero' | 'mago';
 export const CLASS_KITS: Record<ClassId, Readonly<Record<string, number>>> = {
     guerrero: {
         ataque: 1, golpe: 1, juicio: 1, giro: 3, escudo: 5, mandato: 7, aturdir: 9, aura: 12, carga: 20, grito: 24,
-        furia: 1, remover: 1,
+        furia: 1, remover: 1, aliento: 1,
     },
     mago: {
         ataque: 1, proyectil: 1, esquirla: 1, paralisis: 3, nova: 5, ignicion: 7, bola: 9, lluvia: 12, remover: 21, blink: 24,
-        furia: 1, invisibilidad: 1, detectar: 1,
+        furia: 1, invisibilidad: 1, detectar: 1, aliento: 1,
     },
 };
 

@@ -106,7 +106,7 @@ export const UTIL_MP = { furia: 15, invisibilidad: 40, detectar: 30, remover: 20
 export const COMBAT_MP_REGEN_PCT = 0.01;
 export const combatMpRegen = (maxMp: number): number => Math.max(2, Math.round(maxMp * COMBAT_MP_REGEN_PCT));
 const CLASS_MP: Record<string, [number, number]> = { guerrero: [40, 4], mago: [90, 12] };
-export const potionMp = (maxMp: number) => Math.max(40, Math.round(maxMp * 0.5));
+export const potionMp = (maxMp: number, pvp = false) => Math.max(pvp ? 20 : 40, Math.round(maxMp * 0.5 * (pvp ? POTION_PVP_MULT : 1)));
 
 export interface CombatStats { lvl: number; cls: string; /** multiplicadores de daño por Fuerza (físico) y Magia (hechizos) */ meleeMult: number; magicMult: number; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; /** crítico total %, velocidad de ataque %, robo de vida % y chance de veneno % (ya con topes) */ crit: number; aspd: number; leech: number; poison: number; savedHp: number; maxMp: number; savedMp: number }
 const CLASS_HP: Record<string, [number, number]> = { guerrero: [593, 76], mago: [381, 42] };
@@ -162,17 +162,53 @@ export function paralysisSecs(base: number, s: CombatStats): number {
 }
 
 // ---------- pociones ----------
-/** Delay global entre pociones (vida o maná), independiente de los hechizos. */
-export const POTION_GCD_MS = 1750;
-/** Tolerancia por jitter de red: el server acepta una poción si pasaron al menos GCD - esto. */
+/**
+ * Bloqueo compartido entre pociones (vida o maná), independiente de los hechizos (K6, kits-de-clase.md §3):
+ * en PvE es el minuto de Valdrys; en una pelea contra jugadores, 10 s y pociones más chicas (se calibra con sim:pvp).
+ */
+export const POTION_LOCK_PVE_MS = 60000, POTION_LOCK_PVP_MS = 10000;
+/** En PvP la poción cura esta fracción de la normal ("pociones chicas", punto de partida). */
+export const POTION_PVP_MULT = 0.5;
+/** Tolerancia por jitter de red: el server acepta una poción si pasó el bloqueo menos esto. */
 export const POTION_GCD_SLACK_MS = 100;
 /** Vida: parte instantánea y el resto en `POTION_HOT_TICKS` ticks cada `POTION_HOT_EVERY_MS` (2 s en total). */
 export const POTION_INSTANT = 0.2, POTION_HOT_TICKS = 4, POTION_HOT_EVERY_MS = 500;
-export const potionHp = (maxHp: number) => Math.max(50, Math.round(maxHp * 0.4));
+export const potionHp = (maxHp: number, pvp = false) => Math.max(pvp ? 25 : 50, Math.round(maxHp * 0.4 * (pvp ? POTION_PVP_MULT : 1)));
+export const potionLockMs = (pvp: boolean) => (pvp ? POTION_LOCK_PVP_MS : POTION_LOCK_PVE_MS);
 /** Reparto de una poción de vida: [instantáneo, ...ticks]; la suma da exactamente `total`. */
 export function potionHpSplit(total: number): number[] {
     const first = Math.round(total * POTION_INSTANT), rest = total - first, tick = Math.floor(rest / POTION_HOT_TICKS);
     return [first, ...Array.from({ length: POTION_HOT_TICKS }, (_, i) => (i === POTION_HOT_TICKS - 1 ? rest - tick * (POTION_HOT_TICKS - 1) : tick))];
+}
+
+// ---------- K6: reglas de PvP (solo jugador contra jugador; el PvE queda igual a Dreadmyst y Valdrys) ----------
+/** Estar "en combate PvP": haber pegado o recibido daño de otro jugador en estos últimos ms. */
+export const PVP_COMBAT_MS = 10000;
+/** Multiplicador global del daño contra jugadores (punto de partida; se calibra con sim:pvp hasta 1v1 de 20-40 s). */
+export const PVP_DMG_MULT = 0.6;
+/** Ningún golpe solo saca más que esta fracción de la vida máxima de un jugador. */
+export const PVP_HIT_CAP = 0.25;
+/** Tope de los multiplicadores "sobre controlado" contra jugadores (Juicio y Escudo 1,5× → 1,2×; Esquirla 2× → 1,2×). */
+export const PVP_VS_CTRL_MAX = 1.2;
+/** Daño que llega a un jugador desde otro: primero el multiplicador PvP (antes de la defensa) y después el tope por golpe. */
+export const pvpScale = (raw: number): number => Math.max(1, Math.round(raw * PVP_DMG_MULT));
+export const pvpCap = (dmg: number, maxHp: number): number => Math.min(dmg, Math.max(1, Math.floor(maxHp * PVP_HIT_CAP)));
+/** Multiplicador "sobre controlado" que se usa contra un jugador. */
+export const pvpVsCtrl = (k: number): number => Math.min(k, PVP_VS_CTRL_MAX);
+/** El recall se bloquea estos ms después de recibir daño de un jugador. */
+export const RECALL_PVP_LOCK_MS = 10000;
+/** Invisibilidad (para escapar, no para emboscar) y Detectar: recargas del server. */
+export const INVIS_CD_MS = 60000, DETECT_CD_MS = 20000;
+
+// ---------- Segundo aliento (común a todas las clases) ----------
+/**
+ * Casteo de 3 s quieto, recarga de 3,5 min; recupera la mitad de la vida y del maná máximos (menos si estás envenenado).
+ * Lo corta un golpe directo (las quemaduras no), un aturdido o congelado, moverse o hacer otra cosa.
+ */
+export const SECOND_WIND = { castMs: 3000, cdMs: 210000, hp: 0.5, mp: 0.5, poisoned: 0.7 } as const;
+export function secondWindHeal(maxHp: number, maxMp: number, poisoned: boolean): { hp: number; mp: number } {
+    const k = poisoned ? SECOND_WIND.poisoned : 1;
+    return { hp: Math.round(maxHp * SECOND_WIND.hp * k), mp: Math.round(maxMp * SECOND_WIND.mp * k) };
 }
 
 const rint = (a: number, b: number) => Math.floor(a + Math.random() * (b - a + 1));

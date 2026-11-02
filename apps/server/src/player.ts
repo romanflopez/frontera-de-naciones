@@ -87,10 +87,20 @@ export class Player {
     mp = 0;
     nextMpRegenAt = 0;
     lastMpReportAt = 0;
-    /** Pociones: último consumo (delay global), consumos de los últimos segundos (tope por ventana) y época (corta la curación en el tiempo al morir/revivir). */
+    /** Pociones: último consumo, hasta cuándo dura el bloqueo compartido (1 min en PvE, 10 s en PvP) y época (corta la curación en el tiempo al morir/revivir). */
     lastPotionAt = 0;
-    potionLog: number[] = [];
+    potionReadyAt = 0;
     potionEpoch = 0;
+    /** K6: hasta cuándo está en combate contra jugadores (pegó o recibió daño de otro) y último daño recibido de un jugador (bloquea el recall). */
+    pvpCombatUntil = 0;
+    pvpHurtAt = -1e12;
+    /** Recargas de Invisibilidad y Detectar que lleva el server. */
+    invisCdUntil = 0;
+    detectCdUntil = 0;
+    /** Segundo aliento: fin del canal en curso (0 = no canaliza), fin de la recarga y época (invalida el temporizador al cortar). */
+    windUntil = 0;
+    windCdUntil = 0;
+    windEpoch = 0;
     /** Subas de vida aceptadas por reporte del cliente (curas, regeneración) en la ventana reciente: [hora, cantidad]. */
     healLog: [number, number][] = [];
     meditating = false;

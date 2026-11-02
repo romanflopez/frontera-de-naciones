@@ -69,6 +69,25 @@ Reglas:
 - Un combo completo saca 40–55% de la barra, no 100%.
 - Duración objetivo de pelea PvP: 20–30s. Si dura <12s o >45s, el balance está roto.
 
+## Reglas de PvP (K6, solo jugador contra jugador)
+
+El PvE no cambia. Todo esto vive en `apps/server/src/systems/pvpCombat.ts` (constantes) y `world.ts` (dónde se aplica). Son puntos de partida: se calibran con `sim:pvp` (K7) hasta 1v1 de 20-40 s y 2v2 de hasta ~60 s.
+
+| Regla | Valor | Dónde |
+|---|---|---|
+| "En combate PvP" | pegaste o recibiste daño de otro jugador en los últimos 10 s (`PVP_COMBAT_MS`) | `markPvp` |
+| Multiplicador PvP | ×0,6 sobre el daño crudo, antes de DF/RM (`PVP_DMG_MULT`) | `damagePlayer` |
+| Tope por golpe | ningún golpe saca más del 25 % de la vida máxima (`PVP_HIT_CAP`); vale también para quemaduras, Barrido, Aura, Nova | `damagePlayer` |
+| Sin abridor | el primer golpe a alguien que no estaba en combate PvP no usa Furia ni bonus sobre controlado o quemado (no hay críticos en PvP) | `pvpHitRequest`, `handleSkill` |
+| Sobre controlado | tope 1,2× contra jugadores (Juicio y Escudo 1,5×, Esquirla 2×) (`PVP_VS_CTRL_MAX`) | `pvpHitRequest` |
+| Recall | bloqueado 10 s después de recibir daño de un jugador; el canal de 8 s quieto sigue igual | `startRecall` |
+| Pociones | bloqueo compartido: 60 s en PvE, 10 s en PvP con pociones de la mitad; al entrar en PvP el bloqueo se acorta a 10 s desde la última; al morir se libera | `usePotion`, `markPvp` |
+| Segundo aliento (`aliento`, todas las clases, tecla Y) | 3 s quieto, recarga 3,5 min, cura 50 % de vida y maná (−30 % envenenado, cuando exista el veneno en jugadores). Lo cortan un golpe directo (la quemadura no), un control, moverse o cualquier otra acción; cortado no gasta la recarga | `startWind` / `finishWind` |
+| Invisibilidad | recarga 60 s; se corta al atacar, castear, usar una habilidad o recibir daño | `invisibilityRequest`, `startCast`, `damagePlayer` |
+| Detectar | recarga 20 s | `detectInvisibleRequest` |
+
+El cliente recibe el bloqueo de pociones y el Segundo aliento en `AbilityState` (proto, tag 1000).
+
 ## Progresión post-40: Veteranía (no reset)
 - Niveles 1–50 después del 40.
 - Canal 1 (30–40%): stats capeados (+15–20% total a Veteranía 50).

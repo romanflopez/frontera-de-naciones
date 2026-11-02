@@ -568,7 +568,26 @@ export interface ServerMessage {
     /** Botín de materiales / oro en el suelo. Rango propio de tags desde 900. */
     { $case: "lootSpawnEvent"; value: LootSpawnEvent }
     | { $case: "serverItemPickedUp"; value: ServerItemPickedUp }
+    | //
+    /** Canal y recarga de una habilidad común (Segundo aliento) o del bloqueo de pociones (K6). Rango propio de tags desde 1000. */
+    { $case: "abilityState"; value: AbilityState }
     | undefined;
+}
+
+/**
+ * Estado de una habilidad para el que la usa (K6). id: 'aliento' (Segundo aliento) o 'pocion' (bloqueo compartido de pociones).
+ * channeling: está canalizando; channel_ms = duración total del canal y remaining_ms lo que falta.
+ * cooldown_ms = cuánto falta para poder usarla de nuevo y cooldown_total_ms la recarga completa (para dibujar el reloj).
+ * reason: por qué se cortó o se rechazó ('' si no hay nada que avisar).
+ */
+export interface AbilityState {
+  id: string;
+  channeling: boolean;
+  channelMs: number;
+  remainingMs: number;
+  cooldownMs: number;
+  cooldownTotalMs: number;
+  reason: string;
 }
 
 /** Botín que cae al suelo al morir un mob (server-autoritativo). Lo reciben los jugadores en rango de visión. */
@@ -7041,6 +7060,9 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "serverItemPickedUp":
         ServerItemPickedUp.encode(message.payload.value, writer.uint32(7210).fork()).join();
         break;
+      case "abilityState":
+        AbilityState.encode(message.payload.value, writer.uint32(8002).fork()).join();
+        break;
     }
     return writer;
   },
@@ -7908,6 +7930,14 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             };
             continue;
           }
+          case 1000: {
+            if (tag !== 8002) {
+              break;
+            }
+
+            message.payload = { $case: "abilityState", value: AbilityState.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -8586,7 +8616,140 @@ export const ServerMessage: MessageFns<ServerMessage> = {
         }
         break;
       }
+      case "abilityState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "abilityState", value: AbilityState.fromPartial(object.payload.value) };
+        }
+        break;
+      }
     }
+    return message;
+  },
+};
+
+function createBaseAbilityState(): AbilityState {
+  return { id: "", channeling: false, channelMs: 0, remainingMs: 0, cooldownMs: 0, cooldownTotalMs: 0, reason: "" };
+}
+
+export const AbilityState: MessageFns<AbilityState> = {
+  encode(message: AbilityState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    if (message.channeling !== false) {
+      writer.uint32(16).bool(message.channeling);
+    }
+    if (message.channelMs !== 0) {
+      writer.uint32(24).int32(message.channelMs);
+    }
+    if (message.remainingMs !== 0) {
+      writer.uint32(32).int32(message.remainingMs);
+    }
+    if (message.cooldownMs !== 0) {
+      writer.uint32(40).int32(message.cooldownMs);
+    }
+    if (message.cooldownTotalMs !== 0) {
+      writer.uint32(48).int32(message.cooldownTotalMs);
+    }
+    if (message.reason !== "") {
+      writer.uint32(58).string(message.reason);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AbilityState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseAbilityState();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.id = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.channeling = reader.bool();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.channelMs = reader.int32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.remainingMs = reader.int32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.cooldownMs = reader.int32();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.cooldownTotalMs = reader.int32();
+            continue;
+          }
+          case 7: {
+            if (tag !== 58) {
+              break;
+            }
+
+            message.reason = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<AbilityState>, I>>(base?: I): AbilityState {
+    return AbilityState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AbilityState>, I>>(object: I): AbilityState {
+    const message = createBaseAbilityState();
+    message.id = object.id ?? "";
+    message.channeling = object.channeling ?? false;
+    message.channelMs = object.channelMs ?? 0;
+    message.remainingMs = object.remainingMs ?? 0;
+    message.cooldownMs = object.cooldownMs ?? 0;
+    message.cooldownTotalMs = object.cooldownTotalMs ?? 0;
+    message.reason = object.reason ?? "";
     return message;
   },
 };
