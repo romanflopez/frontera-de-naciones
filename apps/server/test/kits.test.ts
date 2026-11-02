@@ -117,7 +117,7 @@ test('K2: las habilidades que se fueron ya no existen en el server ni en los kit
         assert.equal(PVP_SPELLS[id], undefined, `${id} sigue en PVP_SPELLS`);
         for (const kit of Object.values(CLASS_KITS)) assert.equal(kit[id], undefined, `${id} sigue en un kit`);
     }
-    assert.deepEqual(Object.keys(AOE_MAX_TARGETS).sort(), ['giro', 'lluvia']);
+    assert.deepEqual(Object.keys(AOE_MAX_TARGETS).sort(), ['aura', 'giro', 'lluvia', 'nova']);
 });
 
 test('K2: tiempos de casteo y forma de cada hechizo como en Valdrys', () => {
@@ -147,4 +147,24 @@ test('K2: la Carga sagrada aturde al llegar (y no frena)', () => {
     pkt(w, pala.sid, 'skillRequest', { skill: 'carga', targetId: mago.p.playerId, mobId: 0 });
     assert.ok(mago.p.hp < mago.p.combat.maxHp || cases(pala.log, 'pvpHit').length > 0, 'la carga pegó');
     assert.ok(mago.p.isParalyzed(Date.now()), 'quedó aturdido');
+});
+
+// ---------- K3: habilidades de área del mago y del paladín, por el mundo ----------
+test('K3: Nova de escarcha congela y daña a un enemigo pegado; antes del nivel 5 no sale', () => {
+    const { w, mago, pala } = setup();
+    pala.p.setPosition(mago.p.posX + 1, mago.p.posY);
+    pkt(w, mago.sid, 'skillRequest', { skill: 'nova', targetId: 0n, mobId: 0 });
+    assert.equal(pala.p.hp, pala.p.combat.maxHp, 'a nivel 1 no hay Nova');
+    setLevel(mago.p, 5);
+    pkt(w, mago.sid, 'skillRequest', { skill: 'nova', targetId: 0n, mobId: 0 });
+    assert.ok(pala.p.hp < pala.p.combat.maxHp, 'pegó');
+    assert.ok(pala.p.isParalyzed(Date.now()), 'congelado');
+});
+
+test('K3: Mandato y Aura sagrada son del paladín y piden nivel 7 y 12', () => {
+    assert.deepEqual(checkSkill('guerrero', 6, 'mandato'), { ok: false, reason: 'nivel', need: 7 });
+    assert.deepEqual(checkSkill('guerrero', 11, 'aura'), { ok: false, reason: 'nivel', need: 12 });
+    assert.equal(canUseSkill('mago', 40, 'mandato'), false);
+    assert.equal(canUseSkill('guerrero', 1, 'juicio'), true);
+    assert.equal(canUseSkill('mago', 7, 'ignicion'), true);
 });

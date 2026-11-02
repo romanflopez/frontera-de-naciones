@@ -9,6 +9,22 @@ export interface PvpSpell {
     dmg?: [number, number]; lvlK?: number; stat?: Stat;
     /** Multiplicador sobre el "Daño" base de la clase, como en Valdrys (1× = Saeta / Golpe). Si está, reemplaza a dmg/lvlK. */
     k?: number;
+    /** Fuerza que se castee (true) o que salga al instante (false); si no está, se deduce del tipo (los mágicos se castean). */
+    cast?: boolean;
+    /** Multiplicador de amenaza sobre el daño (×3 Juicio, ×5 Escudo vengador). Por defecto 1. */
+    threat?: number;
+    /** Frena (mitad de velocidad) este tiempo (s). */
+    slow?: number;
+    /** Deja una quemadura: ¼ del Daño base dos veces por segundo durante 3 s (una por objetivo; la nueva reemplaza a la vieja). */
+    burn?: boolean;
+    /** Multiplicador contra un objetivo congelado, enraizado o aturdido (Esquirla 2×, Juicio y Escudo 1,5×). */
+    vsCtrl?: number;
+    /** Multiplicador contra un objetivo que se está quemando (Bola de fuego 1,4×). */
+    vsBurn?: number;
+    /** El que lanza se cura esta fracción del daño que hizo (Juicio 50 %). */
+    lifesteal?: number;
+    /** Provoca: el monstruo te ataca a vos este tiempo (s). No afecta a jugadores. */
+    taunt?: number;
     /** Paralización (s) sobre el objetivo; solo se aplica si el cliente la pide (último tick) y no más seguido que `cd`. */
     secs?: number;
     /** Costo de maná (igual al del cliente); se cobra una vez por ráfaga. */
@@ -27,7 +43,7 @@ export const WALK_MS = 333, RUN_MS = 200, MOVE_CAP_MS = 200;
 export const CAST_FAST_MS = 750, CAST_NORMAL_MS = 1000, CAST_HEAVY_MS = 1500, CAST_TELEGRAPH_MS = 2400;
 /** true si el hechizo es un cast (no golpe cuerpo a cuerpo): esos no se pueden lanzar corriendo. */
 /** Cast time de cada hechizo (ms); los que no figuran usan CAST_FAST_MS. Lo decide el server: el cliente no lo puede cambiar. */
-export const CAST_MS: Record<string, number> = { proyectil: CAST_FAST_MS, paralisis: CAST_NORMAL_MS, bola: CAST_HEAVY_MS, lluvia: CAST_TELEGRAPH_MS };
+export const CAST_MS: Record<string, number> = { proyectil: CAST_FAST_MS, esquirla: CAST_NORMAL_MS, paralisis: CAST_NORMAL_MS, bola: CAST_HEAVY_MS, lluvia: CAST_TELEGRAPH_MS, juicio: CAST_NORMAL_MS };
 export const castMsOf = (id: string): number => CAST_MS[id] ?? CAST_FAST_MS;
 /** Margen de red al validar que el cast terminó (ms). */
 export const CAST_SLACK_MS = 150;
@@ -35,31 +51,46 @@ export const CAST_SLACK_MS = 150;
 export const CAST_READY_MS = 10000;
 /** Ventana tras el primer golpe para los demás objetivos y ticks del MISMO cast (áreas y canalizados). */
 export const CAST_MULTI_HIT_MS = 3000;
-export const isCast = (id: string): boolean => { const sp = PVP_SPELLS[id] ?? SKILLS[id]; return !!sp && !sp.melee && sp.stat !== 'melee' && sp.stat !== 'wdmg' && id !== 'blink'; };
+export const isCast = (id: string): boolean => { const sp = PVP_SPELLS[id] ?? SKILLS[id]; if (!sp) return false; if (sp.cast !== undefined) return sp.cast; return !sp.melee && sp.stat !== 'melee' && sp.stat !== 'wdmg' && id !== 'blink'; };
 export const PVP_SPELLS: Record<string, PvpSpell> = {
     ataque: { mp: 0, dmg: [0, 0], lvlK: 1, stat: 'melee', range: 2.6, cd: 0.3, melee: true },
     // Mago (kits de Valdrys, ver el doc del proyecto kits-de-clase.md). Daño = múltiplo del Daño base mágico.
-    proyectil: { mp: 14, dmg: [14, 21], k: 1, stat: 'mag', range: 15, cd: 0.35 },                     // Saeta ígnea: cast 0,75 s
-    paralisis: { mp: 36, dmg: [14, 21], k: 0.2, stat: 'mag', secs: 5, range: 15, cd: 6 },             // Cadenas de hielo: cast 1 s, congela 5 s
-    bola: { mp: 72, kind: 'eruption', dmg: [14, 21], k: 3, stat: 'mag', range: 15, cd: 10 },          // Bola de fuego: cast 1,5 s, un objetivo
-    lluvia: { mp: 90, kind: 'cataclysm', dmg: [14, 21], k: 1.2, stat: 'mag', range: 15, cd: 18, aoe: 4.5 }, // Infierno: cast 2,4 s, área
+    proyectil: { mp: 14, dmg: [14, 21], k: 1, stat: 'mag', range: 15, cd: 0.35 },                                     // Saeta ígnea: cast 0,75 s
+    esquirla: { mp: 24, dmg: [14, 21], k: 1.2, stat: 'mag', range: 15, cd: 0.7, slow: 3, vsCtrl: 2 },                   // Esquirla de hielo: cast 1 s, frena 3 s
+    paralisis: { mp: 36, dmg: [14, 21], k: 0.2, stat: 'mag', secs: 5, range: 15, cd: 6 },                             // Cadenas de hielo: cast 1 s, congela 5 s
+    ignicion: { mp: 30, dmg: [14, 21], k: 0.5, stat: 'mag', range: 15, cd: 5, cast: false, burn: true },                // Ignición: instantánea + quemadura
+    bola: { mp: 72, kind: 'eruption', dmg: [14, 21], k: 3, stat: 'mag', range: 15, cd: 10, burn: true, vsBurn: 1.4 },  // Bola de fuego: cast 1,5 s, un objetivo
+    lluvia: { mp: 90, kind: 'cataclysm', dmg: [14, 21], k: 1.2, stat: 'mag', range: 15, cd: 18, aoe: 4.5, burn: true }, // Infierno: cast 2,4 s, área
     // Paladín. Daño = múltiplo del Daño base físico (arma).
-    golpe: { mp: 10, dmg: [14, 20], lvlK: 2, stat: 'wdmg', range: 2.8, cd: 0.9, melee: true },        // Golpe: cuerpo a cuerpo, sin cast
-    aturdir: { mp: 30, dmg: [14, 20], k: 0.8, stat: 'wdmg', secs: 3, range: 8, cd: 11 },              // Martillo de justicia: a distancia, aturde 3 s
+    golpe: { mp: 10, dmg: [14, 20], lvlK: 2, stat: 'wdmg', range: 2.8, cd: 0.9, melee: true },                        // Golpe: cuerpo a cuerpo, sin cast
+    juicio: { mp: 15, dmg: [14, 20], k: 1.5, stat: 'wdmg', range: 4, cd: 1.4, cast: true, lifesteal: 0.5, vsCtrl: 1.5, threat: 3 }, // Juicio: cast 1 s
+    escudo: { mp: 36, dmg: [14, 20], k: 2.3, stat: 'wdmg', secs: 3, range: 10, cd: 9, cast: false, vsCtrl: 1.5, threat: 5 },    // Escudo vengador: aturde 3 s
+    aturdir: { mp: 30, dmg: [14, 20], k: 0.8, stat: 'wdmg', secs: 3, range: 8, cd: 11, taunt: 3 },                     // Martillo de justicia: aturde y provoca 3 s
 };
 /**
  * Habilidades de clase (las valida y cobra el server): Mago = blink; Paladin (id interno 'guerrero', persistido) = carga, giro, grito.
  * Van aparte de PVP_SPELLS a propósito: no se pueden pedir por pvpHitRequest para pegar sin moverse.
  */
-export interface ClassSkill extends PvpSpell { cls: 'mago' | 'guerrero'; /** ralentización (s) que aplica */ slow?: number; /** aturdimiento (s) al llegar */ stun?: number; /** barridos seguidos (Barrido: 2, a 0,25 s) */ sweeps?: number }
+export interface ClassSkill extends PvpSpell { cls: 'mago' | 'guerrero'; /** aturdimiento (s) al llegar */ stun?: number; /** congelado (s) a los que alcanza (Nova) */ freeze?: number; /** barridos seguidos (Barrido: 2, a 0,25 s) */ sweeps?: number; /** pulsos de un aura (Aura sagrada: 20, uno cada `every` s) */ pulses?: number }
 export const SKILLS: Record<string, ClassSkill> = {
-    blink: { cls: 'mago', mp: 0, range: 7.25, cd: 12 },                                                   // Parpadeo: sin maná (Valdrys)
-    carga: { cls: 'guerrero', mp: 60, dmg: [14, 20], k: 0.6, stat: 'wdmg', range: 15, cd: 18, melee: true, stun: 1 }, // Carga sagrada: aturde 1 s al llegar
-    giro: { cls: 'guerrero', mp: 36, dmg: [14, 20], k: 0.75, stat: 'wdmg', range: 0, cd: 8, melee: true, aoe: 2, sweeps: 2 }, // Barrido: 2 × 0,75
-    grito: { cls: 'guerrero', mp: 20, range: 0, cd: 25 },                                                  // pasa a Bendición de poder en K8
+    blink: { cls: 'mago', mp: 0, range: 7.25, cd: 12 },                                                                  // Parpadeo: sin maná (Valdrys)
+    nova: { cls: 'mago', mp: 60, dmg: [14, 21], k: 0.8, stat: 'mag', range: 0, cd: 8, aoe: 3, freeze: 2, cast: false }, // Nova de escarcha: congela 2 s alrededor
+    carga: { cls: 'guerrero', mp: 60, dmg: [14, 20], k: 0.6, stat: 'wdmg', range: 15, cd: 18, melee: true, stun: 1, threat: 3 }, // Carga sagrada: aturde 1 s al llegar
+    giro: { cls: 'guerrero', mp: 36, dmg: [14, 20], k: 0.75, stat: 'wdmg', range: 0, cd: 8, melee: true, aoe: 2, sweeps: 2, threat: 3 }, // Barrido: 2 × 0,75
+    mandato: { cls: 'guerrero', mp: 42, range: 0, cd: 6, aoe: 6, taunt: 7 },                                              // Mandato: provoca a los monstruos cercanos 7 s
+    aura: { cls: 'guerrero', mp: 48, dmg: [14, 20], k: 0.25, stat: 'wdmg', range: 0, cd: 15, melee: true, aoe: 3, pulses: 20, every: 0.5, threat: 3 }, // Aura sagrada: 10 s de pulsos
+    grito: { cls: 'guerrero', mp: 20, range: 0, cd: 25 },                                                                  // pasa a Bendición de poder en K8
 };
 /** Golpes de área contra mobs (paso 1.4): máximo de objetivos por lanzamiento (los más cercanos al centro) y caída de daño por cada objetivo extra. */
-export const AOE_MAX_TARGETS: Record<string, number> = { lluvia: 5, giro: 4 };
+export const AOE_MAX_TARGETS: Record<string, number> = { lluvia: 5, giro: 4, nova: 5, aura: 5 };
+/** Quemadura: pulsos, cada cuánto (s) y fracción del Daño base por pulso (6 × ¼ = 1,5×). */
+export const BURN_TICKS = 6, BURN_EVERY = 0.5, BURN_K = 0.25;
+/** Aura sagrada: el paladín se cura esta fracción del daño de cada pulso (Valdrys no da el número). */
+export const AURA_HEAL_FRAC = 0.25;
+/** Amenaza que genera una habilidad por punto de daño. */
+export const threatOf = (id: string): number => (PVP_SPELLS[id] ?? SKILLS[id])?.threat ?? 1;
+/** Daño de un pulso de quemadura: ¼ del Daño base mágico (1×) del que la puso. */
+export const burnTickDmg = (s: CombatStats): number => Math.max(1, Math.round(rollSpellDamage('proyectil', s, false) * BURN_K));
 export const AOE_FALLOFF = 0.12, AOE_MIN_MULT = 0.5, AOE_GROUP_MS = 250;
 /** Multiplicador de daño del objetivo número `index` (0 = el más cercano al centro): 100 %, 88 %, 76 %, 64 %, 52 %... mínimo 50 %. */
 export const aoeMult = (index: number): number => Math.max(AOE_MIN_MULT, 1 - AOE_FALLOFF * Math.max(0, index));

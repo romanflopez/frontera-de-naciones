@@ -202,8 +202,8 @@ function totals() {
 // ---------- clases ----------
 interface ClassDef { id: string; name: string; hidden?: boolean; desc: string; head: string; armor?: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; spells: string[] }
 const CLASSES: ClassDef[] = [
-    { id: 'guerrero', name: 'Paladin', desc: 'Tanque: aguanta, aturde y pega cuerpo a cuerpo.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'giro', 'aturdir', 'furia', 'remover', 'carga', 'grito'] },
-    { id: 'mago', name: 'Mago', desc: 'Frágil: frío para frenar, fuego para rematar.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'paralisis', 'bola', 'lluvia', 'furia', 'remover', 'invisibilidad', 'detectar', 'blink'] },
+    { id: 'guerrero', name: 'Paladin', desc: 'Tanque: aguanta, aturde y pega cuerpo a cuerpo.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'juicio', 'giro', 'escudo', 'mandato', 'aturdir', 'aura', 'carga', 'furia', 'remover', 'grito'] },
+    { id: 'mago', name: 'Mago', desc: 'Frágil: frío para frenar, fuego para rematar.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'esquirla', 'paralisis', 'nova', 'ignicion', 'bola', 'lluvia', 'furia', 'remover', 'invisibilidad', 'detectar', 'blink'] },
 ];
 let CLS: ClassDef = CLASSES[0];
 const maxHp = () => CLS.hp + (P.lvl - 1) * CLS.hpL + totals().hp;
@@ -427,6 +427,9 @@ function onSkillEffect(v: { casterId: bigint; skill: string; fromX: number; from
         case 'blink': efxLocal('spread', fx0, fy0); fx.push({ k: 'ring', x: fx0, y: fy0, t: 0, c: '#b9a3ff' }); efxLocal('sphere', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#b9a3ff' }); fx.push({ k: 'burst', x: tx, y: ty, t: 0, c: '#b9a3ff' }); break;
         case 'carga': efxLocal('crosswind', fx0, fy0, 6); fx.push({ k: 'burst', x: fx0, y: fy0, t: 0, c: '#ff9a4a' }); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 1.2, c: '#ff9a4a' }); if (!reduce && v.casterId === myId) shake = Math.max(shake, 0.2); break;
         case 'giro': efxLocal('cyclone', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 1.9, c: '#ffd0a0' }); break;
+        case 'nova': efxLocal('spread', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 3, c: '#bfe8ff' }); break;
+        case 'mandato': fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ff7a5a' }); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 6, c: '#ff7a5a' }); break;
+        case 'aura': efxLocal('sphere', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffe9a0' }); break;
         case 'grito': efxLocal('godsbreath', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#c78bff' }); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffe27a' }); break;
     }
     if (v.skill === 'blink' && v.casterId === myId) { const pt = iso(P.x, P.y); if (Math.hypot(pt.x - cam.x, pt.y - cam.y) > 500) { cam.x = pt.x; cam.y = pt.y; } }
@@ -571,6 +574,20 @@ const skillSend = (skill: string, targetId = 0n, mobId = 0) => net.send({ $case:
 const LIB: Record<string, SpellDef> = {
     proyectil: { name: 'Saeta ígnea', mp: 14, cd: 1.5, col: '#ff9a4a', range: 15, castT: 0.75, target: true, // Firebolt (Valdrys)
         cast(m) { if (!isMob(m)) return false; const t = totals(), dmg = rint(12, 18) + P.lvl * 2 + t.mag; projs.push({ x: P.x, y: P.y, m, spd: 11, dmg, col: '#b9a3ff' }); } },
+    esquirla: { name: 'Esquirla de hielo', mp: 24, cd: 0.8, col: '#9fdcff', range: 15, castT: 1, target: true, // Ice Shard (Valdrys): frena 3 s, 2× sobre congelado
+        cast(m) { if (!isMob(m)) return false; projs.push({ x: P.x, y: P.y, m, spd: 12, dmg: 0, col: '#9fdcff', sid: 'esquirla' }); } },
+    ignicion: { name: 'Ignición', mp: 30, cd: 5, col: '#ff6a2a', range: 15, target: true, instant: true, // Ignite (Valdrys): instantánea + quemadura 3 s
+        cast(m) { if (!isMob(m)) return false; efx('flamme', m.x, m.y, 8); damageMob(m, 'ignicion'); } },
+    nova: { name: 'Nova de escarcha', mp: 60, cd: 8, col: '#bfe8ff', range: 0, target: false, aoe: 3, instant: true, // Ice Blast (Valdrys): congela 2 s alrededor
+        cast() { skillSend('nova'); } },
+    juicio: { name: 'Juicio', mp: 15, cd: 1.5, col: '#ffe27a', range: 4, castT: 1, target: true, // Smite (Valdrys): se cura la mitad del daño
+        cast(m) { if (!isMob(m)) return false; efx('crosswind', m.x, m.y, 8); damageMob(m, 'juicio'); } },
+    escudo: { name: 'Escudo vengador', mp: 36, cd: 9, col: '#ffd24a', range: 10, target: true, ctrl: true, instant: true, // Avenger's Shield (Valdrys): aturde 3 s
+        cast(m) { return control(m, 'escudo', 3, 'Aturdiste', 'El aturdimiento', 'turbulence'); } },
+    mandato: { name: 'Mandato', mp: 42, cd: 6, col: '#ff7a5a', range: 0, target: false, instant: true, // Righteous Mandate (Valdrys): provoca 7 s
+        cast() { skillSend('mandato'); } },
+    aura: { name: 'Aura sagrada', mp: 48, cd: 15, col: '#ffe9a0', range: 0, target: false, instant: true, // Sacred Aura (Valdrys): 10 s de pulsos
+        cast() { skillSend('aura'); } },
     paralisis: { name: 'Cadenas de hielo', mp: 36, cd: 6, col: '#7fd6ff', range: 15, castT: 1, target: true, ctrl: true, // Chains of Ice (Valdrys)
         cast(m) { return control(m, 'paralisis', 5, 'Paralizaste', 'La parálisis'); } },
     aturdir: { name: 'Martillo de justicia', mp: 30, cd: 11, col: '#ffd24a', range: 8, target: true, ctrl: true, instant: true, // Hammer of Justice (Valdrys)
@@ -772,11 +789,11 @@ function release(target: Mob | { x: number; y: number; pvp?: Other }) {
     return true;
 }
 /** Hechizos de daño o control que el server cobra al pegar (a mobs o a jugadores): el cliente no reporta su maná gastado. */
-const SERVER_MP_SPELLS = new Set(['proyectil', 'paralisis', 'aturdir', 'golpe', 'bola', 'lluvia']);
+const SERVER_MP_SPELLS = new Set(['proyectil', 'esquirla', 'paralisis', 'ignicion', 'aturdir', 'golpe', 'juicio', 'escudo', 'bola', 'lluvia']);
 function fire(i: number, m: Target | null) {
     const s = SPELLS[i];
     if (m && 'pvp' in m && !s.aoe) { if (!pvpCast(s.id, (m as { pvp: Other }).pvp)) return; } else if (s.cast(m) === false) return;
-    const srvMp = SERVER_MP_SPELLS.has(s.id ?? '') || ['furia', 'invisibilidad', 'detectar', 'remover', 'blink', 'carga', 'giro', 'grito'].includes(s.id ?? '') || (m && 'pvp' in m && !s.aoe)
+    const srvMp = SERVER_MP_SPELLS.has(s.id ?? '') || ['furia', 'invisibilidad', 'detectar', 'remover', 'blink', 'carga', 'giro', 'grito', 'nova', 'mandato', 'aura'].includes(s.id ?? '') || (m && 'pvp' in m && !s.aoe)
         || (!!s.aoe && enemiesNear(m ? m.x : P.x, m ? m.y : P.y, s.aoe + 0.5).length > 0); // si pega a un jugador, el server cobra
     spendMp(s.mp, srvMp); syncHp(); cds[i] = now() + s.cd;
     P.one = { anim: 'cast', t: now() - 0.3, until: now() + 0.12 };
@@ -819,6 +836,10 @@ function pvpCast(id: string | undefined, o: Other): boolean {
         case 'proyectil': later(dist(P, o) / 11, () => { if (isEnemy(o)) pvpDamage(o, 'proyectil', 'splash'); }); return true;
         case 'paralisis': pvpDamage(o, 'paralisis', 'stop', 3); return true;
         case 'aturdir': pvpDamage(o, 'aturdir', 'turbulence', 3); return true;
+        case 'esquirla': later(dist(P, o) / 12, () => { if (isEnemy(o)) pvpDamage(o, 'esquirla', 'blizz'); }); return true;
+        case 'ignicion': pvpDamage(o, 'ignicion', 'flamme'); return true;
+        case 'juicio': pvpDamage(o, 'juicio', 'crosswind'); return true;
+        case 'escudo': pvpDamage(o, 'escudo', 'turbulence', 3); return true;
         case 'bola': later(dist(P, o) / 9, () => { if (isEnemy(o)) pvpDamage(o, 'bola', 'eruption'); }); return true;
         case 'golpe': pvpDamage(o, 'golpe', 'crosswind'); return true;
         case 'carga': skillSend('carga', o.id); return true;

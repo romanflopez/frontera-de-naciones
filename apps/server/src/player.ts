@@ -56,6 +56,9 @@ export class Player {
     lastPvpMs = 0;
     /** Último aviso de "habilidad bloqueada" (para no inundar el chat). */
     lastKitDeniedMs = 0;
+    /** Quemadura (K3): hasta cuándo dura y número de la última (la nueva reemplaza a la vieja). */
+    burnUntil = 0;
+    burnSeq = 0;
     /** Stats de combate sacados del último guardado validado, y límites del PvP. */
     combat: CombatStats = { ...DEFAULT_STATS };
     /** Progreso del último guardado validado, para decidir si un portal deja pasar (misiones entregadas, nivel, llaves, portales abiertos). */

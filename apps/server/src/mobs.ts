@@ -6,7 +6,7 @@ import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import { MOB_AGGRO, MOB_ASSIST, MOB_TYPES, mobDef, zoneRespawnSecs, type MobDef, type MobType, type WorldMap, type Zone } from '@fdn/world';
 import * as M from './messages.ts';
 import type { Player } from './player.ts';
-import { PVP_SPELLS, aoeMult, rollSpellDamage, spellDmgKind } from './systems/pvpCombat.ts';
+import { BURN_EVERY, BURN_TICKS, PVP_SPELLS, aoeMult, burnTickDmg, rollSpellDamage, spellDmgKind, threatOf } from './systems/pvpCombat.ts';
 import { ANTI_DAMAGE_MULT, CRIT_MULT, EXPLOSION_MULT, EXPLOSION_RADIUS, FLEE_HP_FRAC, FLEE_SECS, FLEE_SPEED_MULT, MUTANT_CHANCE, POISON_SECS, SKILL_CHANCE, SKILL_TRAITS, TOXIC_FRACTION, TOXIC_TICKS, TRAIT_ANTI_MAGIC, TRAIT_ANTI_PHYS, TRAIT_EXPLOSIVE, TRAIT_MUTANT, TRAIT_TOXIC, TRAIT_WILD, fleeChance, traitDmgMult, traitHpMult } from '@fdn/world';
 
 type Pkt<K extends string> = Extract<NonNullable<ClientMessage['payload']>, { $case: K }>['value'];
@@ -41,6 +41,10 @@ interface SimMob {
     traits: number; fled: boolean; fleeUntil: number;
     /** Invocado con /gm mob: no reaparece al morir. */
     gm?: boolean;
+    /** Amenaza por jugador (K4): el mob persigue al que más amenaza le generó, salvo que esté provocado. */
+    threat: Map<bigint, number>; tauntBy: bigint | null; tauntUntil: number;
+    /** Quemadura: hasta cuándo, próximo pulso, daño por pulso y quién la puso. */
+    burn: number; burnTick: number; burnDmg: number; burnBy: bigint | null;
 }
 
 interface Budget { tokens: number; t: number; dead: boolean; lvl: number }
@@ -105,6 +109,7 @@ export class MobSim {
                 id, type: z.type, def: d, typeIdx: MOB_TYPES.indexOf(z.type), zone: z, zoneIdx: zi, x: x + 0.5, y: y + 0.5, hp: hpMax, hpMax,
                 state: 'idle', target: null, lastAttacker: null, wx: x + 0.5, wy: y + 0.5, wait: Math.random() * 2, nextAtk: 0, nextSp: T + 4, busy: 0,
                 par: 0, imm: 0, slow: 0, poison: 0, poisonTick: 0, moving: false, dead: false, traits, fled: false, fleeUntil: 0,
+                threat: new Map(), tauntBy: null, tauntUntil: 0, burn: 0, burnTick: 0, burnDmg: 0, burnBy: null,
             });
         }
     }
@@ -136,6 +141,7 @@ export class MobSim {
                 id, type, def: d, typeIdx: MOB_TYPES.indexOf(type), zone, zoneIdx, x: x + 0.5, y: y + 0.5, hp: d.hp, hpMax: d.hp,
                 state: 'idle', target: null, lastAttacker: null, wx: x + 0.5, wy: y + 0.5, wait: 0, nextAtk: 0, nextSp: T + 4, busy: 0,
                 par: 0, imm: 0, slow: 0, poison: 0, poisonTick: 0, moving: false, dead: false, gm: true, traits: 0, fled: false, fleeUntil: 0,
+                threat: new Map(), tauntBy: null, tauntUntil: 0, burn: 0, burnTick: 0, burnDmg: 0, burnBy: null,
             });
             done++; break;
         }
@@ -172,6 +178,33 @@ export class MobSim {
         for (const o of this.mobs.values()) if (o !== m && o.state === 'idle' && o.zone === m.zone && Math.hypot(o.x - m.x, o.y - m.y) < assist) { o.state = 'chase'; o.target = m.target; o.nextAtk = T + 0.4 + Math.random() * 0.6; }
     }
 
+    // ---------- amenaza y provocación (K4) ----------
+    private addThreat(m: SimMob, p: Player, amount: number) { if (amount > 0) m.threat.set(p.playerId, (m.threat.get(p.playerId) ?? 0) + amount); }
+    /** Provoca a `m`: durante `secs` ataca a `p` aunque otro tenga más amenaza. */
+    private taunt(m: SimMob, p: Player, secs: number) {
+        const T = this.now();
+        m.tauntBy = p.playerId; m.tauntUntil = T + secs; m.target = p.playerId;
+        this.addThreat(m, p, 1); // queda en la tabla aunque no le haya pegado
+        if (m.state === 'idle' || m.state === 'return') { m.state = 'idle'; this.aggro(m, p); }
+    }
+    /** Mandato: provoca a todos los monstruos vivos a `r` celdas de (x, y). Devuelve cuántos. */
+    tauntNear(p: Player, x: number, y: number, r: number, secs: number): number {
+        let n = 0;
+        for (const m of this.mobs.values()) if (!m.dead && m.state !== 'flee' && Math.hypot(m.x - x, m.y - y) <= r) { this.taunt(m, p, secs); n++; }
+        return n;
+    }
+    /** A quién persigue: el que lo provocó (si sigue elegible) o el de más amenaza; si no hay, el de antes. */
+    private pickTarget(m: SimMob, T: number): Player | undefined {
+        if (m.tauntBy != null && m.tauntUntil > T) { const t = this.host.playerById(m.tauntBy); if (this.eligible(t)) return t; }
+        let best: Player | undefined, bt = -1;
+        for (const [id, v] of m.threat) { const p = this.host.playerById(id); if (!this.eligible(p)) continue; if (v > bt) { bt = v; best = p; } }
+        return best ?? (m.target != null ? this.host.playerById(m.target) : undefined);
+    }
+    private clearThreat(m: SimMob) { m.threat.clear(); m.tauntBy = null; m.tauntUntil = 0; }
+    /** Amenaza que lleva `p` sobre el mob `id` (para tests y depuración). */
+    threatOn(id: number, p: Player): number { return this.mobs.get(id)?.threat.get(p.playerId) ?? 0; }
+    targetOf(id: number): bigint | null { return this.mobs.get(id)?.target ?? null; }
+
     private nearestPlayer(m: SimMob, maxD: number): Player | null {
         let best: Player | null = null, bd = maxD;
         for (const p of this.host.players()) { if (!this.eligible(p)) continue; const d = Math.hypot(p.posX + 0.5 - m.x, p.posY + 0.5 - m.y); if (d <= bd) { bd = d; best = p; } }
@@ -189,7 +222,7 @@ export class MobSim {
         this.awake = 0;
         for (const m of [...this.mobs.values()]) {
             if (m.dead) continue;
-            if (m.state === 'idle' && m.poison <= T) {
+            if (m.state === 'idle' && m.poison <= T && m.burn <= T) {
                 let near = false;
                 for (let i = 0; i < pxs.length; i++) if (Math.abs(pxs[i] - m.x) < SLEEP_DIST && Math.abs(pys[i] - m.y) < SLEEP_DIST) { near = true; break; }
                 if (!near) { m.moving = false; continue; }
@@ -202,6 +235,14 @@ export class MobSim {
                 this.broadcastNear(m, M.mobDamaged(m.id, m.lastAttacker ?? 0n, 3, false, Math.max(0, m.hp)));
                 this.broadcastNear(m, M.combatText(M.mid(m.id), m.lastAttacker != null ? M.pid(m.lastAttacker) : '', 3, false, ''));
                 if (m.hp <= 0) { this.kill(m, killer ?? null); continue; }
+            }
+            if (m.burn > T && T >= m.burnTick) { // quemadura: ¼ del Daño base dos veces por segundo
+                m.burnTick = T + BURN_EVERY; m.hp -= m.burnDmg;
+                const by = m.burnBy != null ? this.host.playerById(m.burnBy) : undefined;
+                this.broadcastNear(m, M.mobDamaged(m.id, m.burnBy ?? 0n, m.burnDmg, false, Math.max(0, m.hp)));
+                this.broadcastNear(m, M.combatText(M.mid(m.id), m.burnBy != null ? M.pid(m.burnBy) : '', m.burnDmg, false, 'quemadura'));
+                if (by) this.addThreat(m, by, m.burnDmg);
+                if (m.hp <= 0) { this.kill(m, by ?? null); continue; }
             }
             if (m.par > T) continue;
             const d = m.def, home = { x: m.zone.x + 0.5, y: m.zone.y + 0.5 };
@@ -219,9 +260,10 @@ export class MobSim {
                     }
                 }
             } else if (m.state === 'chase') {
-                let tgt = m.target != null ? this.host.playerById(m.target) : undefined;
-                if (!this.eligible(tgt)) { tgt = this.nearestPlayer(m, 6) ?? undefined; m.target = tgt ? tgt.playerId : null; }
-                if (!tgt || Math.hypot(m.x - home.x, m.y - home.y) > 17) { m.state = 'return'; m.target = null; continue; }
+                let tgt = this.pickTarget(m, T);
+                if (!this.eligible(tgt)) { tgt = this.nearestPlayer(m, 6) ?? undefined; }
+                m.target = tgt ? tgt.playerId : null;
+                if (!tgt || Math.hypot(m.x - home.x, m.y - home.y) > 17) { m.state = 'return'; m.target = null; this.clearThreat(m); continue; }
                 const px = tgt.posX + 0.5, py = tgt.posY + 0.5, dp = Math.hypot(m.x - px, m.y - py);
                 if (T < m.busy) continue; // cargando la habilidad: se queda quieto
                 const sp = d.boss?.special;
@@ -260,7 +302,7 @@ export class MobSim {
                 const fx = from.posX + 0.5, fy = from.posY + 0.5;
                 this.step(m, m.x + (m.x - fx), m.y + (m.y - fy), d.spd * FLEE_SPEED_MULT, dt);
             } else if (m.state === 'return') {
-                if (this.step(m, home.x, home.y, d.spd * 1.3, dt) || Math.hypot(m.x - home.x, m.y - home.y) < 0.5) { m.state = 'idle'; m.hp = m.hpMax; }
+                if (this.step(m, home.x, home.y, d.spd * 1.3, dt) || Math.hypot(m.x - home.x, m.y - home.y) < 0.5) { m.state = 'idle'; m.hp = m.hpMax; this.clearThreat(m); m.burn = 0; }
             }
         }
         this.snapT += dt;
@@ -365,7 +407,7 @@ export class MobSim {
         if (slowSecs > 0) m.slow = T + slowSecs;
         if (stunSecs > 0 && m.imm <= T) { m.par = T + stunSecs; m.imm = T + stunSecs + 8; m.moving = false; } // aturdido (corta la carga de un jefe)
         if (m.traits & TRAIT_ANTI_PHYS) dmg = Math.max(1, Math.round(dmg * ANTI_DAMAGE_MULT)); // las habilidades de guerrero son físicas
-        m.lastAttacker = p.playerId; m.hp -= dmg;
+        m.lastAttacker = p.playerId; m.hp -= dmg; this.addThreat(m, p, dmg * threatOf(skill));
         if (m.par > T && dmg >= m.hpMax * 0.45) m.par = 0;
         this.broadcastNear(m, M.mobDamaged(m.id, p.playerId, dmg, false, Math.max(0, m.hp)));
         this.broadcastNear(m, M.combatText(M.mid(m.id), M.pid(p.playerId), dmg, false, skill));
@@ -407,6 +449,8 @@ export class MobSim {
             const slot = p.pvp.aoeSlot(spell, nowMs); if (slot < 0) return;
             dmg = Math.max(1, Math.round(dmg * aoeMult(slot)));
         }
+        if (dmg > 0 && sp.vsCtrl && m.par > T) dmg = Math.round(dmg * sp.vsCtrl);   // Esquirla, Juicio, Escudo: más contra congelados o aturdidos
+        if (dmg > 0 && sp.vsBurn && m.burn > T) dmg = Math.round(dmg * sp.vsBurn);   // Bola de fuego sobre un quemado
         const phys = spellDmgKind(spell) === 'phys';
         if (dmg > 0 && ((phys && m.traits & TRAIT_ANTI_PHYS) || (!phys && m.traits & TRAIT_ANTI_MAGIC))) dmg = Math.max(1, Math.round(dmg * ANTI_DAMAGE_MULT)); // anti-físico / anti-mágico
         if (dmg > 0 && spell === 'ataque' && Math.random() * 100 < p.combat.crit) { crit = true; dmg = Math.round(dmg * CRIT_MULT); }
@@ -414,6 +458,9 @@ export class MobSim {
         const poisonSecs = dmg > 0 && phys && p.combat.poison > 0 && Math.random() * 100 < p.combat.poison ? POISON_SECS : 0;
         if (dmg <= 0 && parSecs <= 0) return;
         if (parSecs > 0 && m.imm <= T) { m.par = T + parSecs; m.imm = T + parSecs + 8; m.moving = false; }
+        if (dmg > 0 && sp.slow) m.slow = T + sp.slow;                                  // Esquirla: frena
+        if (dmg > 0 && sp.burn) { m.burn = T + BURN_TICKS * BURN_EVERY + 0.05; m.burnTick = T + BURN_EVERY; m.burnDmg = burnTickDmg(p.combat); m.burnBy = p.playerId; } // una sola por mob: la nueva reemplaza
+        if (sp.taunt) this.taunt(m, p, sp.taunt);                                       // Martillo: provoca
         if (poisonSecs > 0) m.poison = T + poisonSecs;
         m.lastAttacker = p.playerId;
         if (dmg > 0) {
@@ -423,6 +470,8 @@ export class MobSim {
             this.broadcastNear(m, M.mobDamaged(m.id, p.playerId, dmg, crit, Math.max(0, m.hp)));
             this.broadcastNear(m, M.combatText(M.mid(m.id), M.pid(p.playerId), dmg, false, spell === 'ataque' ? '' : spell));
             if (phys && p.combat.leech > 0 && dealt > 0) this.host.heal(p, Math.max(1, Math.round((dealt * p.combat.leech) / 100))); // robo de vida: de lo que de verdad quitó
+            if (sp.lifesteal && dealt > 0) this.host.heal(p, Math.max(1, Math.round(dealt * sp.lifesteal)));      // Juicio: se cura la mitad del daño
+            this.addThreat(m, p, dmg * threatOf(spell));
         }
         this.checkFlee(m);
         if (m.state !== 'flee' && (m.state === 'idle' || m.target == null)) this.aggro(m, p);
