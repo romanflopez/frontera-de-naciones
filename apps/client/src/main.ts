@@ -604,7 +604,7 @@ function zone(x: number, y: number, r: number, ticks: number, every: number, dmg
         for (const m of byDistance(mobs, x, y)) if (Math.hypot(m.x - x, m.y - y) <= r && !isSafe(m.x, m.y)) damageMob(m, sid, slow && m.imm <= now() && i === ticks - 1 ? slow : 0);
     });
 }
-function heal(h: number, eff = 'sphere') { P.hp = Math.min(maxHp(), P.hp + h); syncHp(); float(P.x, P.y - 0.2, '+' + h, '#7ee08a'); efx(eff, P.x, P.y); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#7ee08a' }); }
+function heal(h: number, eff = 'sphere') { sfx('heal', 0.6); P.hp = Math.min(maxHp(), P.hp + h); syncHp(); float(P.x, P.y - 0.2, '+' + h, '#7ee08a'); efx(eff, P.x, P.y); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#7ee08a' }); }
 function control(m: Target | null, spell: string, secs: number, verb: string, noun: string, eff = 'stop'): false | void {
     if (!isMob(m)) return false;
     if (m.imm > now()) { log(`${m.name} es inmune al control por unos segundos.`); return false; }
