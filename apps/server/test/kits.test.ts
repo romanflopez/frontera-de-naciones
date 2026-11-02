@@ -54,6 +54,13 @@ test('kits: cada habilidad del server pertenece a por lo menos una clase', () =>
     for (const id of all) assert.ok(inKits.has(id), `${id} no está en ningún kit`);
 });
 
+test('kits: el escape o acercamiento de cada clase sale a la vez, en el nivel 20', () => {
+    assert.equal(checkSkill('guerrero', 20, 'carga').ok, true); assert.equal(checkSkill('guerrero', 19, 'carga').ok, false);
+    assert.equal(checkSkill('mago', 20, 'blink').ok, true); assert.equal(checkSkill('mago', 19, 'blink').ok, false);
+    assert.deepEqual(checkSkill('mago', 29, 'remover'), { ok: false, reason: 'nivel', need: 30 }, 'Purga pasa al 30');
+    assert.deepEqual(checkSkill('guerrero', 29, 'grito'), { ok: false, reason: 'nivel', need: 30 }, 'Bendición de poder pasa al 30');
+});
+
 test('kits: clase y nivel', () => {
     assert.equal(canUseSkill('mago', 1, 'proyectil'), true);
     assert.equal(canUseSkill('guerrero', 40, 'proyectil'), false, 'el paladín no tira saetas');
@@ -63,7 +70,7 @@ test('kits: clase y nivel', () => {
     assert.equal(canUseSkill('guerrero', 19, 'carga'), false);
     assert.equal(canUseSkill('guerrero', 20, 'carga'), true);
     assert.equal(canUseSkill('nadie', 40, 'ataque'), false, 'clase desconocida: nada');
-    assert.equal(skillDeniedText(checkSkill('mago', 1, 'blink')), 'Se desbloquea en el nivel 24.');
+    assert.equal(skillDeniedText(checkSkill('mago', 1, 'blink')), 'Se desbloquea en el nivel 20.');
     assert.equal(skillDeniedText(checkSkill('guerrero', 1, 'blink')), 'Esa habilidad no es de tu clase.');
 });
 
