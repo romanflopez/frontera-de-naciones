@@ -734,6 +734,7 @@ export interface LootRoll {
   attrs: LootAttr[];
 }
 
+/** warcry = Bendición de poder activa (K8; el campo queda por compatibilidad). buffs = bendiciones y auras activas (K8): poder, amparo, intelecto, fortaleza, espiritu, represalia, clarividencia. */
 export interface StatusUpdate {
   playerId: bigint;
   invisible: boolean;
@@ -743,16 +744,19 @@ export interface StatusUpdate {
   slow: boolean;
   blessed: boolean;
   poisoned: boolean;
+  buffs: string[];
 }
 
-/** Mago: Blink a la celda (x, y) (máx. 4 celdas). El server valida y responde con PlayerTeleported + SkillEffect. */
+/** Mago: Blink (máx. 7 celdas) o healer: Paso de luz (máx. 6) a la celda (x, y). El server valida y responde con PlayerTeleported + SkillEffect. */
 export interface BlinkRequest {
   x: number;
   y: number;
+  skill: string;
 }
 
 /**
- * Habilidades de clase: carga, giro, grito, nova, mandato, aura y las del healer (curacion, renovar, bendicion, novasagrada, orbe).
+ * Habilidades de clase: carga, giro, grito, nova, mandato, aura, las del healer (curacion, renovar, bendicion, novasagrada, orbe) y las de K8
+ *  (represalia, escudodivino, amparo, escudomana, clarividencia, intelecto, guardian, esfera, despertar, grupo).
  *  carga necesita target_id (jugador) o mob_id; las curas del healer, target_id del aliado (0 = a sí mismo); renovar a un enemigo, target_id o mob_id.
  */
 export interface SkillRequest {
@@ -792,13 +796,14 @@ export interface PotionRequest {
   kind: number;
 }
 
-/** Mi vida según el server (la autoridad): después de cada golpe, curación o al revivir. */
+/** shield = puntos de escudo que absorben daño antes que la vida (K8). */
 export interface Vitals {
   hp: number;
   maxHp: number;
   dead: boolean;
   mp: number;
   maxMp: number;
+  shield: number;
 }
 
 /** Vida de otro jugador cercano (para su barra). */
@@ -806,6 +811,7 @@ export interface PlayerVitals {
   playerId: bigint;
   hp: number;
   maxHp: number;
+  shield: number;
 }
 
 export interface PvpKill {
@@ -10274,6 +10280,7 @@ function createBaseStatusUpdate(): StatusUpdate {
     slow: false,
     blessed: false,
     poisoned: false,
+    buffs: [],
   };
 }
 
@@ -10305,6 +10312,9 @@ export const StatusUpdate: MessageFns<StatusUpdate> = {
     }
     if (message.poisoned !== false) {
       writer.uint32(64).bool(message.poisoned);
+    }
+    for (const v of message.buffs) {
+      writer.uint32(74).string(v!);
     }
     return writer;
   },
@@ -10386,6 +10396,14 @@ export const StatusUpdate: MessageFns<StatusUpdate> = {
             message.poisoned = reader.bool();
             continue;
           }
+          case 9: {
+            if (tag !== 74) {
+              break;
+            }
+
+            message.buffs.push(reader.string());
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -10411,12 +10429,13 @@ export const StatusUpdate: MessageFns<StatusUpdate> = {
     message.slow = object.slow ?? false;
     message.blessed = object.blessed ?? false;
     message.poisoned = object.poisoned ?? false;
+    message.buffs = object.buffs?.map((e) => e) || [];
     return message;
   },
 };
 
 function createBaseBlinkRequest(): BlinkRequest {
-  return { x: 0, y: 0 };
+  return { x: 0, y: 0, skill: "" };
 }
 
 export const BlinkRequest: MessageFns<BlinkRequest> = {
@@ -10426,6 +10445,9 @@ export const BlinkRequest: MessageFns<BlinkRequest> = {
     }
     if (message.y !== 0) {
       writer.uint32(16).int32(message.y);
+    }
+    if (message.skill !== "") {
+      writer.uint32(26).string(message.skill);
     }
     return writer;
   },
@@ -10459,6 +10481,14 @@ export const BlinkRequest: MessageFns<BlinkRequest> = {
             message.y = reader.int32();
             continue;
           }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.skill = reader.string();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -10478,6 +10508,7 @@ export const BlinkRequest: MessageFns<BlinkRequest> = {
     const message = createBaseBlinkRequest();
     message.x = object.x ?? 0;
     message.y = object.y ?? 0;
+    message.skill = object.skill ?? "";
     return message;
   },
 };
@@ -10884,7 +10915,7 @@ export const PotionRequest: MessageFns<PotionRequest> = {
 };
 
 function createBaseVitals(): Vitals {
-  return { hp: 0, maxHp: 0, dead: false, mp: 0, maxMp: 0 };
+  return { hp: 0, maxHp: 0, dead: false, mp: 0, maxMp: 0, shield: 0 };
 }
 
 export const Vitals: MessageFns<Vitals> = {
@@ -10903,6 +10934,9 @@ export const Vitals: MessageFns<Vitals> = {
     }
     if (message.maxMp !== 0) {
       writer.uint32(40).int32(message.maxMp);
+    }
+    if (message.shield !== 0) {
+      writer.uint32(48).int32(message.shield);
     }
     return writer;
   },
@@ -10960,6 +10994,14 @@ export const Vitals: MessageFns<Vitals> = {
             message.maxMp = reader.int32();
             continue;
           }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.shield = reader.int32();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -10982,12 +11024,13 @@ export const Vitals: MessageFns<Vitals> = {
     message.dead = object.dead ?? false;
     message.mp = object.mp ?? 0;
     message.maxMp = object.maxMp ?? 0;
+    message.shield = object.shield ?? 0;
     return message;
   },
 };
 
 function createBasePlayerVitals(): PlayerVitals {
-  return { playerId: 0n, hp: 0, maxHp: 0 };
+  return { playerId: 0n, hp: 0, maxHp: 0, shield: 0 };
 }
 
 export const PlayerVitals: MessageFns<PlayerVitals> = {
@@ -11003,6 +11046,9 @@ export const PlayerVitals: MessageFns<PlayerVitals> = {
     }
     if (message.maxHp !== 0) {
       writer.uint32(24).int32(message.maxHp);
+    }
+    if (message.shield !== 0) {
+      writer.uint32(32).int32(message.shield);
     }
     return writer;
   },
@@ -11044,6 +11090,14 @@ export const PlayerVitals: MessageFns<PlayerVitals> = {
             message.maxHp = reader.int32();
             continue;
           }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.shield = reader.int32();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -11064,6 +11118,7 @@ export const PlayerVitals: MessageFns<PlayerVitals> = {
     message.playerId = (object.playerId !== undefined && object.playerId !== null) ? BigInt(object.playerId) : 0n;
     message.hp = object.hp ?? 0;
     message.maxHp = object.maxHp ?? 0;
+    message.shield = object.shield ?? 0;
     return message;
   },
 };

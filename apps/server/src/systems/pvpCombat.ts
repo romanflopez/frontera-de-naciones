@@ -3,6 +3,7 @@
  * con las mismas fórmulas del juego, el nivel y el equipo del último guardado validado, la Furia que lleva el server,
  * y límites de recarga, alcance y ritmo por hechizo.
  */
+import { hasBuff, type BuffId, type CharacterStatus } from './statusSystem.ts';
 import { isClass, type ClassId, BASE_BY_NAME, CRIT_BASE, MAX_LEVEL, aspdTotal, critTotal, leechTotal, meleeIntervalSecs, statBonus, upMult, type Stats } from '@fdn/world';
 export type Stat = 'mag' | 'wdmg' | 'melee';
 export interface PvpSpell {
@@ -45,8 +46,11 @@ export const WALK_MS = 333, RUN_MS = 200, MOVE_CAP_MS = 200;
 export const CAST_FAST_MS = 750, CAST_NORMAL_MS = 1000, CAST_HEAVY_MS = 1500, CAST_TELEGRAPH_MS = 2400;
 /** true si el hechizo es un cast (no golpe cuerpo a cuerpo): esos no se pueden lanzar corriendo. */
 /** Cast time de cada hechizo (ms); los que no figuran usan CAST_FAST_MS. Lo decide el server: el cliente no lo puede cambiar. */
+/** Bendiciones de grupo (Valdrys: 0,8 s). */
+export const CAST_BUFF_MS = 800;
 export const CAST_MS: Record<string, number> = { proyectil: CAST_FAST_MS, esquirla: CAST_NORMAL_MS, paralisis: CAST_NORMAL_MS, bola: CAST_HEAVY_MS, lluvia: CAST_TELEGRAPH_MS, juicio: CAST_NORMAL_MS,
-    castigo: CAST_NORMAL_MS, curacion: CAST_HEAVY_MS, orbe: CAST_HEAVY_MS };
+    castigo: CAST_NORMAL_MS, curacion: CAST_HEAVY_MS, orbe: CAST_HEAVY_MS,
+    intelecto: CAST_BUFF_MS, grito: CAST_BUFF_MS, amparo: CAST_BUFF_MS, grupo: CAST_BUFF_MS, despertar: CAST_TELEGRAPH_MS };
 export const castMsOf = (id: string): number => CAST_MS[id] ?? CAST_FAST_MS;
 /** Margen de red al validar que el cast terminó (ms). */
 export const CAST_SLACK_MS = 150;
@@ -83,22 +87,64 @@ export interface ClassSkill extends PvpSpell { cls: ClassId;
     /** Cura directa: fracción de la vida máxima del objetivo (más la misma fracción del poder de curación). */ heal?: number;
     /** Cura en el tiempo (Renovar): pulsos, cada cuánto (s) y fracción de la vida máxima por pulso. */ hot?: { ticks: number; every: number; frac: number };
     /** Bendición sagrada: duración (s). */ bless?: number;
-    /** El que lanza se cura esta fracción del daño de área (Nova sagrada 12 %). */ selfHeal?: number; /** aturdimiento (s) al llegar */ stun?: number; /** congelado (s) a los que alcanza (Nova) */ freeze?: number; /** barridos seguidos (Barrido: 2, a 0,25 s) */ sweeps?: number; /** pulsos de un aura (Aura sagrada: 20, uno cada `every` s) */ pulses?: number }
+    /** El que lanza se cura esta fracción del daño de área (Nova sagrada 12 %). */ selfHeal?: number; /** aturdimiento (s) al llegar */ stun?: number; /** congelado (s) a los que alcanza (Nova) */ freeze?: number; /** barridos seguidos (Barrido: 2, a 0,25 s) */ sweeps?: number; /** pulsos de un aura (Aura sagrada: 20, uno cada `every` s) */ pulses?: number;
+    /** K8. Escudo: fracción de la vida máxima del que lo recibe, dura SHIELD_MS. */ shield?: number;
+    /** K8. Bendición o aura que deja (a uno mismo, o a los aliados a `aoe` celdas si tiene `aoe`) y cuánto dura (s). Bendición de grupo: dos a la vez. */ buff?: BuffId | BuffId[]; buffSecs?: number;
+    /** K8. Despertar: revive a un aliado caído con esta fracción de vida y maná. */ revive?: number;
+    /** K8. Esfera celestial: cantidad de curas y salto máximo (celdas) entre un aliado y el siguiente. */ bounce?: { n: number; jump: number } }
 export const SKILLS: Record<string, ClassSkill> = {
     blink: { cls: 'mago', mp: 0, range: 7.25, cd: 12 },                                                                  // Parpadeo: sin maná (Valdrys)
+    pasoluz: { cls: 'healer', mp: 0, range: 6.25, cd: 15 },                                                              // Paso de luz (K8): hasta 6 celdas, se saca el frenado
     nova: { cls: 'mago', mp: 60, dmg: [14, 21], k: 0.8, stat: 'mag', range: 0, cd: 8, aoe: 3, freeze: 2, cast: false }, // Nova de escarcha: congela 2 s alrededor
     carga: { cls: 'guerrero', mp: 60, dmg: [14, 20], k: 0.6, stat: 'wdmg', range: 15, cd: 18, melee: true, stun: 1, threat: 3 }, // Carga sagrada: aturde 1 s al llegar
     giro: { cls: 'guerrero', mp: 36, dmg: [14, 20], k: 0.75, stat: 'wdmg', range: 0, cd: 8, melee: true, aoe: 2, sweeps: 2, threat: 3 }, // Barrido: 2 × 0,75
     mandato: { cls: 'guerrero', mp: 42, range: 0, cd: 6, aoe: 6, taunt: 7 },                                              // Mandato: provoca a los monstruos cercanos 7 s
     aura: { cls: 'guerrero', mp: 48, dmg: [14, 20], k: 0.25, stat: 'wdmg', range: 0, cd: 15, melee: true, aoe: 3, pulses: 20, every: 0.5, threat: 3 }, // Aura sagrada: 10 s de pulsos
-    grito: { cls: 'guerrero', mp: 20, range: 0, cd: 25 },                                                                  // pasa a Bendición de poder en K8
+    // K8 (nivel 15 a 35). Id interno `grito` = Bendición de poder (reemplaza al Grito de guerra; el id queda por las barras guardadas).
+    represalia: { cls: 'guerrero', mp: 48, range: 0, cd: 30, cast: false, buff: 'represalia', buffSecs: 10 },             // Aura de represalia: 10 s
+    escudodivino: { cls: 'guerrero', mp: 45, range: 0, cd: 20, cast: false, shield: 0.6 },                                // Escudo divino: 60 % de la vida
+    grito: { cls: 'guerrero', mp: 48, range: 0, cd: 10, cast: true, aoe: 14, buff: 'poder', buffSecs: 60 },               // Bendición de poder: +Daño 60 s
+    amparo: { cls: 'guerrero', mp: 48, range: 0, cd: 10, cast: true, aoe: 14, buff: 'amparo', buffSecs: 60 },             // Bendición de amparo: −6 % de daño 60 s
+    escudomana: { cls: 'mago', mp: 45, range: 0, cd: 10, cast: false, shield: 0.33 },                                     // Escudo de maná: 33 % de la vida
+    clarividencia: { cls: 'mago', mp: 60, range: 0, cd: 30, cast: false, buff: 'clarividencia', buffSecs: 10 },           // Clarividencia: +25 % de crítico de hechizos
+    intelecto: { cls: 'mago', mp: 60, range: 0, cd: 10, cast: true, aoe: 14, buff: 'intelecto', buffSecs: 90 },           // Intelecto arcano: +Magia 90 s
     // Healer (K5). Maná: los costos de Valdrys escalados al pool de ERIS (Castigo queda igual: 18).
     curacion: { cls: 'healer', mp: 48, range: 12, cd: 5, cast: true, heal: 0.4 },                                         // Curación: cast 1,5 s, 40 % de la vida
     renovar: { cls: 'healer', mp: 26, range: 12, cd: 3, cast: false, hot: { ticks: 6, every: 1, frac: 0.0625 }, burn: true }, // Renovar: aliado cura en 6 s; enemigo, quemadura
     bendicion: { cls: 'healer', mp: 30, range: 12, cd: 20, cast: false, bless: 10 },                                     // Bendición sagrada: 10 s
     novasagrada: { cls: 'healer', mp: 36, dmg: [14, 21], k: 1.2, stat: 'mag', range: 0, cd: 6, aoe: 4.5, cast: false, selfHeal: 0.12 }, // Nova sagrada
     orbe: { cls: 'healer', mp: 56, range: 12, cd: 10, cast: true, aoe: 4, heal: 0.2 },                                   // Orbe sagrado: cast 1,5 s, 20 % en área
+    guardian: { cls: 'healer', mp: 28, range: 12, cd: 12, cast: false, shield: 0.4 },                                    // Escudo guardián: 40 % de la vida del aliado
+    esfera: { cls: 'healer', mp: 34, range: 12, cd: 8, cast: false, heal: 0.13, bounce: { n: 8, jump: 6 } },             // Esfera celestial: 8 curas del 13 %
+    despertar: { cls: 'healer', mp: 54, range: 10, cd: 20, cast: true, revive: 0.5 },                                   // Despertar: cast 2,4 s, revive con 50 %
+    grupo: { cls: 'healer', mp: 28, range: 0, cd: 10, cast: true, aoe: 14, buff: ['fortaleza', 'espiritu'], buffSecs: 90 }, // Bendición de grupo: Fortaleza + Espíritu divino 90 s
 };
+/** K8: habilidades de nivel 15 a 35 que se piden por skillRequest (escudos, bendiciones, auras, Esfera y Despertar). Paso de luz va por blinkRequest. */
+export const K8_SKILLS = ['represalia', 'escudodivino', 'grito', 'amparo', 'escudomana', 'clarividencia', 'intelecto', 'guardian', 'esfera', 'despertar', 'grupo'] as const;
+/** Escudos: duran 10 s (Valdrys) y se juntan con tope de una barra llena. */
+export const SHIELD_MS = 10000;
+/**
+ * K8: cómo se traducen las bendiciones de Valdrys a los atributos de ERIS (que no se tocan en el MVP, kits-de-clase.md §4). Puntos de partida.
+ * - poder: +16 al Daño base (como el +16 de daño de Valdrys), antes de los multiplicadores de la habilidad.
+ * - amparo: daño recibido ×0,94. represalia: daño recibido ×0,8 y devuelve ⅓ del golpe del monstruo.
+ * - intelecto: +8 de Magia de equipo (suma al Daño base mágico y al poder de curación; la Sabiduría de Valdrys).
+ * - fortaleza: +6 % de vida máxima (el +8 Valor de Valdrys). espiritu: +50 % de regeneración de maná (el +8 Espíritu). El healer los da juntos (Bendición de grupo).
+ * - clarividencia: 25 % de crítico en los hechizos (×1,8) contra monstruos; contra jugadores no hay críticos (K6).
+ * - Despertar: en mazmorras y arenas solo dentro de los 10 s de la caída.
+ */
+export const BUFF = { poderDmg: 16, amparoTaken: 0.94, represaliaTaken: 0.8, represaliaReflect: 1 / 3, intelectoMag: 8, fortalezaHp: 0.06, espirituRegen: 1.5, clarividenciaCrit: 25, reviveWindowMs: 10000 } as const;
+/** Stats de combate con las bendiciones activas encima. */
+export function withBuffs(s: CombatStats, status: CharacterStatus, now: number): CombatStats {
+    const out = { ...s };
+    if (hasBuff(status, 'poder', now)) out.dmgBonus += BUFF.poderDmg;
+    if (hasBuff(status, 'intelecto', now)) out.mag += BUFF.intelectoMag;
+    if (hasBuff(status, 'fortaleza', now)) out.maxHp = Math.round(out.maxHp * (1 + BUFF.fortalezaHp));
+    return out;
+}
+/** Multiplicador de daño recibido por bendiciones y auras (Bendición sagrada aparte). */
+export function buffTakenMult(status: CharacterStatus, now: number): number {
+    return (hasBuff(status, 'amparo', now) ? BUFF.amparoTaken : 1) * (hasBuff(status, 'represalia', now) ? BUFF.represaliaTaken : 1);
+}
 /** Habilidades del healer que se piden por skillRequest. */
 export const HEALER_SKILLS = ['curacion', 'renovar', 'bendicion', 'novasagrada', 'orbe'] as const;
 /** Bendición sagrada: daño recibido ×0,8 y curación recibida ×1,3 mientras dura; inmune a congelado y aturdido. */
@@ -124,13 +170,11 @@ export const burnTickDmg = (s: CombatStats): number => Math.max(1, Math.round(ro
 export const AOE_FALLOFF = 0.12, AOE_MIN_MULT = 0.5, AOE_GROUP_MS = 250;
 /** Multiplicador de daño del objetivo número `index` (0 = el más cercano al centro): 100 %, 88 %, 76 %, 64 %, 52 %... mínimo 50 %. */
 export const aoeMult = (index: number): number => Math.max(AOE_MIN_MULT, 1 - AOE_FALLOFF * Math.max(0, index));
-/** Grito de guerra: duración (ms), radio de aliados y defensa plana que suma. */
-export const WARCRY_MS = 10000, WARCRY_RADIUS = 5, WARCRY_DEF = 15;
 export const FURY_MS = 60000, FURY_CD_MS = 90000;
 /** Furia por clase: el mago la tira más fuerte (todo su daño), el guerrero más débil. */
 export const FURY_MULT: Record<string, number> = { mago: 1.35, guerrero: 1.15, healer: 1.2 };
 /** Costos de maná de los hechizos de utilidad que cobra el server (iguales a los del cliente). */
-export const UTIL_MP = { furia: 15, invisibilidad: 40, detectar: 30, remover: 20 } as const;
+export const UTIL_MP = { furia: 15, invisibilidad: 40, detectar: 30, remover: 30 } as const;
 /** Maná por clase (base, por nivel) y poción: mismas cuentas que el cliente. */
 /** Regen de maná fuera de ciudad (incluye combate): 1 % del pool por segundo, mínimo 2/s (el piso viejo). */
 export const COMBAT_MP_REGEN_PCT = 0.01;
@@ -138,9 +182,9 @@ export const combatMpRegen = (maxMp: number): number => Math.max(2, Math.round(m
 const CLASS_MP: Record<string, [number, number]> = { guerrero: [40, 4], mago: [90, 12], healer: [110, 13] };
 export const potionMp = (maxMp: number, pvp = false) => Math.max(pvp ? 20 : 40, Math.round(maxMp * 0.5 * (pvp ? POTION_PVP_MULT : 1)));
 
-export interface CombatStats { lvl: number; cls: string; /** multiplicadores de daño por Fuerza (físico) y Magia (hechizos) */ meleeMult: number; magicMult: number; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; /** crítico total %, velocidad de ataque %, robo de vida % y chance de veneno % (ya con topes) */ crit: number; aspd: number; leech: number; poison: number; savedHp: number; maxMp: number; savedMp: number }
+export interface CombatStats { lvl: number; cls: string; /** multiplicadores de daño por Fuerza (físico) y Magia (hechizos) */ meleeMult: number; magicMult: number; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; /** crítico total %, velocidad de ataque %, robo de vida % y chance de veneno % (ya con topes) */ crit: number; aspd: number; leech: number; poison: number; savedHp: number; maxMp: number; savedMp: number; /** K8: Daño base extra (Bendición de poder) */ dmgBonus: number }
 const CLASS_HP: Record<string, [number, number]> = { guerrero: [593, 76], mago: [381, 42], healer: [470, 54] };
-export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 140, maxMp: 40, savedMp: 40 };
+export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 140, maxMp: 40, savedMp: 40, dmgBonus: 0 };
 
 /** Las bases de items son las compartidas de @fdn/world (el cliente usa las mismas). */
 const MELEE: Record<string, [number, number]> = { guerrero: [5, 9], mago: [2, 4], healer: [3, 6] };
@@ -152,7 +196,7 @@ export interface StatSource { lvl: number; cls: string; stats?: Stats; hp?: numb
 export function statsFromChar(o: StatSource | undefined, uncapCrit = false): CombatStats {
     if (!o) return { ...DEFAULT_STATS };
     const cls = isClass(o.cls) ? o.cls : 'guerrero', lvl = Math.max(1, Math.min(MAX_LEVEL, Number(o.lvl) || 1));
-    const s: CombatStats = { lvl, cls, meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 0, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 1, maxMp: 0, savedMp: 0 };
+    const s: CombatStats = { lvl, cls, meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 0, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 1, maxMp: 0, savedMp: 0, dmgBonus: 0 };
     let bonusHp = 0, bonusMp = 0, itemCrit = 0, itemAspd = 0, itemLeech = 0;
     for (const [slot, it] of Object.entries(o.eq ?? {})) {
         if (!it) continue;
@@ -248,9 +292,10 @@ const rint = (a: number, b: number) => Math.floor(a + Math.random() * (b - a + 1
 export const BASE_LVL_K = 2;
 export function rollSpellDamage(id: string, s: CombatStats, fury: boolean): number {
     const sp = PVP_SPELLS[id] ?? SKILLS[id]; if (!sp || !sp.dmg) return 0;
-    let d = id === 'ataque' ? rint(...(MELEE[s.cls] ?? MELEE.guerrero)) + s.lvl + rint(s.wdmg[0], s.wdmg[1])
-        : sp.k !== undefined ? (rint(sp.dmg[0], sp.dmg[1]) + s.lvl * BASE_LVL_K + (sp.stat === 'mag' ? s.mag : rint(s.wdmg[0], s.wdmg[1]))) * sp.k // múltiplo del Daño base (Valdrys)
-        : rint(sp.dmg[0], sp.dmg[1]) + s.lvl * (sp.lvlK ?? 0) + (sp.stat === 'mag' ? s.mag : sp.stat === 'wdmg' ? rint(s.wdmg[0], s.wdmg[1]) : 0);
+    const bonus = s.dmgBonus ?? 0; // Bendición de poder
+    let d = id === 'ataque' ? rint(...(MELEE[s.cls] ?? MELEE.guerrero)) + s.lvl + rint(s.wdmg[0], s.wdmg[1]) + bonus
+        : sp.k !== undefined ? (rint(sp.dmg[0], sp.dmg[1]) + s.lvl * BASE_LVL_K + (sp.stat === 'mag' ? s.mag : rint(s.wdmg[0], s.wdmg[1])) + bonus) * sp.k // múltiplo del Daño base (Valdrys)
+        : rint(sp.dmg[0], sp.dmg[1]) + s.lvl * (sp.lvlK ?? 0) + (sp.stat === 'mag' ? s.mag : sp.stat === 'wdmg' ? rint(s.wdmg[0], s.wdmg[1]) : 0) + bonus;
     d = Math.round(d * (id === 'ataque' || sp.stat === 'wdmg' || sp.stat === 'melee' || sp.melee ? s.meleeMult : sp.stat === 'mag' ? s.magicMult : 1)); // Fuerza / Magia
     if (fury) d = Math.round(d * (FURY_MULT[s.cls] ?? 1.15));
     return Math.max(1, d);

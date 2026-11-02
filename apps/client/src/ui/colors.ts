@@ -12,8 +12,8 @@ export type SpellType = keyof typeof SPELL_COLORS;
 
 const TYPE_OF: Record<string, SpellType> = {
     proyectil: 'FIRE', bola: 'FIRE',
-    paralisis: 'ICE',
-    luz: 'HOLY', castigo: 'HOLY', curacion: 'HOLY', renovar: 'HOLY', bendicion: 'HOLY', novasagrada: 'HOLY', reprender: 'HOLY', orbe: 'HOLY',
+    paralisis: 'ICE', esquirla: 'ICE', nova: 'ICE', escudomana: 'ICE', intelecto: 'ICE', clarividencia: 'ICE',
+    luz: 'HOLY', castigo: 'HOLY', curacion: 'HOLY', renovar: 'HOLY', bendicion: 'HOLY', novasagrada: 'HOLY', reprender: 'HOLY', orbe: 'HOLY', guardian: 'HOLY', esfera: 'HOLY', despertar: 'HOLY', grupo: 'HOLY', pasoluz: 'HOLY', grito: 'HOLY', amparo: 'HOLY', escudodivino: 'HOLY',
     golpe: 'PHYSICAL', carga: 'PHYSICAL', giro: 'PHYSICAL',
 };
 

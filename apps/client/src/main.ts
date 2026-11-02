@@ -137,13 +137,13 @@ const P = {
     x: MAP.spawn.x + 0.5, y: MAP.spawn.y + 0.5, dir: 6, ang: undefined as number | undefined, moving: false, phase: 0, ref: 3.4, one: null as OneShot | null, t0: 0, flash: 0,
     name: '', cell: { x: MAP.spawn.x, y: MAP.spawn.y }, path: [] as Cell[], step: null as Step | null, stepMs: 270, frozenUntil: 0, foe: null as Other | null, ally: null as Other | null, med: false, medHp: 0,
     target: null as Mob | null, engage: false, pickup: null as Drop | null, repath: 0, queued: null as number | null,
-    lvl: 1, exp: 0, hp: 100, mp: 60, fury: 0, wcEnd: 0, slowEnd: 0, blessEnd: 0, poisonEnd: 0, inv: false, det: false, invEnd: 0, detEnd: 0, immEnd: 0, gold: 0, nextAtk: 0, dead: false, deadT: 0,
+    lvl: 1, exp: 0, hp: 100, mp: 60, fury: 0, shield: 0, shieldEnd: 0, slowEnd: 0, blessEnd: 0, poisonEnd: 0, inv: false, det: false, invEnd: 0, detEnd: 0, immEnd: 0, gold: 0, nextAtk: 0, dead: false, deadT: 0,
     bag: [] as Item[], eq: { arma: null, armadura: null, cabeza: null, anillo: null } as Record<Slot, Item | null>,
     running: false, casting: null as Casting | null, ready: null as { i: number; t: number } | null, sentDir: -1,
 };
 
 /** Otros jugadores, según lo que manda el server. */
-interface Other extends Ent { hp?: number; maxHp?: number; fury?: boolean; inv?: boolean; profile: string; id: bigint; name: string; cell: Cell; queue: Cell[]; step: Step | null; stepMs: number; gone: boolean }
+interface Other extends Ent { hp?: number; maxHp?: number; shield?: number; fury?: boolean; inv?: boolean; profile: string; id: bigint; name: string; cell: Cell; queue: Cell[]; step: Step | null; stepMs: number; gone: boolean }
 const others = new Map<bigint, Other>();
 
 /** Botín en el suelo (lo manda el server con `groundItemSpawned`). `lockedUntil`: hasta cuándo (reloj local) no lo puedo recoger; 0 = es mío o ya está libre. */
@@ -203,9 +203,9 @@ function totals() {
 // ---------- clases ----------
 interface ClassDef { id: string; name: string; hidden?: boolean; desc: string; head: string; armor?: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; spells: string[] }
 const CLASSES: ClassDef[] = [
-    { id: 'guerrero', name: 'Paladin', desc: 'Tanque: aguanta, aturde y pega cuerpo a cuerpo.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'juicio', 'giro', 'escudo', 'mandato', 'aturdir', 'aura', 'carga', 'furia', 'remover', 'grito', 'aliento'] },
-    { id: 'mago', name: 'Mago', desc: 'Frágil: frío para frenar, fuego para rematar.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'esquirla', 'paralisis', 'nova', 'ignicion', 'bola', 'lluvia', 'furia', 'remover', 'invisibilidad', 'detectar', 'blink', 'aliento'] },
-    { id: 'healer', name: 'Healer', desc: 'Apoyo: cura, bendice y corta casteos.', head: 'head_short', armor: 'Túnica de mago', hp: 110, hpL: 14, mp: 110, mpL: 13, melee: [3, 6], weapon: 'Báculo de fresno', spells: ['castigo', 'curacion', 'renovar', 'bendicion', 'novasagrada', 'reprender', 'orbe', 'furia', 'detectar', 'aliento'] },
+    { id: 'guerrero', name: 'Paladin', desc: 'Tanque: aguanta, aturde y pega cuerpo a cuerpo.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'juicio', 'escudo', 'mandato', 'aturdir', 'aura', 'represalia', 'escudodivino', 'amparo', 'furia', 'giro', 'carga', 'grito', 'remover', 'aliento'] },
+    { id: 'mago', name: 'Mago', desc: 'Frágil: frío para frenar, fuego para rematar.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'esquirla', 'paralisis', 'nova', 'ignicion', 'bola', 'lluvia', 'escudomana', 'clarividencia', 'intelecto', 'furia', 'remover', 'invisibilidad', 'detectar', 'blink', 'aliento'] },
+    { id: 'healer', name: 'Healer', desc: 'Apoyo: cura, bendice y corta casteos.', head: 'head_short', armor: 'Túnica de mago', hp: 110, hpL: 14, mp: 110, mpL: 13, melee: [3, 6], weapon: 'Báculo de fresno', spells: ['castigo', 'curacion', 'renovar', 'bendicion', 'novasagrada', 'reprender', 'orbe', 'guardian', 'esfera', 'grupo', 'furia', 'pasoluz', 'despertar', 'detectar', 'aliento'] },
 ];
 let CLS: ClassDef = CLASSES[0];
 /** Vida y maná máximos que manda el server (Vitals): mandan sobre la cuenta local, que usa números viejos de cada clase. */
@@ -327,7 +327,7 @@ function onServer(m: ServerPayload) {
         case 'skillEffect': onSkillEffect(m.value); break;
         case 'vitals': onVitals(m.value); break;
         case 'logoutResponse': if (logout) { logout.at = now() + m.value.wait; logout.asked = true; if (m.value.wait <= 0) { logout.at = now(); } } break;
-        case 'playerVitals': { const o = others.get(m.value.playerId); if (o) { o.hp = m.value.hp; o.maxHp = m.value.maxHp; } break; }
+        case 'playerVitals': { const o = others.get(m.value.playerId); if (o) { o.hp = m.value.hp; o.maxHp = m.value.maxHp; o.shield = m.value.shield; } break; }
         case 'pvpKill': { const v = m.value; if (v.playerId !== myId) log(v.killerName ? `<b>${esc(v.killerName)}</b> derrotó a <b>${esc(v.victimName)}</b>.` : `<b>${esc(v.victimName)}</b> cayó.`, true); else if (v.killerName) log(`Te derrotó <b>${esc(v.killerName)}</b>.`, true); break; }
         case 'playerProfileChanged': { const o = others.get(m.value.playerId); if (o) o.profile = m.value.profile; break; }
         case 'playersLeftRange':
@@ -429,6 +429,7 @@ function onSkillEffect(v: { casterId: bigint; skill: string; fromX: number; from
     }
     const fx0 = v.fromX + 0.5, fy0 = v.fromY + 0.5, tx = v.toX + 0.5, ty = v.toY + 0.5;
     switch (v.skill) {
+        case 'pasoluz': efxLocal('spread', fx0, fy0); fx.push({ k: 'ring', x: fx0, y: fy0, t: 0, c: '#fff2a8' }); efxLocal('sphere', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#fff2a8' }); break;
         case 'blink': efxLocal('spread', fx0, fy0); fx.push({ k: 'ring', x: fx0, y: fy0, t: 0, c: '#b9a3ff' }); efxLocal('sphere', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#b9a3ff' }); fx.push({ k: 'burst', x: tx, y: ty, t: 0, c: '#b9a3ff' }); break;
         case 'carga': efxLocal('crosswind', fx0, fy0, 6); fx.push({ k: 'burst', x: fx0, y: fy0, t: 0, c: '#ff9a4a' }); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 1.2, c: '#ff9a4a' }); if (!reduce && v.casterId === myId) shake = Math.max(shake, 0.2); break;
         case 'giro': efxLocal('cyclone', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 1.9, c: '#ffd0a0' }); break;
@@ -440,15 +441,37 @@ function onSkillEffect(v: { casterId: bigint; skill: string; fromX: number; from
         case 'orbe': efxLocal('sphere', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 4, c: '#a8ffd0' }); break;
         case 'bendicion': efxLocal('spread', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffe9a0' }); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#fff6d0' }); break;
         case 'novasagrada': efxLocal('spread', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 4.5, c: '#fff0b0' }); break;
-        case 'grito': efxLocal('godsbreath', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#c78bff' }); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffe27a' }); break;
+        case 'grito': case 'amparo': case 'intelecto': case 'grupo': { // bendiciones de grupo (14 celdas)
+            const c = LIB[v.skill]?.col ?? '#ffe27a'; efxLocal('godsbreath', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c }); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 3, c }); break; }
+        case 'escudomana': case 'escudodivino': case 'guardian': efxLocal('sphere', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: LIB[v.skill]?.col ?? '#bfe8ff' }); break;
+        case 'represalia': efxLocal('flamme', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ff9a6a' }); break;
+        case 'clarividencia': efxLocal('spread', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#d0a8ff' }); break;
+        case 'esfera': efxLocal('sphere', tx, ty); fx.push({ k: 'burst', x: tx, y: ty, t: 0, c: '#fff2a8' }); break;
+        case 'despertar': efxLocal('godsbreath', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffffff' }); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#fff2a8' }); break;
     }
-    if (v.skill === 'blink' && v.casterId === myId) { const pt = iso(P.x, P.y); if (Math.hypot(pt.x - cam.x, pt.y - cam.y) > 500) { cam.x = pt.x; cam.y = pt.y; } }
+    if ((v.skill === 'blink' || v.skill === 'pasoluz') && v.casterId === myId) { const pt = iso(P.x, P.y); if (Math.hypot(pt.x - cam.x, pt.y - cam.y) > 500) { cam.x = pt.x; cam.y = pt.y; } }
 }
-function onStatusUpdate(v: { playerId: bigint; invisible: boolean; detect: boolean; fury: boolean; warcry: boolean; slow: boolean; blessed: boolean; poisoned: boolean }) {
+/** Bendiciones y auras de K8: duración (s) y aviso al entrar. La duración exacta la lleva el server; acá es para la cuenta regresiva. */
+const BUFF_INFO: Record<string, { s: number; k: string; c: string; n: string }> = {
+    poder: { s: 60, k: 'P', c: '#ffcf5a', n: 'Bendición de poder: +16 de Daño' },
+    amparo: { s: 60, k: 'A', c: '#a8d8ff', n: 'Bendición de amparo: −6 % de daño recibido' },
+    intelecto: { s: 90, k: 'M', c: '#b9a3ff', n: 'Intelecto arcano: +8 de Magia' },
+    fortaleza: { s: 90, k: 'T', c: '#ffb07a', n: 'Fortaleza: +6 % de vida máxima' },
+    espiritu: { s: 90, k: 'E', c: '#a8ffe0', n: 'Espíritu divino: +50 % de regeneración de maná' },
+    represalia: { s: 10, k: 'X', c: '#ff9a6a', n: 'Aura de represalia: −20 % de daño y devuelve ⅓ a los monstruos' },
+    clarividencia: { s: 10, k: 'C', c: '#d0a8ff', n: 'Clarividencia: +25 % de crítico de hechizos' },
+};
+const myBuffs: Record<string, number> = {};
+function onStatusUpdate(v: { playerId: bigint; invisible: boolean; detect: boolean; fury: boolean; warcry: boolean; slow: boolean; blessed: boolean; poisoned: boolean; buffs?: string[] }) {
     if (v.playerId === myId) {
+        const on = new Set(v.buffs ?? []);
+        for (const id of Object.keys(BUFF_INFO)) {
+            const had = (myBuffs[id] ?? 0) > now();
+            if (on.has(id) && !had) { myBuffs[id] = now() + BUFF_INFO[id].s; log(`${BUFF_INFO[id].n} por ${BUFF_INFO[id].s} s.`, true); }
+            else if (!on.has(id) && had) myBuffs[id] = 0;
+        }
         if (v.poisoned !== P.poisonEnd > now()) { P.poisonEnd = v.poisoned ? now() + 4 : 0; if (v.poisoned) toast('¡Te envenenaron! Recibís 30 % menos de curación.'); }
         if (v.blessed !== P.blessEnd > now()) { P.blessEnd = v.blessed ? now() + 10 : 0; if (v.blessed) { P.frozenUntil = 0; log('Bendición sagrada: −20 % de daño, +30 % de curación e inmune a congelado y aturdido por 10 s.', true); } }
-        if (v.warcry !== P.wcEnd > now()) { P.wcEnd = v.warcry ? now() + 10 : 0; if (v.warcry) log('Grito de guerra: +15 de defensa por 10 s.', true); }
         if (v.slow !== P.slowEnd > now()) { P.slowEnd = v.slow ? now() + 1.5 : 0; if (v.slow) toast('¡Te ralentizaron!'); }
         if (P.inv !== v.invisible) log(v.invisible ? 'Te volviste invisible (15 s o hasta que ataques).' : 'Ya no sos invisible.', true);
         if (P.det !== v.detect) log(v.detect ? 'Ves a los invisibles por 10 s.' : 'Se acabó Detectar invisible.', true);
@@ -536,18 +559,24 @@ function hurtPlayer(d: number, kind: 'phys' | 'magic' = 'phys', applied = false)
     if (!(P.one && P.one.anim !== 'hit' && now() < P.one.until)) oneShot(P, 'hit', 0.15);
 }
 /** El server dice que morí: pierdo un poco de exp y pido revivir en mi ciudad. */
+/** Muerto esperando que un healer aliado lo despierte (K8). */
+let reviveWait = false;
 function die() {
     if (P.dead) return;
     P.dead = true; potEpoch++; pots.cd = 0; P.deadT = now(); P.hp = 0; P.path = []; P.casting = null; P.target = null; P.med = false; const lost = Math.round(expNeed() * 0.05); // la pérdida de exp la aplica el server (llega en inventoryState)
     log(`Moriste. Perdiste ${lost} de exp y ${MAP_DEF.id === DEFAULT_MAP ? 'volvés a tu ciudad' : 'reaparecés en el punto de reaparición de este mapa'}.`, true);
     const ask = (n: number) => { if (!P.dead || n > 10) return; net.send({ $case: 'respawnRequest', value: {} }); later(1, () => ask(n + 1)); };
-    later(2.2, () => ask(0));
+    // K8: con un healer aliado cerca, se espera 10 s antes de reaparecer para que te pueda Despertar
+    reviveWait = [...others.values()].some((o) => !o.gone && facOf(o.profile) === selectedFaction && !isEnemy(o) && o.profile.split(';')[1] === 'healer' && (o.hp ?? 1) > 0 && dist(P, o) <= 15);
+    if (reviveWait) toast('Hay un healer aliado cerca: te puede despertar. Si no, reaparecés en 10 s.');
+    later(reviveWait ? 10 : 2.2, () => ask(0));
 }
 /** Mi vida según el server: es la que vale. */
-function onVitals(v: { hp: number; maxHp: number; dead: boolean; mp: number; maxMp: number }) {
+function onVitals(v: { hp: number; maxHp: number; dead: boolean; mp: number; maxMp: number; shield?: number }) {
     if (v.maxHp > 0) srvMax.hp = v.maxHp; if (v.maxMp > 0) srvMax.mp = v.maxMp;
+    const sh = v.shield ?? 0; if (sh > 0 && P.shield <= 0) P.shieldEnd = now() + 10; P.shield = sh; // escudos de K8: duran 10 s
     if (v.dead) { if (!P.dead) die(); P.hp = 0; return; }
-    if (P.dead) { P.dead = false; P.one = null; P.mp = maxMp(); mpLocalAt = 0; log(MAP_DEF.id === DEFAULT_MAP ? 'Revivís en tu ciudad.' : 'Revivís en el punto de reaparición.', true); }
+    if (P.dead) { const woke = reviveWait && now() - P.deadT < 9.9; reviveWait = false; /* lo despertó un healer: el aviso llega del server */ P.dead = false; P.one = null; P.mp = maxMp(); mpLocalAt = 0; if (!woke) log(MAP_DEF.id === DEFAULT_MAP ? 'Revivís en tu ciudad.' : 'Revivís en el punto de reaparición.', true); }
     P.hp = Math.min(maxHp(), v.hp);
     // el maná también es del server; si recién gasté/tomé algo local (el aviso todavía viaja), no me pisa para arriba
     const smp = Math.min(maxMp(), v.mp);
@@ -570,15 +599,15 @@ type Target = Mob | { x: number; y: number; ground: true } | { x: number; y: num
 interface Spell { id?: string; instant?: boolean; /** cast propio (s); sin esto, CAST_T */ castT?: number; ctrl?: boolean; fury?: boolean; key: string; name: string; mp: number; cd: number; col: string; range: number; target: boolean; aoe?: number; cast: (m: Target | null) => false | void }
 const isMob = (t: Target | null): t is Mob => !!t && 'hp' in t;
 interface SpellDef extends Omit<Spell, 'key'> { ctrl?: boolean }
-/** Mago, Blink: celda de destino hacia el cursor (o hacia donde mira), a lo sumo 7 tiles, caminable y sin nadie encima. Prueba más cerca si la ideal no sirve. */
-function blinkDest(): Cell | null {
+/** Blink (7 tiles) o Paso de luz (6): celda de destino hacia el cursor (o hacia donde mira), caminable y sin nadie encima. Prueba más cerca si la ideal no sirve. */
+function blinkDest(max = 7): Cell | null {
     const from = P.cell; let dx: number, dy: number;
     if (mouse.x >= 0) { const g = toGrid(mouse.x, mouse.y); dx = Math.floor(g.x) - from.x; dy = Math.floor(g.y) - from.y; }
-    else { const a = P.ang ?? 0, sx = Math.cos(a), sy = Math.sin(a) * 2, v = GRID_VEC[gridDir((sx + sy) / 2, (sy - sx) / 2)]; dx = v[0] * 7; dy = v[1] * 7; }
+    else { const a = P.ang ?? 0, sx = Math.cos(a), sy = Math.sin(a) * 2, v = GRID_VEC[gridDir((sx + sy) / 2, (sy - sx) / 2)]; dx = v[0] * max; dy = v[1] * max; }
     const len = Math.hypot(dx, dy); if (len < 0.5) return null;
-    for (let r = Math.min(7, len); r >= 2; r -= 0.5) {
+    for (let r = Math.min(max, len); r >= 2; r -= 0.5) {
         const x = from.x + Math.round((dx / len) * r), y = from.y + Math.round((dy / len) * r);
-        if (Math.hypot(x - from.x, y - from.y) > 7.25 || !freeForMe(x, y) || mobs.some((m) => Math.hypot(m.x - x - 0.5, m.y - y - 0.5) < 0.75)) continue;
+        if (Math.hypot(x - from.x, y - from.y) > max + 0.25 || !freeForMe(x, y) || mobs.some((m) => Math.hypot(m.x - x - 0.5, m.y - y - 0.5) < 0.75)) continue;
         return { x, y };
     }
     return null;
@@ -603,6 +632,15 @@ function renewCast(): false | void {
         return;
     }
     return healCast('renovar', 12);
+}
+/** Despertar: al aliado elegido si está caído; si no, al aliado caído más cercano a 10 celdas. */
+function reviveCast(): false | void {
+    const dead = (o: Other) => !o.gone && facOf(o.profile) === selectedFaction && !isEnemy(o) && o.hp !== undefined && o.hp <= 0;
+    let t = P.ally && dead(P.ally) ? P.ally : null;
+    if (!t) { let bd = 10.5; for (const o of others.values()) if (dead(o) && dist(P, o) <= bd) { bd = dist(P, o); t = o; } }
+    if (!t) { toast('No hay ningún aliado caído cerca.'); return false; }
+    if (dist(P, t) > 10.5) { toast(`${t.name} está muy lejos.`); return false; }
+    skillSend('despertar', t.id);
 }
 const LIB: Record<string, SpellDef> = {
     proyectil: { name: 'Saeta ígnea', mp: 14, cd: 1.5, col: '#ff9a4a', range: 15, castT: 0.75, target: true, // Firebolt (Valdrys)
@@ -631,20 +669,43 @@ const LIB: Record<string, SpellDef> = {
         cast(m) { if (!isMob(m)) return false; efx('crosswind', m.x, m.y, 8); damageMob(m, 'golpe'); } },
     lluvia: { name: 'Infierno', mp: 90, cd: 18, col: '#ff7a2f', range: 15, castT: 2.4, target: true, aoe: 4.5, // Inferno (Valdrys)
         cast(m) { if (!m) return false; zone(m.x, m.y, 4.5, 1, 0, () => Math.round((rint(14, 21) + P.lvl * 2 + totals().mag) * 1.2), 'cataclysm', 0, 'lluvia'); } },
-    remover: { name: 'Remover', mp: 20, cd: 10, col: '#9fe8ff', range: 0, target: false,
-        cast() { if (P.frozenUntil <= now()) { toast('No estás paralizado.'); return false; } net.send({ $case: 'removerRequest', value: {} }); } },
+    remover: { name: 'Purga', mp: 30, cd: 24, col: '#9fe8ff', range: 0, target: false, instant: true, // Cleanse (Valdrys): saca congelado, aturdido y frenado
+        cast() { if (P.frozenUntil <= now() && P.slowEnd <= now()) { toast('No tenés nada que purgar.'); return false; } net.send({ $case: 'removerRequest', value: {} }); } },
     invisibilidad: { name: 'Invisibilidad', mp: 40, cd: 20, col: '#9fb8ff', range: 0, target: false,
         cast() { efx('splash', P.x, P.y); net.send({ $case: 'invisibilityRequest', value: {} }); } },
     detectar: { name: 'Detectar invisible', mp: 30, cd: 12, col: '#ffe9a0', range: 0, target: false,
         cast() { efx('spread', P.x, P.y); net.send({ $case: 'detectInvisibleRequest', value: {} }); } },
     blink: { name: 'Parpadeo', mp: 0, cd: 12, col: '#b9a3ff', range: 0, target: false, instant: true,
-        cast() { const d = blinkDest(); if (!d) { toast('No hay lugar para el Blink hacia ahí.'); return false; } net.send({ $case: 'blinkRequest', value: { x: d.x, y: d.y } }); } },
+        cast() { const d = blinkDest(); if (!d) { toast('No hay lugar para el Blink hacia ahí.'); return false; } net.send({ $case: 'blinkRequest', value: { x: d.x, y: d.y, skill: 'blink' } }); } },
     carga: { name: 'Carga sagrada', mp: 60, cd: 18, col: '#ff9a4a', range: 15, target: true, instant: true,
         cast(m) { if (!isMob(m)) return false; skillSend('carga', 0n, m.id); } },
     giro: { name: 'Barrido', mp: 36, cd: 8, col: '#ffd0a0', range: 0, target: false, aoe: 2, instant: true,
         cast() { skillSend('giro'); } },
-    grito: { name: 'Grito de guerra', mp: 20, cd: 25, col: '#c78bff', range: 0, target: false, instant: true,
+    // K8 (nivel 15 a 26): escudos, auras y bendiciones. El server aplica todo; acá solo se pide.
+    grito: { name: 'Bendición de poder', mp: 48, cd: 10, col: '#ffcf5a', range: 0, target: false, castT: 0.8, aoe: 14, // Blessing of Might (Valdrys): +16 de Daño 60 s a los aliados
         cast() { skillSend('grito'); } },
+    amparo: { name: 'Bendición de amparo', mp: 48, cd: 10, col: '#a8d8ff', range: 0, target: false, castT: 0.8, aoe: 14, // Blessing of Sanctuary: −6 % de daño 60 s
+        cast() { skillSend('amparo'); } },
+    represalia: { name: 'Aura de represalia', mp: 48, cd: 30, col: '#ff9a6a', range: 0, target: false, instant: true, // Retribution Aura: −20 % de daño y devuelve ⅓ a los monstruos, 10 s
+        cast() { skillSend('represalia'); } },
+    escudodivino: { name: 'Escudo divino', mp: 45, cd: 20, col: '#ffe9a0', range: 0, target: false, instant: true, // Divine Shield: escudo del 60 % de la vida, 10 s
+        cast() { skillSend('escudodivino'); } },
+    escudomana: { name: 'Escudo de maná', mp: 45, cd: 10, col: '#9fb8ff', range: 0, target: false, instant: true, // Mana Shield: escudo del 33 % de la vida, 10 s
+        cast() { skillSend('escudomana'); } },
+    clarividencia: { name: 'Clarividencia', mp: 60, cd: 30, col: '#d0a8ff', range: 0, target: false, instant: true, // Vim of Wisdom: +25 % de crítico de hechizos 10 s (contra monstruos)
+        cast() { skillSend('clarividencia'); } },
+    intelecto: { name: 'Intelecto arcano', mp: 60, cd: 10, col: '#b9a3ff', range: 0, target: false, castT: 0.8, aoe: 14, // Arcane Intellect: +8 de Magia 90 s a los aliados
+        cast() { skillSend('intelecto'); } },
+    guardian: { name: 'Escudo guardián', mp: 28, cd: 12, col: '#bfe8ff', range: 12, target: false, instant: true, // Guardian Shield: escudo del 40 % de la vida del aliado
+        cast() { return healCast('guardian', 12); } },
+    esfera: { name: 'Esfera celestial', mp: 34, cd: 8, col: '#fff2a8', range: 12, target: false, instant: true, // Celestial Sphere: 13 % que salta 8 veces entre aliados
+        cast() { return healCast('esfera', 12); } },
+    despertar: { name: 'Despertar', mp: 54, cd: 20, col: '#ffffff', range: 10, castT: 2.4, target: false, // Reawaken: revive con 50 % (en mazmorra o arena, dentro de los 10 s)
+        cast() { return reviveCast(); } },
+    grupo: { name: 'Bendición de grupo', mp: 28, cd: 10, col: '#ffb07a', range: 0, target: false, castT: 0.8, aoe: 14, // Fortitude + Divine Spirit: +6 % de vida y +50 % de regen de maná 90 s
+        cast() { skillSend('grupo'); } },
+    pasoluz: { name: 'Paso de luz', mp: 0, cd: 15, col: '#fff2a8', range: 0, target: false, instant: true, // escape del healer (nivel 20): hasta 6 celdas y se saca el frenado
+        cast() { const d = blinkDest(6); if (!d) { toast('No hay lugar para el Paso de luz hacia ahí.'); return false; } net.send({ $case: 'blinkRequest', value: { x: d.x, y: d.y, skill: 'pasoluz' } }); } },
     aliento: { name: 'Segundo aliento', mp: 0, cd: 210, col: '#7fe0a0', range: 0, target: false, instant: true, // Second Wind (Valdrys): 3 s quieto, la mitad de vida y maná
         cast() { if (P.hp >= maxHp() && P.mp >= maxMp()) { toast('Ya tenés la vida y el maná llenos.'); return false; } P.path = []; P.target = null; P.engage = false; P.pickup = null; P.queued = null; cancelCast(); skillSend('aliento'); } },
     // Healer (K5): el server cura, cobra y valida. Las curas van al aliado elegido (click en alguien de tu nación) o a vos.
@@ -666,7 +727,7 @@ const LIB: Record<string, SpellDef> = {
         cast() { sfx('berserk', 0.7); efxLocal('pilar', P.x, P.y); pvpSend('pilar', P.x, P.y, 0n, 'furia'); P.fury = now() + 60; float(P.x, P.y - 0.4, '¡FURIA!', '#ffd23f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd23f' }); log(`Furia: +${selectedClass === 'mago' ? 35 : selectedClass === 'healer' ? 20 : 15}% de daño por 60 s.`, true); } },
 };
 let SPELLS: Spell[] = [];
-const SPECIAL_KEY: Record<string, string | undefined> = { remover: 'r', invisibilidad: 'f', detectar: 'g', blink: 'b', carga: 'z', giro: 'x', grito: 'v', aliento: 'y' };
+const SPECIAL_KEY: Record<string, string | undefined> = { remover: 'r', invisibilidad: 'f', detectar: 'g', blink: 'b', carga: 'z', giro: 'x', grito: 'v', aliento: 'y', despertar: 'u', pasoluz: 'b' };
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
 /** Hechizo de área estilo Blizzard: varios golpes sobre las celdas cercanas al punto elegido. */
 function zone(x: number, y: number, r: number, ticks: number, every: number, dmg: () => number, effect: string, slow = 0, sid = '') {
@@ -871,7 +932,7 @@ const SERVER_MP_SPELLS = new Set(['proyectil', 'esquirla', 'paralisis', 'ignicio
 function fire(i: number, m: Target | null) {
     const s = SPELLS[i];
     if (m && 'pvp' in m && !s.aoe) { if (!pvpCast(s.id, (m as { pvp: Other }).pvp)) return; } else if (s.cast(m) === false) return;
-    const srvMp = SERVER_MP_SPELLS.has(s.id ?? '') || ['furia', 'invisibilidad', 'detectar', 'remover', 'blink', 'carga', 'giro', 'grito', 'nova', 'mandato', 'aura', 'aliento'].includes(s.id ?? '') || (m && 'pvp' in m && !s.aoe)
+    const srvMp = SERVER_MP_SPELLS.has(s.id ?? '') || ['furia', 'invisibilidad', 'detectar', 'remover', 'blink', 'carga', 'giro', 'grito', 'nova', 'mandato', 'aura', 'aliento', 'amparo', 'represalia', 'escudodivino', 'escudomana', 'clarividencia', 'intelecto', 'guardian', 'esfera', 'despertar', 'grupo', 'pasoluz'].includes(s.id ?? '') || (m && 'pvp' in m && !s.aoe)
         || (!!s.aoe && enemiesNear(m ? m.x : P.x, m ? m.y : P.y, s.aoe + 0.5).length > 0); // si pega a un jugador, el server cobra
     spendMp(s.mp, srvMp); syncHp(); cds[i] = now() + s.cd;
     P.one = { anim: 'cast', t: now() - 0.3, until: now() + 0.12 };
@@ -1546,7 +1607,7 @@ function render() {
         } } });
     objs.sort((a, b) => a.d - b.d).forEach((o) => o.f());
     // nombres arriba de todo
-    for (const o of others.values()) { if (unseen(o)) continue; const p = iso(o.x, o.y); nameTag(o.name, p.x, p.y - 70, factionCol(o.profile.split(';')[0]), o.gone ? 0.5 : 1); if (o.maxHp && o.hp !== undefined && o.hp < o.maxHp) { const f = Math.max(0, o.hp / o.maxHp); ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - 17, p.y - 66, 34, 5); ctx.fillStyle = isEnemy(o) ? '#d9443a' : '#58b85a'; ctx.fillRect(p.x - 16, p.y - 65, 32 * f, 3); } }
+    for (const o of others.values()) { if (unseen(o)) continue; const p = iso(o.x, o.y); nameTag(o.name, p.x, p.y - 70, factionCol(o.profile.split(';')[0]), o.gone ? 0.5 : 1); if (o.maxHp && o.hp !== undefined && (o.hp < o.maxHp || (o.shield ?? 0) > 0)) { const f = Math.max(0, o.hp / o.maxHp); ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - 17, p.y - 66, 34, 5); ctx.fillStyle = isEnemy(o) ? '#d9443a' : '#58b85a'; ctx.fillRect(p.x - 16, p.y - 65, 32 * f, 3); if ((o.shield ?? 0) > 0) { ctx.fillStyle = '#9fd8ff'; ctx.fillRect(p.x - 16, p.y - 65, 32 * Math.min(1, o.shield! / o.maxHp), 1.5); } } }
     { const p = iso(P.x, P.y); nameTag(P.name, p.x, p.y - 70, factionCol(selectedFaction)); }
     drawPortalLabels(); drawLinkLabels();
     for (const n of MAP.npcs) {
@@ -1693,7 +1754,8 @@ function setClass(id: string) {
 /** Cuadraditos de estado con cuenta regresiva (Furia, invisible, detectar, parálisis, inmunidad), como en HB. */
 const BUFFS: { k: string; n: string; c: string; end: () => number; on: () => boolean }[] = [
     { k: 'F', n: 'Furia', c: '#ffc83a', end: () => P.fury, on: () => P.fury > now() },
-    { k: 'G', n: 'Grito de guerra (+15 defensa)', c: '#c78bff', end: () => P.wcEnd, on: () => P.wcEnd > now() },
+    { k: 'S', n: 'Escudo (absorbe daño antes que la vida)', c: '#9fd8ff', end: () => P.shieldEnd, on: () => P.shield > 0 && P.shieldEnd > now() },
+    ...Object.entries(BUFF_INFO).map(([id, b]) => ({ k: b.k, n: b.n, c: b.c, end: () => myBuffs[id] ?? 0, on: () => (myBuffs[id] ?? 0) > now() })),
     { k: 'B', n: 'Bendición sagrada (−20 % daño, +30 % curación, inmune a control)', c: '#ffe9a0', end: () => P.blessEnd, on: () => P.blessEnd > now() },
     { k: 'V', n: 'Envenenado (−30 % de curación)', c: '#7fd05a', end: () => P.poisonEnd, on: () => P.poisonEnd > now() },
     { k: 'L', n: 'Ralentizado', c: '#8fb4d9', end: () => P.slowEnd, on: () => P.slowEnd > now() },
@@ -1712,7 +1774,7 @@ function hud() {
     const T = now(), mh = maxHp(), mm = maxMp();
     const hf = clamp(P.hp / mh, 0, 1), mf = clamp(P.mp / mm, 0, 1);
     $('liqHp').style.transform = `translateY(${(1 - hf) * 100}%)`; $('liqMp').style.transform = `translateY(${(1 - mf) * 100}%)`;
-    $('hpT').textContent = String(Math.ceil(P.hp)); $('hpM').textContent = '/ ' + mh; $('mpT').textContent = String(Math.floor(P.mp)); $('mpM').textContent = '/ ' + mm;
+    $('hpT').textContent = String(Math.ceil(P.hp)); $('hpM').textContent = '/ ' + mh + (P.shield > 0 ? ` +${P.shield}` : ''); $('mpT').textContent = String(Math.floor(P.mp)); $('mpM').textContent = '/ ' + mm;
     $('orbHpBox').setAttribute('aria-label', `Vida ${Math.ceil(P.hp)} de ${mh}`); $('orbMpBox').setAttribute('aria-label', `Maná ${Math.floor(P.mp)} de ${mm}`);
     const xp = clamp(P.exp / expNeed(), 0, 1), xpp = Math.floor(xp * 100);
     $('xpI').style.width = xp * 100 + '%'; $('xpT').textContent = `EXP ${xpp}%`; $('xpBox').setAttribute('aria-valuenow', String(xpp));
