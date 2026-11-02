@@ -13,8 +13,8 @@ import {
     MAPS, SHOPS, SLOTS, SRV_ATTR, TRAINING, buildMap, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statBonus, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, mobDef, sellPrice, trainingUnlocked,
     BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BASES, UP_MAX, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
-    DAILY_BY_ID, DAILY_EXP_PCT, DUNGEON_BOSS, MAIN_QUESTS, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
-    mainComplete, newQuestBook, repeatGold, rerollDaily, rewardUniques, rollDailies, type QuestBook, type QuestEvent, type QuestReward,
+    DAILY_BY_ID, DAILY_EXP_PCT, DUNGEON_BOSS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
+    mainComplete, newQuestBook, repeatGold, rewardUniques, rollDailies, type QuestBook, type QuestEvent, type QuestHave, type QuestReward,
 } from '@fdn/world';
 import { RARITY_INDEX, rollMobDrop, type GeneratedItem } from './loot/itemGenerator.ts';
 import { canPickup, GROUND_MAX_PER_OWNER, PICKUP_RANGE, type GroundApi } from './ground.ts';
@@ -227,6 +227,8 @@ function levelUp(st: Econ): number {
     return n;
 }
 const addGold = (st: Econ, n: number) => { st.gold = Math.min(MAX_GOLD, Math.max(0, st.gold + n)); };
+/** Lo que tiene el personaje para los objetivos de "tener" de las misiones: materiales y la mejora más alta entre sus únicos. */
+const questHave = (st: Econ): QuestHave => ({ mats: st.mats ?? {}, maxUp: Math.max(0, ...st.bag.map((i) => i.up ?? 0), ...SLOTS.map((sl) => st.eq[sl]?.up ?? 0)) });
 const bonus = (st: Econ, id: AttrId): number => SLOTS.reduce((s, sl) => s + (st.eq[sl]?.a.find((x) => x.id === id)?.v ?? 0), 0);
 
 // ---------- vistas hacia el cliente ----------
@@ -353,7 +355,7 @@ export class Economy {
 
     snapshot(p: Player): void {
         const st = p.econ; if (!st) return;
-        if (st.qb && rollDailies(st.qb, st.lvl, Date.now(), Math.random)) this.touch(p); // al entrar o al pasar el reinicio: encargos nuevos
+        if (st.qb && rollDailies(st.qb, st.lvl, Date.now())) this.touch(p); // al entrar o al pasar el reinicio: encargos nuevos
         p.send(M.inventoryState(st));
     }
 
@@ -428,7 +430,7 @@ export class Economy {
             if ((st.forge ?? 0) < stones) return fail('stones', `Necesitás ${stones} piedra${stones > 1 ? 's' : ''} de forja.`);
             if (st.gold < gold) return fail('gold', `Necesitás ${gold} de oro.`);
             st.forge = (st.forge ?? 0) - stones; addGold(st, -gold);
-            if (Math.random() < (UP_RATE[up] ?? 0)) { it.up = up + 1; this.questEvent(p, st, { k: 'upgrade' }); return done(`¡${it.n} subió a +${it.up}!`, true); }
+            if (Math.random() < (UP_RATE[up] ?? 0)) { it.up = up + 1; this.questEvent(p, st, null); return done(`¡${it.n} subió a +${it.up}!`, true); }
             return done(`La mejora falló: se perdieron ${stones} piedra${stones > 1 ? 's' : ''} y ${gold} de oro. ${it.n} sigue en +${up}.`);
         });
     }
@@ -530,19 +532,8 @@ export class Economy {
         this.run(p, ctx, (st) => {
             const npc = this.near(p, ctx, npcId); if (!npc || roleOf(npc) !== 'capitan') return fail('far', 'Estás muy lejos del Capitán.');
             if (action.startsWith('m_') || action.startsWith('d_') || action === 'r_turnin') return this.questBook(p, st, action, key);
-            const q = QUESTS[st.q.i];
-            if (action === 'accept') {
-                if (!q || st.q.st !== 'new') return fail('quest_state', 'No hay misión para aceptar.');
-                st.q.st = 'active'; st.q.prog = 0;
-                return done(`Misión aceptada: ${q.name}.`);
-            }
-            if (action === 'turnin') {
-                if (!q || st.q.st !== 'ready' || st.q.prog < q.n) return fail('quest_state', 'Todavía no completaste la misión.');
-                st.exp += q.xp; addGold(st, q.gold); if (q.shard) st.q.shards[q.shard] = Math.min(99, st.q.shards[q.shard] + 1);
-                st.q.i++; st.q.st = 'new'; st.q.prog = 0;
-                const ups = levelUp(st);
-                return done(`Entregaste «${q.name}»: +${q.xp} exp, +${q.gold} oro${q.shard ? ' y una ' + KEYDEFS[q.shard].shard : ''}.${ups ? ` ¡Subiste a nivel ${st.lvl}!` : ''}`, ups > 0, ups ? 'level_up' : 'ok');
-            }
+            // la cadena vieja de 10 quedó jubilada (la reemplaza el Camino del aventurero); el Capitán solo sigue forjando las llaves viejas
+            if (action === 'accept' || action === 'turnin') return fail('quest_retired', 'Esas misiones ya no están: seguí el Camino del aventurero.');
             if (action === 'forge') {
                 const k = key as KeyId, kd = KEYDEFS[k]; if (!kd) return fail('bad_key', 'Llave inválida.');
                 if (st.q.shards[k] < SHARDS_PER_KEY) return fail('shards', 'Te faltan esquirlas.');
@@ -558,17 +549,20 @@ export class Economy {
      * Avanza el libro de misiones con un evento (matar, levantar, mejorar, hablar, dungeon, PvP) y avisa lo que quedó listo.
      * Devuelve true si cambió algo que el cliente tenga que ver. No guarda: lo hace quien llama (todas las rutas ya guardan).
      */
-    questEvent(p: Player, st: Econ, e: QuestEvent): boolean {
+    questEvent(p: Player, st: Econ, e: QuestEvent | null): boolean {
         const b = (st.qb ??= newQuestBook()), before = JSON.stringify(b);
-        rollDailies(b, st.lvl, Date.now(), Math.random);
-        for (const t of applyQuestEvent(b, e, st.mats ?? {})) p.send(M.econResult(true, 'quest_ready', t));
+        rollDailies(b, st.lvl, Date.now());
+        for (const t of applyQuestEvent(b, e, questHave(st))) p.send(M.econResult(true, 'quest_ready', t));
         return JSON.stringify(b) !== before;
     }
 
-    /** Ganó una pelea contra otra nación en un mapa de facción (lo decide world.ts). */
-    questPvp(p: Player): void {
+    /** Ganó una pelea contra otra nación en un mapa de facción (lo decide world.ts). A cada rival se le cuenta una vez por día. */
+    questPvp(p: Player, victimKey: string): void {
         const st = p.econ; if (!st) return;
-        if (this.questEvent(p, st, { k: 'pvp' })) { this.touch(p); this.snapshot(p); }
+        const b = (st.qb ??= newQuestBook()); rollDailies(b, st.lvl, Date.now());
+        if (b.d.pvp.includes(victimKey)) return;
+        b.d.pvp.push(victimKey);
+        this.questEvent(p, st, { k: 'pvp' }); this.touch(p); this.snapshot(p);
     }
 
     /** Premio de una misión: exp en % del nivel, oro, piedras e ítem único. Verifica antes de tocar nada; devuelve el texto o un error. */
@@ -590,18 +584,18 @@ export class Economy {
 
     /** Acciones del libro de misiones con el Capitán: m_accept / m_turnin (cadena), d_turnin / d_reroll (encargos), r_turnin (repetible). */
     private questBook(p: Player, st: Econ, action: string, key: string): Outcome {
-        const b = (st.qb ??= newQuestBook()), mats = (st.mats ??= {}), now = Date.now();
-        rollDailies(b, st.lvl, now, Math.random);
+        const b = (st.qb ??= newQuestBook()), mats = (st.mats ??= {}), now = Date.now(), have = questHave(st);
+        rollDailies(b, st.lvl, now);
         const q = MAIN_QUESTS[b.m.i];
         if (action === 'm_accept') {
             if (!q || b.m.st !== 'new') return fail('quest_state', 'No hay misión para aceptar.');
             if (st.lvl < q.minLvl) return fail('quest_lvl', `Para «${q.name}» necesitás nivel ${q.minLvl}.`);
             b.m.st = 'active'; b.m.prog = q.goals.map(() => 0);
-            if (mainComplete(b, mats)) b.m.st = 'ready'; // los de "tener" pueden estar cumplidos de entrada
+            if (mainComplete(b, have)) b.m.st = 'ready'; // los de "tener" pueden estar cumplidos de entrada (colmillos, un ítem ya en +1)
             return done(`Misión aceptada: ${q.name}.`);
         }
         if (action === 'm_turnin') {
-            if (!q || b.m.st === 'new' || !mainComplete(b, mats)) return fail('quest_state', 'Todavía no completaste la misión.');
+            if (!q || b.m.st === 'new' || !mainComplete(b, have)) return fail('quest_state', 'Todavía no completaste la misión.');
             const r = this.payReward(st, q.reward, key); if (!r.ok) return r;
             b.m.i++; b.m.st = 'new'; b.m.prog = [];
             return done(`Entregaste «${q.name}»: ${r.text}`, r.ups > 0, r.ups ? 'level_up' : 'ok');
@@ -617,16 +611,12 @@ export class Economy {
             if (!b.d.ess) { b.d.ess = true; mats.esencia = Math.min(9999, (mats.esencia ?? 0) + 1); ess = ' Y por ser el primero del día, una Esencia.'; }
             return done(`Entregaste «${dq.name}»: ${r.text}${ess}`, r.ups > 0, r.ups ? 'level_up' : 'ok');
         }
-        if (action === 'd_reroll') {
-            const r = rerollDaily(b, key, st.lvl, Math.random); if (!r.ok) return fail('quest_state', r.text);
-            return done(`Encargo nuevo: «${DAILY_BY_ID.get(r.id)!.name}».`);
-        }
         if (action === 'r_turnin') { // key = "material|gold" o "material|forge"
             const [mat, what] = key.split('|');
             if (!mat || RESERVED_MATS.has(mat)) return fail('bad_mat', 'Ese material no se entrega: es para las llaves.');
             if (what !== 'gold' && what !== 'forge') return fail('bad_action', 'Elegí oro o piedra de forja.');
             if ((mats[mat] ?? 0) < REPEAT_MATS) return fail('mats', `Necesitás ${REPEAT_MATS} del mismo material.`);
-            mats[mat] -= REPEAT_MATS;
+            mats[mat] -= REPEAT_MATS; this.questEvent(p, st, null);
             if (what === 'gold') { const g = repeatGold(st.lvl); addGold(st, g); return done(`Entregaste ${REPEAT_MATS} materiales: +${g} oro.`); }
             st.forge = (st.forge ?? 0) + 1; return done(`Entregaste ${REPEAT_MATS} materiales: +1 piedra de forja.`);
         }
@@ -701,13 +691,9 @@ export class Economy {
         }
         for (const name of qmats) p.send(M.econResult(true, 'quest_mat', `Conseguiste un ${name}.`));
         this.questEvent(p, st, { k: 'kill', type: k.type, map: k.map ?? '', pit: k.origin === 'pit', tier, myTier: tierOfLevel(st.lvl), mutant: ((k.traits ?? 0) & TRAIT_MUTANT) !== 0 });
-        if (boss) for (const d of ['d1', 'd2'] as const) if (DUNGEON_BOSS[d] === k.type) this.questEvent(p, st, { k: 'dungeon', d });
-        let questReady = false, questProg = 0;
-        const q = QUESTS[st.q.i];
-        if (q && st.q.st === 'active' && q.type === k.type) {
-            st.q.prog = Math.min(q.n, st.q.prog + 1); questProg = st.q.prog;
-            if (st.q.prog >= q.n) { st.q.st = 'ready'; questReady = true; }
-        }
+        // el dungeon cuenta solo si el jefe muere en su piso (la instancia de la party), no si aparece en otro mapa
+        if (boss) for (const d of ['d1', 'd2'] as const) if (DUNGEON_BOSS[d] === k.type && k.map === DUNGEON_MAP[d]) this.questEvent(p, st, { k: 'dungeon', d });
+        const questReady = false, questProg = 0; // la cadena vieja de 10 quedó jubilada: los avisos de misión van por questEvent
         const ups = levelUp(st);
         this.touch(p);
         p.send(M.killReward({ mobId: k.mobId, x: k.x, y: k.y, exp: gain, gold, item: item ? toInvItem(item) : undefined, bagFull, potion, shard, forge, newLvl: ups ? st.lvl : 0, questReady, questProg }));

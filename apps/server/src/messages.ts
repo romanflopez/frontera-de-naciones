@@ -192,7 +192,7 @@ export const inventoryState = (st: Econ): ServerMessage => msg({
         keysCripta: st.q.keys.cripta, keysFoso: st.q.keys.foso, shardsCripta: st.q.shards.cripta, shardsFoso: st.q.shards.foso,
         unlocked: st.u, cls: st.cls, faction: st.faction, forge: st.forge ?? 0,
         statStr: st.stats.str, statVit: st.stats.vit, statDex: st.stats.dex, statMag: st.stats.mag, statLuk: st.stats.luk, statFree: statPointsFree(st.lvl, st.stats),
-        questBook: st.qb ? JSON.stringify(questBookView(st.qb, st.mats ?? {}, Date.now())) : '',
+        questBook: st.qb ? JSON.stringify(questBookView(st.qb, { mats: st.mats ?? {}, maxUp: Math.max(0, ...st.bag.map((i) => i.up ?? 0), ...Object.values(st.eq).map((i) => i?.up ?? 0)) }, Date.now())) : '',
     },
 });
 export const econResult = (ok: boolean, code: string, text: string): ServerMessage => msg({ $case: 'econResult', value: { ok, code, text } });

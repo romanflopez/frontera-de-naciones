@@ -934,7 +934,7 @@ export class GameWorld {
         if (dest.step !== undefined) {
             const t = TRAINING[dest.step];
             if (!p.prog.unlocked.includes(t.id) && !trainingUnlocked(t.step, p.prog.qi, p.prog.lvl)) {
-                p.send(M.sendMessage(`Portal bloqueado (${t.zone}): ${t.after ? `entregá «${t.after}» al Capitán` : 'todavía no'} o llegá al nivel ${t.lvl}.`));
+                p.send(M.sendMessage(`Portal bloqueado (${t.zone}): se abre al llegar al nivel ${t.lvl}.`));
                 return;
             }
         }
@@ -1158,13 +1158,14 @@ export class GameWorld {
     }
     /**
      * Encargo "Defensa de la frontera": ganó una pelea contra la otra nación en un mapa de facción. No cuenta si la víctima
-     * está más de 5 niveles por debajo (freno al farmeo de novatos).
+     * está más de 5 niveles por debajo (freno al farmeo de novatos). A cada rival se le cuenta una vez por día (dos cuentas
+     * de naciones distintas no pueden pasarse kills para completarlo).
      */
     private pvpQuestCredit(victim: Player, killerId?: bigint): void {
         if (!killerId || this.def?.pvp !== 'faction') return;
         const killer = this.playersById.get(killerId); if (!killer || killer === victim || !killer.econ || !victim.econ) return;
         if (this.factionOf(killer) === this.factionOf(victim) || victim.econ.lvl < killer.econ.lvl - 5) return;
-        this.econ?.questPvp(killer);
+        this.econ?.questPvp(killer, victim.accountKey || victim.characterName);
     }
     private respawn(p: Player): void {
         if (!p.isDead || Date.now() - p.deadAt < 1800) return;

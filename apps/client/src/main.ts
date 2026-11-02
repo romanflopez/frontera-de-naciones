@@ -481,8 +481,7 @@ function onKillReward(v: { mobId: number; x: number; y: number; exp: number; gol
     if (v.forge) log(`Encontraste ${v.forge} piedra${v.forge > 1 ? 's' : ''} de forja.`, true);
     if (v.potion === 'hp' || v.potion === 'mp') log(`Encontraste una ${POTS[v.potion].name.toLowerCase()}.`, true);
     if (v.shard === 'cripta' || v.shard === 'foso') { const kd = KEYDEFS[v.shard]; log(`El boss soltó una <b>${kd.shard}</b>. Con ${SHARDS_PER_KEY} esquirlas y ${kd.gold} de oro el Capitán te forja una ${kd.name}.`, true); }
-    if (v.questReady) { const q = QUESTS[Q.i]; log(`Misión lista: volvé con el Capitán${q ? ` (${q.name})` : ''}.`, true); }
-    else if (v.questProg > 0) { const q = QUESTS[Q.i]; if (q) float(P.x, P.y - 0.9, `${v.questProg}/${q.n}`, '#ffd24a'); }
+    // los avisos de misión llegan como econResult (quest_ready); la cadena vieja de 10 quedó jubilada
 }
 /** Habilidad distintiva del boss (el server decide cuándo y a quién pega): fase 0 = aviso y carga, fase 1 = el golpe en área. */
 function onMobSpecial(v: { mobId: number; phase: number; x: number; y: number }) {
@@ -1909,11 +1908,11 @@ const UNLOCKED = new Set<string>();
 const trainOpen = (t: TrainingStep) => UNLOCKED.has(t.id) || trainingUnlocked(t.step, Q.i, P.lvl);
 const portalProgress = () => ({ qi: Q.i, lvl: P.lvl, keys: Q.keys as Record<string, number>, unlocked: [...UNLOCKED] });
 function refreshUnlocks(_announce: boolean) { /* los portales abiertos los decide el server (inventoryState.unlocked) */ }
+/** Seguimiento en el HUD: el Camino del aventurero, los encargos del día y las llaves viejas (la cadena vieja de 10 quedó jubilada). */
 function renderQuest() {
-    const q = QUESTS[Q.i], el = $('quest'), book = bookLines();
-    el.hidden = (!q || Q.st === 'new') && !hasKeyStuff() && !book;
-    if (!q || Q.st === 'new') { el.innerHTML = `${book}${hasKeyStuff() ? `<b>Mazmorras</b>${keyLines()}` : ''}`; return; }
-    el.innerHTML = `${book}<b>${q.name}</b><span>${Q.st === 'ready' ? 'Volvé con el Capitán' : `${q.zone}: ${Q.prog}/${q.n}`}</span>${keyLines()}`;
+    const el = $('quest'), book = bookLines();
+    el.hidden = !hasKeyStuff() && !book;
+    el.innerHTML = `${book}${hasKeyStuff() ? `<b>Mazmorras</b>${keyLines()}` : ''}`;
 }
 // ---------- libro de misiones del corte (cadena de 5, encargos del día, repetible): el server decide todo, acá solo se muestra ----------
 let QB: QuestBookView | null = null;
@@ -1956,7 +1955,7 @@ function renderBook(n: Npc) {
     add(`<b>Encargos del día</b><br><small>${dailyGold(P.lvl)} oro y 10 % de tu nivel cada uno.${ess} Se renuevan en ${fmtReset(QB.d.resetMs)}.</small>`);
     for (const id of QB.d.ids) {
         const d = DAILY_BY_ID.get(id)!, nprog = QB.d.prog[id] ?? 0, done = QB.d.done.includes(id);
-        add(`${done ? '✓ ' : ''}<b>${d.name}</b> <small>${goalLine(d.goal, nprog)}</small>`, done ? [] : [['Entregar', () => bookSend(n, 'd_turnin', id), nprog < d.goal.n], ['Cambiar', () => bookSend(n, 'd_reroll', id), QB!.d.rerolled]]);
+        add(`${done ? '✓ ' : ''}<b>${d.name}</b> <small>${goalLine(d.goal, nprog)}</small>`, done ? [] : [['Entregar', () => bookSend(n, 'd_turnin', id), nprog < d.goal.n]]);
     }
     // repetible
     const extra = Object.entries(QB.mats).filter(([id, c]) => c >= REPEAT_MATS && !RESERVED_MATS.has(id));
@@ -1970,35 +1969,29 @@ function bookTalk(n: Npc) {
     const q = QB && QB.m.st === 'active' ? MAIN_QUESTS[QB.m.i] : undefined;
     if (q?.goals.some((g, j) => g.k === 'talk' && g.role === roleOf(n) && (QB!.m.prog[j] ?? 0) < g.n)) bookSend(n, 'talk');
 }
-function questLevel(q: Quest) { const l = mobDef(q.type, zoneByName(q.zone, q.type)).lvl; return `Nv ${Math.max(1, l - 1)}–${l + 1}`; }
 function openQuestDlg(n: Npc) {
-    const q = QUESTS[Q.i], d = $('qdlg'); shopNpc = n; talkNpc = null;
+    const d = $('qdlg'); shopNpc = n; talkNpc = null;
     $('qdName').textContent = n.name; d.hidden = false;
-    let body = '', btn = '';
-    if (!q) body = 'Ya limpiaste todo lo que te pedí. Más encargos cuando abramos nuevos caminos. Para abrir las escaleras selladas forjá las llaves (abajo).';
-    else if (Q.st === 'new') { body = `<b>${q.name}</b> <small>${q.zone} · ${questLevel(q)}</small><br>${q.say}<br><small>Recompensa: ${q.xp} exp · ${q.gold} oro${q.shard ? ' · ' + KEYDEFS[q.shard].shard : ''}</small>`; btn = 'Aceptar'; }
-    else if (Q.st === 'active') body = `<b>${q.name}</b><br>Todavía te faltan ${q.n - Q.prog} en ${q.zone}.`;
-    else { body = `<b>${q.name}</b><br>Buen trabajo. Tomá tu paga.<br><small>${q.xp} exp · ${q.gold} oro${q.shard ? ' · ' + KEYDEFS[q.shard].shard : ''}</small>`; btn = 'Entregar'; }
-    if (q && Q.st !== 'ready') body += `<br><small>Portal de entrenamiento: «${q.zone}» (Portal de Frontera de la ciudad${trainOpen(TRAINING[Q.i]) ? '' : ', todavía bloqueado'}).</small>`;
-    body += `<br><small>Forja: ${SHARDS_PER_KEY} esquirlas (las sueltan los bosses) + oro = 1 llave.</small>`;
+    // la cadena vieja de 10 quedó jubilada: el Capitán da el Camino del aventurero y los encargos del día (renderBook), y sigue forjando las llaves viejas
+    $('qdBody').innerHTML = `<small>Forja: ${SHARDS_PER_KEY} esquirlas (las sueltan los jefes) + oro = 1 llave.</small>`;
+    $('qdBtn').hidden = true;
     const fg = $('qdForges'); fg.innerHTML = '';
     for (const k of KEY_IDS) {
-        const kd = KEYDEFS[k]; if (k === 'foso' && Q.i < 7 && !Q.shards.foso && !Q.keys.foso) continue;
+        const kd = KEYDEFS[k]; if (!Q.shards[k] && !Q.keys[k]) continue;
         const fb = document.createElement('button'); fb.type = 'button'; fb.textContent = `Forjar ${kd.name} (${Q.shards[k]}/${SHARDS_PER_KEY} esq. · ${kd.gold} oro)`; fb.disabled = Q.shards[k] < SHARDS_PER_KEY || P.gold < kd.gold;
         fb.onclick = () => { if (Q.shards[k] < SHARDS_PER_KEY || P.gold < kd.gold) return; net.send({ $case: 'econQuestRequest', value: { npcId: n.id, action: 'forge', key: k } }); };
         fg.appendChild(fb);
     }
-    $('qdBody').innerHTML = body; const b = $('qdBtn'); b.hidden = !btn; b.textContent = btn; renderBook(n);
-    b.onclick = () => {
-        if (Q.st === 'new') net.send({ $case: 'econQuestRequest', value: { npcId: n.id, action: 'accept', key: '' } });
-        else if (Q.st === 'ready') net.send({ $case: 'econQuestRequest', value: { npcId: n.id, action: 'turnin', key: '' } });
-    };
+    $('qdBody').hidden = !KEY_IDS.some((k) => Q.shards[k] || Q.keys[k]);
+    renderBook(n);
 }
+/** Rango de nivel de una zona de entrenamiento (sale de la tabla vieja de misiones, que se sigue usando solo como dato de zonas). */
+function questLevel(q: Quest) { const l = mobDef(q.type, zoneByName(q.zone, q.type)).lvl; return `Nv ${Math.max(1, l - 1)}–${l + 1}`; }
 /** "!" amarillo sobre el Capitán cuando tiene misión para vos; "?" cuando podés entregar. */
 const questMark = () => {
     const bm = QB ? MAIN_QUESTS[QB.m.i] : undefined;
-    if ((bm && QB!.m.st === 'ready') || QB?.d.ids.some((id) => !QB!.d.done.includes(id) && (QB!.d.prog[id] ?? 0) >= DAILY_BY_ID.get(id)!.goal.n) || (QUESTS[Q.i] && Q.st === 'ready')) return '?';
-    if ((bm && QB!.m.st === 'new' && P.lvl >= bm.minLvl) || (QUESTS[Q.i] && Q.st === 'new')) return '!';
+    if ((bm && QB!.m.st === 'ready') || QB?.d.ids.some((id) => !QB!.d.done.includes(id) && (QB!.d.prog[id] ?? 0) >= DAILY_BY_ID.get(id)!.goal.n)) return '?';
+    if (bm && QB!.m.st === 'new' && P.lvl >= bm.minLvl) return '!';
     return '';
 };
 
@@ -2216,7 +2209,7 @@ function currentTrainStep(): number {
 }
 const LOCK_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4.5 7V5a3.5 3.5 0 017 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="7" width="10" height="7" rx="1.4" fill="currentColor"/></svg>';
 const inHomeCity = () => cityAt(P.cell.x, P.cell.y)?.faction === selectedFaction && factionHome(selectedFaction)?.map === MAP_DEF.id;
-const lockMsg = (t: TrainingStep) => `Portal bloqueado (${t.zone}): ${t.after ? `entregá «${t.after}» al Capitán` : 'todavía no'} o llegá al nivel ${t.lvl}.`;
+const lockMsg = (t: TrainingStep) => `Portal bloqueado (${t.zone}): se abre al llegar al nivel ${t.lvl}.`;
 function renderWp() {
     if (!wpOpen) return;
     const city = selectedFaction === 'solmar' ? { name: 'Villa de Solmar' } : selectedFaction === 'vhar' ? { name: 'Ciudadela de Vhar' } : MAP.cities?.find((c) => c.faction === selectedFaction), inCity = inHomeCity(), cur = inCity ? -1 : currentTrainStep();
@@ -2225,7 +2218,7 @@ function renderWp() {
     const rows = [`<button type="button" class="wprow home${inCity ? ' cur' : ''}" data-wp="city"${inCity ? ' disabled' : ''}><i class="wpn">&#8962;</i><span class="wpt"><b>${inCity ? 'Estás en ' : 'Volver a '}${esc(city?.name ?? 'la ciudad')}</b><small>${inCity ? 'Zona segura' : 'Zona segura · tu facción'}</small></span>${inCity ? '<em class="wptag">Estás aquí</em>' : ''}</button>`];
     for (const t of TRAINING) {
         const open = trainOpen(t), here = t.step === cur, qq = QUESTS[t.step], lv = qq ? questLevel(qq) : '';
-        const sub = open ? `<small>Nivel recomendado ${lv.replace('Nv ', '')}</small>` : `<small class="req">${LOCK_SVG} Misión «${esc(t.after ?? '')}» o nivel ${t.lvl}</small>`;
+        const sub = open ? `<small>Nivel recomendado ${lv.replace('Nv ', '')}</small>` : `<small class="req">${LOCK_SVG} Nivel ${t.lvl}</small>`;
         rows.push(`<button type="button" class="wprow${open ? '' : ' locked'}${here ? ' cur' : ''}" data-wp="${t.id}" style="--zc:${t.col}"><i class="wpn">${t.step + 1}</i><span class="wpt"><b>${esc(t.zone)}</b>${sub}</span>${here ? '<em class="wptag">Estás aquí</em>' : `<em class="wplv">${lv}</em>`}</button>`);
     }
     $('wpList').innerHTML = rows.join('');

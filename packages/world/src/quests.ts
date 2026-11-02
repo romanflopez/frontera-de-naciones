@@ -3,12 +3,13 @@
  *
  * Tres cosas, todas con el Capitán de la ciudad:
  * - **Camino del aventurero:** cadena de 5 que lleva de los pits de nivel 1 a la Reina hormiga león (D2).
- * - **Encargos del día:** 3 al azar entre 6, se reinician todos juntos a las 06:00 de Argentina (09:00 UTC). La primera que
- *   entregás en el día paga además una esencia (material de la llave del nido). Una vez por día se puede cambiar un encargo.
+ * - **Encargos del día:** fijos (beta): están todos los de tu nivel, todos los días, sin sorteo. Se reinician juntos a las
+ *   06:00 de Argentina (09:00 UTC). El primero que entregás en el día paga además una esencia (material de la llave del nido).
  * - **Repetible:** entregar 10 materiales iguales a cambio de oro o de una piedra de forja (sumidero de lo que sobra del farmeo).
  *
- * Convive con la cadena vieja de 10 (`QUESTS` en economy.ts), que sigue abriendo portales y forjando las llaves viejas.
- * Esta lógica es pura (sin red ni azar propio): el server la usa para avanzar el progreso y el cliente para mostrarlo.
+ * Reemplaza a la cadena vieja de 10 (`QUESTS` en economy.ts), que quedó jubilada: los portales de entrenamiento se abren por
+ * nivel y las llaves viejas se siguen forjando con las esquirlas de los jefes.
+ * Esta lógica es pura (sin red ni azar): el server la usa para avanzar el progreso y el cliente para mostrarlo.
  */
 import type { MobType } from './mobs';
 import { BOSS_UNIQUES, UNIQUES_BY_TIER, type UniqueBase } from './uniques';
@@ -28,6 +29,8 @@ export const RESERVED_MATS = new Set([MAT_COLMILLO, MAT_ESENCIA]);
 /** Jefe que cierra cada dungeon del corte: matarlo (vos o tu party cerca) cuenta como completarlo. */
 export const DUNGEON_BOSS: Record<'d1' | 'd2', MobType> = { d1: 'goblin_jefe', d2: 'antlion_reina' };
 export const DUNGEON_NAME: Record<'d1' | 'd2', string> = { d1: 'la Cueva goblin', d2: 'el Nido de hormiga león' };
+/** Piso del jefe: el dungeon solo cuenta si el jefe muere ahí (en la instancia), no si aparece en otro lado (GM, mapas de prueba). */
+export const DUNGEON_MAP: Record<'d1' | 'd2', string> = { d1: 'minas_goblin', d2: 'ruinas_de_stormrock' };
 
 // ---------- objetivos ----------
 export type QuestGoal =
@@ -39,8 +42,8 @@ export type QuestGoal =
     /** levantar N materiales del suelo */
     | { k: 'gather'; n: number; what: string }
     | { k: 'dungeon'; d: 'd1' | 'd2'; n: number; what: string }
-    /** mejoras exitosas en el herrero */
-    | { k: 'upgrade'; n: number; what: string }
+    /** tener un ítem único en +N o más (equipado o en la bolsa): cuenta aunque la mejora la hayas hecho antes de aceptar */
+    | { k: 'upgraded'; n: number; what: string }
     /** hablar con un NPC de ese rol */
     | { k: 'talk'; role: string; n: number; what: string }
     | { k: 'mutant'; n: number; what: string }
@@ -69,9 +72,9 @@ export const MAIN_QUESTS: MainQuest[] = [
     },
     {
         id: 'el_herrero', name: 'El herrero', minLvl: 1,
-        say: 'Un ítem único vale más mejorado. Andá a la herrería, hablá con el herrero y subí tu pieza a +1. A veces falla: así es la forja.',
+        say: 'Un ítem único vale más mejorado. Andá a la herrería y pedile al herrero que suba tu pieza a +1. A veces falla: así es la forja.',
         done: 'Ya sabés limar. Las piedras caen de los mobs: cuanto más difícil el lugar, más seguido.',
-        goals: [{ k: 'talk', role: 'armero', n: 1, what: 'Hablar con el herrero' }, { k: 'upgrade', n: 1, what: 'Mejorar un ítem a +1' }],
+        goals: [{ k: 'upgraded', n: 1, what: 'Tener un ítem en +1' }],
         reward: { expPct: 25, gold: 80 },
     },
     {
@@ -107,7 +110,6 @@ export const DAILY_QUESTS: DailyQuest[] = [
     { id: 'frontera', name: 'Defensa de la frontera', minLvl: 3, goal: { k: 'pvp', n: 1, what: 'Ganar una pelea en mapa de facción' } },
 ];
 export const DAILY_BY_ID = new Map(DAILY_QUESTS.map((q) => [q.id, q]));
-export const DAILY_COUNT = 3;
 export const DAILY_EXP_PCT = 10;
 export const dailyGold = (lvl: number): number => 50 + 20 * lvl;
 /** El reinicio diario: 06:00 de Buenos Aires = 09:00 UTC. Todos a la misma hora (mejor que un temporizador de 20 h por personaje). */
@@ -124,10 +126,10 @@ export const repeatGold = (lvl: number): number => 20 + 6 * lvl;
 export interface QuestBook {
     /** Camino del aventurero: índice, estado y progreso de cada objetivo. */
     m: { i: number; st: 'new' | 'active' | 'ready'; prog: number[] };
-    /** Encargos del día: día del reinicio, los 3 de hoy, progreso, entregados, si ya se cambió uno y si ya se cobró la esencia. */
-    d: { day: number; ids: string[]; prog: Record<string, number>; done: string[]; rerolled: boolean; ess: boolean };
+    /** Encargos del día: día del reinicio, los de hoy, progreso, entregados, si ya se cobró la esencia y a quién ya le ganaste hoy en PvP. */
+    d: { day: number; ids: string[]; prog: Record<string, number>; done: string[]; ess: boolean; pvp: string[] };
 }
-export const newQuestBook = (): QuestBook => ({ m: { i: 0, st: 'new', prog: [] }, d: { day: -1, ids: [], prog: {}, done: [], rerolled: false, ess: false } });
+export const newQuestBook = (): QuestBook => ({ m: { i: 0, st: 'new', prog: [] }, d: { day: -1, ids: [], prog: {}, done: [], ess: false, pvp: [] } });
 
 const int = (v: unknown, lo: number, hi: number): number => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.floor(v))) : lo);
 /** Sanea lo guardado (cuentas sin libro, datos rotos o de una versión vieja). */
@@ -139,34 +141,26 @@ export function cleanQuestBook(raw: unknown): QuestBook {
     b.m.st = q && (m.st === 'active' || m.st === 'ready') ? m.st : 'new';
     b.m.prog = b.m.st === 'new' || !q ? [] : q.goals.map((g, j) => int(m.prog?.[j], 0, g.n));
     b.d.day = typeof d.day === 'number' ? Math.floor(d.day) : -1;
-    b.d.ids = (Array.isArray(d.ids) ? d.ids : []).filter((id): id is string => typeof id === 'string' && DAILY_BY_ID.has(id)).slice(0, DAILY_COUNT);
+    b.d.ids = [...new Set((Array.isArray(d.ids) ? d.ids : []).filter((id): id is string => typeof id === 'string' && DAILY_BY_ID.has(id)))];
     for (const id of b.d.ids) b.d.prog[id] = int(d.prog?.[id], 0, DAILY_BY_ID.get(id)!.goal.n);
     b.d.done = (Array.isArray(d.done) ? d.done : []).filter((id): id is string => b.d.ids.includes(id as string));
-    b.d.rerolled = !!d.rerolled; b.d.ess = !!d.ess;
+    b.d.ess = !!d.ess; b.d.pvp = (Array.isArray(d.pvp) ? d.pvp : []).filter((x): x is string => typeof x === 'string').slice(0, 200);
     return b;
 }
 
 /** Encargos que puede tomar alguien de este nivel. */
 export const dailyEligible = (lvl: number): DailyQuest[] => DAILY_QUESTS.filter((q) => lvl >= q.minLvl && (q.maxLvl === undefined || lvl <= q.maxLvl));
 
-/** Si cambió el día, reparte 3 encargos nuevos (los no entregados se pierden). `rnd` lo pone el server. Devuelve true si reinició. */
-export function rollDailies(b: QuestBook, lvl: number, now: number, rnd: () => number): boolean {
-    const day = questDay(now); if (b.d.day === day) return false;
-    const pool = [...dailyEligible(lvl)], ids: string[] = [];
-    while (ids.length < DAILY_COUNT && pool.length) ids.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0].id);
-    b.d = { day, ids, prog: Object.fromEntries(ids.map((id) => [id, 0])), done: [], rerolled: false, ess: false };
+/**
+ * Encargos fijos: al cambiar el día se renuevan todos (los no entregados se pierden); si subiste de nivel en el día,
+ * se suman los que se abren con el nivel nuevo. Devuelve true si cambió algo.
+ */
+export function rollDailies(b: QuestBook, lvl: number, now: number): boolean {
+    const day = questDay(now), ids = dailyEligible(lvl).map((q) => q.id);
+    if (b.d.day !== day) { b.d = { day, ids, prog: Object.fromEntries(ids.map((id) => [id, 0])), done: [], ess: false, pvp: [] }; return true; }
+    const add = ids.filter((id) => !b.d.ids.includes(id)); if (!add.length) return false;
+    for (const id of add) { b.d.ids.push(id); b.d.prog[id] = 0; }
     return true;
-}
-
-/** Cambia un encargo no entregado por otro que no esté hoy. Una vez por día. Devuelve el nuevo o un motivo de error. */
-export function rerollDaily(b: QuestBook, id: string, lvl: number, rnd: () => number): { ok: true; id: string } | { ok: false; text: string } {
-    if (b.d.rerolled) return { ok: false, text: 'Ya cambiaste un encargo hoy.' };
-    const at = b.d.ids.indexOf(id); if (at < 0) return { ok: false, text: 'Ese encargo no es de hoy.' };
-    if (b.d.done.includes(id)) return { ok: false, text: 'Ese encargo ya lo entregaste.' };
-    const pool = dailyEligible(lvl).filter((q) => !b.d.ids.includes(q.id)); if (!pool.length) return { ok: false, text: 'No hay otro encargo para tu nivel.' };
-    const nid = pool[Math.floor(rnd() * pool.length)].id;
-    b.d.ids[at] = nid; delete b.d.prog[id]; b.d.prog[nid] = 0; b.d.rerolled = true;
-    return { ok: true, id: nid };
 }
 
 // ---------- eventos ----------
@@ -174,9 +168,11 @@ export type QuestEvent =
     | { k: 'kill'; type: MobType; map: string; pit: boolean; /** tier del mob y del jugador (tierOfLevel) */ tier: number; myTier: number; mutant: boolean }
     | { k: 'gather'; n: number }
     | { k: 'dungeon'; d: 'd1' | 'd2' }
-    | { k: 'upgrade' }
     | { k: 'talk'; role: string }
     | { k: 'pvp' };
+
+/** Lo que el jugador tiene ahora (para los objetivos de "tener"): materiales y la mejora más alta entre sus ítems únicos. */
+export interface QuestHave { mats: Record<string, number>; maxUp: number }
 
 /** Cuánto suma un evento a un objetivo (0 si no le corresponde). Los de "tener" (collect) no avanzan por eventos. */
 export function goalStep(g: QuestGoal, e: QuestEvent): number {
@@ -186,41 +182,36 @@ export function goalStep(g: QuestGoal, e: QuestEvent): number {
         case 'mutant': return e.k === 'kill' && e.mutant ? 1 : 0;
         case 'gather': return e.k === 'gather' ? e.n : 0;
         case 'dungeon': return e.k === 'dungeon' && e.d === g.d ? 1 : 0;
-        case 'upgrade': return e.k === 'upgrade' ? 1 : 0;
         case 'talk': return e.k === 'talk' && e.role === g.role ? 1 : 0;
         case 'pvp': return e.k === 'pvp' ? 1 : 0;
         default: return 0;
     }
 }
 
-/** Progreso de un objetivo: los de "tener" se miran en los materiales; el resto, en lo guardado. */
-export const goalProgress = (g: QuestGoal, saved: number, mats: Record<string, number>): number => (g.k === 'collect' ? Math.min(g.n, mats[g.mat] ?? 0) : Math.min(g.n, saved));
-export const mainComplete = (b: QuestBook, mats: Record<string, number>): boolean => {
-    const q = MAIN_QUESTS[b.m.i]; return !!q && q.goals.every((g, j) => goalProgress(g, b.m.prog[j] ?? 0, mats) >= g.n);
+/** Progreso de un objetivo: los de "tener" se miran en lo que tenés; el resto, en lo guardado. */
+export const goalProgress = (g: QuestGoal, saved: number, have: QuestHave): number =>
+    g.k === 'collect' ? Math.min(g.n, have.mats[g.mat] ?? 0) : g.k === 'upgraded' ? (have.maxUp >= g.n ? g.n : 0) : Math.min(g.n, saved);
+export const mainComplete = (b: QuestBook, have: QuestHave): boolean => {
+    const q = MAIN_QUESTS[b.m.i]; return !!q && q.goals.every((g, j) => goalProgress(g, b.m.prog[j] ?? 0, have) >= g.n);
 };
 
 /**
  * Aplica un evento al libro. Devuelve los avisos para el jugador (misión lista, encargo listo).
- * `mats` son los materiales actuales (para los objetivos de "tener"). Llamar `rollDailies` antes si puede haber cambiado el día.
+ * `have` es lo que tiene ahora (para los objetivos de "tener"). Llamar `rollDailies` antes si puede haber cambiado el día.
+ * Sin evento (`null`) solo recalcula los de "tener" (después de mejorar, gastar materiales, etc.).
  */
-export function applyQuestEvent(b: QuestBook, e: QuestEvent, mats: Record<string, number>): string[] {
+export function applyQuestEvent(b: QuestBook, e: QuestEvent | null, have: QuestHave): string[] {
     const out: string[] = [];
     const q = MAIN_QUESTS[b.m.i];
-    if (q && b.m.st === 'active') {
-        q.goals.forEach((g, j) => {
-            // en orden: un objetivo no avanza hasta que el anterior esté cumplido (hablar con el herrero antes de mejorar)
-            if (q.goals.slice(0, j).some((h, i) => goalProgress(h, b.m.prog[i] ?? 0, mats) < h.n)) return;
-            const s = goalStep(g, e); if (s) b.m.prog[j] = Math.min(g.n, (b.m.prog[j] ?? 0) + s);
-        });
-    }
+    if (q && b.m.st === 'active' && e) q.goals.forEach((g, j) => { const s = goalStep(g, e); if (s) b.m.prog[j] = Math.min(g.n, (b.m.prog[j] ?? 0) + s); });
     if (q && b.m.st !== 'new') {
         const was = b.m.st;
-        b.m.st = mainComplete(b, mats) ? 'ready' : 'active';
+        b.m.st = mainComplete(b, have) ? 'ready' : 'active';
         if (was !== 'ready' && b.m.st === 'ready') out.push(`Misión lista: «${q.name}». Volvé con el Capitán.`);
     }
     for (const id of b.d.ids) {
         if (b.d.done.includes(id)) continue;
-        const dq = DAILY_BY_ID.get(id)!, before = b.d.prog[id] ?? 0, s = goalStep(dq.goal, e);
+        const dq = DAILY_BY_ID.get(id)!, before = b.d.prog[id] ?? 0, s = e ? goalStep(dq.goal, e) : 0;
         if (!s) continue;
         b.d.prog[id] = Math.min(dq.goal.n, before + s);
         if (before < dq.goal.n && b.d.prog[id] >= dq.goal.n) out.push(`Encargo listo: «${dq.name}». Entregalo al Capitán.`);
@@ -238,14 +229,14 @@ export function rewardUniques(kind: NonNullable<QuestReward['unique']>, cls: str
 // ---------- vista para el cliente (va como JSON en InventoryState.quest_book) ----------
 export interface QuestBookView {
     m: { i: number; st: QuestBook['m']['st']; prog: number[] };
-    d: { ids: string[]; prog: Record<string, number>; done: string[]; rerolled: boolean; ess: boolean; resetMs: number };
+    d: { ids: string[]; prog: Record<string, number>; done: string[]; ess: boolean; resetMs: number };
     mats: Record<string, number>;
 }
-export function questBookView(b: QuestBook, mats: Record<string, number>, now: number): QuestBookView {
+export function questBookView(b: QuestBook, have: QuestHave, now: number): QuestBookView {
     const q = MAIN_QUESTS[b.m.i];
     return {
-        m: { i: b.m.i, st: b.m.st, prog: q && b.m.st !== 'new' ? q.goals.map((g, j) => goalProgress(g, b.m.prog[j] ?? 0, mats)) : [] },
-        d: { ids: b.d.ids, prog: b.d.prog, done: b.d.done, rerolled: b.d.rerolled, ess: b.d.ess, resetMs: msToReset(now) },
-        mats: Object.fromEntries(Object.entries(mats).filter(([, n]) => n > 0)),
+        m: { i: b.m.i, st: b.m.st, prog: q && b.m.st !== 'new' ? q.goals.map((g, j) => goalProgress(g, b.m.prog[j] ?? 0, have)) : [] },
+        d: { ids: b.d.ids, prog: b.d.prog, done: b.d.done, ess: b.d.ess, resetMs: msToReset(now) },
+        mats: Object.fromEntries(Object.entries(have.mats).filter(([, n]) => n > 0)),
     };
 }
