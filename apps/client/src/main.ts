@@ -282,6 +282,7 @@ function onServer(m: ServerPayload) {
         case 'mobAttack': {
             const mob = mobMap.get(m.value.mobId); if (!mob) break;
             turnTo(mob, m.value.tx - mob.x, m.value.ty - mob.y, 0, true); oneShot(mob, 'swing', 0.4);
+            if (/arana|spider/.test(mob.sprite ?? '') && dist(mob, P) < 10) sfx('spider-attack', 0.6); // ataque de araña (solo si está cerca mío)
             break;
         }
         case 'mobProjectile': {
