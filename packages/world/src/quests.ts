@@ -2,8 +2,8 @@
  * Misiones del corte del MVP (docs del proyecto: `mvp-dungeons-llaves-quests.md` §4).
  *
  * Tres cosas, todas con el Capitán de la ciudad:
- * - **Camino del aventurero** (con el Capitán): cadena de 11 que te lleva mapa por mapa, de Campos de Sal (nivel 1) al Risco del Sur
- *   (nivel 13), pasando por el herrero, los colmillos, la Cueva goblin (D1) y la Reina hormiga león (D2).
+ * - **Camino del aventurero** (con el Capitán): cadena de 20 que te lleva por todos los mapas abiertos y los 6 dungeons, de Campos de
+ *   Sal (nivel 1) al Señor del Foso (nivel 29). Del 31 al 40 todavía no hay mapas (T7): ahí siguen los encargos del día.
  * - **Encargos del día** (sin NPC): se van abriendo por nivel, avanzan solos y se cobran solos al completarse. Tope de 3
  *   cobrados por día; se reinician a las 06:00 de Argentina (09:00 UTC). El primero del día paga además una esencia.
  * - **Repetible:** entregar 10 materiales iguales a cambio de oro o de una piedra de forja (sumidero de lo que sobra del farmeo).
@@ -28,10 +28,12 @@ export const QUEST_MATS: Record<string, { name: string; tier: number; chance: nu
 export const RESERVED_MATS = new Set([MAT_COLMILLO, MAT_ESENCIA]);
 
 /** Jefe que cierra cada dungeon del corte: matarlo (vos o tu party cerca) cuenta como completarlo. */
-export const DUNGEON_BOSS: Record<'d1' | 'd2', MobType> = { d1: 'goblin_jefe', d2: 'antlion_reina' };
-export const DUNGEON_NAME: Record<'d1' | 'd2', string> = { d1: 'la Cueva goblin', d2: 'el Nido de hormiga león' };
+export type DungeonId = 'd1' | 'd2' | 'd3' | 'd4' | 'd5' | 'd6';
+export const DUNGEON_IDS: DungeonId[] = ['d1', 'd2', 'd3', 'd4', 'd5', 'd6'];
+export const DUNGEON_BOSS: Record<DungeonId, MobType> = { d1: 'goblin_jefe', d2: 'antlion_reina', d3: 'caballero_cripta', d4: 'mago_mayor', d5: 'wyvern_aire', d6: 'demonio_foso' };
+export const DUNGEON_NAME: Record<DungeonId, string> = { d1: 'la Cueva goblin', d2: 'el Nido de hormiga león', d3: 'la Cripta olvidada', d4: 'la Torre del hechicero', d5: 'el Templo de Mez', d6: 'el Foso del demonio' };
 /** Piso del jefe: el dungeon solo cuenta si el jefe muere ahí (en la instancia), no si aparece en otro lado (GM, mapas de prueba). */
-export const DUNGEON_MAP: Record<'d1' | 'd2', string> = { d1: 'minas_goblin', d2: 'ruinas_de_stormrock' };
+export const DUNGEON_MAP: Record<DungeonId, string> = { d1: 'minas_goblin', d2: 'ruinas_de_stormrock', d3: 'sepulcro_profundo', d4: 'camaras_de_investigacion', d5: 'salon_de_mez', d6: 'foso_del_demonio' };
 
 // ---------- objetivos ----------
 export type QuestGoal =
@@ -42,7 +44,7 @@ export type QuestGoal =
     | { k: 'collect'; mat: string; n: number; what: string }
     /** levantar N materiales del suelo */
     | { k: 'gather'; n: number; what: string }
-    | { k: 'dungeon'; d: 'd1' | 'd2'; n: number; what: string }
+    | { k: 'dungeon'; d: DungeonId; n: number; what: string }
     /** tener un ítem único en +N o más (equipado o en la bolsa): cuenta aunque la mejora la hayas hecho antes de aceptar */
     | { k: 'upgraded'; n: number; what: string }
     /** hablar con un NPC de ese rol */
@@ -57,7 +59,8 @@ export interface QuestReward {
     gold: number;
     forge?: number;
     /** ítem único: uno T1 de tu clase al azar, uno T1 de tu clase a elección o uno de la Reina a elección */
-    unique?: 'class_t1_random' | 'class_t1_choice' | 'boss_d2_choice';
+    /** `boss_dN_choice`: uno de los ítems del jefe de ese dungeon, a elección (solo los jefes que ya tienen ítems: D1-D3) */
+    unique?: 'class_t1_random' | 'class_t1_choice' | `boss_${DungeonId}_choice`;
 }
 
 export interface MainQuest { id: string; name: string; minLvl: number; say: string; done: string; goals: QuestGoal[]; reward: QuestReward }
@@ -138,9 +141,72 @@ export const MAIN_QUESTS: MainQuest[] = [
     {
         id: 'risco_del_sur', name: 'El Risco del Sur', minLvl: 13,
         say: 'Al sur del cementerio está el Risco. Las hormigas león bajan del risco y cortan el camino: matá a 8.',
-        done: 'Más allá del risco empieza la Brecha. Eso, por ahora, es para los más fuertes.',
+        done: 'El camino quedó abierto. Debajo de Lochport hay algo que no duerme.',
         goals: [kill('risco_del_sur', ['antlion'], 8, 'Hormigas león en el Risco del Sur')],
         reward: { expPct: 25, gold: 280 },
+    },
+    {
+        id: 'cripta', name: 'La Cripta olvidada', minLvl: 14,
+        say: 'Debajo de Lochport hay una cripta que no se quedó dormida. En el sepulcro del fondo vela un caballero que no sabe que está muerto. Bajá con gente.',
+        done: 'El caballero descansa. Elegí una de sus piezas.',
+        goals: [{ k: 'dungeon', d: 'd3', n: 1, what: 'Completar la Cripta olvidada' }],
+        reward: { expPct: 40, gold: 500, unique: 'boss_d3_choice' },
+    },
+    {
+        id: 'la_brecha', name: 'La Brecha', minLvl: 16,
+        say: 'La Brecha es el cruce de todo: de ahí salen el paso de Stormrock, la torre y el templo. Los mineros caídos cuidan la bajada: matá a 8.',
+        done: 'Ya conocés la Brecha. Desde acá todo es más duro.',
+        goals: [kill('la_brecha', ['zombie_dark'], 8, 'Mineros caídos en La Brecha')],
+        reward: { expPct: 25, gold: 400 },
+    },
+    {
+        id: 'paso_de_stormrock', name: 'El Paso de Stormrock', minLvl: 18,
+        say: 'El paso de Stormrock lleva a las Cenizas. Los wyverns de los riscos cazan a los que cruzan: derribá a 6.',
+        done: 'El paso está abierto. Más allá, el mundo se quema.',
+        goals: [kill('paso_de_stormrock', ['wyvern'], 6, 'Wyverns en el Paso de Stormrock')],
+        reward: { expPct: 25, gold: 450, forge: 3 },
+    },
+    {
+        id: 'torre', name: 'La Torre del hechicero', minLvl: 19,
+        say: 'En la torre de la Brecha, un mago mayor sigue con sus experimentos en las cámaras de abajo. Cortalo antes de que termine el hechizo.',
+        done: 'Las cámaras quedaron en silencio.',
+        goals: [{ k: 'dungeon', d: 'd4', n: 1, what: 'Completar la Torre del hechicero' }],
+        reward: { expPct: 40, gold: 700, forge: 5 },
+    },
+    {
+        id: 'cenizas_i', name: 'Las Cenizas', minLvl: 21,
+        say: 'Del paso se baja a las Cenizas. Los hechiceros de ceniza levantan a los calcinados: matá a 8.',
+        done: 'Ceniza en la boca y en la armadura, pero volviste.',
+        goals: [kill('cenizas_i', ['skeleton_mage'], 8, 'Hechiceros de ceniza en Cenizas I')],
+        reward: { expPct: 25, gold: 550 },
+    },
+    {
+        id: 'cenizas_ii', name: 'Las catacumbas de ceniza', minLvl: 23,
+        say: 'Más adentro, en Cenizas II, los arqueros de las catacumbas no dejan pasar a nadie: bajá a 8.',
+        done: 'La entrada al templo de Mez queda cerca de acá.',
+        goals: [kill('cenizas_ii', ['skeleton_archer'], 8, 'Arqueros de las catacumbas en Cenizas II')],
+        reward: { expPct: 25, gold: 600, forge: 3 },
+    },
+    {
+        id: 'templo_de_mez', name: 'El Templo de Mez', minLvl: 24,
+        say: 'En el salón principal de Mez reina el Wyvern del aire. Llevá un grupo que sepa moverse.',
+        done: 'El trono del aire quedó vacío.',
+        goals: [{ k: 'dungeon', d: 'd5', n: 1, what: 'Completar el Templo de Mez' }],
+        reward: { expPct: 40, gold: 900, forge: 5 },
+    },
+    {
+        id: 'cenizas_iii', name: 'Los hornos de wyvern', minLvl: 26,
+        say: 'Cenizas III es el borde del mundo conocido. Los wyverns de fuego anidan en los hornos: matá a 10.',
+        done: 'Ya viste la entrada a la Fortaleza infernal. Lo que queda es el Foso.',
+        goals: [kill('cenizas_iii', ['wyvern_fire'], 10, 'Wyverns de fuego en Cenizas III')],
+        reward: { expPct: 25, gold: 750, forge: 3 },
+    },
+    {
+        id: 'foso', name: 'El Señor del Foso', minLvl: 29,
+        say: 'Debajo de la fortaleza infernal está el Foso, y en el foso, su señor. Es lo más hondo que se conoce. Si volvés, sos leyenda.',
+        done: 'El Señor del Foso cayó. Completaste el camino del aventurero.',
+        goals: [{ k: 'dungeon', d: 'd6', n: 1, what: 'Completar el Foso del demonio' }],
+        reward: { expPct: 50, gold: 1500, forge: 10 },
     },
 ];
 
@@ -149,7 +215,11 @@ export const DAILY_QUESTS: DailyQuest[] = [
     { id: 'pits', name: 'Limpieza de pits', minLvl: 1, goal: { k: 'pit', n: 25, what: 'Mobs de un pit de tu nivel' } },
     { id: 'recolector', name: 'Recolector', minLvl: 1, goal: { k: 'gather', n: 10, what: 'Materiales levantados' } },
     { id: 'dia_d1', name: 'Bajada a la cueva', minLvl: 4, maxLvl: 10, goal: { k: 'dungeon', d: 'd1', n: 1, what: 'Completar la Cueva goblin' } },
-    { id: 'dia_d2', name: 'Contra la Reina', minLvl: 8, goal: { k: 'dungeon', d: 'd2', n: 1, what: 'Completar el Nido de hormiga león' } },
+    { id: 'dia_d2', name: 'Contra la Reina', minLvl: 8, maxLvl: 15, goal: { k: 'dungeon', d: 'd2', n: 1, what: 'Completar el Nido de hormiga león' } },
+    { id: 'dia_d3', name: 'Bajada a la cripta', minLvl: 14, maxLvl: 20, goal: { k: 'dungeon', d: 'd3', n: 1, what: 'Completar la Cripta olvidada' } },
+    { id: 'dia_d4', name: 'Las cámaras de la torre', minLvl: 19, maxLvl: 25, goal: { k: 'dungeon', d: 'd4', n: 1, what: 'Completar la Torre del hechicero' } },
+    { id: 'dia_d5', name: 'El trono del aire', minLvl: 24, maxLvl: 30, goal: { k: 'dungeon', d: 'd5', n: 1, what: 'Completar el Templo de Mez' } },
+    { id: 'dia_d6', name: 'El Foso', minLvl: 29, goal: { k: 'dungeon', d: 'd6', n: 1, what: 'Completar el Foso del demonio' } },
     { id: 'mutante', name: 'Cazador de mutantes', minLvl: 1, goal: { k: 'mutant', n: 1, what: 'Matar un mutante' } },
     { id: 'frontera', name: 'Defensa de la frontera', minLvl: 3, goal: { k: 'pvp', n: 1, what: 'Ganar una pelea en mapa de facción' } },
 ];
@@ -213,7 +283,7 @@ export function rollDailies(b: QuestBook, lvl: number, now: number): boolean {
 export type QuestEvent =
     | { k: 'kill'; type: MobType; map: string; pit: boolean; /** tier del mob y del jugador (tierOfLevel) */ tier: number; myTier: number; mutant: boolean }
     | { k: 'gather'; n: number }
-    | { k: 'dungeon'; d: 'd1' | 'd2' }
+    | { k: 'dungeon'; d: DungeonId }
     | { k: 'talk'; role: string }
     | { k: 'pvp' };
 
@@ -268,7 +338,8 @@ export function applyQuestEvent(b: QuestBook, e: QuestEvent | null, have: QuestH
 
 /** Ítems que se pueden elegir (o sortear) como premio, según la clase. El mago y el healer usan lo que da Magia; el guerrero, lo que no. */
 export function rewardUniques(kind: NonNullable<QuestReward['unique']>, cls: string): UniqueBase[] {
-    if (kind === 'boss_d2_choice') return BOSS_UNIQUES[DUNGEON_BOSS.d2] ?? [];
+    const boss = /^boss_(d\d)_choice$/.exec(kind)?.[1] as DungeonId | undefined;
+    if (boss) return BOSS_UNIQUES[DUNGEON_BOSS[boss]] ?? [];
     const caster = cls === 'mago' || cls === 'healer';
     return (UNIQUES_BY_TIER[1] ?? []).filter((u) => u.slot === 'anillo' || (caster ? (u.mag ?? 0) > 0 : !(u.mag ?? 0)));
 }

@@ -13,7 +13,7 @@ import {
     MAPS, SHOPS, SLOTS, SRV_ATTR, TRAINING, buildMap, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statBonus, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, mobDef, sellPrice, trainingUnlocked,
     BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BASES, UP_MAX, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
-    DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
+    DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
     mainComplete, newQuestBook, repeatGold, rewardUniques, rollDailies, type QuestBook, type QuestEvent, type QuestHave, type QuestReward,
 } from '@fdn/world';
 import { RARITY_INDEX, rollMobDrop, type GeneratedItem } from './loot/itemGenerator.ts';
@@ -694,7 +694,7 @@ export class Economy {
         for (const name of qmats) p.send(M.econResult(true, 'quest_mat', `Conseguiste un ${name}.`));
         this.questEvent(p, st, { k: 'kill', type: k.type, map: k.map ?? '', pit: k.origin === 'pit', tier, myTier: tierOfLevel(st.lvl), mutant: ((k.traits ?? 0) & TRAIT_MUTANT) !== 0 });
         // el dungeon cuenta solo si el jefe muere en su piso (la instancia de la party), no si aparece en otro mapa
-        if (boss) for (const d of ['d1', 'd2'] as const) if (DUNGEON_BOSS[d] === k.type && k.map === DUNGEON_MAP[d]) this.questEvent(p, st, { k: 'dungeon', d });
+        if (boss) for (const d of DUNGEON_IDS) if (DUNGEON_BOSS[d] === k.type && k.map === DUNGEON_MAP[d]) this.questEvent(p, st, { k: 'dungeon', d });
         const questReady = false, questProg = 0; // la cadena vieja de 10 quedó jubilada: los avisos de misión van por questEvent
         levelUp(st); const ups = st.lvl - lvl0;
         this.touch(p);
