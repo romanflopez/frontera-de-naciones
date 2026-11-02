@@ -17,7 +17,7 @@ import { DEFAULT_MAP, RECALL, STAT_CAP, STAT_DESC, STAT_IDS, STAT_NAMES, default
 import { UNIQUE_BY_NAME, UP_MAX, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Quest, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
-import { DAILY_BY_ID, MAIN_QUESTS, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, dailyGold, rewardUniques, type QuestBookView, type QuestGoal } from '@fdn/world';
+import { DAILY_BY_ID, DAILY_LIMIT, MAIN_QUESTS, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, dailyGold, rewardUniques, type QuestBookView, type QuestGoal } from '@fdn/world';
 import { spellIcon } from './icons.ts';
 import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
 import { coinIcon, itemIcon, keyIcon, potionIcon, shardIcon } from './itemicons.ts';
@@ -317,7 +317,7 @@ function onServer(m: ServerPayload) {
         case 'combatTextEvent': onCombatText(m.value); break;
         case 'partyStatsUpdate': updatePartyStats(m.value.name, m.value.hp, m.value.mp); break;
         case 'partyInvited': showPartyInvite(m.value.fromName, Number(m.value.expiresMs)); break;
-        case 'econResult': deposit.onResult(m.value.ok, m.value.text); if (m.value.ok) log(esc(m.value.text)); else { toast(m.value.text); log(esc(m.value.text)); } break;
+        case 'econResult': deposit.onResult(m.value.ok, m.value.text); if (m.value.ok) { log(esc(m.value.text), ['daily_done', 'quest_ready'].includes(m.value.code)); if (['daily_done', 'quest_ready'].includes(m.value.code)) toast(m.value.text); } else { toast(m.value.text); log(esc(m.value.text)); } break;
         case 'killReward': onKillReward(m.value); break;
         case 'statusUpdate': onStatusUpdate(m.value); break;
         case 'skillEffect': onSkillEffect(m.value); break;
@@ -1925,8 +1925,9 @@ function bookLines(): string {
     if (!QB) return '';
     const q = MAIN_QUESTS[QB.m.i]; let out = '';
     if (q && QB.m.st !== 'new') out += `<b>${q.name}</b>` + (QB.m.st === 'ready' ? '<span>Volvé con el Capitán</span>' : q.goals.map((g, j) => `<span>${goalLine(g, QB!.m.prog[j] ?? 0)}</span>`).join(''));
-    const open = QB.d.ids.filter((id) => !QB!.d.done.includes(id));
-    if (open.length) out += `<b>Encargos del día</b>` + open.map((id) => { const d = DAILY_BY_ID.get(id)!, n = QB!.d.prog[id] ?? 0; return `<span>${n >= d.goal.n ? `✓ ${d.name}` : goalLine(d.goal, n)}</span>`; }).join('');
+    // encargos del día: avanzan y se cobran solos (sin NPC), hasta DAILY_LIMIT por día
+    const done = QB.d.done.length, full = done >= DAILY_LIMIT, open = full ? [] : QB.d.ids.filter((id) => !QB!.d.done.includes(id));
+    if (QB.d.ids.length) out += `<b>Encargos del día ${done}/${DAILY_LIMIT}</b>` + (full ? `<span>Listo por hoy · se renuevan en ${fmtReset(QB.d.resetMs)}</span>` : open.map((id) => `<span>${goalLine(DAILY_BY_ID.get(id)!.goal, QB!.d.prog[id] ?? 0)}</span>`).join(''));
     return out;
 }
 const bookSend = (n: Npc, action: string, key = '') => net.send({ $case: 'econQuestRequest', value: { npcId: n.id, action, key } });
@@ -1950,13 +1951,9 @@ function renderBook(n: Npc) {
         else if (rw.unique?.endsWith('_choice')) add(`${head}<br>${q.done}<br><small>Elegí tu premio:</small>`, rewardUniques(rw.unique, CLS.id).map((u) => [u.name, () => bookSend(n, 'm_turnin', u.name)] as [string, () => void]));
         else add(`${head}<br>${q.done}<br>${rtxt}`, [['Entregar', () => bookSend(n, 'm_turnin')]]);
     }
-    // encargos del día
-    const ess = QB.d.ess ? '' : ' El primero que entregues hoy paga además una Esencia.';
-    add(`<b>Encargos del día</b><br><small>${dailyGold(P.lvl)} oro y 10 % de tu nivel cada uno.${ess} Se renuevan en ${fmtReset(QB.d.resetMs)}.</small>`);
-    for (const id of QB.d.ids) {
-        const d = DAILY_BY_ID.get(id)!, nprog = QB.d.prog[id] ?? 0, done = QB.d.done.includes(id);
-        add(`${done ? '✓ ' : ''}<b>${d.name}</b> <small>${goalLine(d.goal, nprog)}</small>`, done ? [] : [['Entregar', () => bookSend(n, 'd_turnin', id), nprog < d.goal.n]]);
-    }
+    // los encargos del día no pasan por el Capitán: se ven en el HUD y se cobran solos
+    const ess = QB.d.ess ? '' : ' El primero del día paga además una Esencia.';
+    add(`<small>Encargos del día: se cobran solos al cumplirlos, hasta ${DAILY_LIMIT} por día (${dailyGold(P.lvl)} oro y 10 % de tu nivel cada uno).${ess}</small>`);
     // repetible
     const extra = Object.entries(QB.mats).filter(([id, c]) => c >= REPEAT_MATS && !RESERVED_MATS.has(id));
     add(`<b>Sobrantes</b><br><small>${REPEAT_MATS} materiales iguales por oro o una piedra de forja.${extra.length ? '' : ' Todavía no juntaste suficientes.'}</small>`);
@@ -1990,7 +1987,7 @@ function questLevel(q: Quest) { const l = mobDef(q.type, zoneByName(q.zone, q.ty
 /** "!" amarillo sobre el Capitán cuando tiene misión para vos; "?" cuando podés entregar. */
 const questMark = () => {
     const bm = QB ? MAIN_QUESTS[QB.m.i] : undefined;
-    if ((bm && QB!.m.st === 'ready') || QB?.d.ids.some((id) => !QB!.d.done.includes(id) && (QB!.d.prog[id] ?? 0) >= DAILY_BY_ID.get(id)!.goal.n)) return '?';
+    if (bm && QB!.m.st === 'ready') return '?';
     if (bm && QB!.m.st === 'new' && P.lvl >= bm.minLvl) return '!';
     return '';
 };

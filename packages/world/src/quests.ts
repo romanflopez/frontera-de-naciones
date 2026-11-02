@@ -2,9 +2,10 @@
  * Misiones del corte del MVP (docs del proyecto: `mvp-dungeons-llaves-quests.md` §4).
  *
  * Tres cosas, todas con el Capitán de la ciudad:
- * - **Camino del aventurero:** cadena de 5 que lleva de los pits de nivel 1 a la Reina hormiga león (D2).
- * - **Encargos del día:** fijos (beta): están todos los de tu nivel, todos los días, sin sorteo. Se reinician juntos a las
- *   06:00 de Argentina (09:00 UTC). El primero que entregás en el día paga además una esencia (material de la llave del nido).
+ * - **Camino del aventurero** (con el Capitán): cadena de 12 que te lleva mapa por mapa, de Campos de Sal a la Reina hormiga
+ *   león (D2), pasando por el herrero, los colmillos y la Cueva goblin (D1).
+ * - **Encargos del día** (sin NPC): se van abriendo por nivel, avanzan solos y se cobran solos al completarse. Tope de 3
+ *   cobrados por día; se reinician a las 06:00 de Argentina (09:00 UTC). El primero del día paga además una esencia.
  * - **Repetible:** entregar 10 materiales iguales a cambio de oro o de una piedra de forja (sumidero de lo que sobra del farmeo).
  *
  * Reemplaza a la cadena vieja de 10 (`QUESTS` en economy.ts), que quedó jubilada: los portales de entrenamiento se abren por
@@ -61,42 +62,92 @@ export interface QuestReward {
 
 export interface MainQuest { id: string; name: string; minLvl: number; say: string; done: string; goals: QuestGoal[]; reward: QuestReward }
 
-/** Camino del aventurero (textos provisorios: los ajusta Román). */
+const kill = (m: string, mobs: MobType[], n: number, what: string): QuestGoal => ({ k: 'kill', mobs, map: m, n, what });
+/** Camino del aventurero: un paso por mapa, en el orden en que se conectan (textos provisorios: se reescriben más adelante). */
 export const MAIN_QUESTS: MainQuest[] = [
     {
         id: 'primeros_pasos', name: 'Primeros pasos', minLvl: 1,
         say: 'Los goblins de los Campos de Sal se volvieron osados. Cada grupo vive en su pit: limpiá uno y vas a ver cómo vuelven a salir. Matá a 10 y volvé.',
         done: 'Bien hecho. Tomá esta pieza y unas piedras de forja: el herrero te va a explicar qué hacer con ellas.',
-        goals: [{ k: 'kill', mobs: ['goblin', 'goblin_elite'], map: 'campos_de_sal', n: 10, what: 'Goblins en Campos de Sal' }],
-        reward: { expPct: 25, gold: 150, forge: 3, unique: 'class_t1_random' },
+        goals: [kill('campos_de_sal', ['goblin', 'goblin_elite'], 10, 'Goblins en Campos de Sal')],
+        reward: { expPct: 20, gold: 120, forge: 3, unique: 'class_t1_random' },
+    },
+    {
+        id: 'bosque_de_piedra', name: 'El Bosque de Piedra', minLvl: 1,
+        say: 'Al lado de los Campos está el Bosque de Piedra. Los hobgoblins cavaron una madriguera y salen de noche. Matá a 6.',
+        done: 'El bosque respira un poco más tranquilo.',
+        goals: [kill('bosque_de_piedra', ['hobgoblin'], 6, 'Hobgoblins en el Bosque de Piedra')],
+        reward: { expPct: 20, gold: 80 },
     },
     {
         id: 'el_herrero', name: 'El herrero', minLvl: 1,
         say: 'Un ítem único vale más mejorado. Andá a la herrería y pedile al herrero que suba tu pieza a +1. A veces falla: así es la forja.',
         done: 'Ya sabés limar. Las piedras caen de los mobs: cuanto más difícil el lugar, más seguido.',
         goals: [{ k: 'upgraded', n: 1, what: 'Tener un ítem en +1' }],
-        reward: { expPct: 25, gold: 80 },
+        reward: { expPct: 20, gold: 80 },
     },
     {
         id: 'colmillos', name: 'Colmillos', minLvl: 1,
         say: 'La Cueva goblin no se abre con palabras. Los bichos de los pits de nivel 1 y 2 a veces sueltan colmillos: juntá 8, con eso y un poco de oro se arma la llave.',
         done: 'Ocho colmillos. Guardalos: son tu entrada a la cueva.',
         goals: [{ k: 'collect', mat: MAT_COLMILLO, n: 8, what: 'Colmillos' }],
-        reward: { expPct: 35, gold: 60 },
+        reward: { expPct: 25, gold: 60 },
+    },
+    {
+        id: 'canon_goblin', name: 'El Cañón goblin', minLvl: 2,
+        say: 'Del bosque sale el camino al Cañón goblin, donde está la entrada a la cueva. Ojo: ahí la otra nación también caza y te puede atacar. Bajá a 6 de sus arqueros.',
+        done: 'Ya conocés el cañón. La entrada a la cueva está ahí mismo.',
+        goals: [kill('canon_goblin', ['hobgoblin_archer'], 6, 'Arqueros hobgoblin en el Cañón goblin')],
+        reward: { expPct: 25, gold: 120 },
     },
     {
         id: 'cueva_goblin', name: 'La cueva goblin', minLvl: 3,
         say: 'El Jefe goblin se esconde al fondo de las minas, debajo de la cueva. Bajá solo o con un compañero y no te quedes quieto cuando golpee el piso.',
         done: 'Volviste entero. Elegí una pieza de la armería, te la ganaste. Y guardá la llave gastada que soltó el jefe.',
         goals: [{ k: 'dungeon', d: 'd1', n: 1, what: 'Completar la Cueva goblin' }],
-        reward: { expPct: 50, gold: 200, unique: 'class_t1_choice' },
+        reward: { expPct: 40, gold: 200, unique: 'class_t1_choice' },
+    },
+    {
+        id: 'pantano', name: 'El Pantano de Merrimead', minLvl: 3,
+        say: 'Saliendo del cañón está el Pantano de Merrimead. En el pozo oscuro los muertos no se quedan quietos: matá a 8 zombis oscuros.',
+        done: 'Olés a ciénaga, pero volviste.',
+        goals: [kill('pantano_de_merrimead', ['zombie_dark'], 8, 'Zombis oscuros en el Pantano')],
+        reward: { expPct: 25, gold: 160 },
+    },
+    {
+        id: 'altas_de_nazia', name: 'Las Altas de Nazia', minLvl: 4,
+        say: 'Del pantano se sube a las Altas de Nazia. Los hormigueros ardientes queman a los viajeros: acabá con 6 hormigas de fuego.',
+        done: 'Esas hormigas vienen de algún lado. Más al sur hay un nido entero.',
+        goals: [kill('altas_de_nazia', ['fire_ant'], 6, 'Hormigas de fuego en las Altas de Nazia')],
+        reward: { expPct: 25, gold: 200 },
+    },
+    {
+        id: 'lochport', name: 'El Cementerio de Lochport', minLvl: 5,
+        say: 'Volviendo por el pantano se llega al Cementerio de Lochport. Los hechiceros del camposanto levantan a los muertos: matá a 8.',
+        done: 'Uno menos que levanta muertos. Quedan muchos.',
+        goals: [kill('cementerio_de_lochport', ['skeleton_mage'], 8, 'Hechiceros esqueleto en Lochport')],
+        reward: { expPct: 25, gold: 240 },
+    },
+    {
+        id: 'risco_del_sur', name: 'El Risco del Sur', minLvl: 5,
+        say: 'Al sur del cementerio está el Risco. Las hormigas león bajan del risco y cortan el camino a la Brecha: matá a 8.',
+        done: 'El camino a la Brecha quedó abierto.',
+        goals: [kill('risco_del_sur', ['antlion'], 8, 'Hormigas león en el Risco del Sur')],
+        reward: { expPct: 25, gold: 280 },
+    },
+    {
+        id: 'la_brecha', name: 'La Brecha', minLvl: 6,
+        say: 'La Brecha es el cruce de todo: de ahí salen el paso de Stormrock, el templo y el nido de la Reina. Los mineros caídos cuidan la bajada: matá a 6.',
+        done: 'Ya viste la entrada al nido. Juntá gente antes de bajar.',
+        goals: [kill('la_brecha', ['zombie_dark'], 6, 'Mineros caídos en La Brecha')],
+        reward: { expPct: 30, gold: 320 },
     },
     {
         id: 'llave_gastada', name: 'La llave gastada', minLvl: 7,
         say: 'La Reina hormiga león manda en las ruinas debajo del nido. Sola no se va a dejar matar: juntá un grupo, y cuando empiece a llover ácido, cortala.',
         done: 'La Reina cayó. Elegí uno de sus trofeos: pocos lo pueden contar.',
         goals: [{ k: 'dungeon', d: 'd2', n: 1, what: 'Completar el Nido de hormiga león' }],
-        reward: { expPct: 60, gold: 400, unique: 'boss_d2_choice' },
+        reward: { expPct: 50, gold: 400, unique: 'boss_d2_choice' },
     },
 ];
 
@@ -111,6 +162,8 @@ export const DAILY_QUESTS: DailyQuest[] = [
 ];
 export const DAILY_BY_ID = new Map(DAILY_QUESTS.map((q) => [q.id, q]));
 export const DAILY_EXP_PCT = 10;
+/** Encargos cobrados por día: el resto deja de avanzar hasta el reinicio. */
+export const DAILY_LIMIT = 3;
 export const dailyGold = (lvl: number): number => 50 + 20 * lvl;
 /** El reinicio diario: 06:00 de Buenos Aires = 09:00 UTC. Todos a la misma hora (mejor que un temporizador de 20 h por personaje). */
 export const DAILY_RESET_UTC_HOUR = 9;
@@ -196,12 +249,13 @@ export const mainComplete = (b: QuestBook, have: QuestHave): boolean => {
 };
 
 /**
- * Aplica un evento al libro. Devuelve los avisos para el jugador (misión lista, encargo listo).
+ * Aplica un evento al libro. Devuelve los avisos para el jugador (misión lista) y los encargos que se acaban de completar
+ * (`paid`: ya quedan como cobrados; el server paga el premio). Con el tope del día alcanzado, los encargos no avanzan.
  * `have` es lo que tiene ahora (para los objetivos de "tener"). Llamar `rollDailies` antes si puede haber cambiado el día.
  * Sin evento (`null`) solo recalcula los de "tener" (después de mejorar, gastar materiales, etc.).
  */
-export function applyQuestEvent(b: QuestBook, e: QuestEvent | null, have: QuestHave): string[] {
-    const out: string[] = [];
+export function applyQuestEvent(b: QuestBook, e: QuestEvent | null, have: QuestHave): { msgs: string[]; paid: string[] } {
+    const out: string[] = [], paid: string[] = [];
     const q = MAIN_QUESTS[b.m.i];
     if (q && b.m.st === 'active' && e) q.goals.forEach((g, j) => { const s = goalStep(g, e); if (s) b.m.prog[j] = Math.min(g.n, (b.m.prog[j] ?? 0) + s); });
     if (q && b.m.st !== 'new') {
@@ -210,13 +264,13 @@ export function applyQuestEvent(b: QuestBook, e: QuestEvent | null, have: QuestH
         if (was !== 'ready' && b.m.st === 'ready') out.push(`Misión lista: «${q.name}». Volvé con el Capitán.`);
     }
     for (const id of b.d.ids) {
-        if (b.d.done.includes(id)) continue;
+        if (b.d.done.includes(id) || b.d.done.length >= DAILY_LIMIT) continue;
         const dq = DAILY_BY_ID.get(id)!, before = b.d.prog[id] ?? 0, s = e ? goalStep(dq.goal, e) : 0;
         if (!s) continue;
         b.d.prog[id] = Math.min(dq.goal.n, before + s);
-        if (before < dq.goal.n && b.d.prog[id] >= dq.goal.n) out.push(`Encargo listo: «${dq.name}». Entregalo al Capitán.`);
+        if (b.d.prog[id] >= dq.goal.n) { b.d.done.push(id); paid.push(id); }
     }
-    return out;
+    return { msgs: out, paid };
 }
 
 /** Ítems que se pueden elegir (o sortear) como premio, según la clase. El mago y el healer usan lo que da Magia; el guerrero, lo que no. */

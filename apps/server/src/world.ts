@@ -1104,7 +1104,8 @@ export class GameWorld {
         const r = this.floorLoot.pickup(lootId, p.posX, p.posY);
         if (!r.ok) { if (r.reason === 'far') p.send(M.sendMessage('Estás muy lejos para levantarlo.')); return; }
         const e = r.loot;
-        this.econ.addLoot(p, e.itemId, e.amount);
+        const lvl0 = p.econ?.lvl; this.econ.addLoot(p, e.itemId, e.amount);
+        if (p.econ && p.econ.lvl !== lvl0) this.restat(p); // un encargo del día cobrado al levantar puede subir de nivel
         const m = M.itemPickedUp(e.lootId, M.pid(p.playerId), e.itemName, e.amount, p.characterName), to = new Set([p.sessionId, ...viewers, ...this.nearbyPlayers(e.x, e.y).map((o) => o.sessionId), ...partyMates(p.sessionId)]);
         for (const sid of to) this.players.get(sid)?.send(m);
     }
@@ -1165,7 +1166,8 @@ export class GameWorld {
         if (!killerId || this.def?.pvp !== 'faction') return;
         const killer = this.playersById.get(killerId); if (!killer || killer === victim || !killer.econ || !victim.econ) return;
         if (this.factionOf(killer) === this.factionOf(victim) || victim.econ.lvl < killer.econ.lvl - 5) return;
-        this.econ?.questPvp(killer, victim.accountKey || victim.characterName);
+        const lvl0 = killer.econ.lvl; this.econ?.questPvp(killer, victim.accountKey || victim.characterName);
+        if (killer.econ.lvl !== lvl0) this.restat(killer);
     }
     private respawn(p: Player): void {
         if (!p.isDead || Date.now() - p.deadAt < 1800) return;

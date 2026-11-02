@@ -13,7 +13,7 @@ import {
     MAPS, SHOPS, SLOTS, SRV_ATTR, TRAINING, buildMap, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statBonus, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, mobDef, sellPrice, trainingUnlocked,
     BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BASES, UP_MAX, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
-    DAILY_BY_ID, DAILY_EXP_PCT, DUNGEON_BOSS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
+    DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
     mainComplete, newQuestBook, repeatGold, rewardUniques, rollDailies, type QuestBook, type QuestEvent, type QuestHave, type QuestReward,
 } from '@fdn/world';
 import { RARITY_INDEX, rollMobDrop, type GeneratedItem } from './loot/itemGenerator.ts';
@@ -552,8 +552,21 @@ export class Economy {
     questEvent(p: Player, st: Econ, e: QuestEvent | null): boolean {
         const b = (st.qb ??= newQuestBook()), before = JSON.stringify(b);
         rollDailies(b, st.lvl, Date.now());
-        for (const t of applyQuestEvent(b, e, questHave(st))) p.send(M.econResult(true, 'quest_ready', t));
-        return JSON.stringify(b) !== before;
+        const r = applyQuestEvent(b, e, questHave(st));
+        for (const t of r.msgs) p.send(M.econResult(true, 'quest_ready', t));
+        for (const id of r.paid) this.payDaily(p, st, id); // los encargos del día se cobran solos, sin ir al Capitán
+        return JSON.stringify(b) !== before || r.paid.length > 0;
+    }
+
+    /** Premio de un encargo del día recién completado (ya quedó marcado como cobrado). El primero del día da además una esencia. */
+    private payDaily(p: Player, st: Econ, id: string): void {
+        const b = st.qb!, dq = DAILY_BY_ID.get(id); if (!dq) return;
+        const r = this.payReward(st, { expPct: DAILY_EXP_PCT, gold: dailyGold(st.lvl) }, ''); if (!r.ok) return;
+        let ess = '';
+        if (!b.d.ess) { b.d.ess = true; const mats = (st.mats ??= {}); mats.esencia = Math.min(9999, (mats.esencia ?? 0) + 1); ess = ' Y por ser el primero del día, una Esencia.'; }
+        const left = DAILY_LIMIT - b.d.done.length;
+        p.send(M.econResult(true, r.ups ? 'level_up' : 'daily_done', `Encargo cumplido: «${dq.name}»: ${r.text}${ess}${left > 0 ? ` (te quedan ${left} hoy)` : ' Ya cobraste los 3 de hoy.'}`));
+
     }
 
     /** Ganó una pelea contra otra nación en un mapa de facción (lo decide world.ts). A cada rival se le cuenta una vez por día. */
@@ -600,17 +613,6 @@ export class Economy {
             b.m.i++; b.m.st = 'new'; b.m.prog = [];
             return done(`Entregaste «${q.name}»: ${r.text}`, r.ups > 0, r.ups ? 'level_up' : 'ok');
         }
-        if (action === 'd_turnin') {
-            const dq = DAILY_BY_ID.get(key);
-            if (!dq || !b.d.ids.includes(key)) return fail('quest_state', 'Ese encargo no es de hoy.');
-            if (b.d.done.includes(key)) return fail('quest_state', 'Ese encargo ya lo entregaste.');
-            if ((b.d.prog[key] ?? 0) < dq.goal.n) return fail('quest_state', 'Todavía no completaste el encargo.');
-            const r = this.payReward(st, { expPct: DAILY_EXP_PCT, gold: dailyGold(st.lvl) }, ''); if (!r.ok) return r;
-            b.d.done.push(key);
-            let ess = '';
-            if (!b.d.ess) { b.d.ess = true; mats.esencia = Math.min(9999, (mats.esencia ?? 0) + 1); ess = ' Y por ser el primero del día, una Esencia.'; }
-            return done(`Entregaste «${dq.name}»: ${r.text}${ess}`, r.ups > 0, r.ups ? 'level_up' : 'ok');
-        }
         if (action === 'r_turnin') { // key = "material|gold" o "material|forge"
             const [mat, what] = key.split('|');
             if (!mat || RESERVED_MATS.has(mat)) return fail('bad_mat', 'Ese material no se entrega: es para las llaves.');
@@ -656,7 +658,7 @@ export class Economy {
 
     reward(p: Player, ctx: EconCtx, k: KillInfo, expMult = 1): void {
         const st = p.econ; if (!st) return;
-        const def = k.def, boss = def.boss;
+        const def = k.def, boss = def.boss, lvl0 = st.lvl; // un encargo del día cobrado en este kill también puede subir de nivel
         // la exp baja con tu nivel (levelExpMult) y con la diferencia de nivel contra el mob (levelGapMult: 0 si es muy inferior)
         const lm = levelExpMult(st.lvl) * levelGapMult(st.lvl, def.lvl);
         const gain = lm > 0 ? Math.max(1, Math.round(def.exp * (1 + bonus(st, 'exp') / 100) * expMult * traitExpMult(k.traits ?? 0) * lm)) : 0;
@@ -694,7 +696,7 @@ export class Economy {
         // el dungeon cuenta solo si el jefe muere en su piso (la instancia de la party), no si aparece en otro mapa
         if (boss) for (const d of ['d1', 'd2'] as const) if (DUNGEON_BOSS[d] === k.type && k.map === DUNGEON_MAP[d]) this.questEvent(p, st, { k: 'dungeon', d });
         const questReady = false, questProg = 0; // la cadena vieja de 10 quedó jubilada: los avisos de misión van por questEvent
-        const ups = levelUp(st);
+        levelUp(st); const ups = st.lvl - lvl0;
         this.touch(p);
         p.send(M.killReward({ mobId: k.mobId, x: k.x, y: k.y, exp: gain, gold, item: item ? toInvItem(item) : undefined, bagFull, potion, shard, forge, newLvl: ups ? st.lvl : 0, questReady, questProg }));
         if (ups) ctx.restat(p); // subir de nivel cura (restat lo detecta por el nivel nuevo)

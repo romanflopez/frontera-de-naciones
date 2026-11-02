@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
 import {
-    DAILY_QUESTS, MAIN_QUESTS, MAPS, REPEAT_MATS, applyQuestEvent, buildMap, cleanQuestBook, dailyEligible, expToLevel, mobDef, msToReset,
+    DAILY_LIMIT, DAILY_QUESTS, MAIN_QUESTS, MAPS, REPEAT_MATS, applyQuestEvent, buildMap, cleanQuestBook, dailyEligible, mobDef, msToReset,
     newQuestBook, questDay, rewardUniques, roleOf, rollDailies, TRAIT_MUTANT, type MobType,
 } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
@@ -70,13 +70,13 @@ test('objetivos: el mapa cuenta; los de "tener" (colmillos, ítem en +1) se leen
     kill('canon_goblin'); kill('campos_de_sal', 'zombie'); assert.equal(b.m.prog[0], 0, 'otro mapa u otro mob no cuenta');
     for (let i = 0; i < 9; i++) kill('campos_de_sal', i % 2 ? 'goblin' : 'goblin_elite');
     assert.equal(b.m.st, 'active');
-    assert.match(kill('campos_de_sal').join(), /Misión lista/); assert.equal(b.m.st, 'ready');
+    assert.match(kill('campos_de_sal').msgs.join(), /Misión lista/); assert.equal(b.m.st, 'ready');
 
-    const h = newQuestBook(); h.m.i = 1; h.m.st = 'active'; h.m.prog = [0];
+    const h = newQuestBook(); h.m.i = MAIN_QUESTS.findIndex((q) => q.id === 'el_herrero'); h.m.st = 'active'; h.m.prog = [0];
     applyQuestEvent(h, null, none); assert.equal(h.m.st, 'active');
-    assert.match(applyQuestEvent(h, null, { mats: {}, maxUp: 1 }).join(), /Misión lista/, 'un ítem en +1, mejorado antes o después de aceptar');
+    assert.match(applyQuestEvent(h, null, { mats: {}, maxUp: 1 }).msgs.join(), /Misión lista/, 'un ítem en +1, mejorado antes o después de aceptar');
 
-    const c = newQuestBook(); c.m.i = 2; c.m.st = 'active'; c.m.prog = [0];
+    const c = newQuestBook(); c.m.i = MAIN_QUESTS.findIndex((q) => q.id === 'colmillos'); c.m.st = 'active'; c.m.prog = [0];
     applyQuestEvent(c, { k: 'gather', n: 1 }, { mats: { colmillo: 7 }, maxUp: 0 }); assert.equal(c.m.st, 'active');
     applyQuestEvent(c, { k: 'gather', n: 1 }, { mats: { colmillo: 8 }, maxUp: 0 }); assert.equal(c.m.st, 'ready');
     applyQuestEvent(c, { k: 'gather', n: 1 }, { mats: { colmillo: 2 }, maxUp: 0 }); assert.equal(c.m.st, 'active', 'si gastó los colmillos vuelve a activa');
@@ -96,81 +96,85 @@ test('premios por clase: el mago recibe ítems con Magia y el guerrero no; los a
     assert.ok(rewardUniques('boss_d2_choice', 'guerrero').every((u) => u.uniq.boss === 'antlion_reina'));
 });
 
-test('cadena completa en el server: de Campos de Sal a la Reina, con premios y elección de ítem', () => {
-    const { p, st, ask, kill, eco, smith, smithy, ctxOf, unthrottle, log } = setup();
+test('el camino recorre los mapas en orden de nivel y cada objetivo de matar apunta a un mob que vive en ese mapa', () => {
+    let last = 0;
+    for (const q of MAIN_QUESTS) {
+        assert.ok(q.minLvl >= last, `${q.name}: el nivel no baja`); last = q.minLvl;
+        for (const g of q.goals) if (g.k === 'kill') {
+            const zones = buildMap(g.map!).zones; assert.ok(zones.length, `${g.map} existe`);
+            assert.ok(g.mobs.some((t) => zones.some((z) => z.type === t)), `${q.name}: ${g.mobs} no vive en ${g.map}`);
+        }
+    }
+    const maps = new Set(MAIN_QUESTS.flatMap((q) => q.goals.flatMap((g) => (g.k === 'kill' ? [g.map] : []))));
+    for (const m of ['campos_de_sal', 'bosque_de_piedra', 'canon_goblin', 'pantano_de_merrimead', 'altas_de_nazia', 'cementerio_de_lochport', 'risco_del_sur', 'la_brecha']) assert.ok(maps.has(m), `falta ${m}`);
+});
+
+test('cadena completa en el server: de Campos de Sal a la Reina, con premios, niveles y elección de ítem', () => {
+    const { p, st, ask, kill, eco, smith, smithy, ctxOf, unthrottle, cap } = setup();
     const rnd = Math.random;
     try {
-        Math.random = () => 0.99; // sin drops al azar (ni colmillos, ni pociones) para contar exacto
+        Math.random = () => 0.99; // sin drops al azar para contar exacto
         assert.equal(ask('m_turnin').code, 'quest_state');
-        assert.equal(ask('m_accept').ok, true);
-        for (let i = 0; i < 9; i++) kill('goblin');
-        kill('goblin', { map: 'bosque_de_piedra' }); // otro mapa: no cuenta
-        assert.equal(st.qb!.m.st, 'active');
-        kill('goblin_elite');
-        assert.equal(st.qb!.m.st, 'ready');
-        // 1) Primeros pasos: exp en % del nivel, oro, 3 piedras y un único T1 de la clase
-        st.exp = 0; const lvl = st.lvl, gold = st.gold, forge = st.forge ?? 0, bag = st.bag.length;
-        const r1 = ask('m_turnin'); assert.equal(r1.ok, true, r1.text);
-        assert.equal(st.forge, forge + 3); assert.equal(st.gold, gold + 150); assert.equal(st.bag.length, bag + 1);
-        assert.ok(st.lvl > lvl || st.exp === Math.round(expToLevel(lvl) * 0.25));
-        const prize = st.bag.at(-1)!; assert.ok(rewardUniques('class_t1_random', 'guerrero').some((u) => u.name === prize.n));
-        assert.equal(st.qb!.m.i, 1); assert.equal(st.qb!.m.st, 'new');
-
-        // 2) El herrero: tener un ítem en +1. Si ya lo mejoró antes de aceptar, queda lista al aceptar
-        const sctx = ctxOf(smithy); const home = { x: p.posX, y: p.posY };
-        p.setPosition(smith.x + 1, smith.y + 1);
-        Math.random = () => 0; // la mejora sale
-        unthrottle(); eco.upgrade(p, sctx, smith.id, prize.u);
-        assert.equal(prize.up, 1, JSON.stringify(log.filter((m) => m.payload?.$case === 'econResult').slice(-3).map((m) => (m.payload as any).value)));
-        p.setPosition(home.x, home.y);
-        Math.random = () => 0.99;
-        assert.equal(ask('m_accept').ok, true); assert.equal(st.qb!.m.st, 'ready', 'mejorado antes de aceptar también vale');
-        assert.equal(ask('m_turnin').ok, true);
-
-        // 3) Colmillos: caen en pits T1 (8 %) y se cuentan; entregar no los gasta (son para la llave)
-        assert.equal(ask('m_accept').ok, true);
-        Math.random = () => 0.05; // 0,05 < 0,08: cae colmillo (y, de paso, no cae ningún otro botín que dependa de valores más bajos)
-        for (let i = 0; i < 8; i++) kill('goblin', { origin: 'pit' });
-        Math.random = () => 0.99;
-        assert.ok((st.mats?.colmillo ?? 0) >= 8); assert.equal(st.qb!.m.st, 'ready');
-        const fangs = st.mats!.colmillo; assert.equal(ask('m_turnin').ok, true); assert.equal(st.mats!.colmillo, fangs);
-        kill('goblin', { origin: 'loose' }); assert.equal(st.mats!.colmillo, fangs, 'sueltos no sueltan colmillos');
-
-        // 4) La cueva goblin: pide nivel 3, se completa matando al jefe, y el premio se elige
-        st.lvl = 2; assert.equal(ask('m_accept').code, 'quest_lvl');
-        st.lvl = 3; st.exp = 0; assert.equal(ask('m_accept').ok, true);
-        kill('goblin_jefe', { origin: 'dungeon', map: 'campos_de_sal' }); assert.equal(st.qb!.m.st, 'active', 'el jefe fuera de su piso no cuenta');
-        kill('goblin_jefe', { origin: 'dungeon', map: 'minas_goblin' });
-        assert.equal(st.qb!.m.st, 'ready');
-        const c = ask('m_turnin'); assert.equal(c.code, 'choose'); assert.match(c.text, /Elegí tu premio/);
-        assert.equal(ask('m_turnin', 'Vara de raíz').code, 'choose', 'un guerrero no elige el báculo');
-        assert.equal(ask('m_turnin', 'Hoja de sal').ok, true); assert.equal(st.bag.at(-1)!.n, 'Hoja de sal');
-
-        // 5) La llave gastada: la Reina, nivel 7, un trofeo de ella a elección
-        st.lvl = 7; st.exp = 0; assert.equal(ask('m_accept').ok, true);
-        kill('antlion_reina', { origin: 'dungeon', map: 'ruinas_de_stormrock' });
-        assert.equal(ask('m_turnin', 'Caparazón de la Reina').ok, true);
+        st.qb!.d.done = ['pits', 'recolector', 'mutante']; // tope del día alcanzado: los encargos no cobran exp ni oro en el medio
+        let prize = '';
+        for (const q of MAIN_QUESTS) {
+            st.lvl = Math.max(st.lvl, q.minLvl); st.exp = 0;
+            if (q.minLvl > 1) { st.lvl = q.minLvl - 1; assert.equal(ask('m_accept').code, 'quest_lvl', q.name); st.lvl = q.minLvl; }
+            const a = ask('m_accept'); assert.equal(a.ok, true, `${q.name}: ${a.text}`);
+            for (const g of q.goals) {
+                if (g.k === 'kill') {
+                    kill(g.mobs[0], { map: 'otro_mapa' }); // otro mapa no cuenta
+                    for (let n = 0; n < g.n; n++) kill(g.mobs[n % g.mobs.length], { map: g.map });
+                } else if (g.k === 'upgraded') {
+                    const it = st.bag.find((x) => x.n === prize)!; p.setPosition(smith.x + 1, smith.y + 1);
+                    Math.random = () => 0; unthrottle(); eco.upgrade(p, ctxOf(smithy), smith.id, it.u); Math.random = () => 0.99;
+                    assert.equal(it.up, 1); p.setPosition(cap.x + 1, cap.y + 1); // de vuelta con el Capitán
+                } else if (g.k === 'collect') {
+                    Math.random = () => 0.05; for (let n = 0; n < g.n; n++) kill('goblin', { origin: 'pit', map: 'campos_de_sal' }); Math.random = () => 0.99;
+                } else if (g.k === 'dungeon') {
+                    const boss = g.d === 'd1' ? 'goblin_jefe' : 'antlion_reina', map = g.d === 'd1' ? 'minas_goblin' : 'ruinas_de_stormrock';
+                    kill(boss, { origin: 'dungeon', map: 'campos_de_sal' }); assert.equal(st.qb!.m.st, 'active', 'el jefe fuera de su piso no cuenta');
+                    kill(boss, { origin: 'dungeon', map });
+                }
+            }
+            assert.equal(st.qb!.m.st, 'ready', q.name);
+            const gold = st.gold, forge = st.forge ?? 0, bag = st.bag.length;
+            if (q.reward.unique?.endsWith('_choice')) {
+                assert.equal(ask('m_turnin').code, 'choose');
+                assert.equal(ask('m_turnin', 'Vara de raíz').code, 'choose', 'un guerrero no elige el báculo');
+                const pick = q.reward.unique === 'boss_d2_choice' ? 'Caparazón de la Reina' : 'Hoja de sal';
+                assert.equal(ask('m_turnin', pick).ok, true); assert.equal(st.bag.at(-1)!.n, pick);
+            } else {
+                const r = ask('m_turnin'); assert.equal(r.ok, true, `${q.name}: ${r.text}`);
+                if (q.reward.unique) { prize = st.bag.at(-1)!.n; assert.ok(rewardUniques('class_t1_random', 'guerrero').some((u) => u.name === prize)); assert.equal(st.bag.length, bag + 1); }
+            }
+            assert.equal(st.gold, gold + q.reward.gold, q.name); assert.equal(st.forge ?? 0, forge + (q.reward.forge ?? 0));
+            if (q.id === 'colmillos') assert.ok((st.mats?.colmillo ?? 0) >= 8, 'entregar no gasta los colmillos');
+        }
         assert.equal(st.qb!.m.i, MAIN_QUESTS.length);
         assert.equal(ask('m_accept').code, 'quest_state', 'la cadena terminó');
     } finally { Math.random = rnd; }
 });
 
-test('encargos del día en el server: progreso, la primera entrega da esencia, no se entregan dos veces, no hay cambio', () => {
-    const { st, ask, kill, eco, p } = setup();
+test('encargos del día en el server: se cobran solos sin NPC, el primero da esencia, tope de 3 por día', () => {
+    const { st, ask, kill, eco, p, log } = setup();
     const rnd = Math.random;
     try {
         Math.random = () => 0.99;
-        st.lvl = 4; eco.snapshot(p); // al entrar se reparten
+        st.lvl = 4; eco.snapshot(p);
         const b = st.qb!; assert.deepEqual([...b.d.ids].sort(), dailyEligible(4).map((q) => q.id).sort());
-        assert.equal(ask('d_turnin', 'pits').code, 'quest_state');
+        const gold0 = st.gold, ess = st.mats?.esencia ?? 0;
         for (let i = 0; i < 25; i++) kill('goblin', { def: { ...mobDef('goblin'), lvl: 3 } }); // T2, igual que el jugador
-        assert.equal(b.d.prog.pits, 25);
-        kill('goblin', { traits: TRAIT_MUTANT, origin: 'loose' }); assert.equal(b.d.prog.mutante, 1);
-        const ess = st.mats?.esencia ?? 0;
-        const a = ask('d_turnin', 'pits'); assert.equal(a.ok, true, a.text); assert.match(a.text, /Esencia/); assert.equal(st.mats!.esencia, ess + 1);
-        assert.equal(ask('d_turnin', 'pits').code, 'quest_state', 'ya entregado');
-        const m = ask('d_turnin', 'mutante'); assert.equal(m.ok, true); assert.doesNotMatch(m.text, /Esencia/); assert.equal(st.mats!.esencia, ess + 1);
-        assert.equal(ask('d_reroll', 'recolector').code, 'bad_action', 'no hay cambio de encargo');
+        assert.ok(b.d.done.includes('pits'), 'cobrado solo'); assert.equal(st.mats!.esencia, ess + 1); assert.ok(st.gold > gold0);
+        const msg = log.filter((m) => m.payload?.$case === 'econResult').map((m) => (m.payload as any).value.text).join('\n');
+        assert.match(msg, /Encargo cumplido: «Limpieza de pits».*Esencia/);
+        kill('goblin', { traits: TRAIT_MUTANT, origin: 'loose' }); assert.ok(b.d.done.includes('mutante')); assert.equal(st.mats!.esencia, ess + 1, 'la esencia es una por día');
+        eco.addLoot(p, 'goblin_ear', 10); assert.ok(b.d.done.includes('recolector'));
+        assert.equal(b.d.done.length, DAILY_LIMIT);
+        const prog = { ...b.d.prog };
+        kill('goblin_jefe', { origin: 'dungeon', map: 'minas_goblin' }); assert.ok(!b.d.done.includes('dia_d1'), 'tope de 3: no se cobra un cuarto');
+        assert.deepEqual(b.d.prog, prog, 'con el tope alcanzado no avanzan');
+        assert.equal(ask('d_turnin', 'pits').code, 'bad_action', 'no hay que entregarlos');
         assert.equal(ask('accept').code, 'quest_retired', 'la cadena vieja quedó jubilada');
     } finally { Math.random = rnd; }
 });
@@ -220,7 +224,7 @@ test('encargo PvP: cuenta ganarle a la otra nación en mapa de facción, una vez
     const a = mk(faction, 'sol', 'solmar'), v = mk(faction, 'vh', 'vhar'), ally = mk(faction, 'sol2', 'solmar');
     a.econ!.lvl = 10; v.econ!.lvl = 4; credit(faction, v, a); assert.equal(a.econ!.qb!.d.prog.frontera, 0, '6 niveles abajo no cuenta');
     ally.econ!.lvl = 10; credit(faction, ally, a); assert.equal(a.econ!.qb!.d.prog.frontera, 0, 'misma nación no cuenta');
-    v.econ!.lvl = 5; credit(faction, v, a); assert.equal(a.econ!.qb!.d.prog.frontera, 1);
-    a.econ!.qb!.d.prog.frontera = 0; credit(faction, v, a); assert.equal(a.econ!.qb!.d.prog.frontera, 0, 'al mismo rival se le cuenta una vez por día');
+    v.econ!.lvl = 5; credit(faction, v, a); assert.equal(a.econ!.qb!.d.prog.frontera, 1); assert.ok(a.econ!.qb!.d.done.includes('frontera'), 'se cobra solo');
+    a.econ!.qb!.d.prog.frontera = 0; a.econ!.qb!.d.done = []; credit(faction, v, a); assert.equal(a.econ!.qb!.d.prog.frontera, 0, 'al mismo rival se le cuenta una vez por día');
     const b = mk(safe, 'sol', 'solmar'), w2 = mk(safe, 'vh', 'vhar'); credit(safe, w2, b); assert.equal(b.econ!.qb!.d.prog.frontera, 0, 'sin PvP en el mapa no cuenta');
 });
