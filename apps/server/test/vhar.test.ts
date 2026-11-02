@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { HUNT_ARRIVALS, LEGACY_VHAR_LINK, MAPS, RECALL, VHAR, VHAR_BUILDINGS, VHAR_INTERIORS, VHAR_RESPAWN, buildMap, factionHome, getMapDef, reachableFrom, respawnTarget, roleOf, roomOf, validateMapGraph, vharDoor, type VharBuilding } from '@fdn/world';
+import { MAPS, RECALL, VHAR, VHAR_BUILDINGS, VHAR_INTERIORS, VHAR_RESPAWN, buildMap, factionHome, getMapDef, reachableFrom, respawnTarget, roleOf, roomOf, validateMapGraph, vharDoor, type VharBuilding } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
@@ -154,28 +154,21 @@ test('el recall (H) de Vhar lleva a la plaza de la ciudadela', () => {
     } finally { c.restore(); }
 });
 
-test('el Portal de Frontera de la ciudadela lleva a las zonas de caza (Llanos del Alba)', () => {
+test('el Portal de Frontera de la ciudadela lleva a los Campos de Sal', () => {
     const { reg, join } = setup();
     const city = reg.ensure('vhar_ciudadela');
     const J = join(city, 'viajero', { x: VHAR.portal.x + 1, y: VHAR.portal.y + 1 });
-    pkt(city, J.session.sessionId, 'waypointRequest', { id: 'goblins' });
-    assert.deepEqual([reg.pendingOf(J.session.sessionId)!.map, reg.pendingOf(J.session.sessionId)!.x, reg.pendingOf(J.session.sessionId)!.y], ['llanos_alba', HUNT_ARRIVALS.goblins.x, HUNT_ARRIVALS.goblins.y]);
+    pkt(city, J.session.sessionId, 'waypointRequest', { id: 'campos_de_sal' });
+    assert.deepEqual([reg.pendingOf(J.session.sessionId)!.map, reg.pendingOf(J.session.sessionId)!.x, reg.pendingOf(J.session.sessionId)!.y], ['campos_de_sal', MAPS.campos_de_sal.spawn.x, MAPS.campos_de_sal.spawn.y]);
 });
 
-test('camino entre la ciudadela y el mapa viejo, ida y vuelta (llega junto a la puerta de la ciudad vieja de Vhar)', () => {
+test('el portón sur de la ciudadela sale a los Campos de Sal (solo ida)', () => {
     const { reg, join } = setup();
     const city = reg.ensure('vhar_ciudadela');
     const J = join(city, 'caminante', VHAR.spawn);
     city.playerOf(J.session.sessionId)!.setPosition(VHAR.toLegacy.x, VHAR.toLegacy.y);
     reg.handlePortal(J.session, 'ciudadela_a_legacy');
-    assert.equal(reg.pendingOf(J.session.sessionId)?.map, 'solmar_legacy');
-    reg.completeTransfer(J.session.sessionId, 'solmar_legacy', reg.hashOf('solmar_legacy'));
-    const legacy = reg.get('solmar_legacy')!, [lx, ly] = pos(legacy, J.session.sessionId);
-    assert.ok(Math.abs(lx - 34) <= 4 && Math.abs(ly - 14) <= 5, `${lx},${ly}`); // puerta de la ciudad vieja de Vhar en (34, 14)
-    legacy.playerOf(J.session.sessionId)!.setPosition(LEGACY_VHAR_LINK.x, LEGACY_VHAR_LINK.y);
-    reg.handlePortal(J.session, 'legacy_a_ciudadela');
-    reg.completeTransfer(J.session.sessionId, 'vhar_ciudadela', reg.hashOf('vhar_ciudadela'));
-    assert.deepEqual(pos(city, J.session.sessionId), [VHAR.fromLegacy.x, VHAR.fromLegacy.y]);
+    assert.equal(reg.pendingOf(J.session.sessionId)?.map, 'campos_de_sal');
 });
 
 test('comprar dentro del Bazar y los NPC _v de la ciudadela', () => {

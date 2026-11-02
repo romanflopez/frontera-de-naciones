@@ -135,7 +135,7 @@ Los mapas de Flare son datos CC-BY-SA 3.0 o posterior: hay que atribuir (autores
 3. ¿Mobs a distancia (arqueros, magos) en abierto o solo en dungeons?
 4. Dungeons como mapas compartidos (hoy) o instancia de grupo (`MUNDO.md` §5.0 lo prevé más adelante).
 5. Qué mapas de la reserva se suman primero para Nv13+.
-6. `main` ya trae 4 mapas de caza generados por código (`llanos_alba`, `la_frontera`, `camposanto`, `paramo`, Fase 3 de `MUNDO.md`): ¿los mapas de Flare los reemplazan o se suman?
+6. ~~¿Los mapas de Flare reemplazan a los de caza generados por código?~~ **Decidido (2/11/2026): sí.** Se sacaron los Llanos del Alba, La Frontera, el Camposanto Viejo y el Páramo Reseco; el mapa viejo (Tierras de Solmar) quedó sin entrada, solo para pruebas. Se entra por la Villa / la Ciudadela; el Portal de Frontera lleva a la entrada de los 12 mapas abiertos de Flare (se abren por nivel) y los portones de las dos ciudades salen a los Campos de Sal.
 
 
 ### Estado de mazmorras

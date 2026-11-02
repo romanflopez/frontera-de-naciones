@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { HUNT_ARRIVALS, INTERIORS, LLANOS, MAPS, TEMPLE_RESPAWN, VILLA, VILLA_BUILDINGS, buildMap, factionHome, getMapDef, respawnTarget, roleOf, roomOf, validateMapGraph, villaDoor, type VillaBuilding } from '@fdn/world';
+import { INTERIORS, MAPS, TEMPLE_RESPAWN, VILLA, VILLA_BUILDINGS, buildMap, factionHome, getMapDef, respawnTarget, roleOf, roomOf, validateMapGraph, villaDoor, type VillaBuilding } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
@@ -122,49 +122,35 @@ test('un personaje nuevo de Solmar va a la villa (hogar de la facción)', () => 
     assert.equal(factionHome('vhar')!.map, 'vhar_ciudadela');
 });
 
-test('el Portal de Frontera de la villa lleva a las zonas (mapas de caza y mapa viejo)', () => {
+test('el Portal de Frontera de la villa lleva a la entrada de cada mapa de Flare, por nivel', () => {
     const { reg, join } = setup();
     const villa = reg.ensure('solmar_villa');
     const J = join(villa, 'viajera', { x: VILLA.portal.x + 1, y: VILLA.portal.y + 1 });
-    // Campamento goblin se mudó a los Llanos del Alba (Fase 3)
-    villa.handleClientPacket(J.session.sessionId, { payload: { $case: 'waypointRequest', value: { id: 'goblins' } } } as never);
-    assert.equal(reg.pendingOf(J.session.sessionId)?.map, 'llanos_alba');
-    assert.deepEqual([reg.pendingOf(J.session.sessionId)!.x, reg.pendingOf(J.session.sessionId)!.y], [HUNT_ARRIVALS.goblins.x, HUNT_ARRIVALS.goblins.y]);
-    reg.completeTransfer(J.session.sessionId, 'llanos_alba', reg.hashOf('llanos_alba'));
-    // de vuelta a la villa a pie y una zona que sigue en el mapa viejo (Hormiguero ardiente, abierta por nivel)
-    const llanos = reg.get('llanos_alba')!;
-    llanos.playerOf(J.session.sessionId)!.setPosition(LLANOS.toVilla.x, LLANOS.toVilla.y);
-    reg.handlePortal(J.session, 'llanos_a_villa');
-    reg.completeTransfer(J.session.sessionId, 'solmar_villa', reg.hashOf('solmar_villa'));
-    villa.playerOf(J.session.sessionId)!.setPosition(VILLA.portal.x + 1, VILLA.portal.y + 1);
-    J.p.prog.lvl = 20;
-    villa.handleClientPacket(J.session.sessionId, { payload: { $case: 'waypointRequest', value: { id: 'hormiguero' } } } as never);
-    assert.equal(reg.pendingOf(J.session.sessionId)?.map, 'solmar_legacy');
-    reg.completeTransfer(J.session.sessionId, 'solmar_legacy', reg.hashOf('solmar_legacy'));
-    const legacy = reg.get('solmar_legacy')!, arr = buildMap('solmar_legacy').waypointArrivals!.hormiguero;
-    const [x, y] = pos(legacy, J.session.sessionId);
-    assert.ok(Math.abs(x - arr.x) + Math.abs(y - arr.y) <= 3);
-    // la zona no tiene portal de regreso: "volver a la ciudad" desde ahí se rechaza (para eso está el recall, ver recall.test.ts)
-    assert.equal(buildMap('solmar_legacy').waypoints!.find((q) => q.id === 'zone:hormiguero'), undefined);
-    legacy.handleClientPacket(J.session.sessionId, { payload: { $case: 'waypointRequest', value: { id: 'city' } } } as never);
+    villa.handleClientPacket(J.session.sessionId, { payload: { $case: 'waypointRequest', value: { id: 'campos_de_sal' } } } as never);
+    assert.equal(reg.pendingOf(J.session.sessionId)?.map, 'campos_de_sal');
+    assert.deepEqual([reg.pendingOf(J.session.sessionId)!.x, reg.pendingOf(J.session.sessionId)!.y], [MAPS.campos_de_sal.spawn.x, MAPS.campos_de_sal.spawn.y]);
+    reg.completeTransfer(J.session.sessionId, 'campos_de_sal', reg.hashOf('campos_de_sal'));
+    // desde la zona no hay Portal de Frontera: "volver a la ciudad" se rechaza (para eso está el recall, ver recall.test.ts)
+    const campos = reg.get('campos_de_sal')!;
+    campos.handleClientPacket(J.session.sessionId, { payload: { $case: 'waypointRequest', value: { id: 'city' } } } as never);
     assert.equal(reg.pendingOf(J.session.sessionId), undefined);
     assert.match(find(J.log, 'sendMessage').value.message, /Portal de Frontera/);
+    // una zona alta está cerrada hasta tener su nivel
+    const K = join(villa, 'novata', { x: VILLA.portal.x + 1, y: VILLA.portal.y + 1 });
+    villa.handleClientPacket(K.session.sessionId, { payload: { $case: 'waypointRequest', value: { id: 'cenizas_iii' } } } as never);
+    assert.equal(reg.pendingOf(K.session.sessionId), undefined);
+    K.p.prog.lvl = 26;
+    villa.handleClientPacket(K.session.sessionId, { payload: { $case: 'waypointRequest', value: { id: 'cenizas_iii' } } } as never);
+    assert.equal(reg.pendingOf(K.session.sessionId)?.map, 'cenizas_iii');
 });
 
-test('camino entre la villa y los Llanos del Alba, ida y vuelta', () => {
+test('el portón este de la villa sale a los Campos de Sal', () => {
     const { reg, join } = setup();
     const villa = reg.ensure('solmar_villa');
     const J = join(villa, 'caminante', VILLA.spawn);
     villa.playerOf(J.session.sessionId)!.setPosition(VILLA.toLegacy.x, VILLA.toLegacy.y);
     reg.handlePortal(J.session, 'villa_a_llanos');
-    assert.equal(reg.pendingOf(J.session.sessionId)?.map, 'llanos_alba');
-    reg.completeTransfer(J.session.sessionId, 'llanos_alba', reg.hashOf('llanos_alba'));
-    const llanos = reg.get('llanos_alba')!;
-    assert.deepEqual(pos(llanos, J.session.sessionId), [LLANOS.fromVilla.x, LLANOS.fromVilla.y]);
-    llanos.playerOf(J.session.sessionId)!.setPosition(LLANOS.toVilla.x, LLANOS.toVilla.y);
-    reg.handlePortal(J.session, 'llanos_a_villa');
-    reg.completeTransfer(J.session.sessionId, 'solmar_villa', reg.hashOf('solmar_villa'));
-    assert.deepEqual(pos(villa, J.session.sessionId), [VILLA.fromLegacy.x, VILLA.fromLegacy.y]);
+    assert.equal(reg.pendingOf(J.session.sessionId)?.map, 'campos_de_sal');
 });
 
 test('las tiendas de los interiores validan la distancia contra los NPC del interior', () => {

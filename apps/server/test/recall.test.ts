@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { MAPS, RECALL, TRAINING, VHAR, VILLA, buildMap, type Waypoint } from '@fdn/world';
+import { MAPS, RECALL, TRAINING, VHAR, VILLA, buildMap, getMapDef } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
@@ -198,35 +198,34 @@ test('no se puede usar durante un cruce de mapa y el cruce corta el canal', () =
     } finally { c.restore(); }
 });
 
-test('el Portal de Frontera lleva a una zona que no tiene portal de llegada; las zonas no tienen waypoints', () => {
-    const legacyMap = buildMap('solmar_legacy');
-    const wps: Waypoint[] = legacyMap.waypoints ?? [];
+test('el Portal de Frontera lleva a la entrada de un mapa de Flare; las zonas no tienen waypoints', () => {
     // el mapa viejo ya no tiene portales: cada ciudad tiene el suyo (la villa de Solmar y la ciudadela de Vhar)
-    assert.deepEqual(wps.map((q) => q.id), []);
+    assert.deepEqual((buildMap('solmar_legacy').waypoints ?? []).map((q) => q.id), []);
     assert.deepEqual(buildMap('solmar_villa').waypoints!.map((q) => q.id), ['city:solmar']);
     assert.deepEqual(buildMap('vhar_ciudadela').waypoints!.map((q) => q.id), ['city:vhar']);
     for (const t of TRAINING) {
-        const a = legacyMap.waypointArrivals![t.id]; assert.ok(a, t.id);
-        assert.ok(!legacyMap.blocked[a.y][a.x], t.id);
-        assert.ok(wps.every((q) => Math.hypot(q.x - a.x, q.y - a.y) > 10), `${t.id}: no hay portal junto a la llegada`);
+        const d = getMapDef(t.map)!, m = buildMap(t.map); assert.ok(d, t.id);
+        assert.ok(!m.blocked[d.spawn.y][d.spawn.x] && m.safe[d.spawn.y][d.spawn.x], `${t.id}: la llegada es caminable y segura`);
+        assert.equal(t.lvl, d.lvl![0], `${t.id}: se abre con el nivel mínimo del mapa`);
+        assert.equal(m.waypoints?.length ?? 0, 0, `${t.id}: sin waypoints`);
     }
     const { reg, join } = setup();
     const villa = reg.ensure('solmar_villa');
     const J = join(villa, 'exploradora', { x: VILLA.portal.x + 1, y: VILLA.portal.y + 1 }), sid = J.session.sessionId;
-    // zona bloqueada (nivel 1, sin misiones): no viaja
-    pkt(villa, sid, 'waypointRequest', { id: 'cantera' });
+    // zona bloqueada (nivel 1): no viaja
+    pkt(villa, sid, 'waypointRequest', { id: 'la_brecha' });
     assert.equal(reg.pendingOf(sid), undefined); assert.match(last(J.log, 'sendMessage').message, /Portal bloqueado/);
-    J.p.prog.lvl = 19;
-    pkt(villa, sid, 'waypointRequest', { id: 'cantera' });
-    assert.equal(reg.pendingOf(sid)?.map, 'solmar_legacy');
-    reg.completeTransfer(sid, 'solmar_legacy', reg.hashOf('solmar_legacy'));
-    const legacy = reg.get('solmar_legacy')!, arr = legacyMap.waypointArrivals!.cantera, [x, y] = pos(legacy, sid);
-    assert.ok(Math.abs(x - arr.x) + Math.abs(y - arr.y) <= 3, `${x},${y}`);
+    J.p.prog.lvl = 16;
+    pkt(villa, sid, 'waypointRequest', { id: 'la_brecha' });
+    assert.equal(reg.pendingOf(sid)?.map, 'la_brecha');
+    reg.completeTransfer(sid, 'la_brecha', reg.hashOf('la_brecha'));
+    const brecha = reg.get('la_brecha')!, [x, y] = pos(brecha, sid), sp = MAPS.la_brecha.spawn;
+    assert.ok(Math.abs(x - sp.x) + Math.abs(y - sp.y) <= 3, `${x},${y}`);
     // desde la zona no hay portal: el menú no se puede usar (hay que volver con el recall)
-    pkt(legacy, sid, 'waypointRequest', { id: 'goblins' });
+    pkt(brecha, sid, 'waypointRequest', { id: 'campos_de_sal' });
     assert.equal(reg.pendingOf(sid), undefined);
     // el portal de Vhar no le sirve a uno de Solmar
     const vc = reg.ensure('vhar_ciudadela'), K = join(vc, 'intrusa', { x: VHAR.portal.x + 1, y: VHAR.portal.y + 1 }, 'solmar');
-    pkt(vc, K.session.sessionId, 'waypointRequest', { id: 'goblins' });
+    pkt(vc, K.session.sessionId, 'waypointRequest', { id: 'campos_de_sal' });
     assert.equal(reg.pendingOf(K.session.sessionId), undefined); assert.match(last(K.log, 'sendMessage').message, /tu ciudad/);
 });

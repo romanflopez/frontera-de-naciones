@@ -14,7 +14,7 @@ import { chatBus, logToChat, type ChatChannel } from './ui/chatStore';
 import { drawPortalFloor, drawPortalFx, PORTAL_CITY, PORTAL_ZONE } from './portal';
 import { checkSkill, skillDeniedText, canUseSkill, skillLevel } from '@fdn/world';
 import { DEFAULT_MAP, RECALL, STAT_CAP, STAT_DESC, STAT_IDS, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, traitLabel, traitHpMult, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
-import { UNIQUE_BY_NAME, UP_MAX, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Quest, type Slot, type Stock } from '@fdn/world';
+import { UNIQUE_BY_NAME, UP_MAX, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
 import { DAILY_BY_ID, DAILY_LIMIT, MAIN_QUESTS, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, dailyGold, rewardUniques, type QuestBookView, type QuestGoal } from '@fdn/world';
@@ -1983,7 +1983,6 @@ function openQuestDlg(n: Npc) {
     renderBook(n);
 }
 /** Rango de nivel de una zona de entrenamiento (sale de la tabla vieja de misiones, que se sigue usando solo como dato de zonas). */
-function questLevel(q: Quest) { const l = mobDef(q.type, zoneByName(q.zone, q.type)).lvl; return `Nv ${Math.max(1, l - 1)}–${l + 1}`; }
 /** "!" amarillo sobre el Capitán cuando tiene misión para vos; "?" cuando podés entregar. */
 const questMark = () => {
     const bm = QB ? MAIN_QUESTS[QB.m.i] : undefined;
@@ -2159,13 +2158,6 @@ function checkLinks() {
     net.send({ $case: 'portalRequest', value: { portalId: l.id } });
     log(l.msg, true);
 }
-/** Zona por nombre en cualquier mapa (para los textos de misiones que mencionan zonas de otros mapas): primero el cargado, después el resto, armados una sola vez. */
-let otherZones: Zone[] | null = null;
-function zoneByName(name: string, type: MobType): Zone | undefined {
-    const here = ZONES.find((z) => z.name === name && z.type === type); if (here) return here;
-    otherZones ??= Object.values(MAPS).filter((d) => d.id !== MAP_DEF.id).flatMap((d) => d.build().zones);
-    return otherZones.find((z) => z.name === name && z.type === type);
-}
 // ---------- escaleras entre zonas (el server valida el teletransporte; la celda de destino tiene que estar libre) ----------
 let portalLock = 0;
 function checkPortals() {
@@ -2201,11 +2193,11 @@ function talkWp(q: Waypoint) {
 /** Paso de la zona de entrenamiento donde estás parado (o cerca), para resaltarla en el menú; -1 si ninguna. */
 function currentTrainStep(): number {
     let best = -1, bd = Infinity;
-    for (const t of TRAINING) { const z = ZONES.find((q) => q.name === t.zone); if (!z) continue; const d = Math.hypot(P.x - z.x, P.y - z.y); if (d <= z.r + 8 && d < bd) { bd = d; best = t.step; } }
+    void bd; for (const t of TRAINING) if (t.map === MAP_DEF.id) best = t.step;
     return best;
 }
 const LOCK_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4.5 7V5a3.5 3.5 0 017 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="7" width="10" height="7" rx="1.4" fill="currentColor"/></svg>';
-const inHomeCity = () => cityAt(P.cell.x, P.cell.y)?.faction === selectedFaction && factionHome(selectedFaction)?.map === MAP_DEF.id;
+const inHomeCity = () => factionHome(selectedFaction)?.map === MAP_DEF.id;
 const lockMsg = (t: TrainingStep) => `Portal bloqueado (${t.zone}): se abre al llegar al nivel ${t.lvl}.`;
 function renderWp() {
     if (!wpOpen) return;
@@ -2214,7 +2206,7 @@ function renderWp() {
     $('wpSub').textContent = `${city?.name ?? 'Tu ciudad'} · zonas de entrenamiento · para volver apretá H`;
     const rows = [`<button type="button" class="wprow home${inCity ? ' cur' : ''}" data-wp="city"${inCity ? ' disabled' : ''}><i class="wpn">&#8962;</i><span class="wpt"><b>${inCity ? 'Estás en ' : 'Volver a '}${esc(city?.name ?? 'la ciudad')}</b><small>${inCity ? 'Zona segura' : 'Zona segura · tu facción'}</small></span>${inCity ? '<em class="wptag">Estás aquí</em>' : ''}</button>`];
     for (const t of TRAINING) {
-        const open = trainOpen(t), here = t.step === cur, qq = QUESTS[t.step], lv = qq ? questLevel(qq) : '';
+        const open = trainOpen(t), here = t.step === cur, ml = getMapDef(t.map)?.lvl, lv = ml ? `Nv ${ml[0]}–${ml[1]}` : '';
         const sub = open ? `<small>Nivel recomendado ${lv.replace('Nv ', '')}</small>` : `<small class="req">${LOCK_SVG} Nivel ${t.lvl}</small>`;
         rows.push(`<button type="button" class="wprow${open ? '' : ' locked'}${here ? ' cur' : ''}" data-wp="${t.id}" style="--zc:${t.col}"><i class="wpn">${t.step + 1}</i><span class="wpt"><b>${esc(t.zone)}</b>${sub}</span>${here ? '<em class="wptag">Estás aquí</em>' : `<em class="wplv">${lv}</em>`}</button>`);
     }
@@ -2463,10 +2455,11 @@ function enterWorld(name: string) {
     invApplied = false; if (lastInv) applyInventory(lastInv); invApplied = false; saver.start(); saver.tick(true); // el primer guardado le dice al server clase y bando si es un personaje nuevo
     if (welcomeBack) log(`Bienvenido de vuelta, ${name}. Nivel ${P.lvl}.`, true);
     // cada facción arranca en su ciudad (también si el guardado te dejó dentro de la del otro bando)
-    const home = factionHome(selectedFaction), here = cityAt(P.cell.x, P.cell.y);
-    if (home && (!welcomeBack || (here && here.faction !== selectedFaction))) net.send({ $case: 'playerTeleportRequested', value: { x: home.x, y: home.y } });
-    log(selectedFaction === 'vhar' ? 'Bienvenido a la Ciudadela de Vhar. El portón del sur lleva a las tierras de caza; los edificios tienen interior.' : 'Bienvenido a la Villa de Solmar. Los edificios tienen interior: entrá por las puertas.', true);
-    log('En la plaza está el Portal de Frontera: un menú con las zonas de entrenamiento. La primera ya está abierta; las demás se abren al entregar las misiones del Capitán (o subiendo de nivel). Para volver a la ciudad apretá H (tarda 8 s y se corta si te pegan).', true);
+    // en una ciudad del otro bando (o un interior suyo): a la propia
+    const home = factionHome(selectedFaction), inOther = MAP_DEF.safe && (MAP_DEF.region === 'solmar' || MAP_DEF.region === 'vhar') && MAP_DEF.region !== selectedFaction;
+    if (home && (!welcomeBack || inOther)) net.send({ $case: 'playerTeleportRequested', value: { x: home.x, y: home.y } });
+    log(selectedFaction === 'vhar' ? 'Bienvenido a la Ciudadela de Vhar. El portón del sur lleva a los Campos de Sal; los edificios tienen interior.' : 'Bienvenido a la Villa de Solmar. Los edificios tienen interior: entrá por las puertas.', true);
+    log('En la plaza está el Portal de Frontera: un menú con las zonas de entrenamiento. La primera ya está abierta; las demás se abren al subir de nivel. Para volver a la ciudad apretá H (tarda 8 s y se corta si te pegan).', true);
     log('Tocá un mob para atacarlo. Apretá un hechizo (1–4), esperá que cargue y hacé clic en el objetivo. Enter para chatear.');
 }
 

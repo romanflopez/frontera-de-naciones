@@ -7,11 +7,14 @@ const clone = (): Record<string, MapDef> => Object.fromEntries(Object.entries(MA
 test('el grafo real de mapas es válido', () => {
     assert.deepEqual(validateMapGraph(), []);
 });
-test('hay al menos 3 mapas conectados y el mapa viejo sigue siendo solmar_legacy', () => {
+test('hay al menos 3 mapas conectados; se entra por la villa y el mapa viejo quedó solo para pruebas', () => {
     assert.ok(Object.keys(MAPS).length >= 3);
-    assert.equal(DEFAULT_MAP, 'solmar_legacy');
-    assert.equal(canonicalMapId('solmar'), 'solmar_legacy');
-    assert.equal(buildMap('solmar').size, 96);
+    assert.equal(DEFAULT_MAP, 'solmar_villa');
+    assert.equal(canonicalMapId('solmar_villa'), 'solmar_villa');
+    assert.ok(MAPS.solmar_legacy.debugOnly);
+    assert.equal(buildMap('solmar_legacy').size, 96);
+    // los mapas de caza viejos ya no existen
+    for (const id of ['llanos_alba', 'la_frontera', 'camposanto', 'paramo']) assert.equal(MAPS[id], undefined, id);
 });
 test('los mapas se arman igual dos veces (hash estable)', () => {
     for (const id of Object.keys(MAPS)) assert.equal(mapHash(buildMap(id)), mapHash(buildMap(id)), id);

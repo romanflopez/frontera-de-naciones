@@ -276,15 +276,18 @@ test('pvp por mapa: sin PvP en la mazmorra, de facción en el claro', () => {
 
 test('posición guardada: sin mapId cae en el mapa por defecto; mapas temporales vuelven a su rest', () => {
     const base = { direction: 4, gender: 0, skinColor: 0, hairStyleIndex: 0, underwearColorIndex: 0, movementSpeedMs: 270, runningMode: true, attackMode: true };
-    // guardado viejo: solo worldId 'solmar' -> mapa original, con su posición (es el mismo mapa)
-    let r = resolveSaved({ ...base, worldId: 'solmar', x: 30, y: 20 }, 'solmar_legacy');
-    assert.equal(r.mapId, 'solmar_legacy'); assert.equal(r.persisted?.x, 30);
-    // sin mapa en absoluto o mapa desconocido: se descarta
-    r = resolveSaved({ ...base, worldId: undefined as never, x: 3, y: 3 }, 'solmar_legacy');
-    assert.equal(r.mapId, 'solmar_legacy'); assert.equal(r.persisted, undefined);
-    r = resolveSaved({ ...base, mapId: 'borrado', worldId: 'borrado', x: 3, y: 3 }, 'solmar_legacy');
-    assert.equal(r.persisted, undefined);
-    assert.equal(resolveSaved(undefined, 'solmar_legacy').mapId, 'solmar_legacy');
+    // guardado en un mapa que existe: tal cual
+    let r = resolveSaved({ ...base, mapId: 'campos_de_sal', worldId: 'campos_de_sal', x: 30, y: 20 }, 'solmar_villa');
+    assert.equal(r.mapId, 'campos_de_sal'); assert.equal(r.persisted?.x, 30);
+    // guardado viejo ('solmar'), en el mapa viejo (ahora de pruebas) o en un mapa de caza que se sacó: vuelve al mapa por defecto
+    for (const m of ['solmar', 'solmar_legacy', 'llanos_alba', 'prueba_caza']) {
+        r = resolveSaved({ ...base, mapId: m, worldId: m, x: 30, y: 20 }, 'solmar_villa');
+        assert.equal(r.mapId, 'solmar_villa', m); assert.equal(r.persisted, undefined, m);
+    }
+    // sin mapa en absoluto: se descarta
+    r = resolveSaved({ ...base, worldId: undefined as never, x: 3, y: 3 }, 'solmar_villa');
+    assert.equal(r.mapId, 'solmar_villa'); assert.equal(r.persisted, undefined);
+    assert.equal(resolveSaved(undefined, 'solmar_villa').mapId, 'solmar_villa');
     const { reg } = fresh();
     const mapOf = (id: string) => reg.mapOf(id);
     // arena del mapa original -> spawn; mazmorra de prueba -> la puerta del claro; claro -> tal cual

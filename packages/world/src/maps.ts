@@ -10,7 +10,6 @@ import { buildPruebaCaza, buildPruebaMazmorra, PRUEBA_CAZA, PRUEBA_MAZMORRA } fr
 import { TRAINING, type PortalProgress } from './training';
 import { buildSolmarVilla, VILLA, VILLA_BUILDINGS, VILLA_ID, VILLA_N, villaDoor, type VillaBuilding } from './solmar/villa';
 import { buildInterior, INTERIORS, roomOf, TEMPLE_RESPAWN } from './solmar/interiors';
-import { HUNT_ARRIVALS, huntMaps, LLANOS, PARAMO } from './hunt';
 import { buildVharCiudadela, VHAR, VHAR_CITADEL_ID, VHAR_N, vharDoor, type VharBuilding } from './vhar/citadel';
 import { LEGACY_FROM_VHAR, LEGACY_VHAR_LINK } from './vhar/legacy';
 import { buildVharInterior, VHAR_INTERIORS, VHAR_RESPAWN } from './vhar/interiors';
@@ -84,9 +83,9 @@ export interface MapDef {
 }
 
 /** Mapa al que van los personajes nuevos y los que tienen una posición guardada que no existe. */
-export const DEFAULT_MAP = 'solmar_legacy';
+export const DEFAULT_MAP = VILLA_ID;
 /** Ids viejos que figuran en personajes guardados antes del registro de mapas. */
-export const MAP_ALIASES: Record<string, string> = { solmar: 'solmar_legacy' };
+export const MAP_ALIASES: Record<string, string> = {};
 export const canonicalMapId = (id: string | undefined): string | undefined => (id === undefined ? undefined : MAP_ALIASES[id] ?? id);
 
 const ARENA: MapRect = { x0: 46, y0: 26, x1: 60, y1: 38 };
@@ -113,7 +112,8 @@ export { LEGACY_VHAR_LINK, LEGACY_FROM_VHAR };
 function vharMaps(): Record<string, MapDef> {
     const out: Record<string, MapDef> = {};
     const links: Link[] = [
-        { id: 'ciudadela_a_legacy', map: VHAR_CITADEL_ID, ...VHAR.toLegacy, to: { map: 'solmar_legacy', ...LEGACY_FROM_VHAR }, kind: 'walk', msg: 'Tomás el Camino de Ceniza hacia las tierras de caza.' },
+        // el portón sur de la ciudadela también sale a los Campos de Sal (antes iba al mapa viejo, que quedó solo para pruebas)
+        { id: 'ciudadela_a_legacy', map: VHAR_CITADEL_ID, ...VHAR.toLegacy, to: { map: FLARE_FIRST.eris, ...FLARE_ARRIVAL }, kind: 'oneway', msg: 'Tomás el Camino de Ceniza hacia los Campos de Sal.' },
         { id: 'ciudadela_a_campos', map: VHAR_CITADEL_ID, ...VHAR_FLARE, to: { map: FLARE_FIRST.eris, ...FLARE_ARRIVAL }, kind: 'oneway', msg: 'Cruzás el portal hacia los Campos de Sal.' },
     ];
     for (const it of VHAR_INTERIORS) {
@@ -137,7 +137,8 @@ function vharMaps(): Record<string, MapDef> {
 function solmarMaps(): Record<string, MapDef> {
     const out: Record<string, MapDef> = {};
     const villaLinks: Link[] = [
-        { id: 'villa_a_llanos', map: VILLA_ID, ...VILLA.toLegacy, to: { map: LLANOS.id, ...LLANOS.fromVilla }, kind: 'walk', msg: 'Tomás el Camino de la Marea hacia los Llanos del Alba.' },
+        // el portón este de la villa también sale a los Campos de Sal (antes iba a los Llanos del Alba, que se sacaron)
+        { id: 'villa_a_llanos', map: VILLA_ID, ...VILLA.toLegacy, to: { map: FLARE_FIRST.eris, ...FLARE_ARRIVAL }, kind: 'oneway', msg: 'Tomás el Camino de la Marea hacia los Campos de Sal.' },
         { id: 'villa_a_campos', map: VILLA_ID, ...VILLA_FLARE, to: { map: FLARE_FIRST.eris, ...FLARE_ARRIVAL }, kind: 'portal', msg: 'Cruzás el portal hacia los Campos de Sal.' },
     ];
     for (const it of INTERIORS) {
@@ -159,16 +160,13 @@ function solmarMaps(): Record<string, MapDef> {
 void VILLA_BUILDINGS;
 
 export const MAPS: Record<string, MapDef> = {
+    // Mapa viejo (Tierras de Solmar): ya no tiene entrada desde el mundo (decisión del 2/11/2026: quedan solo los mapas de Flare). Se
+    // conserva como mapa de pruebas porque muchos tests del server lo usan de mundo genérico; se puede borrar migrando esos tests.
     solmar_legacy: {
-        id: 'solmar_legacy', name: 'Tierras de Solmar', region: 'solmar', size: 96, lvl: [1, 12], legacy: true, pvp: 'faction', safe: false,
+        id: 'solmar_legacy', name: 'Tierras de Solmar', region: 'solmar', size: 96, lvl: [1, 12], legacy: true, debugOnly: true, pvp: 'faction', safe: false,
         spawn: { x: HUBS.solmar.x, y: HUBS.solmar.y }, respawn: 'faction_home', tempRects: [ARENA], ffaRect: ARENA,
         links: [
-            // camino a los Llanos del Alba (Fase 3; antes iba a la villa): por la puerta sur de la ciudad vieja
-            { id: 'legacy_a_llanos', map: 'solmar_legacy', ...LEGACY_VILLA_LINK, to: { map: LLANOS.id, ...LLANOS.fromLegacy }, kind: 'walk', msg: 'Tomás el camino del sur hacia los Llanos del Alba.' },
-            // del páramo viejo (salida de la Cripta) al Páramo Reseco nuevo
-            { id: 'legacy_a_paramo', map: 'solmar_legacy', ...LEGACY_PARAMO_LINK, to: { map: PARAMO.id, x: PARAMO.crypt.x, y: PARAMO.crypt.y - 3 }, kind: 'portal', msg: 'Cruzás al Páramo Reseco.' },
-            // camino a la Ciudadela de Vhar: junto a la puerta de la ciudad vieja de Vhar
-            { id: 'legacy_a_ciudadela', map: 'solmar_legacy', ...LEGACY_VHAR_LINK, to: { map: VHAR_CITADEL_ID, ...VHAR.fromLegacy }, kind: 'walk', msg: 'Tomás el Camino de Ceniza hacia la Ciudadela de Vhar.' },
+            { id: 'legacy_a_ciudadela', map: 'solmar_legacy', ...LEGACY_VHAR_LINK, to: { map: VHAR_CITADEL_ID, ...VHAR.fromLegacy }, kind: 'oneway', msg: 'Tomás el Camino de Ceniza hacia la Ciudadela de Vhar.' },
         ],
         build: () => buildSolmar(),
     },
@@ -194,11 +192,6 @@ export const MAPS: Record<string, MapDef> = {
         build: buildPruebaMazmorra,
     },
     ...solmarMaps(),
-    // núcleo de caza (Fase 3): Llanos del Alba, La Frontera, Camposanto Viejo y Páramo Reseco
-    ...huntMaps({
-        villa: { id: VILLA_ID, toLlanos: VILLA.toLegacy, fromLlanos: VILLA.fromLegacy },
-        legacy: { id: 'solmar_legacy', toLlanos: LEGACY_VILLA_LINK, fromLlanos: LEGACY_FROM_VILLA, toParamo: LEGACY_PARAMO_LINK, crypt: LEGACY_CRYPT_ARRIVAL },
-    }),
     ...vharMaps(),
     // mapas importados de Flare: Campos de Sal -> Bosque de Piedra -> Cañón goblin (docs/MAPAS_FLARE.md)
     ...flareMaps({ map: VILLA_ID, to: VILLA_FLARE_BACK }),
@@ -243,19 +236,14 @@ export function recallBlockedReason(def: MapDef | undefined, x: number, y: numbe
     if (def?.pvp === 'ffa' || (def?.ffaRect && inMapRect(def.ffaRect, x, y))) return 'No podés volver a la ciudad desde la arena.';
     return null;
 }
-let legacyArrivals: Record<string, { x: number; y: number }> | null = null;
 /**
- * Destino de un pedido del menú del Portal de Frontera, en cualquier mapa: 'city' = hogar de la facción, o el id de una zona de
- * entrenamiento (todas siguen en el mapa original; las celdas de llegada las calcula training.ts al armarlo).
+ * Destino de un pedido del menú del Portal de Frontera: 'city' = hogar de la facción, o el id de una zona de entrenamiento (la entrada
+ * de su mapa de Flare, que es zona segura).
  */
 export function waypointTarget(id: string, faction: string): { map: string; x: number; y: number; step?: number } | null {
     if (id === 'city') return factionHome(faction);
-    const t = TRAINING.find((q) => q.id === id); if (!t) return null;
-    // las zonas que ya se mudaron a un mapa de caza (Fase 3) llegan a su celda en ese mapa
-    const h = HUNT_ARRIVALS[id]; if (h) return { ...h, step: t.step };
-    legacyArrivals ??= buildMap(DEFAULT_MAP).waypointArrivals ?? {};
-    const a = legacyArrivals[id];
-    return a ? { map: DEFAULT_MAP, x: a.x, y: a.y, step: t.step } : null;
+    const t = TRAINING.find((q) => q.id === id); const d = t && MAPS[t.map]; if (!t || !d) return null;
+    return { map: d.id, ...d.spawn, step: t.step };
 }
 /** ¿La posición (x, y) de `def` es temporal (no se guarda; al reconectar se usa `rest` o el spawn)? */
 export function isTemporaryCell(def: MapDef, map: WorldMap | undefined, x: number, y: number): boolean {

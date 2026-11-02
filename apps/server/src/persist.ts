@@ -6,12 +6,14 @@ import type { PersistedPlayer } from './player.ts';
 import type { Storage } from './storage.ts';
 
 /**
- * Qué guardado usar al entrar. Un guardado sin `mapId` (anterior al registro de mapas) usa su `worldId`, donde 'solmar' vale como el mapa
- * original; uno sin ningún mapa, o con un mapa que ya no existe, se descarta y el personaje aparece en el mapa por defecto sin crashear.
+ * Qué guardado usar al entrar. Un guardado sin `mapId` (anterior al registro de mapas) usa su `worldId`;
+ * uno sin ningún mapa, con un mapa que ya no existe (los mapas de caza viejos) o en un mapa de pruebas, se descarta y el personaje aparece en el mapa por defecto sin crashear.
  */
 export function resolveSaved(saved: PersistedPlayer | undefined, defaultMap: string): { persisted?: PersistedPlayer; mapId: string } {
     const m = canonicalMapId(saved?.mapId ?? saved?.worldId);
-    if (saved && m && getMapDef(m)) return { persisted: { ...saved, mapId: m, worldId: m }, mapId: m };
+    // los mapas de prueba (`debugOnly`, como el mapa viejo de Tierras de Solmar) no se juegan: quien quedó guardado ahí vuelve al mapa por defecto
+    const def = m ? getMapDef(m) : undefined;
+    if (saved && m && def && !def.debugOnly) return { persisted: { ...saved, mapId: m, worldId: m }, mapId: m };
     return { mapId: defaultMap };
 }
 

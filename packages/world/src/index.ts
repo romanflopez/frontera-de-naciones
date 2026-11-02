@@ -13,7 +13,7 @@ import { extendCities } from './cities';
 import { extendTraining, type TrainingStep } from './training';
 import { extendVharGate } from './vhar/legacy';
 export { CITIES, HUBS, cityAt, type City } from './cities';
-export { TRAINING, TRAINING_IDS, WAYPOINT_RANGE, CITY_PORTAL_OFFSET, LEGACY_CITY_PORTALS, waypointDest, trainingUnlocked, portalGate, type TrainingStep, type PortalProgress, type Waypoint } from './training';
+export { TRAINING, TRAINING_IDS, WAYPOINT_RANGE, CITY_PORTAL_OFFSET, LEGACY_CITY_PORTALS, trainingUnlocked, portalGate, type TrainingStep, type PortalProgress, type Waypoint } from './training';
 import type { MobType } from './mobs';
 export * from './mobs';
 export * from './mobTraits';
@@ -77,8 +77,6 @@ export interface WorldMap {
     portals?: Portal[];
     /** Portales de Frontera (uno por ciudad) que abren el menú de viaje. Las zonas no tienen portal. Ver training.ts. */
     waypoints?: import('./training').Waypoint[];
-    /** Celda de llegada de cada zona de entrenamiento (por id de TRAINING): destino del menú del Portal de Frontera. */
-    waypointArrivals?: Record<string, { x: number; y: number }>;
     /** Rectángulo de la cripta (el cliente la oscurece). */
     dungeon?: { x0: number; y0: number; x1: number; y1: number };
     /** Otras mazmorras (Cámara del foso): el cliente las oscurece igual. */
@@ -173,7 +171,6 @@ export function buildSolmar(): WorldMap {
 export * from './town';
 export { VILLA, VILLA_ID, VILLA_BUILDINGS, villaDoor, type VillaBuilding } from './solmar/villa';
 export { INTERIORS, TEMPLE_RESPAWN, roomOf } from './solmar/interiors';
-export { HUNT_ARRIVALS, LLANOS, FRONTERA, CAMPOSANTO, PARAMO, HuntMap } from './hunt';
 export { VHAR, VHAR_CITADEL_ID, VHAR_BUILDINGS, vharDoor, type VharBuilding } from './vhar/citadel';
 export { VHAR_INTERIORS, VHAR_RESPAWN } from './vhar/interiors';
 export { FLARE_DATA, FLARE_FIRST, FLARE_ARRIVAL, FLARE_BACK, flareTile, FLARE_BASE, type FlareMapData } from './flare';
