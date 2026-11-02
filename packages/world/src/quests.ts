@@ -2,8 +2,8 @@
  * Misiones del corte del MVP (docs del proyecto: `mvp-dungeons-llaves-quests.md` §4).
  *
  * Tres cosas, todas con el Capitán de la ciudad:
- * - **Camino del aventurero** (con el Capitán): cadena de 12 que te lleva mapa por mapa, de Campos de Sal a la Reina hormiga
- *   león (D2), pasando por el herrero, los colmillos y la Cueva goblin (D1).
+ * - **Camino del aventurero** (con el Capitán): cadena de 11 que te lleva mapa por mapa, de Campos de Sal (nivel 1) al Risco del Sur
+ *   (nivel 13), pasando por el herrero, los colmillos, la Cueva goblin (D1) y la Reina hormiga león (D2).
  * - **Encargos del día** (sin NPC): se van abriendo por nivel, avanzan solos y se cobran solos al completarse. Tope de 3
  *   cobrados por día; se reinician a las 06:00 de Argentina (09:00 UTC). El primero del día paga además una esencia.
  * - **Repetible:** entregar 10 materiales iguales a cambio de oro o de una piedra de forja (sumidero de lo que sobra del farmeo).
@@ -16,9 +16,9 @@ import type { MobType } from './mobs';
 import { BOSS_UNIQUES, UNIQUES_BY_TIER, type UniqueBase } from './uniques';
 
 // ---------- materiales nuevos (los sueltan los mobs; la receta de las llaves va en el paso de llaves) ----------
-/** Colmillo: 8 % en los pits T1 (nivel 1-2). Con 8 + oro se arma la llave de la cueva (D1). */
+/** Colmillo: 8 % en los pits T1 (nivel 1-5). Con 8 + oro se arma la llave de la cueva (D1). */
 export const MAT_COLMILLO = 'colmillo';
-/** Esencia: 3 % en los pits T2 (nivel 3-4) o 1 por día con el primer encargo entregado. Va en la llave del nido (D2). */
+/** Esencia: 3 % en los pits T2 (nivel 6-10) o 1 por día con el primer encargo entregado. Va en la llave del nido (D2). */
 export const MAT_ESENCIA = 'esencia';
 export const QUEST_MATS: Record<string, { name: string; tier: number; chance: number }> = {
     [MAT_COLMILLO]: { name: 'Colmillo', tier: 1, chance: 0.08 },
@@ -73,81 +73,74 @@ export const MAIN_QUESTS: MainQuest[] = [
         reward: { expPct: 20, gold: 120, forge: 3, unique: 'class_t1_random' },
     },
     {
-        id: 'bosque_de_piedra', name: 'El Bosque de Piedra', minLvl: 1,
+        id: 'bosque_de_piedra', name: 'El Bosque de Piedra', minLvl: 2,
         say: 'Al lado de los Campos está el Bosque de Piedra. Los hobgoblins cavaron una madriguera y salen de noche. Matá a 6.',
         done: 'El bosque respira un poco más tranquilo.',
         goals: [kill('bosque_de_piedra', ['hobgoblin'], 6, 'Hobgoblins en el Bosque de Piedra')],
         reward: { expPct: 20, gold: 80 },
     },
     {
-        id: 'el_herrero', name: 'El herrero', minLvl: 1,
+        id: 'el_herrero', name: 'El herrero', minLvl: 2,
         say: 'Un ítem único vale más mejorado. Andá a la herrería y pedile al herrero que suba tu pieza a +1. A veces falla: así es la forja.',
         done: 'Ya sabés limar. Las piedras caen de los mobs: cuanto más difícil el lugar, más seguido.',
         goals: [{ k: 'upgraded', n: 1, what: 'Tener un ítem en +1' }],
         reward: { expPct: 20, gold: 80 },
     },
     {
-        id: 'colmillos', name: 'Colmillos', minLvl: 1,
-        say: 'La Cueva goblin no se abre con palabras. Los bichos de los pits de nivel 1 y 2 a veces sueltan colmillos: juntá 8, con eso y un poco de oro se arma la llave.',
+        id: 'colmillos', name: 'Colmillos', minLvl: 2,
+        say: 'La Cueva goblin no se abre con palabras. Los bichos de los pits de nivel 1 a 5 a veces sueltan colmillos: juntá 8, con eso y un poco de oro se arma la llave.',
         done: 'Ocho colmillos. Guardalos: son tu entrada a la cueva.',
         goals: [{ k: 'collect', mat: MAT_COLMILLO, n: 8, what: 'Colmillos' }],
         reward: { expPct: 25, gold: 60 },
     },
     {
-        id: 'canon_goblin', name: 'El Cañón goblin', minLvl: 2,
+        id: 'canon_goblin', name: 'El Cañón goblin', minLvl: 3,
         say: 'Del bosque sale el camino al Cañón goblin, donde está la entrada a la cueva. Ojo: ahí la otra nación también caza y te puede atacar. Bajá a 6 de sus arqueros.',
         done: 'Ya conocés el cañón. La entrada a la cueva está ahí mismo.',
         goals: [kill('canon_goblin', ['hobgoblin_archer'], 6, 'Arqueros hobgoblin en el Cañón goblin')],
         reward: { expPct: 25, gold: 120 },
     },
     {
-        id: 'cueva_goblin', name: 'La cueva goblin', minLvl: 3,
+        id: 'cueva_goblin', name: 'La cueva goblin', minLvl: 4,
         say: 'El Jefe goblin se esconde al fondo de las minas, debajo de la cueva. Bajá solo o con un compañero y no te quedes quieto cuando golpee el piso.',
         done: 'Volviste entero. Elegí una pieza de la armería, te la ganaste. Y guardá la llave gastada que soltó el jefe.',
         goals: [{ k: 'dungeon', d: 'd1', n: 1, what: 'Completar la Cueva goblin' }],
         reward: { expPct: 40, gold: 200, unique: 'class_t1_choice' },
     },
     {
-        id: 'pantano', name: 'El Pantano de Merrimead', minLvl: 3,
+        id: 'pantano', name: 'El Pantano de Merrimead', minLvl: 6,
         say: 'Saliendo del cañón está el Pantano de Merrimead. En el pozo oscuro los muertos no se quedan quietos: matá a 8 zombis oscuros.',
         done: 'Olés a ciénaga, pero volviste.',
         goals: [kill('pantano_de_merrimead', ['zombie_dark'], 8, 'Zombis oscuros en el Pantano')],
         reward: { expPct: 25, gold: 160 },
     },
     {
-        id: 'altas_de_nazia', name: 'Las Altas de Nazia', minLvl: 4,
+        id: 'altas_de_nazia', name: 'Las Altas de Nazia', minLvl: 8,
         say: 'Del pantano se sube a las Altas de Nazia. Los hormigueros ardientes queman a los viajeros: acabá con 6 hormigas de fuego.',
-        done: 'Esas hormigas vienen de algún lado. Más al sur hay un nido entero.',
+        done: 'Esas hormigas vienen de algún lado: hay un nido entero, y abajo manda una reina.',
         goals: [kill('altas_de_nazia', ['fire_ant'], 6, 'Hormigas de fuego en las Altas de Nazia')],
         reward: { expPct: 25, gold: 200 },
     },
     {
-        id: 'lochport', name: 'El Cementerio de Lochport', minLvl: 5,
-        say: 'Volviendo por el pantano se llega al Cementerio de Lochport. Los hechiceros del camposanto levantan a los muertos: matá a 8.',
+        id: 'llave_gastada', name: 'La llave gastada', minLvl: 8,
+        say: 'La Reina hormiga león manda en las ruinas debajo del nido. Sola no se va a dejar matar: juntá un grupo, y cuando empiece a llover ácido, cortala.',
+        done: 'La Reina cayó. Elegí uno de sus trofeos: pocos lo pueden contar.',
+        goals: [{ k: 'dungeon', d: 'd2', n: 1, what: 'Completar el Nido de hormiga león' }],
+        reward: { expPct: 50, gold: 400, unique: 'boss_d2_choice' },
+    },
+    {
+        id: 'lochport', name: 'El Cementerio de Lochport', minLvl: 11,
+        say: 'Con la Reina muerta, el camino sigue hacia el Cementerio de Lochport. Los hechiceros del camposanto levantan a los muertos: matá a 8.',
         done: 'Uno menos que levanta muertos. Quedan muchos.',
         goals: [kill('cementerio_de_lochport', ['skeleton_mage'], 8, 'Hechiceros esqueleto en Lochport')],
         reward: { expPct: 25, gold: 240 },
     },
     {
-        id: 'risco_del_sur', name: 'El Risco del Sur', minLvl: 5,
-        say: 'Al sur del cementerio está el Risco. Las hormigas león bajan del risco y cortan el camino a la Brecha: matá a 8.',
-        done: 'El camino a la Brecha quedó abierto.',
+        id: 'risco_del_sur', name: 'El Risco del Sur', minLvl: 13,
+        say: 'Al sur del cementerio está el Risco. Las hormigas león bajan del risco y cortan el camino: matá a 8.',
+        done: 'Más allá del risco empieza la Brecha. Eso, por ahora, es para los más fuertes.',
         goals: [kill('risco_del_sur', ['antlion'], 8, 'Hormigas león en el Risco del Sur')],
         reward: { expPct: 25, gold: 280 },
-    },
-    {
-        id: 'la_brecha', name: 'La Brecha', minLvl: 6,
-        say: 'La Brecha es el cruce de todo: de ahí salen el paso de Stormrock, el templo y el nido de la Reina. Los mineros caídos cuidan la bajada: matá a 6.',
-        done: 'Ya viste la entrada al nido. Juntá gente antes de bajar.',
-        goals: [kill('la_brecha', ['zombie_dark'], 6, 'Mineros caídos en La Brecha')],
-        reward: { expPct: 30, gold: 320 },
-    },
-    {
-        id: 'llave_gastada', name: 'La llave gastada', minLvl: 7,
-        say: 'La Reina hormiga león manda en las ruinas debajo del nido. Sola no se va a dejar matar: juntá un grupo, y cuando empiece a llover ácido, cortala.',
-        done: 'La Reina cayó. Elegí uno de sus trofeos: pocos lo pueden contar.',
-        goals: [{ k: 'dungeon', d: 'd2', n: 1, what: 'Completar el Nido de hormiga león' }],
-        reward: { expPct: 50, gold: 400, unique: 'boss_d2_choice' },
     },
 ];
 
@@ -155,8 +148,8 @@ export interface DailyQuest { id: string; name: string; minLvl: number; maxLvl?:
 export const DAILY_QUESTS: DailyQuest[] = [
     { id: 'pits', name: 'Limpieza de pits', minLvl: 1, goal: { k: 'pit', n: 25, what: 'Mobs de un pit de tu nivel' } },
     { id: 'recolector', name: 'Recolector', minLvl: 1, goal: { k: 'gather', n: 10, what: 'Materiales levantados' } },
-    { id: 'dia_d1', name: 'Bajada a la cueva', minLvl: 3, maxLvl: 12, goal: { k: 'dungeon', d: 'd1', n: 1, what: 'Completar la Cueva goblin' } },
-    { id: 'dia_d2', name: 'Contra la Reina', minLvl: 7, goal: { k: 'dungeon', d: 'd2', n: 1, what: 'Completar el Nido de hormiga león' } },
+    { id: 'dia_d1', name: 'Bajada a la cueva', minLvl: 4, maxLvl: 10, goal: { k: 'dungeon', d: 'd1', n: 1, what: 'Completar la Cueva goblin' } },
+    { id: 'dia_d2', name: 'Contra la Reina', minLvl: 8, goal: { k: 'dungeon', d: 'd2', n: 1, what: 'Completar el Nido de hormiga león' } },
     { id: 'mutante', name: 'Cazador de mutantes', minLvl: 1, goal: { k: 'mutant', n: 1, what: 'Matar un mutante' } },
     { id: 'frontera', name: 'Defensa de la frontera', minLvl: 3, goal: { k: 'pvp', n: 1, what: 'Ganar una pelea en mapa de facción' } },
 ];

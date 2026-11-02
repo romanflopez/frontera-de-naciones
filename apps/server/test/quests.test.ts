@@ -51,16 +51,16 @@ test('encargos del día fijos: todos los de tu nivel, sin sorteo; reinicio a las
     const b = newQuestBook(), t = Date.UTC(2026, 10, 2, 8, 59);
     assert.equal(rollDailies(b, 1, t), true);
     assert.deepEqual(b.d.ids, dailyEligible(1).map((q) => q.id));
-    assert.ok(!b.d.ids.includes('dia_d2') && !b.d.ids.includes('frontera'), 'D2 pide nivel 7 y el PvP nivel 3');
+    assert.ok(!b.d.ids.includes('dia_d2') && !b.d.ids.includes('frontera'), 'D2 pide nivel 8 y el PvP nivel 3');
     const again = newQuestBook(); rollDailies(again, 1, t); assert.deepEqual(again.d.ids, b.d.ids, 'todos ven lo mismo');
     assert.equal(rollDailies(b, 1, t + 60_000 - 1), false, 'mismo día (antes de las 09:00 UTC)');
     assert.equal(questDay(t + 60_000), questDay(t) + 1, 'a las 09:00 UTC cambia el día');
     assert.equal(msToReset(t), 60_000);
     b.d.prog.pits = 7;
-    assert.equal(rollDailies(b, 7, t), true, 'subió a 7 en el día: se suman D2 y PvP');
+    assert.equal(rollDailies(b, 8, t), true, 'subió a 8 en el día: se suman D1, D2 y PvP');
     assert.ok(b.d.ids.includes('dia_d2') && b.d.ids.includes('frontera')); assert.equal(b.d.prog.pits, 7, 'no pierde lo hecho');
     b.d.done.push('pits'); b.d.pvp.push('x');
-    assert.equal(rollDailies(b, 7, t + 2 * H), true); assert.deepEqual(b.d.done, []); assert.deepEqual(b.d.pvp, []); assert.ok(Object.values(b.d.prog).every((v) => v === 0));
+    assert.equal(rollDailies(b, 8, t + 2 * H), true); assert.deepEqual(b.d.done, []); assert.deepEqual(b.d.pvp, []); assert.ok(Object.values(b.d.prog).every((v) => v === 0));
 });
 
 test('objetivos: el mapa cuenta; los de "tener" (colmillos, ítem en +1) se leen de lo que tenés', () => {
@@ -106,7 +106,7 @@ test('el camino recorre los mapas en orden de nivel y cada objetivo de matar apu
         }
     }
     const maps = new Set(MAIN_QUESTS.flatMap((q) => q.goals.flatMap((g) => (g.k === 'kill' ? [g.map] : []))));
-    for (const m of ['campos_de_sal', 'bosque_de_piedra', 'canon_goblin', 'pantano_de_merrimead', 'altas_de_nazia', 'cementerio_de_lochport', 'risco_del_sur', 'la_brecha']) assert.ok(maps.has(m), `falta ${m}`);
+    for (const m of ['campos_de_sal', 'bosque_de_piedra', 'canon_goblin', 'pantano_de_merrimead', 'altas_de_nazia', 'cementerio_de_lochport', 'risco_del_sur']) assert.ok(maps.has(m), `falta ${m}`);
 });
 
 test('cadena completa en el server: de Campos de Sal a la Reina, con premios, niveles y elección de ítem', () => {
@@ -180,12 +180,11 @@ test('encargos del día en el server: se cobran solos sin NPC, el primero da ese
 });
 
 test('pits del encargo: solo cuentan los de tu banda o más alta', () => {
-    const { st, kill, eco } = setup();
-    const evs: unknown[] = [], orig = eco.questEvent.bind(eco); eco.questEvent = (pp, ss, e) => { evs.push({ e, sameSt: ss === st, lvl: ss.lvl, pEcon: pp.econ === st }); return orig(pp, ss, e); };
-    st.lvl = 5; const b = st.qb!; b.d = { day: questDay(Date.now()), ids: ['pits'], prog: { pits: 0 }, done: [], ess: false, pvp: [] };
-    kill('goblin', { def: { ...mobDef('goblin'), lvl: 1 } }); assert.equal(b.d.prog.pits, 0, `T1 para alguien T3 no cuenta: ${JSON.stringify({ lvl: st.lvl, d: b.d, same: st.qb === b, evs })}`);
-    kill('goblin', { def: { ...mobDef('goblin'), lvl: 6 } }); assert.equal(b.d.prog.pits, 1);
-    kill('goblin', { def: { ...mobDef('goblin'), lvl: 6 }, origin: 'loose' }); assert.equal(b.d.prog.pits, 1, 'los sueltos no son de pit');
+    const { st, kill } = setup();
+    st.lvl = 12; const b = st.qb!; b.d = { day: questDay(Date.now()), ids: ['pits'], prog: { pits: 0 }, done: [], ess: false, pvp: [] }; // nivel 12 = T3
+    kill('goblin', { def: { ...mobDef('goblin'), lvl: 5 } }); assert.equal(b.d.prog.pits, 0, 'T1 para alguien T3 no cuenta');
+    kill('goblin', { def: { ...mobDef('goblin'), lvl: 13 } }); assert.equal(b.d.prog.pits, 1);
+    kill('goblin', { def: { ...mobDef('goblin'), lvl: 13 }, origin: 'loose' }); assert.equal(b.d.prog.pits, 1, 'los sueltos no son de pit');
 });
 
 test('repetible: 10 materiales iguales por oro o piedra; los de las llaves no se aceptan', () => {
