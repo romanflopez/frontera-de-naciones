@@ -1,6 +1,6 @@
 # Skin de prueba: caballero (solo cuenta GM)
 
-Prueba para ver si el estilo del pack de SmallScaleInt calza con ERIS. **Los PNG no se suben al repo** (la licencia no permite redistribuir los archivos originales); están en `.gitignore`.
+Prueba para ver si el estilo del pack de SmallScaleInt calza con ERIS. **Los PNG están en el repo para que el skin se vea en Render** (decisión de Román, de prueba). Ojo: la licencia del pack no permite redistribuir los archivos originales y el repo es público; sacarlos antes de la beta.
 
 ## Cómo probarlo
 1. Copiá estas 7 hojas de `Spritesheets/With shadows/` a `apps/client/public/assets/skins/caballero/`: `Idle.png`, `Run.png`, `Melee.png`, `Special1.png` (golpe crítico: espada arriba y salto), `TakeDamage.png`, `Die.png`, `CastSpell.png`.

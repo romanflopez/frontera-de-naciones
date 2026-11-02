@@ -23,5 +23,3 @@ __pycache__/
 # Assets crudos de OpenGameArt: licencias sin verificar por pieza (ver docs/MOBS_NUEVOS.md). No se suben.
 /assets/raw/
 
-# Skin de prueba (caballero): hojas con licencia que no se redistribuyen; se copian a mano (ver docs/SKIN_CABALLERO.md)
-apps/client/public/assets/skins/
