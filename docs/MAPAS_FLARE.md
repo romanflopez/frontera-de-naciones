@@ -114,6 +114,7 @@ Todo mob de dungeon necesita animaciones completas: **stance, run, ataque, golpe
 - **Agua:** ya no se cambia por la del kit de ciudad (celeste, con bordes cuadrados). Se usa la de Flare, con sus orillas, puentes y acantilados, teñida al armar el atlas (`WATER_TINT`: verde azulado en pasto, azul hielo en nieve).
 - **Cuevas:** el vacío se rellena con tierra oscurecida (`FLARE_SHADE`, ids 900+) y el "abismo" de musgo verde de Flare (192-219) pasa al mismo tono de roca. Antes parecía un pantano.
 - **Nieve:** el relleno ya no usa piezas del agua (quedaban cajas negras o azules) y se sacan los marcadores violeta de editor de Flare (92-95).
+- **Mapas abiertos más amplios (para PvP):** los obstáculos sueltos del medio (grupos de hasta 12 celdas rodeados de piso: árboles, rocas, lápidas, carpas) dejan de bloquear; se conserva ~1 de cada 4, separados por 6+ celdas, para que cada mapa mantenga su identidad (`OPEN_MAX`, `KEEP_PROPS`, `KEEP_GAP` y `keepProps` por mapa en `tools/src/flare/maps.ts`). Las mazmorras no se tocan. También se sacan los marcadores violeta del pasto.
 - `pnpm --filter @fdn/tools maps:render [id…] [--scale 0.25] [--clean]`: vista completa de cualquier mapa (tiles, props, edificios, zonas y vínculos) a PNG en `tools/out/maps`, para revisar sin abrir el juego.
 
 **Falta:**

@@ -41,6 +41,8 @@ interface MapSpec {
     dropLinks?: string[]; linkGates?: Record<string, number>;
     /** Rectángulos [x,y,w,h] que se abren (puertas trabadas de Flare que se abren con un evento): sin colisión ni objeto. */
     open?: [number, number, number, number][];
+    /** Parte de los obstáculos sueltos que se conserva al abrir el mapa (por defecto KEEP_PROPS). */
+    keepProps?: number;
 }
 
 /** Un mapa por entrada. Pit A = el más cerca de la entrada (el más fácil), C = el más lejos. Los nombres de zona son únicos entre mapas. */
@@ -198,6 +200,21 @@ const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.m
 
 interface OutZone { type: string; x: number; y: number; r: number; n: number; name: string; lvl: number; kind: 'pit' | 'loose' | 'boss'; pit?: number }
 
+/** Tamaño máximo (en celdas) de un obstáculo suelto que se abre en los mapas abiertos, y alto máximo (px de Flare) de un objeto que queda de adorno. */
+const OPEN_MAX = 12, LOW_PROP = 90;
+/** Parte de los obstáculos sueltos que se conserva y distancia mínima (celdas, Manhattan) entre dos conservados. */
+const KEEP_PROPS = 0.25, KEEP_GAP = 6;
+/** Celda bloqueada (fuera de lo alcanzable). Los vecinos alcanzables ya están marcados en `seen` como vistos. */
+const hardBlockOrUnreached = (reach: boolean[][], x: number, y: number): boolean => !reach[y][x];
+/** Alto en px de cada pieza de la hoja (para decidir si un objeto es bajo). */
+function objectHeights(tilesetRel: string): Map<number, number> {
+    const out = new Map<number, number>();
+    const file = ['fantasycore', 'empyrean_campaign'].map((m) => join(flare, 'mods', m, tilesetRel)).find((f) => existsSync(f));
+    if (!file) return out;
+    for (const l of readFileSync(file, 'utf8').split(/\r?\n/)) if (l.startsWith('tile=')) { const a = l.slice(5).split(',').map(Number); out.set(a[0], a[4]); }
+    return out;
+}
+
 function convert(spec: MapSpec): object {
     const [t0, t1] = TIERS[spec.tier];
     if (spec.lvl[0] < t0 || spec.lvl[1] > t1 || spec.lvl[0] > spec.lvl[1]) throw new Error(`${spec.id}: lvl ${spec.lvl} no cae dentro del tier ${spec.tier} (${t0}-${t1})`);
@@ -207,8 +224,8 @@ function convert(spec: MapSpec): object {
     const grid = (name: string): number[][] => Array.from({ length: N }, (_, y) => Array.from({ length: N }, (_, x) => (y < p.h && x < p.w ? p.layers[name]?.[y]?.[x] ?? 0 : 0)));
     const background = grid('background'), object = grid('object'), collision = grid('collision');
     for (const [ox, oy, ow, oh] of spec.open ?? []) for (let y = oy; y < oy + oh; y++) for (let x = ox; x < ox + ow; x++) { collision[y][x] = 0; object[y][x] = 0; }
-    // Marcadores de editor de Flare (triángulos violeta 92-95 de la nieve): en Flare no se ven en el juego; acá se sacan.
-    if (/tileset_snowplains\.txt$/.test(p.tileset)) for (const row of object) for (let x = 0; x < row.length; x++) if (row[x] >= 92 && row[x] <= 95) row[x] = 0;
+    // Marcadores de editor de Flare (triángulos violeta 92-95 de pasto y nieve): en Flare no se ven en el juego; acá se sacan.
+    if (/tileset_(snowplains|grassland)\.txt$/.test(p.tileset)) for (const row of object) for (let x = 0; x < row.length; x++) if (row[x] >= 92 && row[x] <= 95) row[x] = 0;
 
     // 1) Colisión: lo que no es de Flare (relleno a cuadrado) y toda colisión != 0 bloquea. Solo se queda lo alcanzable a pie desde la entrada.
     const hardBlock = collision.map((row, y) => row.map((v, x) => y >= p.h || x >= p.w || v !== 0));
@@ -251,6 +268,37 @@ function convert(spec: MapSpec): object {
         flood();
     }
     if (carved) console.log(`${spec.id}: ${carved} cruces diagonales abiertos`);
+
+    // 1b) Mapas abiertos más amplios para el PvP (pedido de Román, 2/11/2026): los obstáculos sueltos del medio (árboles, rocas, lápidas,
+    // carpas, columnas: grupos de hasta OPEN_MAX celdas bloqueadas rodeados de piso) dejan de bloquear. Los objetos bajos quedan de adorno
+    // (se pasa por encima); los altos (árboles, columnas) se sacan para que no se vea a alguien atravesándolos. Las mazmorras no se tocan.
+    if (!spec.dungeon) {
+        const heights = objectHeights(p.tileset);
+        const seen = reach.map((r) => r.slice());
+        let opened = 0, removed = 0; const kept: [number, number][] = [];
+        for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+            if (seen[y][x] || !hardBlockOrUnreached(reach, x, y)) continue;
+            const isle: [number, number][] = [[x, y]]; seen[y][x] = true; let enclosed = true;
+            for (let i = 0; i < isle.length; i++) {
+                const [cx, cy] = isle[i];
+                if (cx === 0 || cy === 0 || cx === N - 1 || cy === N - 1 || cx >= p.w || cy >= p.h || background[cy][cx] === 0) enclosed = false;
+                for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+                    const nx = cx + dx, ny = cy + dy;
+                    if (inside(nx, ny) && !seen[ny][nx]) { seen[ny][nx] = true; isle.push([nx, ny]); }
+                }
+            }
+            if (!enclosed || isle.length > OPEN_MAX) continue;
+            // Se conserva ~1 de cada 4 (bloqueando, como estaba) para que el mapa no pierda su identidad (las lápidas del cementerio, las
+            // carpas del cañón), siempre separados entre sí: un obstáculo suelto se rodea fácil; muchos juntos son los que traban.
+            const [ix, iy] = isle[0];
+            if (hashStr(`${spec.id}:isla:${ix},${iy}`) / 4294967296 < (spec.keepProps ?? KEEP_PROPS) && !kept.some((k) => Math.abs(k[0] - ix) + Math.abs(k[1] - iy) < KEEP_GAP)) { kept.push([ix, iy]); continue; }
+            for (const [cx, cy] of isle) {
+                reach[cy][cx] = true; opened++;
+                const o = object[cy][cx]; if (o && (heights.get(o) ?? 999) > LOW_PROP) { object[cy][cx] = 0; removed++; }
+            }
+        }
+        if (opened) console.log(`${spec.id}: ${opened} celdas de obstáculos sueltos abiertas (${removed} objetos altos sacados, ${kept.length} obstáculos conservados)`);
+    }
     const free = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < N && y < N && reach[y][x];
     let walkable = 0; for (const r of reach) for (const v of r) if (v) walkable++;
     const snap = (x: number, y: number): { x: number; y: number } | undefined => {
