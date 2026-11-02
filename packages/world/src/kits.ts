@@ -2,9 +2,8 @@
  * Kits de clase: qué habilidad puede usar cada clase y desde qué nivel (paso K1, ver el doc del proyecto `kits-de-clase.md`).
  * Lo usan el server (rechaza lo que no corresponde) y el cliente (bloquea el botón y avisa el nivel).
  *
- * Los niveles salen de los kits de Valdrys para las habilidades que se quedan. Las que se van a sacar o reemplazar en el
- * paso K2 (hoja, lanza, marejada, ventisca, sismo, torbellino, tajo, luz, curar, curar2, vendar) quedan en nivel 1 hasta entonces,
- * para no dejar la barra vacía mientras no existan sus reemplazos.
+ * Los niveles salen de los kits de Valdrys. Las habilidades nuevas (Esquirla, Nova, Ignición, Juicio, Escudo vengador, Mandato,
+ * Aura sagrada y el healer) se suman en K3; furia, invisibilidad y detectar son utilidad compartida (recargas en K6).
  */
 
 export type ClassId = 'guerrero' | 'mago';
@@ -14,12 +13,10 @@ export const CLASS_KITS: Record<ClassId, Readonly<Record<string, number>>> = {
     guerrero: {
         ataque: 1, golpe: 1, giro: 3, aturdir: 9, carga: 20, grito: 24,
         furia: 1, remover: 1,
-        tajo: 1, vendar: 1, torbellino: 1, sismo: 1, // se van en K2
     },
     mago: {
         ataque: 1, proyectil: 1, paralisis: 3, bola: 9, lluvia: 12, remover: 21, blink: 24,
         furia: 1, invisibilidad: 1, detectar: 1,
-        curar: 1, hoja: 1, lanza: 1, ventisca: 1, marejada: 1, luz: 1, curar2: 1, // se van o se reemplazan en K2
     },
 };
 

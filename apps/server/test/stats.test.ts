@@ -69,9 +69,9 @@ test('stats: la vida, el maná, la defensa y el daño del combate salen de los p
     assert.ok(b.meleeMult > 1.05 && b.magicMult > 1.04 && a.meleeMult === 1);
     const rnd = Math.random; Math.random = () => 0.5;
     try {
-        const d1 = rollSpellDamage('tajo', { ...a }, false), d2 = rollSpellDamage('tajo', { ...a, meleeMult: 1.5 }, false);
+        const d1 = rollSpellDamage('golpe', { ...a }, false), d2 = rollSpellDamage('golpe', { ...a, meleeMult: 1.5 }, false);
         assert.ok(d2 > d1 && Math.abs(d2 / d1 - 1.5) < 0.05, `físico ${d1} -> ${d2}`);
-        const m1 = rollSpellDamage('lanza', { ...a }, false), m2 = rollSpellDamage('lanza', { ...a, magicMult: 1.3 }, false), m3 = rollSpellDamage('lanza', { ...a, meleeMult: 2 }, false);
+        const m1 = rollSpellDamage('bola', { ...a }, false), m2 = rollSpellDamage('bola', { ...a, magicMult: 1.3 }, false), m3 = rollSpellDamage('bola', { ...a, meleeMult: 2 }, false);
         assert.ok(m2 > m1 && m3 === m1, 'la Magia sube los hechizos y la Fuerza no los toca');
     } finally { Math.random = rnd; }
 });

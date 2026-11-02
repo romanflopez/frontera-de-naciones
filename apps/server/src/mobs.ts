@@ -359,10 +359,11 @@ export class MobSim {
     }
     get(id: number): { id: number; x: number; y: number } | undefined { const m = this.mobs.get(id); return m && !m.dead && !this.isSafe(m.x, m.y) ? { id: m.id, x: m.x, y: m.y } : undefined; }
     /** Daño ya calculado por el server (sin tope del cliente) + ralentización opcional. */
-    skillHit(p: Player, id: number, dmg: number, slowSecs = 0, skill = ''): void {
+    skillHit(p: Player, id: number, dmg: number, slowSecs = 0, skill = '', stunSecs = 0): void {
         const m = this.mobs.get(id); if (!m || m.dead) return;
         const T = this.now();
         if (slowSecs > 0) m.slow = T + slowSecs;
+        if (stunSecs > 0 && m.imm <= T) { m.par = T + stunSecs; m.imm = T + stunSecs + 8; m.moving = false; } // aturdido (corta la carga de un jefe)
         if (m.traits & TRAIT_ANTI_PHYS) dmg = Math.max(1, Math.round(dmg * ANTI_DAMAGE_MULT)); // las habilidades de guerrero son físicas
         m.lastAttacker = p.playerId; m.hp -= dmg;
         if (m.par > T && dmg >= m.hpMax * 0.45) m.par = 0;

@@ -25,7 +25,7 @@ const URL = process.argv[2] ?? 'ws://localhost:8113/ws';
 const DATA_DIR = process.env.DATA_DIR ?? '';
 const RUN = Math.random().toString(36).slice(2, 6);
 /** Desde el paso 1.3 el server calcula el daño: para matar rápido se piden varios hechizos distintos a la vez (cada uno tiene su recarga). */
-const BURST = ['lanza', 'bola', 'hoja', 'proyectil', 'golpe', 'tajo'];
+const BURST = ['golpe', 'aturdir', 'ataque']; // golpes instantáneos del paladín (los bots son paladines)
 function hitBurst(b: { send: (m: never) => void }, mobId: number) { for (const spell of BURST) b.send({ $case: 'mobHitRequest', value: { mobId, dmg: 0, melee: false, crit: false, parSecs: 0, poisonSecs: 0, spell } } as never); }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -285,8 +285,10 @@ async function main() {
     if (target) {
         killer.rewards.length = 0;
         const before = { ...killer.inv! }, bagBefore = killer.inv!.bag.length;
-        // 4 golpes mortales pegados: el mob muere con el primero y los demás no pueden volver a cobrar
-        hitBurst(killer, target.id);
+        // ráfagas de golpes pegados hasta que el mob muere (un personaje de nivel 1 no lo mata de un golpe desde que se fue el Tajo):
+        // la ráfaga que lo mata manda varios golpes juntos y los que llegan después no pueden volver a cobrar
+        for (let k = 0; k < 15 && killer.rewards.length === 0; k++) { hitBurst(killer, target.id); await sleep(1000); }
+        hitBurst(killer, target.id); // uno más sobre el mob ya muerto
         await sleep(900);
         const rw = killer.rewards;
         check(rw.length === 1, `(h) exactamente un killReward por el mob (${rw.length})`);
@@ -357,10 +359,10 @@ async function main() {
             for (let i = 0; i < 40 && !target; i++) { await sleep(100); target = K.mobs.filter((m) => Math.hypot(m.x - K.x, m.y - K.y) < 9).sort((a, b) => a.hp - b.hp)[0]; }
             if (!target) { await K.warp(kcell![0], kcell![1]); continue; }
             K.rewards.length = 0;
-            // el server calcula el daño y cobra maná: se pega como un jugador (ataque cada ~0,9 s y un proyectil si alcanza el maná) hasta que muera
+            // el server calcula el daño y cobra maná: se pega como un paladín (ataque y golpe cada ~0,9 s) hasta que muera
             for (let k = 0; k < 14 && !K.rewards.length && K.mobs.some((m) => m.id === target!.id); k++) {
                 K.send({ $case: 'mobHitRequest', value: { mobId: target.id, dmg: 0, melee: true, crit: false, parSecs: 0, poisonSecs: 0, spell: 'ataque' } });
-                K.send({ $case: 'mobHitRequest', value: { mobId: target.id, dmg: 0, melee: false, crit: false, parSecs: 0, poisonSecs: 0, spell: 'proyectil' } });
+                K.send({ $case: 'mobHitRequest', value: { mobId: target.id, dmg: 0, melee: true, crit: false, parSecs: 0, poisonSecs: 0, spell: 'golpe' } }); // el paladín no tira saetas (kits, K1)
                 await sleep(900);
             }
             await sleep(300);

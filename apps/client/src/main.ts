@@ -149,7 +149,7 @@ const others = new Map<bigint, Other>();
 interface Drop { x: number; y: number; item?: Item; gold?: number; t: number; gid?: number; lockedUntil?: number; loot?: FloorLoot }
 /** Botín de materiales / oro del server (LootSpawnEvent). `mock`: lo armó la tecla L de ?debug, no existe en el server. */
 interface FloorLoot { id: string; itemId: string; name: string; amount: number; mock?: boolean }
-interface Proj { x: number; y: number; m: Mob | null; spd: number; dmg: number; col: string; aoe?: number; tx?: number; ty?: number; sx?: number; sy?: number; arc?: number; trail?: { x: number; y: number }[] }
+interface Proj { x: number; y: number; m: Mob | null; spd: number; dmg: number; col: string; sid?: string; aoe?: number; tx?: number; ty?: number; sx?: number; sy?: number; arc?: number; trail?: { x: number; y: number }[] }
 interface Fx { k: 'ring' | 'boom' | 'burst' | 'click' | 'efx' | 'blizz'; d?: number; n?: string; dy?: number; x: number; y: number; t: number; c?: string; r?: number }
 const scorch: { x: number; y: number; t: number; r: number }[] = [];
 const mobs: Mob[] = [], corpses: { sprite: string; x: number; y: number; dir: number; t: number }[] = [], drops: Drop[] = [], projs: Proj[] = [];
@@ -202,8 +202,8 @@ function totals() {
 // ---------- clases ----------
 interface ClassDef { id: string; name: string; hidden?: boolean; desc: string; head: string; armor?: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; spells: string[] }
 const CLASSES: ClassDef[] = [
-    { id: 'guerrero', name: 'Paladin', desc: 'Resistente, pega cuerpo a cuerpo y frena enemigos.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'tajo', 'aturdir', 'vendar', 'torbellino', 'sismo', 'furia', 'remover', 'carga', 'giro', 'grito'] },
-    { id: 'mago', name: 'Mago', desc: 'Frágil pero con hechizos a distancia, parálisis y cura.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'paralisis', 'curar', 'bola', 'hoja', 'lanza', 'lluvia', 'ventisca', 'marejada', 'luz', 'curar2', 'furia', 'remover', 'invisibilidad', 'detectar', 'blink'] },
+    { id: 'guerrero', name: 'Paladin', desc: 'Tanque: aguanta, aturde y pega cuerpo a cuerpo.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'giro', 'aturdir', 'furia', 'remover', 'carga', 'grito'] },
+    { id: 'mago', name: 'Mago', desc: 'Frágil: frío para frenar, fuego para rematar.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 90, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'paralisis', 'bola', 'lluvia', 'furia', 'remover', 'invisibilidad', 'detectar', 'blink'] },
 ];
 let CLS: ClassDef = CLASSES[0];
 const maxHp = () => CLS.hp + (P.lvl - 1) * CLS.hpL + totals().hp;
@@ -569,51 +569,29 @@ function blinkDest(): Cell | null {
 }
 const skillSend = (skill: string, targetId = 0n, mobId = 0) => net.send({ $case: 'skillRequest', value: { skill, targetId, mobId } });
 const LIB: Record<string, SpellDef> = {
-    proyectil: { name: 'Proyectil arcano', mp: 8, cd: 0.4, col: '#b9a3ff', range: 15, castT: 1.5, target: true, // Firebolt
+    proyectil: { name: 'Saeta ígnea', mp: 14, cd: 1.5, col: '#ff9a4a', range: 15, castT: 0.75, target: true, // Firebolt (Valdrys)
         cast(m) { if (!isMob(m)) return false; const t = totals(), dmg = rint(12, 18) + P.lvl * 2 + t.mag; projs.push({ x: P.x, y: P.y, m, spd: 11, dmg, col: '#b9a3ff' }); } },
-    paralisis: { name: 'Parálisis', mp: 20, cd: 15, col: '#7fd6ff', range: 6, castT: 1, target: true, ctrl: true, // Chains of Ice
+    paralisis: { name: 'Cadenas de hielo', mp: 36, cd: 6, col: '#7fd6ff', range: 15, castT: 1, target: true, ctrl: true, // Chains of Ice (Valdrys)
         cast(m) { return control(m, 'paralisis', 5, 'Paralizaste', 'La parálisis'); } },
-    aturdir: { name: 'Aturdir', mp: 18, cd: 5, col: '#ffd24a', range: 1.9, target: true, ctrl: true,
-        cast(m) { return control(m, 'aturdir', 2.5, 'Aturdiste', 'El aturdimiento', 'turbulence'); } },
-    curar: { name: 'Curar', mp: 15, cd: 2, col: '#7ee08a', range: 0, target: false,
-        cast() { heal(35 + P.lvl * 3); } },
-    vendar: { name: 'Vendar', mp: 14, cd: 3, col: '#7ee08a', range: 0, target: false,
-        cast() { heal(30 + P.lvl * 4, 'godsbreath'); } },
-    bola: { name: 'Bola de fuego', mp: 25, cd: 4, col: '#ff8a3d', range: 7, target: true, aoe: 1.9,
-        cast(m) { if (!m) return false; const t = totals(), dmg = rint(18, 26) + P.lvl * 2 + t.mag; projs.push({ x: P.x, y: P.y, tx: m.x, ty: m.y, m: isMob(m) ? m : null, spd: 8, dmg, col: '#ff8a3d', aoe: 1.9, sx: P.x, sy: P.y }); } },
+    aturdir: { name: 'Martillo de justicia', mp: 30, cd: 11, col: '#ffd24a', range: 8, target: true, ctrl: true, instant: true, // Hammer of Justice (Valdrys)
+        cast(m) { return control(m, 'aturdir', 3, 'Aturdiste', 'El aturdimiento', 'turbulence'); } },
+    bola: { name: 'Bola de fuego', mp: 72, cd: 10, col: '#ff8a3d', range: 15, castT: 1.5, target: true, // Fireball (Valdrys): un objetivo, 3×
+        cast(m) { if (!isMob(m)) return false; const t = totals(), dmg = (rint(14, 21) + P.lvl * 2 + t.mag) * 3; projs.push({ x: P.x, y: P.y, m, spd: 9, dmg, col: '#ff8a3d', sid: 'bola' }); } },
     golpe: { name: 'Golpe brutal', mp: 10, cd: 1, col: '#ffb347', range: 2, target: true, instant: true, // Strike
         cast(m) { if (!isMob(m)) return false; efx('crosswind', m.x, m.y, 8); damageMob(m, 'golpe'); } },
-    tajo: { name: 'Tajo salvaje', mp: 12, cd: 1, col: '#ff6b55', range: 1.9, target: true,
-        cast(m) { if (!isMob(m)) return false; efx('crosswind', m.x, m.y, 8); damageMob(m, 'tajo'); } },
-    torbellino: { name: 'Torbellino', mp: 22, cd: 5, col: '#e0e0e0', range: 0, target: false,
-        cast() { fx.push({ k: 'boom', x: P.x, y: P.y, t: 0, r: 2.2 }); efx('cyclone', P.x, P.y); let n = 0; for (const m of byDistance(mobs, P.x, P.y)) if (dist(P, m) <= 2.2 && !isSafe(m.x, m.y)) { n++; damageMob(m, 'torbellino'); } if (!n) log('El torbellino no alcanzó a nadie.'); } },
-    hoja: { name: 'Hoja de viento', mp: 14, cd: 1.5, col: '#8dffa0', range: 7, target: true,
-        cast(m) { if (!isMob(m)) return false; efx('windblade', m.x, m.y, 10); damageMob(m, 'hoja'); } },
-    lanza: { name: 'Lanza de piedra', mp: 30, cd: 5, col: '#d9a45a', range: 7, target: true,
-        cast(m) { if (!isMob(m)) return false; efx('rocklance', m.x, m.y, 4); if (!reduce) shake = Math.max(shake, 0.2); damageMob(m, 'lanza'); } },
-    lluvia: { name: 'Lluvia de fuego', mp: 45, cd: 9, col: '#ff7a2f', range: 7, target: true, aoe: 2.4,
-        cast(m) { if (!m) return false; zone(m.x, m.y, 2.4, 4, 0.5, () => rint(11, 16) + P.lvl * 2 + totals().mag, 'cataclysm', 0, 'lluvia'); } },
-    ventisca: { name: 'Ventisca', mp: 50, cd: 10, col: '#9fdcff', range: 7, target: true, aoe: 2.7,
-        cast(m) { if (!m) return false; zone(m.x, m.y, 2.7, 6, 0.4, () => rint(9, 14) + P.lvl * 2 + totals().mag, 'blizz', 1.5, 'ventisca'); } },
-    marejada: { name: 'Marejada', mp: 40, cd: 8, col: '#4aa8ff', range: 7, target: true, aoe: 2.2,
-        cast(m) { if (!m) return false; zone(m.x, m.y, 2.2, 3, 0.6, () => rint(12, 17) + P.lvl * 2 + totals().mag, 'tidal', 1.2, 'marejada'); } },
-    curar2: { name: 'Curación mayor', mp: 35, cd: 6, col: '#7ee08a', range: 0, target: false,
-        cast() { heal(70 + P.lvl * 5, 'godsbreath'); } },
-    sismo: { name: 'Sismo', mp: 25, cd: 6, col: '#d9a45a', range: 0, target: false, aoe: 2.4,
-        cast() { fx.push({ k: 'boom', x: P.x, y: P.y, t: 0, r: 2.4, c: '#d9a45a' }); const w = totals().wdmg; zone(P.x, P.y, 2.4, 1, 0, () => rint(12, 18) + P.lvl * 2 + rint(w[0], w[1]), 'cataclysm', 0, 'sismo'); } },
+    lluvia: { name: 'Infierno', mp: 90, cd: 18, col: '#ff7a2f', range: 15, castT: 2.4, target: true, aoe: 4.5, // Inferno (Valdrys)
+        cast(m) { if (!m) return false; zone(m.x, m.y, 4.5, 1, 0, () => Math.round((rint(14, 21) + P.lvl * 2 + totals().mag) * 1.2), 'cataclysm', 0, 'lluvia'); } },
     remover: { name: 'Remover', mp: 20, cd: 10, col: '#9fe8ff', range: 0, target: false,
         cast() { if (P.frozenUntil <= now()) { toast('No estás paralizado.'); return false; } net.send({ $case: 'removerRequest', value: {} }); } },
-    luz: { name: 'Pilar de luz', mp: 35, cd: 7, col: '#bfe6ff', range: 7, target: true, aoe: 1.9,
-        cast(m) { if (!m) return false; const x = m.x, y = m.y; zone(x, y, 1.9, 2, 0.7, () => rint(14, 20) + P.lvl * 2 + totals().mag, 'spread', 0, 'luz'); later(0.5, () => { if (!P.dead && Math.hypot(P.x - x, P.y - y) <= 1.9) heal(25 + P.lvl * 3); }); } },
     invisibilidad: { name: 'Invisibilidad', mp: 40, cd: 20, col: '#9fb8ff', range: 0, target: false,
         cast() { efx('splash', P.x, P.y); net.send({ $case: 'invisibilityRequest', value: {} }); } },
     detectar: { name: 'Detectar invisible', mp: 30, cd: 12, col: '#ffe9a0', range: 0, target: false,
         cast() { efx('spread', P.x, P.y); net.send({ $case: 'detectInvisibleRequest', value: {} }); } },
-    blink: { name: 'Blink', mp: 35, cd: 12, col: '#b9a3ff', range: 0, target: false, instant: true,
+    blink: { name: 'Parpadeo', mp: 0, cd: 12, col: '#b9a3ff', range: 0, target: false, instant: true,
         cast() { const d = blinkDest(); if (!d) { toast('No hay lugar para el Blink hacia ahí.'); return false; } net.send({ $case: 'blinkRequest', value: { x: d.x, y: d.y } }); } },
-    carga: { name: 'Embestida', mp: 15, cd: 10, col: '#ff9a4a', range: 6, target: true, instant: true,
+    carga: { name: 'Carga sagrada', mp: 60, cd: 18, col: '#ff9a4a', range: 15, target: true, instant: true,
         cast(m) { if (!isMob(m)) return false; skillSend('carga', 0n, m.id); } },
-    giro: { name: 'Tajo giratorio', mp: 8, cd: 4, col: '#ffd0a0', range: 0, target: false, aoe: 1.9, instant: true,
+    giro: { name: 'Barrido', mp: 36, cd: 8, col: '#ffd0a0', range: 0, target: false, aoe: 2, instant: true,
         cast() { skillSend('giro'); } },
     grito: { name: 'Grito de guerra', mp: 20, cd: 25, col: '#c78bff', range: 0, target: false, instant: true,
         cast() { skillSend('grito'); } },
@@ -633,7 +611,6 @@ function zone(x: number, y: number, r: number, ticks: number, every: number, dmg
         for (const m of byDistance(mobs, x, y)) if (Math.hypot(m.x - x, m.y - y) <= r && !isSafe(m.x, m.y)) damageMob(m, sid, slow && m.imm <= now() && i === ticks - 1 ? slow : 0);
     });
 }
-function heal(h: number, eff = 'sphere') { sfx('heal', 0.6); P.hp = Math.min(maxHp(), P.hp + h); syncHp(); float(P.x, P.y - 0.2, '+' + h, '#7ee08a'); efx(eff, P.x, P.y); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#7ee08a' }); }
 function control(m: Target | null, spell: string, secs: number, verb: string, noun: string, eff = 'stop'): false | void {
     if (!isMob(m)) return false;
     if (m.imm > now()) { log(`${m.name} es inmune al control por unos segundos.`); return false; }
@@ -795,7 +772,7 @@ function release(target: Mob | { x: number; y: number; pvp?: Other }) {
     return true;
 }
 /** Hechizos de daño o control que el server cobra al pegar (a mobs o a jugadores): el cliente no reporta su maná gastado. */
-const SERVER_MP_SPELLS = new Set(['proyectil', 'paralisis', 'aturdir', 'hoja', 'lanza', 'golpe', 'tajo', 'bola', 'lluvia', 'ventisca', 'marejada', 'sismo', 'luz', 'torbellino']);
+const SERVER_MP_SPELLS = new Set(['proyectil', 'paralisis', 'aturdir', 'golpe', 'bola', 'lluvia']);
 function fire(i: number, m: Target | null) {
     const s = SPELLS[i];
     if (m && 'pvp' in m && !s.aoe) { if (!pvpCast(s.id, (m as { pvp: Other }).pvp)) return; } else if (s.cast(m) === false) return;
@@ -841,11 +818,9 @@ function pvpCast(id: string | undefined, o: Other): boolean {
     switch (id) {
         case 'proyectil': later(dist(P, o) / 11, () => { if (isEnemy(o)) pvpDamage(o, 'proyectil', 'splash'); }); return true;
         case 'paralisis': pvpDamage(o, 'paralisis', 'stop', 3); return true;
-        case 'aturdir': pvpDamage(o, 'aturdir', 'turbulence', 2.5); return true;
-        case 'hoja': pvpDamage(o, 'hoja', 'windblade'); return true;
-        case 'lanza': pvpDamage(o, 'lanza', 'rocklance'); return true;
+        case 'aturdir': pvpDamage(o, 'aturdir', 'turbulence', 3); return true;
+        case 'bola': later(dist(P, o) / 9, () => { if (isEnemy(o)) pvpDamage(o, 'bola', 'eruption'); }); return true;
         case 'golpe': pvpDamage(o, 'golpe', 'crosswind'); return true;
-        case 'tajo': pvpDamage(o, 'tajo', 'crosswind'); return true;
         case 'carga': skillSend('carga', o.id); return true;
         default: return false;
     }
@@ -1300,7 +1275,7 @@ function update(dt: number) {
         }
         const pm = p.m!;
         if (pm.hp <= 0 || !mobs.includes(pm)) { projs.splice(projs.indexOf(p), 1); continue; }
-        const d = dist(p, pm); if (d < 0.3) { fx.push({ k: 'ring', x: pm.x, y: pm.y, t: 0, c: '#c9b6ff' }); efx('splash', pm.x, pm.y, 10); damageMob(pm, 'proyectil'); projs.splice(projs.indexOf(p), 1); continue; }
+        const d = dist(p, pm); if (d < 0.3) { fx.push({ k: 'ring', x: pm.x, y: pm.y, t: 0, c: '#c9b6ff' }); efx('splash', pm.x, pm.y, 10); damageMob(pm, p.sid ?? 'proyectil'); projs.splice(projs.indexOf(p), 1); continue; }
         p.x += ((pm.x - p.x) / d) * p.spd * dt; p.y += ((pm.y - p.y) / d) * p.spd * dt;
     }
     for (const c of corpses.slice()) if (T - c.t > 3) corpses.splice(corpses.indexOf(c), 1);

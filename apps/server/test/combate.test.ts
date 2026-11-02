@@ -77,7 +77,7 @@ test('sin hechizo (o con uno que no existe) no hay golpe, aunque venga con daño
 
 test('un hechizo no puede pegar desde más lejos que su alcance', () => {
     const { hit, hits } = setup(statsFor({}), { x: 38, y: 20 }); // el mob está en x≈10
-    hit('ataque'); hit('lanza'); hit('bola');
+    hit('ataque'); hit('bola'); hit('lluvia');
     assert.equal(hits().length, 0);
 });
 
@@ -101,19 +101,19 @@ test('velocidad de ataque: con +200 % en el equipo se topea en 40 %', () => {
 
 test('recarga: un hechizo no se puede repetir antes de su recarga', () => {
     const { hit, hits, paid } = setup(statsFor({}, 'mago', 10), { x: 14, y: 20 });
-    hit('lanza'); clock += 500; hit('lanza'); clock += 500; hit('lanza');
-    assert.equal(hits().length, 1, 'solo el primero (cd 4,5 s)');
-    assert.deepEqual(paid, [30], 'y se cobra una sola vez');
-    clock += 4500; hit('lanza');
+    hit('bola'); clock += 500; hit('bola'); clock += 500; hit('bola');
+    assert.equal(hits().length, 1, 'solo el primero (cd 10 s)');
+    assert.deepEqual(paid, [72], 'y se cobra una sola vez');
+    clock += 10000; hit('bola');
     assert.equal(hits().length, 2);
-    assert.deepEqual(paid, [30, 30]);
+    assert.deepEqual(paid, [72, 72]);
 });
 
 test('maná: sin maná el server no aplica el golpe', () => {
     const { hit, hits, setMana } = setup(statsFor({}, 'mago', 10));
-    setMana(5); hit('lanza'); hit('bola');
+    setMana(5); hit('bola'); hit('lluvia');
     assert.equal(hits().length, 0);
-    setMana(100); hit('lanza');
+    setMana(100); hit('bola');
     assert.equal(hits().length, 1);
 });
 
@@ -134,7 +134,7 @@ test('crítico: sin equipo es 5 % y los hechizos no critican', () => {
     const rate = a.hits().filter((x) => x.crit).length / a.hits().length;
     assert.ok(rate > 0.035 && rate < 0.065, `${(rate * 100).toFixed(1)} %`);
     const b = setup(statsFor(withAttrs([{ id: 'crit', v: 500 }]), 'mago', 10));
-    for (let i = 0; i < 100; i++) { b.hit('hoja'); clock += 2000; }
+    for (let i = 0; i < 100; i++) { b.hit('proyectil'); clock += 2000; }
     assert.equal(b.hits().filter((x) => x.crit).length, 0);
 });
 
@@ -147,7 +147,7 @@ test('robo de vida: cura al server lo que de verdad quitó, con el tope de 15 %'
 
 test('robo de vida: sin atributo no cura, y un hechizo mágico tampoco cura', () => {
     const a = setup(statsFor({}, 'guerrero', 10)); a.hit('ataque'); assert.equal(a.heals.length, 0);
-    const b = setup(statsFor(withAttrs([{ id: 'leech', v: 15 }]), 'mago', 10)); b.hit('lanza'); assert.equal(b.hits().length, 1); assert.equal(b.heals.length, 0, 'el robo de vida es del daño físico');
+    const b = setup(statsFor(withAttrs([{ id: 'leech', v: 15 }]), 'mago', 10)); b.hit('bola'); assert.equal(b.hits().length, 1); assert.equal(b.heals.length, 0, 'el robo de vida es del daño físico');
 });
 
 test('veneno: lo decide el server según el atributo del equipo', () => {
@@ -176,7 +176,8 @@ test('parálisis: pedirla con un hechizo que no paraliza no hace nada', () => {
 test('daño de un hechizo: rango de la fórmula con nivel, arma, Magia y el multiplicador de stats', () => {
     const s = statsFor(withAttrs([{ id: 'mag', v: 20 }]), 'mago', 20);
     const { hit, hits } = setup(s);
-    for (let i = 0; i < 50; i++) { hit('lanza'); clock += 5000; }
-    const lo = Math.round((30 + 20 * 3 + s.mag) * s.magicMult), hi = Math.round((42 + 20 * 3 + s.mag) * s.magicMult);
+    for (let i = 0; i < 50; i++) { hit('bola'); clock += 11000; }
+    // Bola = 3× el Daño base mágico: (14..21 + 2·nivel + Magia) × 3, después la Magia de los stats
+    const lo = Math.round((14 + 20 * 2 + s.mag) * 3 * s.magicMult), hi = Math.round((21 + 20 * 2 + s.mag) * 3 * s.magicMult);
     for (const x of hits()) assert.ok(x.dmg >= lo && x.dmg <= hi, `${x.dmg} fuera de ${lo}-${hi}`);
 });
