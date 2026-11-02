@@ -23,6 +23,7 @@ export * from './stats';
 export * from './kits';
 export * from './auction';
 export * from './deposit';
+export * from './quests';
 export * from './maps';
 export * from './tiers';
 export { TILED_DATA } from './tiledmaps';

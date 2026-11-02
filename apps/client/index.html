@@ -258,6 +258,7 @@ button.sl:not(.dis):hover,.cl:hover{border-color:#e0b765;filter:brightness(1.15)
 #qdlg{top:calc(84px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(340px,calc(100vw - 24px));padding:12px;display:grid;gap:10px}
 #qdlg h2{margin:0;font-family:var(--f-display);font-size:15px;color:var(--brass);display:flex;align-items:center;gap:8px} #qdlg h2 button{margin-left:auto;padding:0 8px;line-height:22px}
 #qdForges{display:grid;gap:6px} #qdBody{line-height:1.35} #qdBody small{color:var(--muted)}
+#qdBook{display:grid;gap:8px;max-height:46vh;overflow:auto} #qdBook .qbk{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font-size:12px} #qdBook .qbk .qtx{flex-basis:100%} #qdBook .qbk b{color:var(--brass)} #qdBook .qbk button{padding:0 8px;line-height:22px}
 #quest{top:calc(10px + env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));padding:8px 10px;display:grid;gap:2px;max-width:230px;font-size:12px}
 #quest b{font-family:var(--f-display);color:var(--brass);font-size:13px} #quest em{font-style:normal;color:#bfe6ff}
 #buffs{top:calc(10px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);display:flex;gap:5px;pointer-events:none}
@@ -403,6 +404,7 @@ canvas:focus{outline:none}
     <div id="qdBody"></div>
     <button id="qdBtn" type="button">Aceptar</button>
     <div id="qdForges"></div>
+    <div id="qdBook"></div>
   </div>
   <div id="quest" class="hud box" hidden></div>
 
