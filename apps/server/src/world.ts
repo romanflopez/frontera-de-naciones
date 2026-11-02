@@ -7,9 +7,9 @@
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
 import { PARTY_SHARE_RANGE, partyExpMult, partyMates } from './party.ts';
-import { AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionLockMs, potionMp, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, POTION_LOCK_PVP_MS, PVP_COMBAT_MS, pvpCap, pvpScale, pvpVsCtrl, RECALL_PVP_LOCK_MS, INVIS_CD_MS, DETECT_CD_MS, SECOND_WIND, secondWindHeal, progressFromEcon, PVP_SPELLS, BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, POISON_HEAL_TAKEN, HEAL_THREAT, HEALER_SKILLS, STUN_SPELLS, healAmount, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
+import { AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionLockMs, potionMp, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, POTION_LOCK_PVP_MS, PVP_COMBAT_MS, pvpCap, pvpScale, pvpVsCtrl, RECALL_PVP_LOCK_MS, INVIS_CD_MS, DETECT_CD_MS, SECOND_WIND, secondWindHeal, progressFromEcon, PVP_SPELLS, BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, POISON_HEAL_TAKEN, HEAL_THREAT, HEALER_SKILLS, STUN_SPELLS, healAmount, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, K8_SKILLS, SHIELD_MS, BUFF, withBuffs, buffTakenMult, type DmgKind } from './systems/pvpCombat.ts';
 import { HUBS, QUESTS, RECALL, TRAINING, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef, checkSkill, skillDeniedText } from '@fdn/world';
-import { applyParalysis, applySlow, applyBless, applyPoison, applyWarcry, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, hasWarcry, isBlessed, isPoisoned, isSlowed, updateStatus } from './systems/statusSystem.ts';
+import { applyParalysis, applySlow, applyBless, applyPoison, applyBuff, applyShield, absorbShield, activeBuffs, clearBuffs, hasBuff, shieldOf, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, isBlessed, isPoisoned, isSlowed, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import type { GameWorldConfig, Settings } from './config.ts';
 import { adjacentCellsAt45, distance, findNearestFreeLocation, nextGridDirection } from './location.ts';
@@ -79,7 +79,14 @@ export class GameWorld {
                 playerById: (id) => this.playersById.get(id),
                 nearby: (cx, cy) => this.nearbyPlayers(cx, cy),
                 after: (ms, fn) => this.setTimeout(ms, fn),
-                hurt: (p, raw, source, srcId) => this.damagePlayer(p, raw, 'phys', null, source, '', srcId), // los ataques de mobs son físicos (los mitiga la DF)
+                hurt: (p, raw, source, srcId, mobId) => { // los ataques de mobs son físicos (los mitiga la DF)
+                    this.damagePlayer(p, raw, 'phys', null, source, '', srcId);
+                    // Aura de represalia (K8): devuelve ⅓ del golpe al monstruo (en el tick siguiente, para no matarlo en medio de su propio ataque)
+                    if (mobId !== undefined && !p.isDead && hasBuff(p.status, 'represalia', Date.now())) {
+                        const back = Math.max(1, Math.round(raw * BUFF.represaliaReflect));
+                        this.setTimeout(1, () => { if (!p.disconnected && p.world === this) this.mobSim?.skillHit(p, mobId, back, 0, 'represalia'); });
+                    }
+                },
                 stun: (p, secs) => { const ms = applyParalysis(p.status, Date.now(), paralysisSecs(secs, p.combat) * 1000, 'aturdir'); return ms / 1000; },
                 pay: (p, c) => this.payMp(p, c),
                 heal: (p, n) => this.healPlayer(p, n), // robo de vida, Juicio y Castigo
@@ -175,6 +182,8 @@ export class GameWorld {
             }
             this.changeStatus(pl, () => updateStatus(pl.status, now));
             expireTimed(pl.status, now);
+            if (pl.status.statDirty) { pl.status.statDirty = false; this.restat(pl); } // K8: venció una bendición que tocaba los stats
+            if (pl.status.vitalsDirty) this.flushShield(pl);
             if (pl.status.dirty) { pl.status.dirty = false; this.announceStatus(pl); }
             this.regenMana(pl, now);
             if (pl.windUntil && pl.isParalyzed(now)) this.cancelWind(pl, 'Te controlaron: se cortó el Segundo aliento.');
@@ -240,10 +249,10 @@ export class GameWorld {
         return target.status.isInvisible && !viewer.status.hasDetectInvisible && this.factionOf(viewer) !== this.factionOf(target);
     }
 
-    /** Estado visible de `p` (invisible, detectar, furia, grito de guerra, ralentizado) para `p` y los cercanos. */
+    /** Estado visible de `p` (invisible, detectar, furia, Bendición de poder, ralentizado, bendiciones y auras de K8) para `p` y los cercanos. */
     private statusMsg(p: Player): ServerMessage {
         const now = Date.now();
-        return M.statusUpdate(p.playerId, p.status.isInvisible, p.status.hasDetectInvisible, p.pvp.fury(now), hasWarcry(p.status, now), isSlowed(p.status, now), isBlessed(p.status, now), isPoisoned(p.status, now));
+        return M.statusUpdate(p.playerId, p.status.isInvisible, p.status.hasDetectInvisible, p.pvp.fury(now), hasBuff(p.status, 'poder', now), isSlowed(p.status, now), isBlessed(p.status, now), isPoisoned(p.status, now), activeBuffs(p.status, now));
     }
     private announceStatus(p: Player): void { const m = this.statusMsg(p); p.send(m); this.broadcastNear(p, m); }
 
@@ -368,7 +377,7 @@ export class GameWorld {
         const list = [...sources].filter((s) => !this.hiddenFrom(recipient, s));
         if (!list.length) return;
         recipient.send(M.playersEnteredRange(list));
-        for (const s of list) { if (s.status.isInvisible || hasWarcry(s.status, Date.now())) recipient.send(this.statusMsg(s)); recipient.send(M.playerVitals(s.playerId, Math.max(0, Math.round(s.hp)), s.combat.maxHp)); }
+        for (const s of list) { const now = Date.now(); if (s.status.isInvisible || activeBuffs(s.status, now).length || isBlessed(s.status, now)) recipient.send(this.statusMsg(s)); recipient.send(M.playerVitals(s.playerId, Math.max(0, Math.round(s.hp)), s.combat.maxHp, shieldOf(s.status, now))); }
         for (const s of list) if (s.disconnected) recipient.send(M.playerDisconnected(s.playerId));
     }
 
@@ -536,7 +545,7 @@ export class GameWorld {
                     this.broadcastNear(p, M.pvpHit(p.playerId, { fx, x, y, targetId: v.targetId, dmg, secs, r }));
                     break;
                 }
-                case 'blinkRequest': this.handleBlink(p, payload.value.x, payload.value.y); break;
+                case 'blinkRequest': this.handleBlink(p, payload.value.x, payload.value.y, payload.value.skill === 'pasoluz' ? 'pasoluz' : 'blink'); break;
                 case 'skillRequest': this.handleSkill(p, payload.value.skill, payload.value.targetId, payload.value.mobId); break;
                 case 'hpReport': this.acceptHpReport(p, payload.value.hp, payload.value); break;
                 case 'potionRequest': this.usePotion(p, payload.value.kind); break;
@@ -738,28 +747,30 @@ export class GameWorld {
     }
 
     /**
-     * Mago: Blink. Hasta 7 tiles hacia (x, y), atraviesa jugadores y mobs, pero no muros: la línea no puede cruzar celdas
-     * bloqueadas, y el destino tiene que ser caminable, libre (sin jugador ni mob), sin portal y del mismo lado de la zona segura.
+     * Mago: Blink (7 tiles). Healer: Paso de luz (K8, 6 tiles, además se saca el frenado). Hacia (x, y), atraviesa jugadores y mobs,
+     * pero no muros: la línea no puede cruzar celdas bloqueadas, y el destino tiene que ser caminable, libre (sin jugador ni mob),
+     * sin portal y del mismo lado de la zona segura.
      */
-    private handleBlink(p: Player, x: number, y: number): void {
-        if (!this.skillGate(p, 'blink')) return;
-        const sp = SKILLS.blink, fx = p.posX, fy = p.posY;
-        if (!Number.isInteger(x) || !Number.isInteger(y)) return this.skillDenied(p, 'blink', '');
+    private handleBlink(p: Player, x: number, y: number, skill: 'blink' | 'pasoluz' = 'blink'): void {
+        if (!this.skillGate(p, skill)) return;
+        const sp = SKILLS[skill], fx = p.posX, fy = p.posY, name = skill === 'blink' ? 'el Blink' : 'el Paso de luz';
+        if (!Number.isInteger(x) || !Number.isInteger(y)) return this.skillDenied(p, skill, '');
         const d = Math.hypot(x - fx, y - fy);
-        if (d < 1 || d > sp.range) return this.skillDenied(p, 'blink', d < 1 ? '' : 'Está muy lejos para el Blink (máx. 7 tiles).');
+        if (d < 1 || d > sp.range) return this.skillDenied(p, skill, d < 1 ? '' : `Está muy lejos para ${name} (máx. ${Math.floor(sp.range)} tiles).`);
         if (!this.cellWalkable(x, y) || !this.occupancy.isFreeAndNotTeleportCell(x, y) || this.isPortalCell(x, y) || this.mobSim?.near(x + 0.5, y + 0.5, 0.75).length)
-            return this.skillDenied(p, 'blink', 'No podés aparecer ahí: la celda está ocupada o bloqueada.');
-        if (this.cellSafe(x, y) !== this.cellSafe(fx, fy)) return this.skillDenied(p, 'blink', 'No podés cruzar la zona segura con el Blink.');
+            return this.skillDenied(p, skill, 'No podés aparecer ahí: la celda está ocupada o bloqueada.');
+        if (this.cellSafe(x, y) !== this.cellSafe(fx, fy)) return this.skillDenied(p, skill, `No podés cruzar la zona segura con ${name}.`);
         // línea recta: ningún muro entre medio (las celdas con jugadores o mobs sí se atraviesan)
         const n = Math.ceil(Math.max(Math.abs(x - fx), Math.abs(y - fy)) * 2);
         for (let i = 1; i < n; i++) {
             const cx = Math.round(fx + ((x - fx) * i) / n), cy = Math.round(fy + ((y - fy) * i) / n);
-            if (!this.cellWalkable(cx, cy)) return this.skillDenied(p, 'blink', 'Hay un muro en el camino.');
+            if (!this.cellWalkable(cx, cy)) return this.skillDenied(p, skill, 'Hay un muro en el camino.');
         }
-        this.skillCommit(p, 'blink');
+        this.skillCommit(p, skill);
         this.jumpTo(p, x, y);
+        if (skill === 'pasoluz' && isSlowed(p.status, Date.now())) { p.status.slowEndTime = 0; this.announceStatus(p); } // Paso de luz: se saca el frenado
         // los cercanos al destino (y el propio jugador) reciben el efecto; los que solo veían el origen, también
-        const m = M.skillEffect(p.playerId, 'blink', fx, fy, x, y, true);
+        const m = M.skillEffect(p.playerId, skill, fx, fy, x, y, true);
         p.send(m); this.broadcastNear(p, m);
         const atDest = new Set(this.nearbyPlayers(x, y, p.sessionId));
         for (const o of this.nearbyPlayers(fx, fy, p.sessionId)) if (!atDest.has(o) && !this.hiddenFrom(o, p)) o.send(m);
@@ -788,9 +799,10 @@ export class GameWorld {
     /** Paladin: Carga / Tajo giratorio / Grito de guerra. */
     private handleSkill(p: Player, skill: string, targetId: bigint, mobId: number): void {
         if (skill === 'aliento') return this.startWind(p);
-        if (!['carga', 'giro', 'grito', 'nova', 'mandato', 'aura'].includes(skill) && !(HEALER_SKILLS as readonly string[]).includes(skill)) return;
+        if (!['carga', 'giro', 'nova', 'mandato', 'aura'].includes(skill) && !(HEALER_SKILLS as readonly string[]).includes(skill) && !(K8_SKILLS as readonly string[]).includes(skill)) return;
         if (!this.skillGate(p, skill)) return;
         const sp = SKILLS[skill], now = Date.now();
+        if ((K8_SKILLS as readonly string[]).includes(skill)) return this.k8Skill(p, skill, targetId, now);
         if (sp.cls === 'healer') return this.healerSkill(p, skill, targetId, mobId, now);
         const rollDmg = (tgt?: Player) => rollSpellDamage(skill, p.combat, p.pvp.fury(now) && (!tgt || this.inPvp(tgt, now))); // K6: la Furia no vale en el primer golpe
         const hitPlayer = (tgt: Player, control: boolean) => {
@@ -801,16 +813,6 @@ export class GameWorld {
             this.broadcastNear(p, M.pvpHit(p.playerId, { fx: 'crosswind', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs, r: 0 }));
             return dmg;
         };
-        if (skill === 'grito') {
-            this.skillCommit(p, 'grito');
-            const fac = this.factionOf(p);
-            for (const o of [p, ...this.nearbyPlayers(p.posX, p.posY, p.sessionId)]) {
-                if (o.disconnected || o.isDead || this.factionOf(o) !== fac || Math.hypot(o.posX - p.posX, o.posY - p.posY) > WARCRY_RADIUS) continue;
-                applyWarcry(o.status, now, WARCRY_MS); this.announceStatus(o);
-            }
-            this.skillBroadcast(p, 'grito', p.posX, p.posY);
-            return;
-        }
         if (skill === 'mandato') { // provoca a los monstruos cercanos; a los jugadores no
             this.skillCommit(p, 'mandato');
             this.mobSim?.tauntNear(p, p.posX + 0.5, p.posY + 0.5, sp.aoe!, sp.taunt!);
@@ -1095,7 +1097,7 @@ export class GameWorld {
 
     private restat(p: Player, login = false): void {
         const prevLvl = p.combat.lvl, st = p.econ;
-        p.combat = statsFromChar(st, p.gmCritUncap);
+        p.combat = withBuffs(statsFromChar(st, p.gmCritUncap), p.status, Date.now()); // K8: bendiciones activas encima
         p.pvp.meleeGapMs = meleeIntervalSecs(p.combat.aspd) * 1000; // la velocidad de ataque la fija el equipo que guarda el server
         p.prog = progressFromEcon(st);
         if (login) { p.hp = p.combat.savedHp; p.mp = p.combat.savedMp; }
@@ -1106,13 +1108,17 @@ export class GameWorld {
 
     // ---------- vida, muerte y revivir (la vida la lleva el server) ----------
     private sendVitals(p: Player, announce: boolean): void {
-        p.send(M.vitals(Math.max(0, Math.round(p.hp)), p.combat.maxHp, p.isDead, Math.max(0, Math.round(p.mp)), p.combat.maxMp));
+        p.send(M.vitals(Math.max(0, Math.round(p.hp)), p.combat.maxHp, p.isDead, Math.max(0, Math.round(p.mp)), p.combat.maxMp, shieldOf(p.status, Date.now())));
         if (announce) this.announceVitals(p);
     }
     /** Avisa la vida a los cercanos (para la barra), a lo sumo cada 200 ms por jugador. */
     private announceVitals(p: Player, force = false): void {
         const now = Date.now(); if (!force && now - p.lastVitalsAt < 200) return; p.lastVitalsAt = now;
-        this.broadcastNear(p, M.playerVitals(p.playerId, Math.max(0, Math.round(p.hp)), p.combat.maxHp));
+        this.broadcastNear(p, M.playerVitals(p.playerId, Math.max(0, Math.round(p.hp)), p.combat.maxHp, shieldOf(p.status, now)));
+    }
+    /** El escudo cambió (entró, absorbió o venció): el dueño y los cercanos lo ven en la barra. */
+    private flushShield(p: Player): void {
+        p.status.vitalsDirty = false; this.sendVitals(p, false); this.announceVitals(p, true);
     }
     private isEnemyPair(a: Player, b: Player): boolean {
         if (a === b || a.disconnected || b.disconnected) return false;
@@ -1183,6 +1189,71 @@ export class GameWorld {
         if (!o || this.hiddenFrom(p, o) || !this.isAlly(p, o)) return 'Solo podés curar a los de tu nación.';
         if (Math.hypot(o.posX - p.posX, o.posY - p.posY) > range + 1.5) return 'Está muy lejos.';
         return o;
+    }
+    // ---------- K8: habilidades de nivel 15 a 26 (kits-de-clase.md §2) ----------
+    /** Aliados vivos y a la vista a `r` celdas de (x, y), incluido `p` si está en rango (bendiciones de grupo, saltos de la Esfera). */
+    private alliesNear(p: Player, x: number, y: number, r: number): Player[] {
+        const out: Player[] = [];
+        for (const o of [p, ...this.nearbyPlayers(x, y, p.sessionId)]) if (this.isAlly(p, o) && (o === p || !this.hiddenFrom(p, o)) && Math.hypot(o.posX - x, o.posY - y) <= r) out.push(o);
+        return out;
+    }
+    /** En mazmorras (instancias o mapas temporales) y arenas, Despertar solo vale dentro de los 10 s de la caída. */
+    private reviveLimited(o: Player): boolean {
+        const ffa = this.def?.ffaRect;
+        return this.id.includes('#') || !!this.def?.temporary || this.def?.pvp === 'ffa' || (!!ffa && inMapRect(ffa, o.posX, o.posY));
+    }
+    /**
+     * Escudo de maná, Escudo divino, Escudo guardián; Aura de represalia y Clarividencia; Bendición de poder (`grito`), Bendición de amparo,
+     * Intelecto arcano y Bendición de grupo del healer (a los aliados a 14 celdas); Esfera celestial; Despertar. Paso de luz va por `handleBlink`.
+     */
+    private k8Skill(p: Player, skill: string, targetId: bigint, now: number): void {
+        const sp = SKILLS[skill];
+        if (sp.cast && !this.castOk(p, skill, now)) return this.skillDenied(p, skill, ''); // bendiciones de grupo (0,8 s) y Despertar (2,4 s) se castean
+        if (sp.revive) { // Despertar: a un aliado caído
+            const o = targetId ? this.playersById.get(targetId) : undefined;
+            if (!o || o === p || o.disconnected || !o.isDead || this.factionOf(o) !== this.factionOf(p) || this.isEnemyPair(p, o)) return this.skillDenied(p, skill, 'Elegí a un aliado caído.');
+            if (Math.hypot(o.posX - p.posX, o.posY - p.posY) > sp.range + 1.5) return this.skillDenied(p, skill, 'Está muy lejos.');
+            if (this.reviveLimited(o) && now - o.deadAt > BUFF.reviveWindowMs) return this.skillDenied(p, skill, 'Pasaron más de 10 s: acá ya no se lo puede despertar.');
+            this.skillCommit(p, skill);
+            o.hp = Math.max(1, Math.round(o.combat.maxHp * sp.revive)); o.mp = Math.max(o.mp, Math.round(o.combat.maxMp * sp.revive));
+            o.deadAt = 0; o.lastDamager = null; o.potionEpoch++;
+            this.sendVitals(o, false); this.announceVitals(o, true);
+            o.send(M.sendMessage(`${p.characterName} te despertó.`));
+            this.skillBroadcast(p, skill, o.posX, o.posY);
+            return;
+        }
+        if (sp.shield) { // propio (mago y paladín) o al aliado elegido (healer)
+            const tgt = sp.range > 0 ? this.allyTarget(p, targetId, sp.range) : p;
+            if (typeof tgt === 'string') return this.skillDenied(p, skill, tgt);
+            this.skillCommit(p, skill);
+            applyShield(tgt.status, now, tgt.combat.maxHp * sp.shield, tgt.combat.maxHp, SHIELD_MS); this.flushShield(tgt);
+            this.skillBroadcast(p, skill, tgt.posX, tgt.posY);
+            return;
+        }
+        if (sp.bounce) { // Esfera celestial: cura y salta al aliado más herido a ≤ 6 celdas (puede volver, pero no al mismo de recién)
+            const first = this.allyTarget(p, targetId, sp.range);
+            if (typeof first === 'string') return this.skillDenied(p, skill, first);
+            this.skillCommit(p, skill);
+            let cur = first;
+            for (let i = 0; i < sp.bounce.n; i++) {
+                this.healPlayer(cur, healAmount(sp.heal!, p.combat, cur.combat.maxHp), p, skill);
+                this.broadcastNear(p, M.pvpHit(p.playerId, { fx: 'sphere', x: cur.posX, y: cur.posY, targetId: cur.playerId, dmg: 0, secs: 0, r: 0 }));
+                const next = this.alliesNear(p, cur.posX, cur.posY, sp.bounce.jump).filter((o) => o !== cur).sort((a, b) => a.hp / a.combat.maxHp - b.hp / b.combat.maxHp)[0];
+                if (!next) break;
+                cur = next;
+            }
+            this.skillBroadcast(p, skill, first.posX, first.posY);
+            return;
+        }
+        // bendiciones y auras: a uno mismo, o a los aliados alrededor si la habilidad tiene `aoe`
+        this.skillCommit(p, skill);
+        const ms = (sp.buffSecs ?? 10) * 1000, ids = Array.isArray(sp.buff) ? sp.buff : [sp.buff!];
+        for (const o of sp.aoe ? this.alliesNear(p, p.posX, p.posY, sp.aoe) : [p]) {
+            for (const id of ids) applyBuff(o.status, id, now, ms);
+            if (o.status.statDirty) { o.status.statDirty = false; this.restat(o); }
+            o.status.dirty = false; this.announceStatus(o);
+        }
+        this.skillBroadcast(p, skill, p.posX, p.posY);
     }
     /** Curación, Renovar, Bendición sagrada, Nova sagrada y Orbe sagrado. Castigo y Reprender van por pvpHitRequest y mobHitRequest. */
     private healerSkill(p: Player, skill: string, targetId: bigint, mobId: number, now: number): void {
@@ -1257,9 +1328,12 @@ export class GameWorld {
         if (p.isDead || p.spawnProtection || p.godMode || raw <= 0) return 0;
         const now = Date.now(), pvp = !!killer && killer !== p; // K6: las reglas de PvP valen solo contra jugadores
         if (isBlessed(p.status, now)) raw = Math.max(1, Math.round(raw * BLESS_DMG_TAKEN)); // Bendición sagrada: −20 % de daño recibido
+        const tk = buffTakenMult(p.status, now); if (tk !== 1) raw = Math.max(1, Math.round(raw * tk)); // K8: Bendición de amparo y Aura de represalia
         if (pvp) raw = pvpScale(raw); // multiplicador PvP global, antes de la defensa
-        let dmg = damageAfterDefense(raw, hasWarcry(p.status, now) ? { ...p.combat, def: p.combat.def + WARCRY_DEF } : p.combat, kind); // el Grito de guerra suma a la defensa antes de la fórmula
+        let dmg = damageAfterDefense(raw, p.combat, kind);
         if (pvp) { dmg = pvpCap(dmg, p.combat.maxHp); p.pvpHurtAt = now; this.markPvp(p, now); this.markPvp(killer!, now); } // tope por golpe
+        const before = dmg; dmg = absorbShield(p.status, now, dmg); // K8: el escudo se come el golpe antes que la vida
+        if (before > dmg) { this.flushShield(p); if (dmg <= 0) { this.combatText(p, 0, false, killer ? M.pid(killer.playerId) : srcId, spell); return 0; } }
         p.hp = Math.max(0, p.hp - dmg); p.meditating = false;
         if (dmg > 0) {
             this.changeStatus(p, () => breakInvisibility(p.status)); // recibir daño corta la invisibilidad
@@ -1276,6 +1350,7 @@ export class GameWorld {
     private killPlayer(p: Player): void {
         p.hp = 0; p.deadAt = Date.now(); p.potionEpoch++; this.econ?.onDeath(p); // corta la curación en el tiempo de pociones
         this.cancelRecall(p, ''); this.cancelWind(p, ''); p.potionReadyAt = 0; // al morir se libera el bloqueo de pociones (el cliente hace lo mismo)
+        clearBuffs(p.status); if (p.status.statDirty) { p.status.statDirty = false; this.restat(p); } // K8: se pierden escudos y bendiciones
         this.changeStatus(p, () => breakInvisibility(p.status));
         p.status.isParalyzed = false;
         const k = p.lastDamager && Date.now() - p.lastDamager.t < 15000 ? p.lastDamager : null;
@@ -1438,7 +1513,8 @@ export class GameWorld {
         if (p.meditating && (p.isDead || p.posX !== p.medX || p.posY !== p.medY)) p.meditating = false;
         const max = p.combat.maxMp; if (p.isDead || p.mp >= max) return;
         const inCity = !!this.map?.safe[Math.floor(p.posY)]?.[Math.floor(p.posX)];
-        const add = p.meditating ? Math.max(6, Math.round(max * 0.08)) : inCity ? 8 : combatMpRegen(max);
+        let add = p.meditating ? Math.max(6, Math.round(max * 0.08)) : inCity ? 8 : combatMpRegen(max);
+        if (hasBuff(p.status, 'espiritu', now)) add = Math.round(add * BUFF.espirituRegen); // Espíritu divino (K8)
         p.mp = Math.min(max, p.mp + add);
         this.sendVitals(p, false);
     }

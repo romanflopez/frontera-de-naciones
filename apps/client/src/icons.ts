@@ -55,6 +55,9 @@ const ART_OF: Record<string, string> = {
     marejada: 'remolino-de-sombra', luz: 'ascension', sismo: 'piel-de-piedra', furia: 'bestia-furiosa', remover: 'anular', invisibilidad: 'encapuchado', detectar: 'modo-cazador', blink: 'paso-sombrio', carga: 'embestida', giro: 'hacha-de-guerra', grito: 'bendicion',
     // healer (K5): íconos del pack que ya teníamos, como marcadores hasta los propios
     castigo: 'daga-bendita', curacion: 'curar', renovar: 'circulo-natural', bendicion: 'corazon-sagrado', novasagrada: 'explosion-solar', reprender: 'martillo-arcano', orbe: 'lluvia-de-curacion',
+    // K8: marcadores con los íconos que ya hay (los propios los suma Román con los assets de habilidades)
+    represalia: 'espada-solar', escudodivino: 'piel-de-piedra', amparo: 'ascension', escudomana: 'escudo-magico', clarividencia: 'ojo-de-dragon', intelecto: 'tormenta-arcana',
+    guardian: 'escudo-de-escarcha', esfera: 'explosion-solar', despertar: 'resurreccion', grupo: 'piel-de-roble', pasoluz: 'paso-sombrio',
 };
 
 /** Ícono del hechizo `id`: el pintado si existe, si no uno dibujado (data URL) del color `col`. */

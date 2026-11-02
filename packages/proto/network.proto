@@ -651,10 +651,12 @@ message DetectInvisibleRequest {}
 message LootAttr { string key = 1; int32 value = 2; }
 /** Botín tirado por el server para quien dio el golpe final. */
 message LootRoll { int32 mob_id = 1; int32 rarity = 2; int32 base_seed = 3; repeated LootAttr attrs = 4; }
-message StatusUpdate { int64 player_id = 1; bool invisible = 2; bool detect = 3; bool fury = 4; bool warcry = 5; bool slow = 6; bool blessed = 7; bool poisoned = 8; }
-/** Mago: Blink a la celda (x, y) (máx. 4 celdas). El server valida y responde con PlayerTeleported + SkillEffect. */
-message BlinkRequest { int32 x = 1; int32 y = 2; }
-/** Habilidades de clase: carga, giro, grito, nova, mandato, aura y las del healer (curacion, renovar, bendicion, novasagrada, orbe).
+/** warcry = Bendición de poder activa (K8; el campo queda por compatibilidad). buffs = bendiciones y auras activas (K8): poder, amparo, intelecto, fortaleza, espiritu, represalia, clarividencia. */
+message StatusUpdate { int64 player_id = 1; bool invisible = 2; bool detect = 3; bool fury = 4; bool warcry = 5; bool slow = 6; bool blessed = 7; bool poisoned = 8; repeated string buffs = 9; }
+/** Mago: Blink (máx. 7 celdas) o healer: Paso de luz (máx. 6) a la celda (x, y). El server valida y responde con PlayerTeleported + SkillEffect. */
+message BlinkRequest { int32 x = 1; int32 y = 2; /** '' o 'blink' = Parpadeo del mago; 'pasoluz' = Paso de luz del healer (K8). */ string skill = 3; }
+/** Habilidades de clase: carga, giro, grito, nova, mandato, aura, las del healer (curacion, renovar, bendicion, novasagrada, orbe) y las de K8
+ *  (represalia, escudodivino, amparo, escudomana, clarividencia, intelecto, guardian, esfera, despertar, grupo).
  *  carga necesita target_id (jugador) o mob_id; las curas del healer, target_id del aliado (0 = a sí mismo); renovar a un enemigo, target_id o mob_id. */
 message SkillRequest { string skill = 1; int64 target_id = 2; int32 mob_id = 3; }
 /** Efecto de una habilidad de clase para el que la usó (ok=false si el server la rechazó) y los cercanos. */
@@ -672,9 +674,10 @@ message RespawnRequest {}
 /** Tomar una poción (kind: 0 = vida, 1 = maná). El server valida el delay global (GCD) y cura: 20 % al instante y el resto en 2 s (vida). */
 message PotionRequest { int32 kind = 1; }
 /** Mi vida según el server (la autoridad): después de cada golpe, curación o al revivir. */
-message Vitals { int32 hp = 1; int32 max_hp = 2; bool dead = 3; int32 mp = 4; int32 max_mp = 5; }
+/** shield = puntos de escudo que absorben daño antes que la vida (K8). */
+message Vitals { int32 hp = 1; int32 max_hp = 2; bool dead = 3; int32 mp = 4; int32 max_mp = 5; int32 shield = 6; }
 /** Vida de otro jugador cercano (para su barra). */
-message PlayerVitals { int64 player_id = 1; int32 hp = 2; int32 max_hp = 3; }
+message PlayerVitals { int64 player_id = 1; int32 hp = 2; int32 max_hp = 3; int32 shield = 4; }
 message PvpKill { int64 player_id = 1; int64 killer_id = 2; string victim_name = 3; string killer_name = 4; }
 message PvpHitRequest {
   string fx = 1;
