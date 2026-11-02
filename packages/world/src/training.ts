@@ -23,7 +23,7 @@ export interface TrainingStep {
 }
 
 const T = (step: number, map: string, zone: string, lvl: number, col: string): TrainingStep => ({ id: map, step, zone, map, lvl, col, after: null });
-/** Una zona por mapa abierto de Flare, de T1 a T6. El nivel es el mínimo del `lvl` del mapa (lo comprueba el test de tiers). */
+/** Una zona por mapa abierto de Flare, de T1 a T7. El nivel es el mínimo del `lvl` del mapa (lo comprueba el test de tiers). */
 export const TRAINING: TrainingStep[] = [
     T(0, 'campos_de_sal', 'Campos de Sal', 1, '#8fd05a'),
     T(1, 'bosque_de_piedra', 'Bosque de Piedra', 2, '#a6d24e'),
@@ -37,6 +37,9 @@ export const TRAINING: TrainingStep[] = [
     T(9, 'cenizas_i', 'Cenizas I', 21, '#e04a5a'),
     T(10, 'cenizas_ii', 'Cenizas II', 23, '#cf4a86'),
     T(11, 'cenizas_iii', 'Cenizas III', 26, '#a64ad0'),
+    T(12, 'oasis_de_ceniza', 'Oasis de Ceniza', 31, '#e8c27a'),
+    T(13, 'lago_kuuma', 'Lago Kuuma', 34, '#9fd6f0'),
+    T(14, 'laguna_de_la_gruta', 'Laguna de la Gruta', 37, '#c2a8f0'),
 ];
 export const TRAINING_IDS = TRAINING.map((t) => t.id);
 

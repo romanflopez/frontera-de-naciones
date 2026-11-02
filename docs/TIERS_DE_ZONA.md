@@ -53,7 +53,7 @@ Cada mapa tiene `tier` y un `lvl` que es su sub-rango dentro del tier. Los pits 
 | T4 | La Brecha 16-18, Paso de Stormrock 18-20 | D4 Torre del hechicero 18-19 / Cámaras 19-20, Mago mayor Nv20 | La Brecha (14) |
 | T5 | Cenizas I 21-23, Cenizas II 23-25 | D5 Templo de Mez 23-24 / Salón de Mez 24-25, Wyvern del aire Nv25 | Cenizas II (19) |
 | T6 | Cenizas III 26-30 | D6 Fortaleza infernal 28-29 / Foso del demonio 29-30, Señor del Foso Nv30 | Cenizas III (24) |
-| T7 | (vacío: salen de la reserva de Flare) | | |
+| T7 | Oasis de Ceniza 31-34, Lago Kuuma 34-37, Laguna de la Gruta 37-40 | falta D7 (ver `ROADMAP_MAPAS.md`) | — |
 
 - Código: `packages/world/src/tiers.ts` (tabla, `pitLevel`, `itemBandOfLevel`, `tierGateLevel`), `MapDef.tier`, `tierErrors` (corre dentro de `validateMapGraph`) y `BOSS_LEVELS` en `mobs.ts` (los jefes se llevan a su nivel nuevo con las mismas curvas de vida, daño, exp y oro).
 - Banda de ítems: `tierOfLevel(lvl)` ahora es la del tier del nivel (1-5 = 1 … 26-40 = 6), antes `ceil(lvl / 2)`.

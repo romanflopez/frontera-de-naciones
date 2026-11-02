@@ -111,6 +111,17 @@ const SPECS: MapSpec[] = [
     { id: 'underworld_mines', eris: 'cenizas_iii', name: 'Cenizas III', region: 'comun', pvp: 'faction', lvl: [26, 30], tier: 6, dropLinks: ['underworld_stronghold_1'],
         pits: [{ name: 'Mineros condenados', type: 'zombie_dark' }, { name: 'Hornos de wyvern', type: 'wyvern_fire' }, { name: 'Galerías de brasas', type: 'fire_ant' }],
         loose: [{ type: 'skeleton_mage' }], extras: [{ to: 'fortaleza_infernal', where: 'far', kind: 'door', gate: 24 }] },
+    // T7 (Nv 31-40, docs/TIERS_DE_ZONA.md): tres mapas abiertos de la reserva de Flare. Cenizas III -> Oasis (camino de Flare) -> Lago Kuuma
+    // -> Laguna de la Gruta (portales de piedra). Todavía sin mazmorra propia (la del T7 entra con los jefes nuevos, ver docs/ROADMAP_MAPAS.md).
+    { id: 'oasis', eris: 'oasis_de_ceniza', name: 'Oasis de Ceniza', region: 'comun', pvp: 'faction', lvl: [31, 34], tier: 7,
+        pits: [{ name: 'Dunas de las hormigas', type: 'antlion' }, { name: 'Pozos de fuego', type: 'fire_ant' }, { name: 'Nidos del oasis', type: 'wyvern_fire' }],
+        loose: [{ type: 'antlion_small' }], extras: [{ to: 'lago_kuuma', where: 'far' }] },
+    { id: 'lake_kuuma', eris: 'lago_kuuma', name: 'Lago Kuuma', region: 'comun', pvp: 'faction', lvl: [34, 37], tier: 7, dropLinks: ['blackmire_mines', 'fort_amir'],
+        pits: [{ name: 'Hormigueros del lago', type: 'ice_ant' }, { name: 'Vigías helados', type: 'skeleton_archer' }, { name: 'Riscos del lago', type: 'wyvern_ice' }],
+        loose: [{ type: 'ice_ant' }], extras: [{ to: 'oasis_de_ceniza', where: 'near' }, { to: 'laguna_de_la_gruta', where: 'far' }] },
+    { id: 'grot_lagoon', eris: 'laguna_de_la_gruta', name: 'Laguna de la Gruta', region: 'comun', pvp: 'faction', lvl: [37, 40], tier: 7, dropLinks: ['abandoned_mines'],
+        pits: [{ name: 'Orilla helada', type: 'wyvern_ice' }, { name: 'Hechiceros de la gruta', type: 'skeleton_mage' }, { name: 'Cumbre de la laguna', type: 'wyvern' }],
+        loose: [{ type: 'skeleton' }], extras: [{ to: 'lago_kuuma', where: 'near' }] },
     { id: 'merrimead_swamp', eris: 'pantano_de_merrimead', name: 'Pantano de Merrimead', region: 'comun', pvp: 'faction', lvl: [6, 8], tier: 2,
         pits: [{ name: 'Ciénaga de zombis', type: 'zombie' }, { name: 'Pozo oscuro', type: 'zombie_dark' }, { name: 'Lápidas del pantano', type: 'cursed_grave' }],
         loose: [{ type: 'zombie' }], extras: [{ to: 'altas_de_nazia', where: 'far' }] },

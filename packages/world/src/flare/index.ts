@@ -4,6 +4,7 @@
  * atlas `flare_<hoja>.webp` (tools/src/flare/mapatlas.ts). Todo es dato fijo: cliente y server arman exactamente lo mismo.
  *   Villa de Solmar / Ciudadela de Vhar --portal--> Campos de Sal -> Bosque de Piedra -> Cañón goblin -> Pantano de Merrimead
  *   Pantano -> Altas de Nazia (Nv 4-5) y Pantano -> Cementerio de Lochport (Nv 5) -> Risco del Sur (Nv 5-6) -> La Brecha (Nv 6-7, cueva)
+ *   T7 (Nv 31-40): Cenizas III -> Oasis de Ceniza -> Lago Kuuma -> Laguna de la Gruta (sin mazmorra todavía)
  *   Mazmorras de grupo (una por tier, docs/TIERS_DE_ZONA.md): Cañón goblin -> D1, Altas de Nazia -> D2, Cementerio -> D3, La Brecha -> D4, Cenizas II -> D5, Cenizas III -> D6
  */
 import type { Prop, WorldMap, Zone } from '../index';
@@ -34,12 +35,15 @@ import { DATA as STORMROCK_PASS } from './stormrock_pass';
 import { DATA as UNDERWORLD } from './underworld';
 import { DATA as UNDERWORLD_CATACOMBS } from './underworld_catacombs';
 import { DATA as UNDERWORLD_MINES } from './underworld_mines';
+import { DATA as OASIS } from './oasis';
+import { DATA as LAKE_KUUMA } from './lake_kuuma';
+import { DATA as GROT_LAGOON } from './grot_lagoon';
 
 export { flareTile, FLARE_BASE } from './types';
 export type { FlareMapData } from './types';
 
 /** En el orden de la cadena: la primera es la que une el portal de las ciudades. */
-export const FLARE_DATA: FlareMapData[] = [SALTED_FIELD, STONEWOOD, GOBLIN_CAMP, MERRIMEAD_SWAMP, NAZIA_HIGHLANDS, LOCHPORT_CEMETERY, SOUTHERN_RIDGE, THE_BREACH, GOBLIN_CAVE, PERDITION_MINES, ANTLION_NEST, STORMROCK_RUINS, ST_MARIA_2, ST_MARIA_3, WIZARDS_TOWER_1, WIZARDS_TOWER_2, TEMPLE_OF_MEZ_1, TEMPLE_OF_MEZ_2, UNDERWORLD_STRONGHOLD_1, THE_PIT, STORMROCK_PASS, UNDERWORLD, UNDERWORLD_CATACOMBS, UNDERWORLD_MINES];
+export const FLARE_DATA: FlareMapData[] = [SALTED_FIELD, STONEWOOD, GOBLIN_CAMP, MERRIMEAD_SWAMP, NAZIA_HIGHLANDS, LOCHPORT_CEMETERY, SOUTHERN_RIDGE, THE_BREACH, GOBLIN_CAVE, PERDITION_MINES, ANTLION_NEST, STORMROCK_RUINS, ST_MARIA_2, ST_MARIA_3, WIZARDS_TOWER_1, WIZARDS_TOWER_2, TEMPLE_OF_MEZ_1, TEMPLE_OF_MEZ_2, UNDERWORLD_STRONGHOLD_1, THE_PIT, STORMROCK_PASS, UNDERWORLD, UNDERWORLD_CATACOMBS, UNDERWORLD_MINES, OASIS, LAKE_KUUMA, GROT_LAGOON];
 const byFlareId = new Map(FLARE_DATA.map((d) => [d.id, d]));
 const byEris = new Map(FLARE_DATA.map((d) => [d.eris, d]));
 export const FLARE_FIRST = FLARE_DATA[0];
