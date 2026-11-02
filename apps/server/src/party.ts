@@ -13,7 +13,7 @@ export const PARTY_SHARE_RANGE = 20;
 /** Exp total del grupo = exp del mob × min(1 + 0,2 por compañero extra, 4), repartida en partes iguales (misma regla que Helbreath: 2 → ×1,2; 4 → ×1,6). */
 export const partyExpMult = (n: number): number => (n <= 1 ? 1 : Math.min(1 + 0.2 * (n - 1), 4) / n);
 
-export interface MemberInfo { name: string; faction: string; level: number; hp: number; maxHp: number; map: string; online: boolean }
+export interface MemberInfo { name: string; faction: string; level: number; hp: number; maxHp: number; mp: number; maxMp: number; map: string; online: boolean }
 export interface PartyHooks {
     /** sessionId por nombre de personaje (solo jugadores conectados). */
     sessionByName(name: string): string | undefined;
@@ -22,7 +22,7 @@ export interface PartyHooks {
     now?(): number;
 }
 
-interface Party { id: number; leader: string; members: string[] }
+interface Party { id: number; leader: string; members: string[]; /** lo último que se mandó: estructura (miembros, nivel, mapa, líder) y hp/mp por nombre */ sent?: { key: string; stats: Map<string, string> } }
 interface Invite { from: string; partyId: number | null; expires: number }
 
 export class PartyService {
@@ -69,7 +69,7 @@ export class PartyService {
         const expires = this.now() + INVITE_MS;
         this.invites.set(to, { from: sid, partyId: party?.id ?? null, expires });
         this.say(sid, `Invitaste a ${other.name} a tu party.`);
-        this.h.send(to, M.partyInvited(me.name, expires));
+        this.h.send(to, M.partyInvited(me.name, expires, party ? String(party.id) : ''));
         this.say(to, `${me.name} te invitó a su party. Escribí /aceptar o /rechazar (vence en 30 s).`);
     }
 
@@ -147,17 +147,36 @@ export class PartyService {
         return true;
     }
 
+    private snapshot(party: Party) {
+        return party.members.map((m) => { const i = this.h.info(m); return i ? { name: i.name, level: i.level, hp: i.hp, maxHp: i.maxHp, mp: i.mp, maxMp: i.maxMp, map: i.map, leader: m === party.leader, online: i.online } : null; }).filter((x): x is NonNullable<typeof x> => !!x);
+    }
+    private static structKey(members: ReturnType<PartyService['snapshot']>): string {
+        return members.map((m) => [m.name, m.level, m.maxHp, m.maxMp, m.map, m.leader, m.online].join('|')).join(';');
+    }
+    /** Estado completo de la party a todos sus miembros. */
     private pushState(party: Party): void {
-        const members = party.members.map((m) => { const i = this.h.info(m); return i ? { name: i.name, level: i.level, hp: i.hp, maxHp: i.maxHp, map: i.map, leader: m === party.leader, online: i.online } : null; }).filter((x): x is NonNullable<typeof x> => !!x);
-        const msg = M.partyState(members);
+        const members = this.snapshot(party);
+        party.sent = { key: PartyService.structKey(members), stats: new Map(members.map((m) => [m.name, `${m.hp}|${m.mp}`])) };
+        const msg = M.partyState(members, String(party.id));
         for (const m of party.members) this.h.send(m, msg);
+    }
+    /** Si solo cambiaron hp/mp, manda PartyStatsUpdate de quien cambió; si cambió la estructura, el estado completo. */
+    private pushStats(party: Party): void {
+        const members = this.snapshot(party);
+        if (!party.sent || party.sent.key !== PartyService.structKey(members)) { this.pushState(party); return; }
+        for (const m of members) {
+            const v = `${m.hp}|${m.mp}`; if (party.sent.stats.get(m.name) === v) continue;
+            party.sent.stats.set(m.name, v);
+            const msg = M.partyStatsUpdate(m.name, m.hp, m.mp);
+            for (const to of party.members) this.h.send(to, msg);
+        }
     }
 
     /** Cada ~1 s: vence invitaciones y refresca las barras de los compañeros. */
     tick(): void {
         const t = this.now();
         for (const [to, inv] of this.invites) if (inv.expires < t) { this.invites.delete(to); this.say(inv.from, `${this.nameOf(to)} no respondió a tu invitación.`); }
-        for (const party of this.parties.values()) this.pushState(party);
+        for (const party of this.parties.values()) this.pushStats(party);
     }
 }
 

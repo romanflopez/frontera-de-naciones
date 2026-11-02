@@ -299,7 +299,8 @@ function onServer(m: ServerPayload) {
         case 'depositState': deposit.onMessage(m); break;
         case 'recallState': onRecallState(m.value); break;
         case 'partyState': renderParty(m.value.members); break;
-        case 'partyInvited': break; // el server ya avisa por chat (/aceptar o /rechazar)
+        case 'partyStatsUpdate': updatePartyStats(m.value.name, m.value.hp, m.value.mp); break;
+        case 'partyInvited': showPartyInvite(m.value.fromName, Number(m.value.expiresMs)); break;
         case 'econResult': deposit.onResult(m.value.ok, m.value.text); if (m.value.ok) log(esc(m.value.text)); else { toast(m.value.text); log(esc(m.value.text)); } break;
         case 'killReward': onKillReward(m.value); break;
         case 'statusUpdate': onStatusUpdate(m.value); break;
@@ -1032,13 +1033,59 @@ function partyCommand(text: string): boolean {
     if ((action === 'invite' || action === 'kick' || action === 'leader') && !m[2]) { log(`Falta el nombre: /${m[1]} nombre`); return true; }
     net.send({ $case: 'partyRequest', value: { action, name: (m[2] ?? '').trim() } }); return true;
 }
-function renderParty(members: { name: string; level: number; hp: number; maxHp: number; map: string; leader: boolean; online: boolean }[]): void {
-    const el = $('party'); if (!members.length) { el.hidden = true; el.innerHTML = ''; return; }
+type PartyRow = { name: string; level: number; hp: number; maxHp: number; mp: number; maxMp: number; map: string; leader: boolean; online: boolean };
+/** Filas del panel por nombre: los cambios de hp/mp tocan solo el ancho de las barras (con transición CSS), sin reescribir el panel. */
+const partyRows = new Map<string, { m: PartyRow; el: HTMLElement }>();
+const pctOf = (v: number, max: number) => Math.max(0, Math.min(100, Math.round((v / Math.max(1, max)) * 100)));
+function paintPartyBars(r: { m: PartyRow; el: HTMLElement }): void {
+    const hp = pctOf(r.m.hp, r.m.maxHp), mp = pctOf(r.m.mp, r.m.maxMp);
+    (r.el.querySelector('.ph i') as HTMLElement).style.width = hp + '%'; (r.el.querySelector('.ph em') as HTMLElement).textContent = hp + '%';
+    (r.el.querySelector('.pp i') as HTMLElement).style.width = mp + '%'; (r.el.querySelector('.pp em') as HTMLElement).textContent = mp + '%';
+}
+function renderParty(members: PartyRow[]): void {
+    const el = $('party'); if (!members.length) { el.hidden = true; el.innerHTML = ''; partyRows.clear(); return; }
     el.hidden = false;
-    el.innerHTML = '<div class="pt">Party</div>' + members.map((m) => {
-        const pct = Math.max(0, Math.min(100, Math.round((m.hp / Math.max(1, m.maxHp)) * 100)));
-        return `<div class="pm${m.online ? '' : ' off'}"><span class="pn">${m.leader ? '★ ' : ''}${esc(m.name)}</span><span class="pl">Nv ${m.level}</span><div class="pb"><i style="width:${pct}%"></i></div></div>`;
-    }).join('');
+    let list = el.querySelector('.pls') as HTMLElement | null;
+    if (!list) { el.innerHTML = '<div class="pt">Party · <span class="pc"></span></div><div class="pls"></div>'; list = el.querySelector('.pls') as HTMLElement; }
+    (el.querySelector('.pc') as HTMLElement).textContent = String(members.length);
+    const keep = new Set(members.map((m) => m.name));
+    for (const [n, r] of partyRows) if (!keep.has(n)) { r.el.remove(); partyRows.delete(n); }
+    for (const m of members) {
+        let r = partyRows.get(m.name);
+        if (!r) {
+            const row = document.createElement('div'); row.className = 'pm';
+            row.innerHTML = `<span class="pav">${esc(m.name.replace(/^\[[^\]]*\]\s*/, '').charAt(0).toUpperCase())}</span><div class="pbody"><div class="phd"><span class="pn"></span><span class="pl"></span></div><div class="pb ph"><i></i><em></em></div><div class="pb pp"><i></i><em></em></div></div>`;
+            r = { m, el: row }; partyRows.set(m.name, r);
+        }
+        r.m = m; list.appendChild(r.el); // appendChild reordena según el server sin recrear la fila
+        r.el.classList.toggle('far', !m.online || m.map !== MAP_DEF.id);
+        r.el.title = !m.online ? 'Desconectado' : m.map !== MAP_DEF.id ? `En otro mapa (${m.map})` : '';
+        (r.el.querySelector('.pn') as HTMLElement).innerHTML = (m.leader ? '<b class="pcr">♛</b> ' : '') + esc(m.name);
+        (r.el.querySelector('.pl') as HTMLElement).textContent = String(m.level);
+        paintPartyBars(r);
+    }
+}
+function updatePartyStats(name: string, hp: number, mp: number): void {
+    const r = partyRows.get(name); if (!r) return; r.m.hp = hp; r.m.mp = mp; paintPartyBars(r);
+}
+
+// Cartel de invitación: Aceptar / Rechazar, se cierra solo a los 15 s (o antes si vence en el server). Una nueva reemplaza a la anterior.
+const INVITE_SHOW_MS = 15_000;
+let inviteTimer = 0;
+function hidePartyInvite(): void { clearTimeout(inviteTimer); $('partyInvite').hidden = true; }
+function showPartyInvite(from: string, expiresMs: number, mock = false): void {
+    const el = $('partyInvite'), ms = Math.max(1000, Math.min(INVITE_SHOW_MS, expiresMs ? expiresMs - Date.now() : INVITE_SHOW_MS));
+    el.innerHTML = `<p>¡<b>${esc(from)}</b> te invitó a su party!</p><div class="pib"><button type="button" class="ok">Aceptar</button><button type="button" class="no">Rechazar</button></div><div class="pit"><i></i></div>`;
+    const bar = el.querySelector('.pit i') as HTMLElement; bar.style.transitionDuration = ms + 'ms';
+    const answer = (action: 'accept' | 'decline') => {
+        const req = { $case: 'partyRequest' as const, value: { action, name: from } };
+        if (mock) console.info('[party] (simulado, no se envía)', req); else { if (DEBUG) console.info('[party] enviando', req); net.send(req); }
+        hidePartyInvite();
+    };
+    (el.querySelector('.ok') as HTMLElement).onclick = () => answer('accept');
+    (el.querySelector('.no') as HTMLElement).onclick = () => answer('decline');
+    el.hidden = false; void bar.offsetWidth; bar.style.width = '0%';
+    clearTimeout(inviteTimer); inviteTimer = window.setTimeout(hidePartyInvite, ms);
 }
 
 const chatIn = $('chatIn') as HTMLInputElement;
@@ -1069,6 +1116,8 @@ window.addEventListener('keydown', (e) => {
     const hk = SPELLS.findIndex((x) => SPECIAL_KEY[x.id ?? ''] === e.key.toLowerCase()) >= 0 ? SPELLS.findIndex((x) => SPECIAL_KEY[x.id ?? ''] === e.key.toLowerCase()) : KEYS.indexOf(e.key), dm = /^(?:Digit|Numpad)([0-9])$/.exec(e.code), k = hk >= 0 ? hk : dm ? KEYS.indexOf(dm[1]) : null;
     if (k != null && k < SPELLS.length && !e.repeat) { e.preventDefault(); cast(k); }
     if (e.code === 'Space' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); pickupNearest(); return; }
+    // ?debug: Shift+I simula una invitación de KingLuthor (la I sola sigue abriendo la bolsa).
+    if (DEBUG && e.shiftKey && e.code === 'KeyI' && !e.repeat) { showPartyInvite('KingLuthor', Date.now() + 30_000, true); return; }
     if (e.key === 'i' || e.key === 'I') toggleBag();
     if (e.key === 'c' || e.key === 'C') toggleChar();
     if (e.key === 'Escape') { if (P.casting || P.ready) cancelCast('Hechizo cancelado.'); else P.target = null; }

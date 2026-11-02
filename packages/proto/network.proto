@@ -508,10 +508,12 @@ message ServerMessage {
     // Party (ver docs/PARTY_Y_ARENAS.md). Rango propio de tags desde 600.
     PartyState party_state = 600;
     PartyInvited party_invited = 601;
+    PartyStatsUpdate party_stats_update = 602;
   }
 }
 
 // Party: el cliente manda una acción ('invite', 'accept', 'decline', 'leave', 'kick', 'leader') con el nombre del otro jugador cuando hace falta.
+// El nombre del personaje es el identificador del jugador en todo el sistema de party.
 message PartyRequest {
   string action = 1;
   string name = 2;
@@ -525,16 +527,28 @@ message PartyMember {
   string map = 5;
   bool leader = 6;
   bool online = 7;
+  int32 mp = 8;
+  int32 max_mp = 9;
 }
 
-// Estado de la party del jugador (sin miembros = no tiene party).
+// Estado completo de la party (al entrar, salir, expulsar o cambiar líder). Sin miembros = no tiene party.
 message PartyState {
   repeated PartyMember members = 1;
+  string party_id = 2;
 }
 
+// Te invitaron a una party.
 message PartyInvited {
   string from_name = 1;
   int64 expires_ms = 2;
+  string party_id = 3;
+}
+
+// Solo los stats de un compañero, para no mandar el estado completo en cada golpe o regen.
+message PartyStatsUpdate {
+  string name = 1;
+  int32 hp = 2;
+  int32 mp = 3;
 }
 
 message TemporaryEffectApplied {

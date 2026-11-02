@@ -5,7 +5,7 @@ import { PARTY_MAX, PartyService, partyExpMult, type MemberInfo } from '../src/p
 
 function setup() {
     const people = new Map<string, MemberInfo>(), inbox = new Map<string, ServerMessage[]>(); let t = 1_000_000;
-    const add = (sid: string, name: string, faction = 'solmar', online = true) => { people.set(sid, { name, faction, level: 5, hp: 100, maxHp: 120, map: 'campos_de_sal', online }); inbox.set(sid, []); };
+    const add = (sid: string, name: string, faction = 'solmar', online = true) => { people.set(sid, { name, faction, level: 5, hp: 100, maxHp: 120, mp: 50, maxMp: 60, map: 'campos_de_sal', online }); inbox.set(sid, []); };
     const svc = new PartyService({
         sessionByName: (n) => [...people].find(([, i]) => i.online && i.name.toLowerCase() === n.toLowerCase())?.[0],
         send: (sid, m) => { inbox.get(sid)?.push(m); },
@@ -81,4 +81,15 @@ test('party: chat de party solo llega a los miembros; sin party devuelve false',
 test('party: la exp total crece 10 % por compañero extra y se reparte en partes iguales', () => {
     assert.equal(partyExpMult(1), 1);
     assert.ok(Math.abs(partyExpMult(2) * 2 - 1.2) < 1e-9); assert.ok(Math.abs(partyExpMult(4) * 4 - 1.6) < 1e-9);
+});
+
+test('party: el tick manda solo PartyStatsUpdate si cambió hp/mp, y el estado completo si cambió el mapa', () => {
+    const { svc, add, people, inbox } = setup(); add('a', 'Ana'); add('b', 'Beto'); join(svc, 'a', 'b', 'Beto');
+    const cases = () => inbox.get('a')!.map((m) => m.payload?.$case);
+    inbox.get('a')!.length = 0; svc.tick(); assert.deepEqual(cases(), []);
+    people.get('b')!.hp = 40; people.get('b')!.mp = 10; svc.tick();
+    const last = inbox.get('a')!.at(-1)!; assert.equal(last.payload?.$case, 'partyStatsUpdate');
+    if (last.payload?.$case === 'partyStatsUpdate') assert.deepEqual({ ...last.payload.value }, { name: 'Beto', hp: 40, mp: 10 });
+    inbox.get('a')!.length = 0; people.get('b')!.map = 'cripta'; svc.tick(); assert.deepEqual(cases(), ['partyState']);
+    const st = inbox.get('a')![0]; if (st.payload?.$case === 'partyState') { assert.ok(st.payload.value.partyId); assert.equal(st.payload.value.members[1].maxMp, 60); }
 });

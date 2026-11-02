@@ -292,14 +292,31 @@ canvas:focus{outline:none}
 @media (max-width:620px){#target{top:calc(60px + env(safe-area-inset-top,0px))} #help{display:none}}
 @media (prefers-reduced-motion:reduce){.bar i{transition:none}}
 
-#party{top:96px;left:max(12px,env(safe-area-inset-left,0px));width:150px;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:6px 8px}
-#party .pt{font-size:11px;letter-spacing:.08em;color:var(--brass);text-transform:uppercase;margin-bottom:4px}
-#party .pm{margin-bottom:5px}
-#party .pm.off{opacity:.45}
-#party .pn{font-size:12px;color:var(--text)}
-#party .pl{float:right;font-size:11px;color:#9aa3ad}
-#party .pb{height:5px;background:#2a1618;border-radius:3px;margin-top:2px;overflow:hidden}
-#party .pb i{display:block;height:100%;background:#c0463a}
+#party{top:96px;left:max(12px,env(safe-area-inset-left,0px));width:190px;background:rgba(10,12,10,.55);border-radius:4px;padding:6px 8px}
+#party .pt{font-size:11px;letter-spacing:.08em;color:var(--brass);text-transform:uppercase;margin-bottom:6px}
+#party .pm{display:flex;gap:7px;align-items:center;margin-bottom:8px;transition:opacity .3s}
+#party .pm.far{opacity:.4}
+#party .pav{flex:none;width:30px;height:30px;border-radius:50%;border:2px solid #6b5326;background:radial-gradient(circle at 40% 35%,#4a4136,#1c1915);color:var(--brass);font-size:14px;font-weight:600;display:grid;place-items:center}
+#party .pbody{flex:1;min-width:0}
+#party .phd{display:flex;justify-content:space-between;align-items:baseline}
+#party .pn{font-size:12px;color:var(--brass);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#party .pcr{color:#f0c050;font-weight:400}
+#party .pl{font-size:11px;color:#d8d2bf;margin-left:4px}
+#party .pb{position:relative;height:9px;background:rgba(30,14,14,.75);margin-top:2px;overflow:hidden}
+#party .pb i{display:block;height:100%;transition:width .2s ease-out}
+#party .ph i{background:linear-gradient(#a8322a,#6e1c18)}
+#party .pp{background:rgba(12,16,34,.75)}
+#party .pp i{background:linear-gradient(#2d4fa8,#1a2d66)}
+#party .pb em{position:absolute;left:3px;top:-2px;font-size:9px;font-style:normal;color:#eee;text-shadow:0 1px 1px #000}
+#partyInvite{top:100px;right:max(20px,env(safe-area-inset-right,0px));width:230px;background:var(--panel);border:1px solid rgba(214,164,69,.55);border-radius:4px;padding:10px 12px;font-size:13px;color:var(--text);pointer-events:auto}
+#partyInvite p{margin:0 0 8px}
+#partyInvite b{color:var(--brass)}
+#partyInvite .pib{display:flex;gap:8px}
+#partyInvite button{flex:1;padding:5px 0;border-radius:3px;font:inherit;font-size:12px;cursor:pointer;color:#f2ead2}
+#partyInvite .ok{background:#2f5a2a;border:1px solid #6c9a4c}
+#partyInvite .no{background:#5a2420;border:1px solid #93463c}
+#partyInvite .pit{height:3px;background:rgba(255,255,255,.08);margin-top:8px}
+#partyInvite .pit i{display:block;height:100%;width:100%;background:var(--brass);transition:width linear}
 #chat{bottom:calc(var(--hud-h) + 12px);left:max(12px,env(safe-area-inset-left,0px));width:min(320px,70vw)}
 #chat{display:flex;gap:4px;pointer-events:auto}
 #chatCh{flex:none;font:inherit;font-size:11px;letter-spacing:.04em;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:0 7px;cursor:pointer}
@@ -500,6 +517,7 @@ canvas:focus{outline:none}
   <div id="chips" aria-label="Estadísticas"></div>
 </div>
   <div id="party" class="hud" hidden></div>
+  <div id="partyInvite" class="hud" role="alertdialog" aria-label="Invitación a party" hidden></div>
   <div id="log" class="hud"></div>
   <div id="chat" class="hud"><button id="chatCh" type="button" title="Canal de chat (Tab para cambiar): Global, Nación, Party. Guild: próximamente" aria-label="Canal de chat">Global</button><input id="chatIn" maxlength="200" autocomplete="off" placeholder="Enter para chatear" aria-label="Chat"></div>
   <div id="net" class="hud" aria-live="polite"></div>

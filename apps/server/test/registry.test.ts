@@ -322,7 +322,7 @@ test('mazmorra: cada party entra junta a su propia instancia; los demás, a la s
     const svc = new PartyService({
         sessionByName: (n) => [...people].find(([, v]) => v === n.toLowerCase())?.[0],
         send: (sid, m) => { (inbox.get(sid) ?? inbox.set(sid, []).get(sid)!).push(m); },
-        info: (sid) => (people.has(sid) ? { name: people.get(sid)!, faction: 'solmar', level: 5, hp: 100, maxHp: 100, map: 'prueba_caza', online: true } : undefined),
+        info: (sid) => (people.has(sid) ? { name: people.get(sid)!, faction: 'solmar', level: 5, hp: 100, maxHp: 100, mp: 0, maxMp: 0, map: 'prueba_caza', online: true } : undefined),
     });
     setParties(svc);
     reg.sessionHook = (sid) => { const j = [A, B, C, D].find((x) => x.session.sessionId === sid); return j && { session: j.session, save }; };
@@ -357,7 +357,7 @@ test('mazmorra: un compañero que no cumple el requisito no entra y se avisa', (
     const people = new Map([[A.session.sessionId, 'ana'], [B.session.sessionId, 'beto']]);
     const svc = new PartyService({
         sessionByName: (n) => [...people].find(([, v]) => v === n.toLowerCase())?.[0], send: () => {},
-        info: (sid) => ({ name: people.get(sid)!, faction: 'solmar', level: 5, hp: 100, maxHp: 100, map: 'prueba_caza', online: true }),
+        info: (sid) => ({ name: people.get(sid)!, faction: 'solmar', level: 5, hp: 100, maxHp: 100, mp: 0, maxMp: 0, map: 'prueba_caza', online: true }),
     });
     setParties(svc);
     reg.sessionHook = (sid) => { const j = [A, B].find((x) => x.session.sessionId === sid); return j && { session: j.session, save }; };

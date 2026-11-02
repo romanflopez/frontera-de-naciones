@@ -98,7 +98,7 @@ const parties = new PartyService({
     send: (sid, m) => { const s = sessionsById.get(sid); if (s?.socket && s.socket.readyState === s.socket.OPEN) s.socket.send(encode(m)); },
     info: (sid) => {
         const s = sessionsById.get(sid), w = s ? worldOf(s) : undefined, p = w?.playerOf(sid); if (!s || !w || !p) return undefined;
-        return { name: s.characterName, faction: p.profile.split(';')[0], level: p.econ?.lvl ?? 1, hp: Math.round(p.hp), maxHp: Math.round(p.maxHp), map: w.mapId, online: !!s.socket };
+        return { name: s.characterName, faction: p.profile.split(';')[0], level: p.econ?.lvl ?? 1, hp: Math.round(p.hp), maxHp: Math.round(p.maxHp), mp: Math.round(p.mp), maxMp: Math.round(p.combat.maxMp), map: w.mapId, online: !!s.socket };
     },
 });
 setParties(parties);
