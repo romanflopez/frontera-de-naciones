@@ -36,14 +36,14 @@ export const CAST_MULTI_HIT_MS = 3000;
 export const isCast = (id: string): boolean => { const sp = PVP_SPELLS[id] ?? SKILLS[id]; return !!sp && !sp.melee && sp.stat !== 'melee' && sp.stat !== 'wdmg' && id !== 'blink'; };
 export const PVP_SPELLS: Record<string, PvpSpell> = {
     ataque: { mp: 0, dmg: [0, 0], lvlK: 1, stat: 'melee', range: 2.6, cd: 0.3, melee: true },
-    proyectil: { mp: 8, dmg: [12, 18], lvlK: 2, stat: 'mag', range: 15, cd: 0.35 }, // Firebolt: cast 1.5 s (cliente), 14–17 tiles
+    proyectil: { mp: 8, dmg: [14, 21], lvlK: 2, stat: 'mag', range: 15, cd: 0.35 }, // Firebolt: cast 1.5 s (cliente), 14–17 tiles
     paralisis: { mp: 20, secs: 5, range: 7.5, cd: 15 }, // Chains of Ice: cast 1 s (cliente), freeze 5 s, cd 15 s
     aturdir: { mp: 18, secs: 3, range: 2.8, cd: 5 },
     hoja: { mp: 14, dmg: [13, 19], lvlK: 2, stat: 'mag', range: 8.5, cd: 1.4 },
     lanza: { mp: 30, dmg: [30, 42], lvlK: 3, stat: 'mag', range: 8.5, cd: 4.5 },
     golpe: { mp: 10, dmg: [14, 20], lvlK: 2, stat: 'wdmg', range: 2.8, cd: 0.9, melee: true }, // Strike: melee 2 tiles (+0.8 de tolerancia), sin cast
     tajo: { mp: 12, dmg: [22, 30], lvlK: 3, stat: 'wdmg', range: 2.8, cd: 0.9, melee: true },
-    bola: { mp: 25, kind: 'eruption', dmg: [18, 26], lvlK: 2, stat: 'mag', range: 9, cd: 3.6, aoe: 1.9 },
+    bola: { mp: 25, kind: 'eruption', dmg: [22, 31], lvlK: 2, stat: 'mag', range: 9, cd: 3.6, aoe: 1.9 },
     lluvia: { mp: 45, kind: 'cataclysm', dmg: [11, 16], lvlK: 2, stat: 'mag', range: 9, cd: 8.5, ticks: 4, every: 0.5, aoe: 2.4 },
     ventisca: { mp: 50, kind: 'blizz', dmg: [9, 14], lvlK: 2, stat: 'mag', range: 9, cd: 9.5, ticks: 6, every: 0.4, aoe: 2.7, secs: 1.5 },
     marejada: { mp: 40, kind: 'tidal', dmg: [12, 17], lvlK: 2, stat: 'mag', range: 9, cd: 7.5, ticks: 3, every: 0.6, aoe: 2.2, secs: 1.2 },
@@ -78,7 +78,7 @@ const CLASS_MP: Record<string, [number, number]> = { guerrero: [40, 4], mago: [9
 export const potionMp = (maxMp: number) => Math.max(40, Math.round(maxMp * 0.5));
 
 export interface CombatStats { lvl: number; cls: string; /** multiplicadores de daño por Fuerza (físico) y Magia (hechizos) */ meleeMult: number; magicMult: number; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; /** crítico total %, velocidad de ataque %, robo de vida % y chance de veneno % (ya con topes) */ crit: number; aspd: number; leech: number; poison: number; savedHp: number; maxMp: number; savedMp: number }
-const CLASS_HP: Record<string, [number, number]> = { guerrero: [140, 18], mago: [90, 10] };
+const CLASS_HP: Record<string, [number, number]> = { guerrero: [490, 63], mago: [315, 35] };
 export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 140, maxMp: 40, savedMp: 40 };
 
 /** Las bases de items son las compartidas de @fdn/world (el cliente usa las mismas). */

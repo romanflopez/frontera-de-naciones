@@ -46,7 +46,7 @@ export const AB = {
     chains: fromServer('Chains of Ice', 'paralisis'),
     blink: fromServer('Blink', 'blink', { castMs: 0, blink: 7 }),
     iceShard: { name: 'Ice Shard', simOnly: true, castMs: 750, range: 9, cd: 8, mp: 12, dmg: { base: [10, 14], lvlK: 2, stat: 'mag' }, kind: 'magic', slowMs: 3000, vsFrozen: 1.5 } as Ability,
-    ignite: { name: 'Ignite', simOnly: true, castMs: 750, range: 9, cd: 6, mp: 12, dmg: { base: [16, 24], lvlK: 2, stat: 'mag' }, kind: 'magic', dot: { ticks: 4, everyMs: 1000 } } as Ability,
+    ignite: { name: 'Ignite', simOnly: true, castMs: 750, range: 9, cd: 6, mp: 12, dmg: { base: [12, 18], lvlK: 2, stat: 'mag' }, kind: 'magic', dot: { ticks: 4, everyMs: 1000 } } as Ability,
     // ---- Paladin (clase 'guerrero') ----
     holyCharge: fromServer('Holy Charge', 'carga', { charge: true }),
     hammer: fromServer('Hammer of Justice', 'aturdir'),

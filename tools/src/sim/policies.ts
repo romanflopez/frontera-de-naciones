@@ -9,15 +9,23 @@ const tryCast = (v: View, k: AbilityKey): Action => (v.ready(k) && v.inRange(k) 
 /** No hace nada (muñeco de prueba para combos). */
 export const idle: Policy = () => null;
 
-/** Mago que kitea: Blink si lo alcanzan, Chains si se acerca, Ice Shard para frenar, Firebolt a distancia; corre si está muy cerca. */
+/**
+ * Mago que kitea, por prioridad:
+ * 1. Paladin a ≤3 y Blink listo → Blink alejándose.
+ * 2. Paladin a ≤5 y Chains lista → Chains.
+ * 3. Paladin a ≤5 y Chains en recarga → Ice Shard.
+ * 4. Paladin congelado o a >6 → Fireball si está lista; si no, Firebolt.
+ * 5. Sin nada de lo anterior (incluye ≤2 sin CC/Blink) → caminar hacia atrás (walk, no run).
+ *    Firebolt no es instantáneo (cast 1.5 s) y moverse cancela el cast, así que acá no se castea.
+ */
 export const mageKite: Policy = (v) => {
-    const close = v.dist <= 3.5;
-    if (close && v.ready('blink')) return { cast: 'blink' };
-    if (v.foe.frozen) return tryCast(v, 'iceShard') ?? tryCast(v, 'fireball') ?? tryCast(v, 'ignite') ?? tryCast(v, 'firebolt');
-    if (v.dist <= 6 && !close) { const c = tryCast(v, 'chains'); if (c) return c; }
-    if (close) return tryCast(v, 'chains') ?? { move: away(v), run: true };
-    if (v.dist < 8 && !v.foe.status.slowEndTime) { const c = tryCast(v, 'iceShard'); if (c) return c; }
-    return tryCast(v, 'ignite') ?? tryCast(v, 'fireball') ?? tryCast(v, 'firebolt') ?? { move: toward(v) };
+    if (v.dist <= 3 && v.ready('blink')) return { cast: 'blink' };
+    if (v.dist <= 5 && !v.foe.frozen) {
+        if (v.ready('chains')) { const c = tryCast(v, 'chains'); if (c) return c; }
+        else { const c = tryCast(v, 'iceShard'); if (c) return c; }
+    }
+    if (v.foe.frozen || v.dist > 6) { const c = tryCast(v, 'fireball') ?? tryCast(v, 'firebolt'); if (c) return c; if (v.dist > 6) return { move: toward(v) }; }
+    return { move: away(v) };
 };
 
 /** Paladin que cierra: Holy Charge apenas está en alcance; en melee Hammer → Smite → Strike → ataque; si no, corre. */

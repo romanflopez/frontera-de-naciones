@@ -22,17 +22,19 @@
 - Un paso cancela el cast y devuelve maná/cooldown
 
 ## Gap management (slows, roots, stuns, escapes)
-Regla: todo CC tiene DR. Ventana de DR: 15s.
-- Primer CC: duración full
-- Segundo en ventana: 50%
-- Tercero: 25%
-- Cuarto: inmune contra jugadores
+DR es multiplicativo sobre la duración base de cada CC. Ventana: 15s por tipo de CC por target.
+- 1er CC: 100% de la duración base
+- 2do: 50%
+- 3ro: 25%
+- 4to: inmune (0%)
+
+Ejemplos: Chains of Ice (base 5s): 5/2.5/1.25/0. Hammer (base 3s): 3/1.5/0.75/0. Slow (base 3s): 3/1.5/0.75/0.
 
 | Efecto | Duración full | DR (2º/3º/4º) | Cooldown | Quién |
 |---|---|---|---|---|
 | Slow (50% vel) | 3s | 1.5 / 0.75 / 0 | 8–10s | Mago (Ice Shard) |
-| Root (no se mueve, sí actúa) | 2–4s | 2 / 1 / 0 | 10–15s | Healer (Entangling Roots) |
-| Freeze/Stun (no se mueve ni actúa) | 3–5s | 1.5 / 0.75 / 0 | 15–20s | Mago (Chains of Ice), Paladin (Hammer of Justice), Healer (Chastise) |
+| Root (no se mueve, sí actúa) | 2–4s | 50% / 25% / 0 | 10–15s | Healer (Entangling Roots) |
+| Freeze/Stun (no se mueve ni actúa) | 3–5s | 50% / 25% / 0 | 15–20s | Mago (Chains of Ice), Paladin (Hammer of Justice), Healer (Chastise) |
 | Gap closer | — | — | 12–18s | Paladin (Holy Charge, 15 tiles) |
 | Escape | — | — | 8–12s | Mago (Blink, 7 tiles), Healer (Nature Roll, 7 tiles) |
 | Inmunidad a CC | 10s | — | 20–30s | Healer (Holy Blessing) |
@@ -42,6 +44,13 @@ Reglas:
 - El slow NO stackea con el root: se reemplazan.
 - Los escapes son recursos: cooldown largo (8–12s) define el ritmo de la pelea.
 - El CC duro del Mago (Chains of Ice) tiene cast time de 1s: es interrumpible.
+- Hammer del Paladin: cast 750ms, interrumpible. Counterplay válido.
+- Blink cancela el Hammer casteando si el Mago sale de rango. Counterplay válido.
+
+## HP nivel 40
+- HP nivel 40 (sin items ni stats): Paladin ~2950, Mago ~1680. Healer TBD.
+- HP nivel 10 (sim): Paladin ~1057, Mago ~630.
+- La sim usa nivel 10 por velocidad. El balance real se valida a nivel 40.
 
 ## Clases del MVP
 - Mago: caster, DPS/CC. Blink + Chains of Ice + Ice Shard + Firebolt + Fireball + Ignite.
@@ -57,8 +66,7 @@ Reglas:
 - Ningún CC encadena sin DR.
 - Todo burst grande requiere setup visible (cast time o combo).
 - Un combo completo saca 40–55% de la barra, no 100%.
-- Duración objetivo de pelea PvP: 20–40s.
-- Si una pelea dura <10s o >60s, el balance está roto.
+- Duración objetivo de pelea PvP: 20–30s. Si dura <12s o >45s, el balance está roto.
 
 ## Progresión post-40: Veteranía (no reset)
 - Niveles 1–50 después del 40.

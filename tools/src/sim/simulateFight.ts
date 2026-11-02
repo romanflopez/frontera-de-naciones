@@ -20,10 +20,12 @@ export interface View {
     ready(k: AbilityKey): boolean; inRange(k: AbilityKey): boolean;
 }
 export type Policy = (v: View) => Action;
-export interface FighterSpec { class: ClassId; level: number; hp?: number; abilities?: AbilityKey[]; policy: Policy; pos?: number }
+export interface FighterSpec { class: ClassId; level: number; hp?: number; /** multiplica la vida de statsFromChar (solo sim; el daño no cambia) */ hpMult?: number; abilities?: AbilityKey[]; policy: Policy; pos?: number }
 export interface FightSpec { a: FighterSpec; b: FighterSpec; maxDuration?: number; seed?: number; arena?: number; dtMs?: number; log?: boolean }
 
-export interface Metrics { castsInterrupted: number; cdsUsed: Partial<Record<AbilityKey, number>>; drProcs: number; dmgDone: number; casts: number }
+export interface Metrics { castsInterrupted: number; cdsUsed: Partial<Record<AbilityKey, number>>; drProcs: number; dmgDone: number; casts: number; dbg: Dbg }
+// TEMP (reporte): contadores de diagnóstico
+export interface Dbg { castsStarted: number; castsCompleted: number; castsInterrupted: number; blinkUsed: number; chainsUsed: number; slowUsed: number; damageDealtInRange: number; damageDealtInMelee: number; timeInMelee: number; timeInRange: number }
 export interface FightResult {
     duration: number; winner: 'a' | 'b' | 'draw'; winnerHpPct: number;
     castsInterrupted: number; cdsUsed: number; drProcs: number;
@@ -43,11 +45,12 @@ export class Fighter {
     simCd = new Map<AbilityKey, number>();
     casting: { k: AbilityKey; fireAt: number } | null = null;
     dots: { at: number; dmg: number; left: number; every: number; from: Fighter }[] = [];
-    m: Metrics = { castsInterrupted: 0, cdsUsed: {}, drProcs: 0, dmgDone: 0, casts: 0 };
+    m: Metrics = { castsInterrupted: 0, cdsUsed: {}, drProcs: 0, dmgDone: 0, casts: 0, dbg: { castsStarted: 0, castsCompleted: 0, castsInterrupted: 0, blinkUsed: 0, chainsUsed: 0, slowUsed: 0, damageDealtInRange: 0, damageDealtInMelee: 0, timeInMelee: 0, timeInRange: 0 } };
     readonly kit: Set<AbilityKey>;
     constructor(readonly id: 'a' | 'b', readonly spec: FighterSpec, pos: number) {
         this.stats = statsFromChar({ lvl: spec.level, cls: spec.class === 'mago' ? 'mago' : 'guerrero', eq: KIT_ITEMS[spec.class] });
         if (spec.hp) this.stats.maxHp = spec.hp;
+        if (spec.hpMult) this.stats.maxHp = Math.round(this.stats.maxHp * spec.hpMult);
         this.hp = this.stats.maxHp; this.mp = this.stats.maxMp; this.pos = pos;
         this.kit = new Set(spec.abilities ?? KITS[spec.class]);
     }
@@ -91,7 +94,7 @@ function run(spec: FightSpec, rnd: () => number): FightResult {
 
     const hurt = (from: Fighter, to: Fighter, raw: number, kind: Ability['kind'], what: string) => {
         const d = damageAfterDefense(raw, to.stats, kind);
-        to.hp = Math.max(0, to.hp - d); from.m.dmgDone += d;
+        to.hp = Math.max(0, to.hp - d); from.m.dmgDone += d; if (dist() > 3) from.m.dbg.damageDealtInRange += d; else from.m.dbg.damageDealtInMelee += d;
         ev(`${from.id} ${what} → ${to.id} −${d} (${to.hp}/${to.stats.maxHp})`);
     };
 
@@ -105,6 +108,7 @@ function run(spec: FightSpec, rnd: () => number): FightResult {
         else if (a.server && a.server in { blink: 1, carga: 1, giro: 1, grito: 1 }) { if (!f.limiter.skillReady(a.server, now) || !pay(a.mp)) return false; f.limiter.markSkill(a.server, now); }
         else if (!f.limiter.allow(a.server!, foe.tid, now, pay)) return false;
         f.m.casts++;
+        if (k === 'blink') f.m.dbg.blinkUsed++; if (k === 'chains') f.m.dbg.chainsUsed++; if (a.slowMs) f.m.dbg.slowUsed++;
         if (a.cd >= 3) f.m.cdsUsed[k] = (f.m.cdsUsed[k] ?? 0) + 1;
 
         if (a.blink) { const dir = Math.sign(f.pos - foe.pos) || 1; f.pos = Math.max(-wall, Math.min(wall, f.pos + dir * a.blink)); ev(`${f.id} Blink → ${f.pos.toFixed(1)}`); return true; }
@@ -127,7 +131,7 @@ function run(spec: FightSpec, rnd: () => number): FightResult {
             const got = applyParalysis(foe.status, now, req, a.cc.kind);
             if (got < req) f.m.drProcs++;
             ev(`${f.id} ${a.name}: ${a.cc.kind} ${(got / 1000).toFixed(2)}s${got < req ? ' (DR)' : ''}`);
-            if (got > 0 && foe.casting) { foe.m.castsInterrupted++; ev(`${foe.id} cast ${abil(foe.casting.k).name} interrumpido`); foe.casting = null; }
+            if (got > 0 && foe.casting) { foe.m.castsInterrupted++; foe.m.dbg.castsInterrupted++; ev(`${foe.id} cast ${abil(foe.casting.k).name} interrumpido`); foe.casting = null; }
         }
         if (a.slowMs) {
             const got = applySlow(foe.status, now, a.slowMs);
@@ -144,7 +148,7 @@ function run(spec: FightSpec, rnd: () => number): FightResult {
         f.dots = f.dots.filter((d) => d.left > 0);
         if (f.frozen) return;
         if (f.casting) {
-            if (now >= f.casting.fireAt) { const k = f.casting.k; f.casting = null; fire(f, foe, k); }
+            if (now >= f.casting.fireAt) { const k = f.casting.k; f.casting = null; f.m.dbg.castsCompleted++; fire(f, foe, k); }
             else return; // castea quieto; la política no actúa
         }
         const act = f.spec.policy(view(f, foe));
@@ -156,13 +160,14 @@ function run(spec: FightSpec, rnd: () => number): FightResult {
         }
         const k = act.cast, a = abil(k);
         if (!ready(f, k)) return;
-        if (a.castMs > 0) { f.casting = { k, fireAt: now + a.castMs }; ev(`${f.id} castea ${a.name}`); }
+        if (a.castMs > 0) { f.casting = { k, fireAt: now + a.castMs }; f.m.dbg.castsStarted++; ev(`${f.id} castea ${a.name}`); }
         else fire(f, foe, k);
     };
 
     // orden alternado por tick para no favorecer siempre a A
-    let tick = 0;
+    let tick = 0, wasMelee = false;
     while (now - T0 < maxMs && A.hp > 0 && B.hp > 0) {
+        { const inM = dist() <= 2; for (const f of [A, B]) { if (inM) f.m.dbg.timeInMelee += dt / 1000; else f.m.dbg.timeInRange += dt / 1000; } if (inM !== wasMelee) ev(inM ? 'MELEE (≤2 tiles)' : `sale de melee (${dist().toFixed(1)} tiles)`); wasMelee = inM; }
         if (tick++ % 2 === 0) { step(A, B); step(B, A); } else { step(B, A); step(A, B); }
         now += dt;
     }
