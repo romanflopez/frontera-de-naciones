@@ -74,11 +74,14 @@ export const FURY_MS = 10000, FURY_CD_MS = 18000;
 /** Costos de maná de los hechizos de utilidad que cobra el server (iguales a los del cliente). */
 export const UTIL_MP = { furia: 15, invisibilidad: 40, detectar: 30, remover: 20 } as const;
 /** Maná por clase (base, por nivel) y poción: mismas cuentas que el cliente. */
+/** Regen de maná fuera de ciudad (incluye combate): 1 % del pool por segundo, mínimo 2/s (el piso viejo). */
+export const COMBAT_MP_REGEN_PCT = 0.01;
+export const combatMpRegen = (maxMp: number): number => Math.max(2, Math.round(maxMp * COMBAT_MP_REGEN_PCT));
 const CLASS_MP: Record<string, [number, number]> = { guerrero: [40, 4], mago: [90, 12] };
 export const potionMp = (maxMp: number) => Math.max(40, Math.round(maxMp * 0.5));
 
 export interface CombatStats { lvl: number; cls: string; /** multiplicadores de daño por Fuerza (físico) y Magia (hechizos) */ meleeMult: number; magicMult: number; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; /** crítico total %, velocidad de ataque %, robo de vida % y chance de veneno % (ya con topes) */ crit: number; aspd: number; leech: number; poison: number; savedHp: number; maxMp: number; savedMp: number }
-const CLASS_HP: Record<string, [number, number]> = { guerrero: [490, 63], mago: [315, 35] };
+const CLASS_HP: Record<string, [number, number]> = { guerrero: [593, 76], mago: [381, 42] };
 export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 140, maxMp: 40, savedMp: 40 };
 
 /** Las bases de items son las compartidas de @fdn/world (el cliente usa las mismas). */

@@ -1,4 +1,4 @@
-/** Utilidad para combos: un atacante con secuencia fija contra un muñeco quieto. Doc: un combo completo saca 40–55 % de la barra. */
+/** Utilidad para combos: un atacante con secuencia fija contra un muñeco quieto. Doc: un combo completo saca 12–20 % de la barra (target recalibrado para HP ×4.24). */
 import { simulateFight, type ClassId } from '../simulateFight.ts';
 import { idle, script } from '../policies.ts';
 import type { AbilityKey } from '../abilities.ts';
@@ -12,7 +12,7 @@ export function combo(seed: number, cls: ClassId, foeCls: ClassId, seq: AbilityK
         metrics: { duration: r.duration, comboPct: pct, casts: r.a.casts, castsInterrupted: r.castsInterrupted, cdsUsed: r.cdsUsed, drProcs: r.drProcs },
         checks: [
             { label: 'todas las habilidades salieron', expected: `${seq.length}`, actual: `${r.a.casts}`, ok: r.a.casts === seq.length },
-            { label: 'combo saca 40–55 % de la barra', expected: '40–55', actual: `${pct}`, ok: pct >= 40 && pct <= 55 },
+            { label: 'combo saca 12–20 % de la barra (target recalibrado para HP ×4.24)', expected: '12–20', actual: `${pct}`, ok: pct >= 12 && pct <= 20 },
         ],
     };
 }

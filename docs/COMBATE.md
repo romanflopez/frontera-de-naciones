@@ -48,7 +48,7 @@ Reglas:
 - Blink cancela el Hammer casteando si el Mago sale de rango. Counterplay válido.
 
 ## HP nivel 40
-- HP nivel 40 (sin items ni stats): Paladin ~2950, Mago ~1680. Healer TBD.
+- HP nivel 40 (sin items ni stats): Paladin ~3560, Mago ~2020 (HP ×4.24 sobre la base vieja; ajustado para pelea 20–30s). Healer TBD.
 - HP nivel 10 (sim): Paladin ~1057, Mago ~630.
 - La sim usa nivel 10 por velocidad. El balance real se valida a nivel 40.
 
@@ -59,6 +59,7 @@ Reglas:
 
 ## Counterplay esperado por matchup
 - Mago vs Paladin: Mago kitea con slow/root/Blink; Paladin cierra con Holy Charge. Ventana: cuando el Mago gastó Blink + Chains of Ice (12–15s), el Paladin gana.
+- Paladin vs Mago: Paladin gana con ~75% de HP. ACEPTADO como matchup desfavorable del Mago. El Mago compensa en otros escenarios (con Healer de partner, con kiting perfecto, o en nivel 40 con items). No calibrar más por ahora. Re-evaluar cuando exista el Healer.
 - Paladin vs Healer: Paladin stunea y presiona; Healer usa Holy Blessing + Nature Roll. Ventana: cuando el Healer gastó Holy Blessing (20–30s), el Paladin gana.
 - Mago vs Healer: Mago burstea; Healer sostiene. Ventana: cuando el Healer gasta heals grandes, el Mago burstea. Si dura >2 min, el Healer está roto.
 
@@ -97,3 +98,5 @@ Reglas:
 
 DR (statusSystem.ts `drApply`): por tipo (`paralisis`, `aturdir`, `slow`) y por target, ventana 15s desde el último CC que entró.
 Reemplaza la inmunidad fija de 8s al terminar una parálisis (la del Remover se mantiene).
+
+Nota de calibración: los targets de combo (12–20%) se recalibraron cuando el HP subió ×3.5 (después ×4.24 para llevar la pelea a 20–30s; con ×4.24 los combos dan 12.8% Mago y 16.6% Paladin). El target viejo (40–55%) era para HP 302/180. Al cambiar el HP, siempre recalibrar los targets de % de barra.

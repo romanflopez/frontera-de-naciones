@@ -9,7 +9,7 @@
  * Modelo espacial: una línea (1D) entre dos paredes; alcances en tiles. Walk 333 ms/celda (castea), run 200 ms/celda (no),
  * slow = 50 % de velocidad. Moverse cancela el cast; un CC duro lo interrumpe.
  */
-import { PvpLimiter, WALK_MS, RUN_MS, damageAfterDefense, paralysisSecs, rollSpellDamage, statsFromChar, type CombatStats } from '../../../apps/server/src/systems/pvpCombat.ts';
+import { PvpLimiter, combatMpRegen, WALK_MS, RUN_MS, damageAfterDefense, paralysisSecs, rollSpellDamage, statsFromChar, type CombatStats } from '../../../apps/server/src/systems/pvpCombat.ts';
 import { applyParalysis, applySlow, createDefaultStatus, isSlowed, updateStatus, expireTimed, type CharacterStatus } from '../../../apps/server/src/systems/statusSystem.ts';
 import { AB, KITS, type Ability, type AbilityKey } from './abilities.ts';
 
@@ -43,6 +43,7 @@ export class Fighter {
     status: CharacterStatus = createDefaultStatus();
     limiter = new PvpLimiter();
     simCd = new Map<AbilityKey, number>();
+    nextRegenAt = 1_000_000 + 1000; // T0 + 1 s
     casting: { k: AbilityKey; fireAt: number } | null = null;
     dots: { at: number; dmg: number; left: number; every: number; from: Fighter }[] = [];
     m: Metrics = { castsInterrupted: 0, cdsUsed: {}, drProcs: 0, dmgDone: 0, casts: 0, dbg: { castsStarted: 0, castsCompleted: 0, castsInterrupted: 0, blinkUsed: 0, chainsUsed: 0, slowUsed: 0, damageDealtInRange: 0, damageDealtInMelee: 0, timeInMelee: 0, timeInRange: 0 } };
@@ -144,6 +145,7 @@ function run(spec: FightSpec, rnd: () => number): FightResult {
     const step = (f: Fighter, foe: Fighter) => {
         if (f.hp <= 0) return;
         updateStatus(f.status, now); expireTimed(f.status, now);
+        if (now >= f.nextRegenAt) { f.nextRegenAt += 1000; f.mp = Math.min(f.stats.maxMp, f.mp + combatMpRegen(f.stats.maxMp)); } // igual que world.regenMana
         for (const d of f.dots) if (d.left > 0 && now >= d.at) { d.left--; d.at += d.every; hurt(d.from, f, d.dmg, 'magic', 'Ignite tick'); }
         f.dots = f.dots.filter((d) => d.left > 0);
         if (f.frozen) return;

@@ -7,7 +7,7 @@
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
 import { PARTY_SHARE_RANGE, partyExpMult, partyMates } from './party.ts';
-import { AOE_MAX_TARGETS, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionMp, POTION_GCD_MS, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, progressFromEcon, PVP_SPELLS, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
+import { AOE_MAX_TARGETS, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionMp, POTION_GCD_MS, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, progressFromEcon, PVP_SPELLS, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
 import { HUBS, QUESTS, RECALL, TRAINING, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef } from '@fdn/world';
 import { applyParalysis, applySlow, applyWarcry, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, hasWarcry, isSlowed, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
@@ -1098,7 +1098,7 @@ export class GameWorld {
         if (cost > 0) { p.mp -= cost; p.meditating = false; this.sendVitals(p, false); }
         return true;
     }
-    /** Regeneración con las reglas del server: ciudad 8/s, meditando quieto 8 % de la máxima por s (mín. 6), afuera 2/s. */
+    /** Regeneración con las reglas del server: ciudad 8/s, meditando quieto 8 % de la máxima por s (mín. 6), afuera 1 %/s (mín. 2, combatMpRegen). */
     private regenMana(p: Player, now: number): void {
         if (now < p.nextMpRegenAt) return;
         p.nextMpRegenAt = now + 1000;
@@ -1106,7 +1106,7 @@ export class GameWorld {
         if (p.meditating && (p.isDead || p.posX !== p.medX || p.posY !== p.medY)) p.meditating = false;
         const max = p.combat.maxMp; if (p.isDead || p.mp >= max) return;
         const inCity = !!this.map?.safe[Math.floor(p.posY)]?.[Math.floor(p.posX)];
-        const add = p.meditating ? Math.max(6, Math.round(max * 0.08)) : inCity ? 8 : 2;
+        const add = p.meditating ? Math.max(6, Math.round(max * 0.08)) : inCity ? 8 : combatMpRegen(max);
         p.mp = Math.min(max, p.mp + add);
         this.sendVitals(p, false);
     }

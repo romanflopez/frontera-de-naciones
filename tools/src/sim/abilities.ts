@@ -51,12 +51,11 @@ export const AB = {
     holyCharge: fromServer('Holy Charge', 'carga', { charge: true }),
     hammer: fromServer('Hammer of Justice', 'aturdir'),
     strike: fromServer('Strike', 'golpe'),
-    smite: { name: 'Smite', simOnly: true, castMs: 0, range: 2.8, cd: 6, mp: 12, dmg: { base: [16, 22], lvlK: 2, stat: 'wdmg' }, kind: 'magic' } as Ability,
     ataque: fromServer('Ataque', 'ataque'),
 } satisfies Record<string, Ability>;
 export type AbilityKey = keyof typeof AB;
 
 export const KITS = {
     mago: ['firebolt', 'fireball', 'chains', 'blink', 'iceShard', 'ignite', 'ataque'],
-    paladin: ['holyCharge', 'hammer', 'strike', 'smite', 'ataque'],
+    paladin: ['holyCharge', 'hammer', 'strike', 'ataque'],
 } satisfies Record<string, AbilityKey[]>;
