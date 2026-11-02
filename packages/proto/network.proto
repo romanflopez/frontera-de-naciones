@@ -214,7 +214,11 @@ message SpellCastRequest {
 /** Cruzar un vínculo entre mapas. El id es estable (no depende de coordenadas); el server valida distancia, requisitos y estado. */
 message PortalRequest { string portal_id = 1; }
 /** El cliente terminó de armar el mapa `map_id` (con el hash que calculó). El server recién ahí mete al jugador en el mundo nuevo. */
-message MapReady { string map_id = 1; string map_hash = 2; }
+message MapReady {
+  string map_id = 1;
+  string map_hash = 2;
+  uint32 channel_id = 3;  // MVP: siempre 0
+}
 
 message WaypointRequest {
   string id = 1;
@@ -388,6 +392,7 @@ message TeleportTarget {
   string world_id = 1;
   string map_name = 2;
   WorldLocation loc = 3;
+  uint32 channel_id = 4;  // MVP: siempre 0
 }
 
 message TeleportLocationSet {

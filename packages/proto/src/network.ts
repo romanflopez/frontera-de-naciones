@@ -244,6 +244,8 @@ export interface PortalRequest {
 export interface MapReady {
   mapId: string;
   mapHash: string;
+  /** MVP: siempre 0 */
+  channelId: number;
 }
 
 export interface WaypointRequest {
@@ -423,7 +425,11 @@ export interface WorldLocation {
 export interface TeleportTarget {
   worldId: string;
   mapName: string;
-  loc: WorldLocation | undefined;
+  loc:
+    | WorldLocation
+    | undefined;
+  /** MVP: siempre 0 */
+  channelId: number;
 }
 
 export interface TeleportLocationSet {
@@ -4280,7 +4286,7 @@ export const PortalRequest: MessageFns<PortalRequest> = {
 };
 
 function createBaseMapReady(): MapReady {
-  return { mapId: "", mapHash: "" };
+  return { mapId: "", mapHash: "", channelId: 0 };
 }
 
 export const MapReady: MessageFns<MapReady> = {
@@ -4290,6 +4296,9 @@ export const MapReady: MessageFns<MapReady> = {
     }
     if (message.mapHash !== "") {
       writer.uint32(18).string(message.mapHash);
+    }
+    if (message.channelId !== 0) {
+      writer.uint32(24).uint32(message.channelId);
     }
     return writer;
   },
@@ -4323,6 +4332,14 @@ export const MapReady: MessageFns<MapReady> = {
             message.mapHash = reader.string();
             continue;
           }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.channelId = reader.uint32();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -4342,6 +4359,7 @@ export const MapReady: MessageFns<MapReady> = {
     const message = createBaseMapReady();
     message.mapId = object.mapId ?? "";
     message.mapHash = object.mapHash ?? "";
+    message.channelId = object.channelId ?? 0;
     return message;
   },
 };
@@ -6480,7 +6498,7 @@ export const WorldLocation: MessageFns<WorldLocation> = {
 };
 
 function createBaseTeleportTarget(): TeleportTarget {
-  return { worldId: "", mapName: "", loc: undefined };
+  return { worldId: "", mapName: "", loc: undefined, channelId: 0 };
 }
 
 export const TeleportTarget: MessageFns<TeleportTarget> = {
@@ -6493,6 +6511,9 @@ export const TeleportTarget: MessageFns<TeleportTarget> = {
     }
     if (message.loc !== undefined) {
       WorldLocation.encode(message.loc, writer.uint32(26).fork()).join();
+    }
+    if (message.channelId !== 0) {
+      writer.uint32(32).uint32(message.channelId);
     }
     return writer;
   },
@@ -6534,6 +6555,14 @@ export const TeleportTarget: MessageFns<TeleportTarget> = {
             message.loc = WorldLocation.decode(reader, reader.uint32());
             continue;
           }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.channelId = reader.uint32();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -6554,6 +6583,7 @@ export const TeleportTarget: MessageFns<TeleportTarget> = {
     message.worldId = object.worldId ?? "";
     message.mapName = object.mapName ?? "";
     message.loc = (object.loc !== undefined && object.loc !== null) ? WorldLocation.fromPartial(object.loc) : undefined;
+    message.channelId = object.channelId ?? 0;
     return message;
   },
 };
