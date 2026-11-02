@@ -262,7 +262,7 @@ function onServer(m: ServerPayload) {
         case 'pvpHit': {
             const v = m.value;
             if (v.casterId === myId) { // el server me confirma mi golpe con el daño que calculó
-                if (v.dmg > 0) float(v.x, v.y - 0.3, '-' + v.dmg, '#ffd24a'); if (v.secs > 0) float(v.x, v.y - 0.6, 'Paralizado', '#7fd6ff'); break;
+                if (v.secs > 0) float(v.x, v.y - 0.6, 'Paralizado', '#7fd6ff'); break;
             }
             if (v.fx === 'blizz') fx.push({ k: 'blizz', x: v.x, y: v.y, t: 0, r: v.r || 2.7, d: 3.2 }); else if (v.fx) efxLocal(v.fx, v.x, v.y, v.targetId ? 8 : 0);
             if (v.fx === 'resist') { float(v.x, v.y - 0.5, '¡Resistió!', '#9fe8ff'); break; }
@@ -391,7 +391,7 @@ function onMobDamaged(v: { mobId: number; attackerId: bigint; dmg: number; crit:
         if (v.crit && heroKey() === 'hero_knight') P.one = { anim: 'crit', t: now() - 0.15, until: now() + 0.65 };
     }
     if (!poisonTick && !(m.one && (m.one.anim === 'swing' || m.one.anim === 'special') && now() < m.one.until) && !(m.boss && R() < 0.6)) oneShot(m, 'hit', 0.2);
-    float(m.x, m.y, poisonTick ? '3' : (v.crit ? '¡' : '') + v.dmg + (v.crit ? '!' : ''), poisonTick ? '#8fd14f' : v.crit ? '#ffd24a' : '#fff', v.crit);
+    // el número lo dibuja CombatTextManager (CombatTextEvent)
     if (mine) { hitstop = Math.max(hitstop, v.crit ? 0.09 : 0.045); if (v.crit && !reduce) shake = 0.25; }
 }
 /** Subí de nivel (lo decide el server): efecto y aviso. */
@@ -439,7 +439,7 @@ function onMobDied(v: { mobId: number; killerId: bigint; x: number; y: number; t
 /** El server ya aplicó el botín del golpe final (exp, oro, item, pociones, misión): acá solo se muestra. El estado nuevo llega en `inventoryState`. */
 function onKillReward(v: { mobId: number; x: number; y: number; exp: number; gold: number; goldD: number; item?: InvItemMsg; bagFull: boolean; potion: string; shard: string; forge?: number; newLvl: number; questReady: boolean; questProg: number }) {
     const mob = mobMap.get(v.mobId), boss = !!mob?.boss;
-    float(v.x, v.y - 0.3, `+${v.exp} exp`, '#c9a227');
+    combatText.showAt(P.x, P.y, `+${v.exp} exp`, '#f0c84a', 22, myId.toString()); // sobre mi personaje, no sobre el mob (ahí va el daño)
     if (v.item) {
         const it = itemFromInv(v.item);
         if (boss) { log(`¡${mob?.name ?? 'El boss'} cayó! Soltó un item <span style="color:${it.rar.c}">${it.rar.n.toLowerCase()}</span>.`, true); shake = Math.max(shake, 0.4); }
@@ -491,7 +491,7 @@ function hurtPlayer(d: number, kind: 'phys' | 'magic' = 'phys', applied = false)
     if (!applied) {
         const tt = totals(); d = mitigate(d, kind === 'magic' ? tt.rm : tt.def);
     }
-    P.flash = 0.12; float(P.x, P.y, '-' + d, '#ff6b55');
+    P.flash = 0.12;
     if (P.casting) P.casting.end = Math.min(P.casting.end + 0.2, P.casting.start + P.casting.len * 1.6);
     if (!(P.one && P.one.anim !== 'hit' && now() < P.one.until)) oneShot(P, 'hit', 0.15);
 }
@@ -639,7 +639,7 @@ function usePotion(k: 'hp' | 'mp') {
     if (connected) net.send({ $case: 'potionRequest', value: { kind: k === 'hp' ? 0 : 1 } });
     if (k === 'hp') {
         const total = Math.max(50, Math.round(maxHp() * 0.4)), first = Math.round(total * 0.2), rest = total - first, tick = Math.floor(rest / POT_HOT_TICKS);
-        const heal = (n: number) => { if (local) P.hp = Math.min(maxHp(), P.hp + n); float(P.x, P.y - 0.2, '+' + n, '#7ee08a'); };
+        const heal = (n: number) => { if (local) P.hp = Math.min(maxHp(), P.hp + n); };
         heal(first); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#e0524a' });
         for (let i = 1; i <= POT_HOT_TICKS; i++) later(i * POT_HOT_EVERY, () => { if (!P.dead && epoch === potEpoch) heal(i === POT_HOT_TICKS ? rest - tick * (POT_HOT_TICKS - 1) : tick); }); // muerto o revivido: se corta
     } else { const m = Math.max(40, Math.round(maxMp() * 0.5)); if (local) { P.mp = Math.min(maxMp(), P.mp + m); mpLocalAt = now(); } float(P.x, P.y - 0.2, '+' + m + ' maná', '#7fb7ff'); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#4a8fe0' }); }
@@ -955,7 +955,7 @@ const combatText = new CombatTextManager({
 });
 const spellLabel = (id: string) => SPELLS.find((x) => x.id === id)?.name ?? id;
 function onCombatText(v: { targetId: string; sourceId?: string; amount: number; isHeal: boolean; spellName: string; spellIcon: string }) {
-    const ev: CombatTextEvent = { targetId: v.targetId, amount: v.amount, isHeal: v.isHeal, spellName: v.spellName ? spellLabel(v.spellName) : '', spellId: v.spellIcon || undefined };
+    const ev: CombatTextEvent = { targetId: v.targetId, amount: v.amount, isHeal: v.isHeal, spellName: v.spellName ? spellLabel(v.spellName) : '', spellId: v.spellIcon || undefined, self: v.targetId === myId.toString() };
     combatText.onEvent(ev);
     const me = myId.toString(), spell = ev.spellName ? ` de ${ev.spellName}` : '';
     if (v.targetId === me) logToChat('combat', 'System', v.isHeal ? `Te curaste ${v.amount}${spell}.` : `Recibiste ${v.amount} de daño${spell}.`);
