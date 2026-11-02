@@ -17,6 +17,7 @@
 import { WebSocket } from 'ws';
 import { ClientMessage, ServerMessage } from '@fdn/proto';
 import { buildMap, mapLinks } from '@fdn/world';
+import { castMsOf, isCast } from '../src/systems/pvpCombat.ts';
 
 const URL = process.argv[2] ?? 'ws://localhost:8111/ws';
 const RUN = Math.random().toString(36).slice(2, 6);
@@ -75,7 +76,9 @@ class Bot {
         }
         if (this.bad.length) throw new Error(`${this.name}: el server corrigió la posición (${this.bad.join(',')})`);
     }
-    cast(spell: string, target: Bot, secs = 0) {
+    /** Los hechizos con cast avisan el inicio y esperan el cast time del server: si no, el server descarta el golpe. */
+    async cast(spell: string, target: Bot, secs = 0) {
+        if (isCast(spell)) { this.send({ $case: 'spellCastStartRequest', value: { spellId: 0, spell } }); await sleep(castMsOf(spell) + 50); }
         this.send({ $case: 'pvpHitRequest', value: { fx: '', x: target.x, y: target.y, targetId: target.id, dmg: 0, secs, r: 0, spell } });
     }
     /** Mis golpes confirmados por el server sobre `target` (el aviso propio: fx vacío). */
@@ -149,7 +152,7 @@ async function main() {
     for (let i = 0; i < 3; i++) await targets[i].save({ cls: 'guerrero', lvl: 60, eq: { anillo: dfOf(cases[i]) } });
     for (let i = 0; i < 3; i++) {
         const T = targets[i], df = cases[i];
-        for (let k = 0; k < 6; k++) { A.cast('ataque', T); await sleep(880); }
+        for (let k = 0; k < 6; k++) { await A.cast('ataque', T); await sleep(880); }
         const d = A.myHits(T).map((h) => h.dmg), ok = new Set<number>(); for (let raw = 7; raw <= 11; raw++) ok.add(mit(raw, df));
         check(d.length >= 5 && d.every((x) => ok.has(x)), `(a) físico, DF=${df}: daños ${[...new Set(d)].join(',')} esperados ⊂ {${[...ok].join(',')}} (${Math.round((df / (100 + df)) * 100)} % menos)`);
     }
@@ -161,13 +164,13 @@ async function main() {
     for (let i = 0; i < 3; i++) await targets[i].save({ cls: 'guerrero', lvl: 60, eq: i === 0 ? { arma: noRm(0) } : { anillo: noRm(cases[i]) } });
     for (let i = 0; i < 3; i++) {
         const T = targets[i], rm = i === 0 ? 0 : cases[i] + 8; A.hits.length = 0;
-        for (let k = 0; k < 3; k++) { A.cast('proyectil', T); await sleep(420); }
+        for (let k = 0; k < 3; k++) { await A.cast('proyectil', T); await sleep(420); }
         const d = A.myHits(T).map((h) => h.dmg), ok = new Set<number>(); for (let raw = 18; raw <= 24; raw++) ok.add(mit(raw, rm));
         check(d.length >= 2 && d.every((x) => ok.has(x)), `(a) mágico, RM=${rm}: daños ${[...new Set(d)].join(',')} esperados ⊂ {${[...ok].join(',')}}`);
     }
     // el DF no protege del daño mágico ni la RM del físico
     await targets[3].save({ cls: 'guerrero', lvl: 60, eq: { anillo: dfOf(300) } }); A.hits.length = 0;
-    for (let k = 0; k < 2; k++) { A.cast('proyectil', targets[3]); await sleep(420); }
+    for (let k = 0; k < 2; k++) { await A.cast('proyectil', targets[3]); await sleep(420); }
     const dm = A.myHits(targets[3]).map((h) => h.dmg);
     check(dm.length >= 1 && dm.every((x) => x >= mit(18, 8) && x <= 24), `(a) DF=300 no reduce el daño mágico (RM 8): ${dm.join(',')}`);
 
@@ -182,7 +185,7 @@ async function main() {
     ];
     for (const c of para) await c.T.save({ cls: 'guerrero', lvl: 60, eq: c.eq.n === 'Espada corta' ? { arma: c.eq } : { anillo: c.eq } });
     for (const c of para) {
-        A.hits.length = 0; A.cast('paralisis', c.T, 1); await sleep(500);
+        A.hits.length = 0; await A.cast('paralisis', c.T, 1); await sleep(500);
         const want = Math.max(0.4, Math.round(((3 * 100) / (100 + c.rm)) * (1 - c.rpar / 100) * 100) / 100), got = A.myHits(c.T).find((h) => h.secs > 0)?.secs ?? -1;
         check(Math.abs(got - want) < 0.011, `(b) parálisis con RM=${c.rm}${c.rpar ? ` y resist. parálisis ${c.rpar} %` : ''}: ${got} s (esperado ${want} s)`);
         await sleep(3500); // el mismo hechizo tiene 4 s de recarga
@@ -193,7 +196,7 @@ async function main() {
     const V = targets[0]; // al lado del atacante
     await V.save({ cls: 'guerrero', lvl: 5 });
     await A.save({ cls: 'guerrero', lvl: 6 });
-    for (let k = 0; k < 14 && V.vitals.hp > V.vitals.maxHp - 110; k++) { A.cast('ataque', V); await sleep(880); }
+    for (let k = 0; k < 14 && V.vitals.hp > V.vitals.maxHp - 110; k++) { await A.cast('ataque', V); await sleep(880); }
     V.send({ $case: 'hpReport', value: { hp: V.vitals.hp, mpSpent: 40, mp: 16, meditating: false } });
     await sleep(400);
     const hp0 = V.vitals.hp, mp0 = V.vitals.mp, max = V.vitals.maxHp, maxMp = V.vitals.maxMp;

@@ -10,6 +10,7 @@
 import { WebSocket } from 'ws';
 import { ClientMessage, ServerMessage } from '@fdn/proto';
 import { MOB_TYPES, buildMap } from '@fdn/world';
+import { castMsOf } from '../src/systems/pvpCombat.ts';
 
 const URL = process.argv[2] ?? 'ws://localhost:8211/ws', TRIALS = Number(process.argv[3]) || 3;
 const RUN = Math.random().toString(36).slice(2, 5);
@@ -87,7 +88,7 @@ async function trial(cls: 'mago' | 'guerrero', lvl: number, zoneName: string) {
         if (cls === 'mago' && b.mp < 8 && b.pots.mp > 0 && now - potAt > 1700) { potAt = now; b.pots.mp--; b.send({ $case: 'potionRequest', value: { kind: 1 } }); }
         const tgt = mine.map((m) => ({ m, d: Math.hypot(b.x + 0.5 - m.x, b.y + 0.5 - m.y) })).sort((a, c) => a.d - c.d)[0];
         if (tgt && now >= nextAct) {
-            if (cls === 'mago' && b.mp >= 8 && tgt.d <= 7.5) { nextAct = now + 900; const dmg = rint(12, 18) + 2 * lvl + mag; setTimeout(() => b.send({ $case: 'mobHitRequest', value: { mobId: tgt.m.id, dmg: 0, melee: false, crit: false, parSecs: 0, poisonSecs: 0, spell: 'proyectil' } }), 500 + tgt.d * 90); b.mp -= 8; }
+            if (cls === 'mago' && b.mp >= 8 && tgt.d <= 7.5) { nextAct = now + castMsOf('proyectil') + 400; const dmg = rint(12, 18) + 2 * lvl + mag; b.send({ $case: 'spellCastStartRequest', value: { spellId: 0, spell: 'proyectil' } }); setTimeout(() => b.send({ $case: 'mobHitRequest', value: { mobId: tgt.m.id, dmg: 0, melee: false, crit: false, parSecs: 0, poisonSecs: 0, spell: 'proyectil' } }), castMsOf('proyectil') + 50 + tgt.d * 90); b.mp -= 8; }
             else if (cls === 'guerrero' && tgt.d <= 1.9) { nextAct = now + 850; const dmg = rint(...melee) + lvl + rint(...wd); setTimeout(() => b.send({ $case: 'mobHitRequest', value: { mobId: tgt.m.id, dmg: 0, melee: true, crit: false, parSecs: 0, poisonSecs: 0, spell: 'ataque' } }), 180); }
             else if (cls === 'guerrero' && tgt.d > 1.9 && tgt.d < 5) { // sale al encuentro: un paso por vez hacia el blanco
                 const nx = b.x + Math.sign(Math.round(tgt.m.x - 0.5) - b.x), ny = b.y + Math.sign(Math.round(tgt.m.y - 0.5) - b.y);

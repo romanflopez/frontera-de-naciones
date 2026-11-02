@@ -38,7 +38,7 @@ export const PVP_SPELLS: Record<string, PvpSpell> = {
     ataque: { mp: 0, dmg: [0, 0], lvlK: 1, stat: 'melee', range: 2.6, cd: 0.3, melee: true },
     proyectil: { mp: 8, dmg: [12, 18], lvlK: 2, stat: 'mag', range: 15, cd: 0.35 }, // Firebolt: cast 1.5 s (cliente), 14–17 tiles
     paralisis: { mp: 20, secs: 5, range: 7.5, cd: 15 }, // Chains of Ice: cast 1 s (cliente), freeze 5 s, cd 15 s
-    aturdir: { mp: 18, secs: 2.5, range: 2.8, cd: 5 },
+    aturdir: { mp: 18, secs: 3, range: 2.8, cd: 5 },
     hoja: { mp: 14, dmg: [13, 19], lvlK: 2, stat: 'mag', range: 8.5, cd: 1.4 },
     lanza: { mp: 30, dmg: [30, 42], lvlK: 3, stat: 'mag', range: 8.5, cd: 4.5 },
     golpe: { mp: 10, dmg: [14, 20], lvlK: 2, stat: 'wdmg', range: 2.8, cd: 0.9, melee: true }, // Strike: melee 2 tiles (+0.8 de tolerancia), sin cast
@@ -59,7 +59,7 @@ export interface ClassSkill extends PvpSpell { cls: 'mago' | 'guerrero'; /** ral
 export const SKILLS: Record<string, ClassSkill> = {
     // blink: ≈ 39 % del maná base del Mago a nivel 1 (90); alcance 7 tiles (+0.25 por redondeo de diagonales)
     blink: { cls: 'mago', mp: 35, range: 7.25, cd: 12 },
-    carga: { cls: 'guerrero', mp: 15, dmg: [14, 20], lvlK: 2, stat: 'wdmg', range: 6.3, cd: 10, melee: true, slow: 1.5 },
+    carga: { cls: 'guerrero', mp: 15, dmg: [14, 20], lvlK: 2, stat: 'wdmg', range: 15, cd: 10, melee: true, slow: 1.5 },
     giro: { cls: 'guerrero', mp: 8, dmg: [16, 22], lvlK: 2, stat: 'wdmg', range: 0, cd: 4, melee: true, aoe: 1.9 },
     grito: { cls: 'guerrero', mp: 20, range: 0, cd: 25 },
 };

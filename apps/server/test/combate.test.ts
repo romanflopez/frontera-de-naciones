@@ -162,7 +162,7 @@ test('parálisis: dura lo que dice el hechizo (no lo que pide el cliente) y una 
     const { hit, raw } = setup(statsFor({}, 'mago', 10));
     const t0 = clock / 1000;
     hit('paralisis', { parSecs: 99 });
-    assert.ok(raw.par > t0 && raw.par <= t0 + 3.01, `par hasta +${(raw.par - t0).toFixed(2)} s (máx 3)`);
+    assert.ok(raw.par > t0 && raw.par <= t0 + 5.01, `par hasta +${(raw.par - t0).toFixed(2)} s (máx 5)`);
     const first = raw.par; clock += 500; hit('paralisis', { parSecs: 99 });
     assert.equal(raw.par, first, 'dentro de la recarga no se renueva');
 });
