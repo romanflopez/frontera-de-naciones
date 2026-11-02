@@ -14,10 +14,13 @@ const run = (args: string[], cwd?: string) => {
     if (r.error) throw new Error('No encontré git. Instalá Git for Windows (https://git-scm.com) y volvé a correr pnpm assets:flare.');
     if (r.status !== 0) throw new Error(`git ${args.join(' ')} falló (código ${r.status}).`);
 };
-const parts = ['engine', 'animations/avatar', 'animations/enemies', 'images/avatar', 'images/enemies', 'images/tilesets', 'tilesetdefs']
-    .map((p) => `mods/fantasycore/${p}`);
+// fantasycore: arte de personajes, bichos y tiles; empyrean_campaign: los mapas (y la hoja de ruinas) que importa tools/src/flare/maps.ts
+const parts = [
+    ...['engine', 'animations/avatar', 'animations/enemies', 'images/avatar', 'images/enemies', 'images/tilesets', 'tilesetdefs', 'maps'].map((p) => `mods/fantasycore/${p}`),
+    ...['maps', 'tilesetdefs', 'images/tilesets'].map((p) => `mods/empyrean_campaign/${p}`),
+];
 
-if (existsSync(join(dest, 'mods', 'fantasycore', 'engine', 'hero_layers.txt'))) {
+if (existsSync(join(dest, 'mods', 'fantasycore', 'engine', 'hero_layers.txt')) && existsSync(join(dest, 'mods', 'empyrean_campaign', 'maps'))) {
     console.log('Flare: ya está bajado en reference/flare-game.');
 } else {
     if (!existsSync(join(dest, '.git'))) {

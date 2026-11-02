@@ -14,7 +14,8 @@
     "flare:mapatlas": "tsx src/flare/mapatlas.ts",
     "typecheck": "tsc --noEmit -p .",
     "maps:tiled": "tsx src/maps/tiled_to_ts.ts",
-    "sim:pvp": "tsx src/sim/run.ts"
+    "sim:pvp": "tsx src/sim/run.ts",
+    "maps:render": "tsx src/maps/render.ts"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.65"

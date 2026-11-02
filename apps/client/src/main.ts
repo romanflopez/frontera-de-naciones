@@ -2043,9 +2043,9 @@ function loadMap(def: MapDef): string {
     return h;
 }
 const loadEl = () => $('maploading');
-function showMapLoading(name: string, lvl: [number, number] | null) {
+function showMapLoading(name: string, lvl: [number, number] | null, tier?: number) {
     const el = loadEl(); el.classList.remove('err'); el.dataset.since = String(performance.now());
-    $('mlName').textContent = name; $('mlLvl').textContent = lvl ? `Nivel recomendado ${lvl[0]}–${lvl[1]}` : ''; $('mlMsg').textContent = 'Cargando…';
+    $('mlName').textContent = name; $('mlLvl').textContent = lvl ? `${tier ? `Zona T${tier} · ` : ''}Nivel recomendado ${lvl[0]}–${lvl[1]}` : ''; $('mlMsg').textContent = 'Cargando…';
     el.hidden = false; requestAnimationFrame(() => el.classList.add('on'));
 }
 function hideMapLoading() {
@@ -2061,7 +2061,7 @@ function failMapLoading(msg: string) {
 function onMapTransfer(v: { mapId: string; name: string; x: number; y: number; direction: number; mapHash: string; gameWorldId: string; lvlMin: number; lvlMax: number }) {
     mapLoading = true;
     P.path = []; P.step = null; P.target = null; P.engage = false;
-    showMapLoading(v.name || v.mapId, v.lvlMax ? [v.lvlMin, v.lvlMax] : null);
+    showMapLoading(v.name || v.mapId, v.lvlMax ? [v.lvlMin, v.lvlMax] : null, getMapDef(v.mapId)?.tier);
     // dejar que el navegador pinte la pantalla de carga antes de armar el mapa
     requestAnimationFrame(() => setTimeout(() => {
         const def = getMapDef(v.mapId);

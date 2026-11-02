@@ -1,16 +1,18 @@
 /**
- * Ítems únicos (docs/ITEMS.md): equipo con nombre y atributos fijos, por banda de nivel (tier = ceil(nivel / 2), 1..6) y slot.
+ * Ítems únicos (docs/ITEMS.md): equipo con nombre y atributos fijos, por banda de nivel (la del tier de zona: niveles 1-5 = 1, 6-10 = 2 … 26-40 = 6) y slot.
  * Cada único es una `Base` más: entra en ALL_BASES, así que subasta, depósito, tiendas y el cliente lo reconocen sin cambios.
  * Sus atributos fijos salen de `uniq.attrs` (el server los tira con una variación de ±10 %). De momento hay T1 a T3 y los
  * ítems de los jefes de las mazmorras D1-D3; los mobs de bandas más altas siguen con el botín viejo hasta que existan sus ítems.
  */
+import { itemBandOfLevel } from './tiers';
 import type { AttrId, Base, Slot } from './economy';
 import type { MobType } from './mobs';
 
 /** Bandas con ítems únicos ya hechos. */
 export const UNIQUE_TIERS_READY = 3;
 /** Tier de ítem de un mob según su nivel. */
-export const tierOfLevel = (lvl: number): number => Math.max(1, Math.min(6, Math.ceil(lvl / 2)));
+/** Banda de ítems de un mob de nivel `lvl`: la del tier de su nivel (docs/TIERS_DE_ZONA.md), con tope 6. */
+export const tierOfLevel = (lvl: number): number => itemBandOfLevel(lvl);
 /** Variación de los atributos fijos de un único al caer. */
 export const UNIQUE_VARIATION = 0.1;
 

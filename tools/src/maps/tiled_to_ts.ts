@@ -16,6 +16,7 @@
  *
  * Determinista: el mismo .json da siempre el mismo archivo. Incluye `HASH` = mapHash() del mapa armado (lo que valida MapReady).
  */
+import { tierOfLvl, type Tier } from '../../../packages/world/src/tiers';
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -151,7 +152,7 @@ const P = tm.properties;
 const lvl: [number, number] = [Number(prop(P, 'lvlMin') ?? 1), Number(prop(P, 'lvlMax') ?? prop(P, 'lvlMin') ?? 1)];
 const data: FlareMapData = {
     id, eris: id, name: String(prop(P, 'name') ?? id), region: String(prop(P, 'region') ?? 'comun'),
-    pvp: prop(P, 'pvp') === 'faction' ? 'faction' : 'off', lvl, ...(prop(P, 'dungeon') ? { dungeon: true } : {}),
+    pvp: prop(P, 'pvp') === 'faction' ? 'faction' : 'off', lvl, tier: (Number(prop(P, 'tier') ?? 0) || tierOfLvl(lvl[0])) as Tier, ...(prop(P, 'dungeon') ? { dungeon: true } : {}),
     tileset, size: N, flareSize: [W, H], entry: entry!,
     source: `Tiled: ${basename(input)}`, license: String(prop(P, 'license') ?? 'propio'),
     walkable, zones, links: [], extras, layers: { background, object }, blocked: reach.map((r) => r.map((v) => (v ? 0 : 1))),

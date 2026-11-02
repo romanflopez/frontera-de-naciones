@@ -343,7 +343,7 @@ export function createMinimap(host: HTMLElement, opts: MinimapOptions = {}): Min
         nameEl.textContent = mt.name;
         big.querySelector('h2')!.textContent = mt.name;
         const def = getMapDef(mt.id);
-        big.querySelector('.mm-head span')!.textContent = def?.lvl ? `Nivel ${def.lvl[0]}–${def.lvl[1]}` : '';
+        big.querySelector('.mm-head span')!.textContent = def?.tier && def.lvl ? `T${def.tier} · nivel ${def.lvl[0]}–${def.lvl[1]}` : def?.lvl ? `Nivel ${def.lvl[0]}–${def.lvl[1]}` : '';
         // etiquetas: ciudades y zonas (las zonas con varios campamentos se rotulan una vez, en el promedio)
         labels = (m.cities ?? []).map((c) => ({ x: (c.x0 + c.x1 + 1) / 2, y: (c.y0 + c.y1 + 1) / 2, text: c.name, kind: 'city' as const }));
         const byName = new Map<string, { x: number; y: number; n: number }>();

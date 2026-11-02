@@ -70,7 +70,7 @@ test('mazmorra D1: puerta con nivel mínimo, jefe, tier de mazmorra y mapas temp
 
 test('ítems únicos: catálogo coherente, tier por nivel y jefes de D1-D3 con sus ítems', () => {
     const names = ALL_BASES.map((b) => b.name); assert.equal(new Set(names).size, names.length, 'nombres repetidos');
-    assert.equal(tierOfLevel(1), 1); assert.equal(tierOfLevel(2), 1); assert.equal(tierOfLevel(3), 2); assert.equal(tierOfLevel(12), 6);
+    assert.equal(tierOfLevel(1), 1); assert.equal(tierOfLevel(5), 1); assert.equal(tierOfLevel(6), 2); assert.equal(tierOfLevel(30), 6); assert.equal(tierOfLevel(40), 6);
     for (let t = 1; t <= UNIQUE_TIERS_READY; t++) assert.equal(UNIQUES_BY_TIER[t].length, 10, `banda ${t}: 10 únicos`);
     for (const b of ['goblin_jefe', 'antlion_reina', 'caballero_cripta'] as const) assert.ok(BOSS_UNIQUES[b]!.length >= 2, b);
     for (const u of UNIQUE_BASES) { assert.equal(u.uniq.attrs.length, 2, u.name); assert.ok(u.uniq.attrs.every(([, v]) => v >= 1), u.name); assert.ok(BASE_BY_NAME.get(u.name) === u); }

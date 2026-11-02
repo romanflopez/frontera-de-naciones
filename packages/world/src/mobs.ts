@@ -69,6 +69,20 @@ export const mobHpCurve = (l: number): number => 29 + 10.5 * l + 2.75 * l * l;
 export const mobDmgCurve = (l: number): number => 2.5 * l + 3;
 /** Exp por kill de un mob común de nivel `l` (curva de referencia para reescalar tipos; los MOBS base ya la siguen: ~60·l^1,5 / 11). */
 export const mobExpCurve = (l: number): number => (60 * Math.pow(l, 1.5)) / 11;
+/**
+ * Jefes de las mazmorras de grupo al nivel de su tier (docs/TIERS_DE_ZONA.md): cada uno queda en el nivel más alto de su mazmorra (D1 = 5,
+ * D2 = 10 … D6 = 30). Los números de arriba son los de diseño a su nivel viejo; acá se llevan al nuevo con las mismas curvas que los mobs
+ * comunes (vida, daño, exp, daño de la habilidad y oro), así que conservan su peso relativo (~11 veces un mob común de su nivel).
+ */
+export const BOSS_LEVELS: Partial<Record<MobType, number>> = { goblin_jefe: 5, antlion_reina: 10, caballero_cripta: 15, mago_mayor: 20, wyvern_aire: 25, demonio_foso: 30 };
+for (const [t, L] of Object.entries(BOSS_LEVELS) as [MobType, number][]) {
+    const b = MOBS[t], o = b.lvl; if (o === L || !b.boss) continue;
+    const kh = mobHpCurve(L) / mobHpCurve(o), kd = mobDmgCurve(L) / mobDmgCurve(o), ke = mobExpCurve(L) / mobExpCurve(o), kg = L / o, sp = b.boss.special;
+    MOBS[t] = {
+        ...b, lvl: L, hp: Math.round(b.hp * kh), dmg: [Math.round(b.dmg[0] * kd), Math.round(b.dmg[1] * kd)], exp: Math.round(b.exp * ke),
+        boss: { ...b.boss, gold: [Math.round(b.boss.gold[0] * kg), Math.round(b.boss.gold[1] * kg)], special: { ...sp, ...(sp.dmg ? { dmg: [Math.round(sp.dmg[0] * kd), Math.round(sp.dmg[1] * kd)] as [number, number] } : {}) } },
+    };
+}
 /** Nivel máximo del personaje (docs/NIVEL_40_E_ITEMS.md §2.4 y docs/PLAN_DE_TRABAJO.md paso 1.1). */
 export const MAX_LEVEL = 40;
 /**

@@ -1,17 +1,15 @@
 /**
- * Mapas importados de Flare (docs/MAPAS_FLARE.md): campos de caza de nivel 1-3 al tamaño nativo del mapa original, con 3 pits de mobs
+ * Mapas importados de Flare (docs/MAPAS_FLARE.md): campos de caza y mazmorras (tiers T1-T6) al tamaño nativo del mapa original, con 3 pits de mobs
  * distintos y mobs sueltos entre medio. Los datos los genera tools/src/flare/maps.ts (CC-BY-SA 3.0, ver CREDITS) y los tiles salen del
  * atlas `flare_<hoja>.webp` (tools/src/flare/mapatlas.ts). Todo es dato fijo: cliente y server arman exactamente lo mismo.
  *   Villa de Solmar / Ciudadela de Vhar --portal--> Campos de Sal -> Bosque de Piedra -> Cañón goblin -> Pantano de Merrimead
  *   Pantano -> Altas de Nazia (Nv 4-5) y Pantano -> Cementerio de Lochport (Nv 5) -> Risco del Sur (Nv 5-6) -> La Brecha (Nv 6-7, cueva)
- *   Cañón goblin --puerta Nv 2--> Cueva goblin -> Minas goblin (D1, mazmorra de grupo con jefe final)
+ *   Mazmorras de grupo (una por tier, docs/TIERS_DE_ZONA.md): Cañón goblin -> D1, Altas de Nazia -> D2, Cementerio -> D3, La Brecha -> D4, Cenizas II -> D5, Cenizas III -> D6
  */
 import type { Prop, WorldMap, Zone } from '../index';
 import type { MapDef, Link } from '../maps';
 import type { MobType } from '../mobs';
-import { townTile } from '../town';
-import { noise2 } from '../solmar/kit';
-import { flareTile, isFlareWater, type FlareMapData } from './types';
+import { flareTile, type FlareMapData } from './types';
 import { DATA as SALTED_FIELD } from './salted_field';
 import { DATA as STONEWOOD } from './stonewood';
 import { DATA as GOBLIN_CAMP } from './goblin_camp';
@@ -46,7 +44,6 @@ const byFlareId = new Map(FLARE_DATA.map((d) => [d.id, d]));
 const byEris = new Map(FLARE_DATA.map((d) => [d.eris, d]));
 export const FLARE_FIRST = FLARE_DATA[0];
 
-const WATER_SHALLOW = [1, 4], WATER_DEEP = [13, 16];
 /** Radio de la zona segura (sin mobs) alrededor de la entrada y de cada vínculo. */
 const SAFE_R = 5;
 /** Segundos de reaparición: pits y sueltos. */
@@ -96,14 +93,8 @@ export const FLARE_BACK: Cell = (() => {
 /** Arma el mapa desde los datos importados. */
 export function buildFlareMap(d: FlareMapData): WorldMap {
     const N = d.size;
-    // El agua de Flare es casi negra: se cambia por el agua del kit de ciudad (orilla clara; profunda si todo alrededor es agua).
-    const isWater = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < N && y < N && isFlareWater(d.tileset, d.layers.background[y][x]);
-    const tiles = d.layers.background.map((row, y) => row.map((id, x) => {
-        if (!id) return 0;
-        if (!isWater(x, y)) return flareTile(d.tileset, id);
-        const deep = isWater(x - 1, y) && isWater(x + 1, y) && isWater(x, y - 1) && isWater(x, y + 1);
-        return townTile('water', (deep ? WATER_DEEP : WATER_SHALLOW)[noise2(x, y, 91, 6) < 0.5 ? 0 : 1]); // manchones suaves, sin dibujo de tablero
-    }));
+    // El agua es la de Flare, teñida al armar el atlas (tools/src/flare/mapatlas.ts): conserva sus orillas, puentes y acantilados.
+    const tiles = d.layers.background.map((row) => row.map((id) => (id ? flareTile(d.tileset, id) : 0)));
     const blocked = d.blocked.map((row) => row.map((v) => v === 1));
     const props: Prop[] = [];
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const id = d.layers.object[y][x]; if (id) props.push({ id: flareTile(d.tileset, id), x, y }); }
@@ -137,7 +128,7 @@ export function flareMaps(hub: { map: string; to: Cell }): Record<string, MapDef
         const links = flareLinks(d);
         if (d === FLARE_FIRST) links.push({ id: 'campos_a_ciudad', map: d.eris, ...FLARE_BACK, to: { map: hub.map, ...hub.to }, kind: 'portal', msg: 'Cruzás el portal de vuelta a la ciudad.' });
         const def: MapDef = {
-            id: d.eris, name: d.name, region: d.region, size: d.size, lvl: d.lvl, pvp: d.pvp, safe: false,
+            id: d.eris, name: d.name, region: d.region, size: d.size, lvl: d.lvl, tier: d.tier, pvp: d.pvp, safe: false,
             spawn: { ...d.entry }, respawn: { ...d.entry }, links, build: () => buildFlareMap(byEris.get(d.eris)!),
         };
         if (d.dungeon) {

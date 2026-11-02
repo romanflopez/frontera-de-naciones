@@ -1,3 +1,4 @@
+import type { Tier } from '../tiers';
 /**
  * Forma de los datos de un mapa importado de Flare (los genera tools/src/flare/maps.ts; docs/MAPAS_FLARE.md).
  * Las capas llevan los ids de tile de Flare: `flareTile(tileset, id)` los pasa a los ids del atlas de ERIS.
@@ -12,6 +13,8 @@ export interface FlareLinkData { cell: { x: number; y: number }; to: string; tx:
 export interface FlareMapData {
     /** Id del mapa en Flare y en ERIS. */
     id: string; eris: string; name: string; region: string; pvp: 'off' | 'faction'; lvl: [number, number];
+    /** Tier de zona (docs/TIERS_DE_ZONA.md); `lvl` es el sub-rango del tier que cubre el mapa. */
+    tier: Tier;
     /** Mazmorra de grupo: mobs con `tier: 'dungeon'`, sin PvP, posición temporal y el mapa oscurecido. `respawnMap` = piso donde reaparecés si no es este. */
     dungeon?: boolean; respawnMap?: string;
     /** Hoja de tiles de Flare (`grassland`, `cave`, `dungeon`…). */
@@ -50,3 +53,11 @@ export const isFlareWater = (tileset: string, id: number): boolean => { const r 
  */
 export const FLARE_CLIFF: Record<string, [number, number][]> = { grassland: [[48, 71]], cave: [[64, 121]], dungeon: [[48, 117], [208, 223], [280, 283]], snowplains: [[48, 71], [176, 183]] };
 export const isFlareCliff = (tileset: string, id: number): boolean => !!FLARE_CLIFF[tileset]?.some((r) => id >= r[0] && id <= r[1]);
+
+/**
+ * Piezas oscurecidas que no existen en Flare: copias de un rango de piso de la hoja con el brillo multiplicado por `k`, con ids
+ * `base + (id - from)`. Sirven de piso del vacío en las cuevas: roca oscura bajo las caras transparentes de las paredes, en vez del
+ * negro de Flare o del musgo verde. Las arma tools/src/flare/mapatlas.ts.
+ */
+export const FLARE_SHADE: Record<string, { from: number; to: number; base: number; k: number }> = { cave: { from: 16, to: 31, base: 900, k: 0.42 } };
+export const shadeSource = (tileset: string, id: number): number | undefined => { const s = FLARE_SHADE[tileset]; return s && id >= s.base && id <= s.base + s.to - s.from ? s.from + id - s.base : undefined; };

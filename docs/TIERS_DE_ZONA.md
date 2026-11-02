@@ -41,6 +41,27 @@ Los 12 mapas abiertos de hoy están apretados en los niveles 1-11 (uno por nivel
 
 Faltan mapas para el T7 (niveles 31-40) y más variedad en los tiers altos: salen de la reserva de Flare. Hoy hay 12 mapas de mazmorra (niveles 2 a 12, de la Cueva goblin al Foso del demonio): se reparten dos por tier y los jefes no se reescalan solos, hay que subirles el nivel a mano (ver paso 3.1).
 
+## 3b. Lo implementado (2/11/2026)
+
+Cada mapa tiene `tier` y un `lvl` que es su sub-rango dentro del tier. Los pits salen de ese rango con `pitLevel` (A = mínimo, B = medio, C = máximo; los sueltos, al mínimo) y los jefes quedan en el tope de su mazmorra.
+
+| Tier | Mapas abiertos (niveles) | Mazmorra (piso 1 / piso 2 + jefe) | Entrada de la mazmorra (nivel de la puerta) |
+|---|---|---|---|
+| T1 | Campos de Sal 1-2, Bosque de Piedra 2-3, Cañón goblin 3-5 (+ Llanos, Frontera, Camposanto, Páramo) | D1 Cueva goblin 3-4 / Minas goblin 4-5, Jefe goblin Nv5 | Cañón goblin (2) |
+| T2 | Pantano de Merrimead 6-8, Altas de Nazia 8-10 | D2 Nido de hormiga león 8-9 / Ruinas de Stormrock 9-10, Reina Nv10 | Altas de Nazia (4) |
+| T3 | Cementerio de Lochport 11-13, Risco del Sur 13-15 | D3 Cripta olvidada 13-14 / Sepulcro profundo 14-15, Caballero Nv15 | Cementerio (9) |
+| T4 | La Brecha 16-18, Paso de Stormrock 18-20 | D4 Torre del hechicero 18-19 / Cámaras 19-20, Mago mayor Nv20 | La Brecha (14) |
+| T5 | Cenizas I 21-23, Cenizas II 23-25 | D5 Templo de Mez 23-24 / Salón de Mez 24-25, Wyvern del aire Nv25 | Cenizas II (19) |
+| T6 | Cenizas III 26-30 | D6 Fortaleza infernal 28-29 / Foso del demonio 29-30, Señor del Foso Nv30 | Cenizas III (24) |
+| T7 | (vacío: salen de la reserva de Flare) | | |
+
+- Código: `packages/world/src/tiers.ts` (tabla, `pitLevel`, `itemBandOfLevel`, `tierGateLevel`), `MapDef.tier`, `tierErrors` (corre dentro de `validateMapGraph`) y `BOSS_LEVELS` en `mobs.ts` (los jefes se llevan a su nivel nuevo con las mismas curvas de vida, daño, exp y oro).
+- Banda de ítems: `tierOfLevel(lvl)` ahora es la del tier del nivel (1-5 = 1 … 26-40 = 6), antes `ceil(lvl / 2)`.
+- Las entradas de D2, D5 y D6 se mudaron para que cada mazmorra salga de un mapa de su tier (antes las cuatro salían de La Brecha).
+- El cliente muestra "Zona T3 · Nivel recomendado 11-13" al cargar el mapa y "T3 · nivel 11-13" en el minimapa grande.
+- `Tierras de Solmar` (el mapa viejo) queda fuera de la regla (`legacy`).
+- Pruebas: `apps/server/test/tiers.test.ts` (A y B de la sección 5). Falta la E (recorrido con un personaje por los tiers) y el balance de los jefes reescalados.
+
 ## 4. Cómo se implementa
 
 - `MapDef` suma `tier` (1-7). Las ciudades y zonas seguras no lo llevan.

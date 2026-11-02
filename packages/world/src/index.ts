@@ -24,6 +24,7 @@ export * from './kits';
 export * from './auction';
 export * from './deposit';
 export * from './maps';
+export * from './tiers';
 export { TILED_DATA } from './tiledmaps';
 export { PRUEBA_CAZA, PRUEBA_MAZMORRA } from './testmaps';
 

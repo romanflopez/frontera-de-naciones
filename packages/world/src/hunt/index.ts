@@ -33,7 +33,7 @@ export function huntMaps(a: HuntAnchors): Record<string, MapDef> {
     const L = LLANOS, F = FRONTERA, C = CAMPOSANTO, P = PARAMO;
     return {
         [L.id]: {
-            id: L.id, name: 'Llanos del Alba', region: 'inicio', size: L.size, lvl: [1, 2], pvp: 'off', safe: false,
+            id: L.id, name: 'Llanos del Alba', region: 'inicio', size: L.size, lvl: [1, 2], tier: 1, pvp: 'off', safe: false,
             spawn: { ...L.fromVilla }, respawn: { ...L.respawn },
             links: [
                 { id: 'llanos_a_villa', map: L.id, ...L.toVilla, to: { map: a.villa.id, ...a.villa.fromLlanos }, kind: 'walk', msg: 'Tomás el Camino de la Marea hacia la Villa de Solmar.' },
@@ -43,7 +43,7 @@ export function huntMaps(a: HuntAnchors): Record<string, MapDef> {
             build: buildLlanos,
         },
         [F.id]: {
-            id: F.id, name: 'La Frontera', region: 'comun', size: F.size, lvl: [3, 4], pvp: 'faction', safe: false,
+            id: F.id, name: 'La Frontera', region: 'comun', size: F.size, lvl: [3, 4], tier: 1, pvp: 'faction', safe: false,
             spawn: { ...F.fromLlanos }, respawn: { ...F.respawn },
             links: [
                 { id: 'frontera_a_llanos', map: F.id, ...F.toLlanos, to: { map: L.id, ...L.fromFrontera }, kind: 'walk', msg: 'Volvés por el Paso de la Frontera a los Llanos del Alba.' },
@@ -52,7 +52,7 @@ export function huntMaps(a: HuntAnchors): Record<string, MapDef> {
             build: buildFrontera,
         },
         [C.id]: {
-            id: C.id, name: 'Camposanto Viejo', region: 'comun', size: C.size, lvl: [5, 5], pvp: 'faction', safe: false,
+            id: C.id, name: 'Camposanto Viejo', region: 'comun', size: C.size, lvl: [5, 5], tier: 1, pvp: 'faction', safe: false,
             spawn: { ...C.fromFrontera }, respawn: { ...C.respawn },
             links: [
                 { id: 'camposanto_a_frontera', map: C.id, ...C.toFrontera, to: { map: F.id, ...F.fromCamposanto }, kind: 'walk', msg: 'Subís por el camino del norte a La Frontera.' },
@@ -61,7 +61,7 @@ export function huntMaps(a: HuntAnchors): Record<string, MapDef> {
             build: buildCamposanto,
         },
         [P.id]: {
-            id: P.id, name: 'Páramo Reseco', region: 'comun', size: P.size, lvl: [5, 5], pvp: 'faction', safe: false,
+            id: P.id, name: 'Páramo Reseco', region: 'comun', size: P.size, lvl: [5, 5], tier: 1, pvp: 'faction', safe: false,
             spawn: { ...P.fromCamposanto }, respawn: { ...P.respawn },
             links: [
                 { id: 'paramo_a_camposanto', map: P.id, ...P.toCamposanto, to: { map: C.id, ...C.fromParamo }, kind: 'walk', msg: 'Volvés al Camposanto Viejo por el portón sur.' },

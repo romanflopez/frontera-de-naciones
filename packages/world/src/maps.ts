@@ -16,6 +16,8 @@ import { LEGACY_FROM_VHAR, LEGACY_VHAR_LINK } from './vhar/legacy';
 import { buildVharInterior, VHAR_INTERIORS, VHAR_RESPAWN } from './vhar/interiors';
 import { FLARE_ARRIVAL, FLARE_FIRST, flareMaps } from './flare';
 import { tiledMaps } from './tiledmaps';
+import { TIERS, TIER_LIST, tierGateLevel, type Tier } from './tiers';
+import { mobDef } from './mobs';
 
 /** Rectángulo de celdas con los dos extremos incluidos (igual que `WorldMap.dungeon`). */
 export interface MapRect { x0: number; y0: number; x1: number; y1: number }
@@ -51,6 +53,12 @@ export interface MapDef {
     size: number;
     /** Rango de nivel recomendado (informativo: HUD y pantalla de carga). */
     lvl: [number, number] | null;
+    /**
+     * Tier de zona (docs/TIERS_DE_ZONA.md): todo mapa de caza o mazmorra lo lleva (las ciudades no). `lvl` es el sub-rango del tier que
+     * cubre el mapa; los niveles de sus mobs caen ahí. `legacy` = mapa viejo (Tierras de Solmar) que mezcla todo y queda fuera de la regla.
+     */
+    tier?: Tier;
+    legacy?: boolean;
     /** `off` sin PvP, `faction` entre facciones distintas fuera de zona segura, `ffa` todos contra todos. */
     pvp: 'off' | 'faction' | 'ffa';
     /** Mapa seguro entero (ciudad): sin mobs y sin PvP. */
@@ -152,7 +160,7 @@ void VILLA_BUILDINGS;
 
 export const MAPS: Record<string, MapDef> = {
     solmar_legacy: {
-        id: 'solmar_legacy', name: 'Tierras de Solmar', region: 'solmar', size: 96, lvl: [1, 12], pvp: 'faction', safe: false,
+        id: 'solmar_legacy', name: 'Tierras de Solmar', region: 'solmar', size: 96, lvl: [1, 12], legacy: true, pvp: 'faction', safe: false,
         spawn: { x: HUBS.solmar.x, y: HUBS.solmar.y }, respawn: 'faction_home', tempRects: [ARENA], ffaRect: ARENA,
         links: [
             // camino a los Llanos del Alba (Fase 3; antes iba a la villa): por la puerta sur de la ciudad vieja
@@ -293,6 +301,36 @@ export function reachableFrom(m: WorldMap, sx: number, sy: number, viaPortals = 
 }
 
 /**
+ * Reglas de los tiers de zona (docs/TIERS_DE_ZONA.md §5): todo mapa de caza o mazmorra (salvo los de prueba y el viejo) tiene tier, su `lvl`
+ * cae dentro del tier y el nivel de cada mob también (los jefes, en el tope del mapa); cada puerta a una mazmorra sale de un mapa del mismo
+ * tier y pide al menos el mínimo del tier menos 2; cada tier del 1 al 6 tiene al menos 2 mapas abiertos y una mazmorra.
+ */
+export function tierErrors(defs: Record<string, MapDef>, built: Map<string, WorldMap>): string[] {
+    const errs: string[] = [], open = new Map<Tier, number>(), dung = new Map<Tier, number>();
+    for (const [id, d] of Object.entries(defs)) {
+        if (d.safe || d.debugOnly || d.legacy) continue;
+        if (!d.tier) { errs.push(`${id}: mapa de caza o mazmorra sin tier`); continue; }
+        const [t0, t1] = TIERS[d.tier];
+        if (!d.lvl || d.lvl[0] < t0 || d.lvl[1] > t1) errs.push(`${id}: lvl ${JSON.stringify(d.lvl)} fuera del tier ${d.tier} (${t0}-${t1})`);
+        const m = built.get(id);
+        for (const z of m?.zones ?? []) {
+            const l = mobDef(z.type, z).lvl;
+            if (d.lvl && (l < d.lvl[0] || l > d.lvl[1])) errs.push(`${id}: zona '${z.name}' con mobs de nivel ${l}, fuera de ${d.lvl[0]}-${d.lvl[1]}`);
+        }
+        const isDungeon = !!m?.dungeon;
+        (isDungeon ? dung : open).set(d.tier, ((isDungeon ? dung : open).get(d.tier) ?? 0) + 1);
+        for (const l of d.links) {
+            const to = defs[l.to.map]; if (!to?.tier || !built.get(l.to.map)?.dungeon || isDungeon) continue;
+            if (to.tier !== d.tier) errs.push(`vínculo '${l.id}': la mazmorra '${l.to.map}' es T${to.tier} y la entrada está en un mapa T${d.tier}`);
+            const need = to.tier === 1 ? 2 : tierGateLevel(to.tier);
+            if ((l.gate?.lvl ?? 0) < need) errs.push(`vínculo '${l.id}': la puerta de la mazmorra pide nivel ${l.gate?.lvl ?? 0}; mínimo ${need}`);
+        }
+    }
+    for (const t of TIER_LIST) if (t <= 6 && ((open.get(t) ?? 0) < 1 || (dung.get(t) ?? 0) < 1)) errs.push(`tier ${t}: tiene ${open.get(t) ?? 0} mapas abiertos y ${dung.get(t) ?? 0} mazmorras (mínimo 1 y 1)`);
+    return errs;
+}
+
+/**
  * Valida el grafo de mapas y devuelve la lista de errores (vacía = bien):
  * ids únicos y coherentes, tamaño, vínculos con destino existente y caminable, que el destino no sea una celda disparadora
  * (rebotaría), reciprocidad salvo `oneway`, puertas con requisito, respawn/rest/spawn caminables, todo alcanzable a pie
@@ -349,6 +387,7 @@ export function validateMapGraph(defs: Record<string, MapDef> = MAPS, start: str
         for (const o of ids) for (const l of defs[o].links) if (l.to.map === id) must(`llegada de '${l.id}'`, l.to);
         if (rt.map === id) must('respawn', rt);
     }
+    errs.push(...tierErrors(defs, built));
     // nombres de zona únicos entre mapas (dentro de un mapa se repiten: varios campamentos de la misma zona). Excepción transitoria:
     // las zonas que se mudaron del mapa viejo a un mapa de caza (Fase 3) conservan su nombre hasta que la Fase 8 borre el mapa viejo.
     const zoneMap = new Map<string, string>();

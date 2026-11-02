@@ -21,7 +21,7 @@ export function tiledMaps(defs: Record<string, MapDef>): Record<string, MapDef> 
             return { id: `${d.eris}_a_${e.to}${i ? `_${i + 1}` : ''}`, map: d.eris, x: e.cell.x, y: e.cell.y, to: { map: e.to, ...spawn }, kind: e.kind, ...(e.gate ? { gate: { lvl: e.gate } } : {}), msg: e.kind === 'door' ? 'Cruzás la puerta.' : 'Cruzás el portal.' };
         });
         out[d.eris] = {
-            id: d.eris, name: d.name, region: d.region, size: d.size, lvl: d.lvl, pvp: d.pvp, safe: false, debugOnly: true,
+            id: d.eris, name: d.name, region: d.region, size: d.size, lvl: d.lvl, tier: d.tier, pvp: d.pvp, safe: false, debugOnly: true,
             spawn: { ...d.entry }, respawn: { ...d.entry }, links, build: () => buildFlareMap(d),
         };
     }

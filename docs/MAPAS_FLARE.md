@@ -1,6 +1,6 @@
 # Mapas de Flare en ERIS: organización por nivel
 
-Estado: **8 mapas jugables en el juego** (Campos de Sal, Bosque de Piedra, Cañón goblin, Pantano de Merrimead, Altas de Nazia, Cementerio de Lochport, Risco del Sur y La Brecha, con portales desde las ciudades); el resto es propuesta. Complementa a [`MUNDO.md`](MUNDO.md) (grafo y fases) y [`ZONAS.md`](ZONAS.md) (curva de niveles y mobs). Si algo de acá contradice a esos dos, hay que decidir cuál se actualiza (ver sección 9).
+Estado (2/11/2026): **24 mapas de Flare jugables** (12 abiertos y 6 mazmorras de 2 pisos), con tiers de zona T1-T6, ver `TIERS_DE_ZONA.md` §3b. Texto original: 8 mapas jugables en el juego (Campos de Sal, Bosque de Piedra, Cañón goblin, Pantano de Merrimead, Altas de Nazia, Cementerio de Lochport, Risco del Sur y La Brecha, con portales desde las ciudades); el resto es propuesta. Complementa a [`MUNDO.md`](MUNDO.md) (grafo y fases) y [`ZONAS.md`](ZONAS.md) (curva de niveles y mobs). Si algo de acá contradice a esos dos, hay que decidir cuál se actualiza (ver sección 9).
 
 ## 1. Marco: lo que ya manda en ERIS
 
@@ -109,8 +109,14 @@ Todo mob de dungeon necesita animaciones completas: **stance, run, ataque, golpe
 - **Portales:** en la plaza de la Villa de Solmar, 5 celdas al este del punto de aparición (`villa_a_campos`, de ida y vuelta), y en la plaza de la Ciudadela de Vhar (`ciudadela_a_campos`, de ida).
 - Validado: `validateMapGraph()` sin errores con los 33 mapas, tests del server (123 de 124, 1 salteado; 5 de ellos en `apps/server/test/flare.test.ts`), tipos, build y recorrido con navegador (crear cuenta, Villa, portal, los 8 mapas, un pit con mobs, sin errores de consola).
 
+**Pulido visual (2/11/2026):**
+- `fetch.ts` ya baja los mapas de `empyrean_campaign`: `pnpm assets:flare` y después `flare:maps` + `flare:mapatlas` regeneran todo sin el zip (se comprobó que da exactamente los mismos datos).
+- **Agua:** ya no se cambia por la del kit de ciudad (celeste, con bordes cuadrados). Se usa la de Flare, con sus orillas, puentes y acantilados, teñida al armar el atlas (`WATER_TINT`: verde azulado en pasto, azul hielo en nieve).
+- **Cuevas:** el vacío se rellena con tierra oscurecida (`FLARE_SHADE`, ids 900+) y el "abismo" de musgo verde de Flare (192-219) pasa al mismo tono de roca. Antes parecía un pantano.
+- **Nieve:** el relleno ya no usa piezas del agua (quedaban cajas negras o azules) y se sacan los marcadores violeta de editor de Flare (92-95).
+- `pnpm --filter @fdn/tools maps:render [id…] [--scale 0.25] [--clean]`: vista completa de cualquier mapa (tiles, props, edificios, zonas y vínculos) a PNG en `tools/out/maps`, para revisar sin abrir el juego.
+
 **Falta:**
-1. `fetch.ts`: sumar `mods/empyrean_campaign/{maps,tilesetdefs,images/tilesets}` a lo que baja (hoy solo `fantasycore`). Mientras, se apunta `FLARE_DIR` al zip v1.14.
 2. Specs de los 4 mapas abiertos restantes (Stormrock, Cenizas I-III) y de los dungeons, y las hojas dungeon, nieve y ruinas en `FLARE_BASE`, con su relleno del vacío (hoy hay para pasto y cueva).
 3. Props con colisión propia: hoy los árboles y rocas del relleno bloquean por celda; falta afinar casos como los cruces diagonales abiertos.
 4. Portar el render de control a `tools/` (hoy es un script aparte) y el recorrido con navegador a un test del repo.

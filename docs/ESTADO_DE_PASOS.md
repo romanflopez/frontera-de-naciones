@@ -1,6 +1,6 @@
 # Estado de los pasos del plan
 
-Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última actualización: 1/11/2026 (paso 1.4).
+Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última actualización: 2/11/2026 (paso 1.5).
 
 | Paso | Estado | Detalle |
 |---|---|---|
@@ -11,7 +11,7 @@ Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última a
 | **1.2 Puntos de stats** | **Implementado** (falta la prueba de balance con el script de combate) | Ver abajo |
 | **1.3 Atributos autoritativos y topes** | **Implementado** (faltan crítico con cargas, topes de absorción y la prueba manual) | Ver abajo |
 | **1.4 Daño en área y habilidades de mobs** | **Implementado** (falta la simulación D del área y la prueba manual) | Ver abajo |
-| **1.5 Tiers de zona** (paso nuevo) | Diseñado, pendiente | `TIERS_DE_ZONA.md`: cada mapa lleva un tier y de ahí salen los niveles de los mobs y la banda de ítems; con los 12 mapas actuales alcanza hasta el T6 |
+| **1.5 Tiers de zona** (paso nuevo) | **Implementado** (falta el recorrido E y el balance de jefes) | `TIERS_DE_ZONA.md` §3b: mapas de T1 a T6 (niveles 1-30), jefes en el tope de su tier, banda de ítems por tier, validador y tests |
 
 ## Paso 1.1: qué quedó
 
