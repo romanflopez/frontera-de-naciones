@@ -7,6 +7,9 @@
  */
 import { CombatTextManager, type CombatTextEvent } from './systems/CombatTextManager';
 import { mountChat } from './ui/mountChat';
+import { mountCastBar } from './ui/CastBar';
+import { useCastStore } from './ui/castStore';
+import { spellTypeOf, type SpellType } from './ui/colors';
 import { chatBus, logToChat, type ChatChannel } from './ui/chatStore';
 import { drawPortalFloor, drawPortalFx, PORTAL_CITY, PORTAL_ZONE } from './portal';
 import { DEFAULT_MAP, RECALL, STAT_CAP, STAT_DESC, STAT_IDS, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, traitLabel, traitHpMult, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
@@ -208,6 +211,7 @@ const expNeed = () => expToLevel(P.lvl);
 
 // ---------- log ----------
 mountChat($('chatRoot'));
+{ const h = document.createElement('div'); h.id = 'castBarRoot'; document.body.appendChild(h); mountCastBar(h); }
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 /** Línea del sistema en el chat. `t` es HTML ya escapado (puede traer colores de rareza). */
 function log(t: string, hi = false, _cls = '') { logToChat('system', 'System', t, hi ? '#e9dfc0' : undefined, true); }
@@ -753,6 +757,9 @@ function cast(i: number) {
     if (P.running) { toast('Corriendo no podés castear. Apretá T para caminar.'); return; }
     P.ready = null; P.engage = false; P.queued = null; P.path = []; holding = false;
     const T = now(), len = s.castT ?? CAST_T; P.casting = { i, start: T, end: T + len, len };
+    const ty = spellTypeOf(s.id);
+    useCastStore.getState().startCast(s.name, len * 1000, ty, spellIcon(s.id ?? '', s.col)); castBarOf = P.casting; // antes de avisar al server
+    combatText.showCastingSpell(myId, s.name, ty, s.id);
     net.send({ $case: 'spellCastStartRequest', value: { spellId: 0, spell: s.id ?? '' } }); // el server cuenta el cast time desde acá
 }
 /** Habilidades de clase sin casteo: salen al instante (las de objetivo toman el seleccionado, el del cursor o el enemigo más cercano). */
@@ -768,7 +775,7 @@ function instantCast(i: number) {
     fire(i, m ?? { x: e!.x, y: e!.y, pvp: e! });
 }
 function finishCast() {
-    const c = P.casting!, s = SPELLS[c.i]; P.casting = null;
+    const c = P.casting!, s = SPELLS[c.i]; P.casting = null; useCastStore.getState().cancelCast(); castBarOf = null;
     if (!s.target) { fire(c.i, null); return; }
     P.ready = { i: c.i, t: now() };
 }
@@ -796,7 +803,7 @@ function fire(i: number, m: Target | null) {
     fx.push({ k: 'burst', x: P.x, y: P.y, t: 0, c: s.col });
     const b = $('sp' + i); b.classList.remove('fired'); void b.offsetWidth; b.classList.add('fired');
 }
-function cancelCast(why?: string | null) { if (!P.casting && !P.ready) return; P.casting = null; P.ready = null; net.send({ $case: 'spellCastCancelRequest', value: {} }); if (why) toast(why); }
+function cancelCast(why?: string | null) { if (!P.casting && !P.ready) return; P.casting = null; useCastStore.getState().cancelCast(); castBarOf = null; P.ready = null; net.send({ $case: 'spellCastCancelRequest', value: {} }); if (why) toast(why); }
 /** Walk (castea, 333 ms/celda) o run (no castea, 200 ms/celda). La velocidad la manda el server en playerMovementStateChanged. */
 function toggleRun() { P.running = !P.running; if (P.running) cancelCast(P.casting || P.ready ? 'Hechizo cancelado: estás corriendo.' : null); net.send({ $case: 'playerMovementStateChangeRequest', value: { runningMode: P.running } }); toast(P.running ? 'Corriendo (no podés castear).' : 'Caminando.'); }
 let toastT: ReturnType<typeof setTimeout> | undefined;
@@ -1160,6 +1167,13 @@ window.addEventListener('keydown', (e) => {
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'h' || e.key === 'H')) { toggleRecall(); return; }
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 't' || e.key === 'T')) { toggleRun(); return; }
     const hk = SPELLS.findIndex((x) => SPECIAL_KEY[x.id ?? ''] === e.key.toLowerCase()) >= 0 ? SPELLS.findIndex((x) => SPECIAL_KEY[x.id ?? ''] === e.key.toLowerCase()) : KEYS.indexOf(e.key), dm = /^(?:Digit|Numpad)([0-9])$/.exec(e.code), k = hk >= 0 ? hk : dm ? KEYS.indexOf(dm[1]) : null;
+    // ?debug: Shift+1/2/3 simula un cast de Fuego/Hielo/Sagrado (solo visual: barra + cartel, no va al server).
+    if (DEBUG && e.shiftKey && !e.repeat && /^Digit[123]$/.test(e.code)) {
+        const [ty, name]: [SpellType, string] = ([['FIRE', 'Firebolt'], ['ICE', 'Chains of Ice'], ['HOLY', 'Heal']] as [SpellType, string][])[+e.code.slice(5) - 1];
+        e.preventDefault(); useCastStore.getState().startCast(name, 1500, ty); combatText.showCastingSpell(myId, name, ty);
+        setTimeout(() => { if (!P.casting) useCastStore.getState().cancelCast(); }, 1600);
+        return;
+    }
     if (k != null && k < SPELLS.length && !e.repeat) { e.preventDefault(); cast(k); }
     if (e.code === 'Space' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); pickupNearest(); return; }
     // ?debug: Shift+I simula una invitación de KingLuthor (la I sola sigue abriendo la bolsa).
@@ -1297,8 +1311,18 @@ function updateHover() {
     hoverDrop = mouse.x >= 0 && !hover ? pickDrop(mouse.x, mouse.y) : null;
     cursorTick();
 }
+/** Barra de casteo (React): sigue a P.casting, que se corta desde muchos lados (muerte, cancelar, cambio de clase…). */
+let castBarOf: Casting | null = null;
+function castBarTick() {
+    const c = P.casting, st = useCastStore.getState();
+    if (c !== castBarOf) {
+        castBarOf = c;
+        if (c) { const s = SPELLS[c.i]; st.startCast(s.name, (c.end - c.start) * 1000, spellTypeOf(s.id), spellIcon(s.id ?? '', s.col)); } else if (st.isCasting) st.cancelCast();
+    } else if (c && Math.abs(st.durationMs - (c.end - c.start) * 1000) > 1) st.setDuration((c.end - c.start) * 1000); // golpe que demora el cast
+}
 /** Cursor propio (cursor.ts): qué hay bajo el mouse (mismo orden que el clic) y el estado del hechizo. Solo visual. */
 function cursorTick() {
+    castBarTick();
     const on = mouse.x >= 0, mx = mouse.x, my = mouse.y, en = on && !hover ? pickEnemy(mx, my) : null, g = on ? toGrid(mx, my) : null;
     const portal = !!g && (!!pickWaypoint(mx, my) || LINK_WPS.some((q) => Math.hypot(q.x + 0.5 - g.x, q.y + 0.5 - g.y) <= 1.1) || !!MAP.portals?.some((q) => Math.floor(g.x) === q.x && Math.floor(g.y) === q.y));
     const sp = (i: number) => ({ icon: spellIcon(SPELLS[i].id ?? '', SPELLS[i].col), slot: document.getElementById('sp' + i) });
@@ -1412,14 +1436,6 @@ function render() {
     for (const q of LINK_WPS) if (q.x >= minX - 3 && q.x <= maxX + 3 && q.y >= minY - 3 && q.y <= maxY + 3) drawPortalPad(q, T);
     for (const f of fx) if (f.k === 'click') { const p = iso(f.x, f.y); ctx.globalAlpha = 1 - f.t / 0.6; ctx.strokeStyle = '#d6a445'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(p.x, p.y, 10 + f.t * 30, (10 + f.t * 30) / 2, 0, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
     for (const sc of scorch.slice()) { const age = T - sc.t; if (age > 5) { scorch.splice(scorch.indexOf(sc), 1); continue; } const p = iso(sc.x, sc.y); ctx.globalAlpha = Math.min(1, (5 - age) / 2) * 0.55; const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, sc.r * TW * 0.45); g.addColorStop(0, '#120a05'); g.addColorStop(0.7, 'rgba(30,15,5,.6)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(p.x, p.y, sc.r * TW * 0.45, sc.r * TW * 0.225, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
-    if (P.casting) {
-        const c = P.casting, s = SPELLS[c.i], k = clamp((T - c.start) / (c.end - c.start), 0, 1), p = iso(P.x, P.y), r = 20 + k * 8;
-        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = s.col; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.4 + k * 0.5;
-        ctx.beginPath(); ctx.ellipse(p.x, p.y, r, r / 2, 0, 0, Math.PI * 2); ctx.stroke();
-        ctx.beginPath(); ctx.ellipse(p.x, p.y, r * 0.7, r * 0.35, 0, 0, Math.PI * 2); ctx.stroke();
-        for (let j = 0; j < 6; j++) { const a = (j / 6) * Math.PI * 2 + T * 1.6; ctx.fillStyle = s.col; ctx.beginPath(); ctx.arc(p.x + Math.cos(a) * r * 0.85, p.y + Math.sin(a) * r * 0.425, 2, 0, Math.PI * 2); ctx.fill(); }
-        ctx.restore();
-    }
     if (P.ready && mouse.x >= 0) {
         const s = SPELLS[P.ready.i], g = toGrid(mouse.x, mouse.y), tgt = s.aoe ? hover || g : hover;
         if (tgt) {
@@ -1468,7 +1484,6 @@ function render() {
     if (P.casting) {
         const c = P.casting, s = SPELLS[c.i], p = iso(P.x, P.y), k = clamp((T - c.start) / (c.end - c.start), 0, 1);
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(p.x, p.y - 34, 0, p.x, p.y - 34, 8 + k * 10); g.addColorStop(0, '#fff'); g.addColorStop(0.3, s.col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y - 34, 8 + k * 10, 0, Math.PI * 2); ctx.fill(); ctx.restore();
-        const w = 34; ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - w / 2 - 1, p.y + 8, w + 2, 5); ctx.fillStyle = s.col; ctx.fillRect(p.x - w / 2, p.y + 9, w * k, 3);
     }
     drawRecall(T);
     // proyectiles de mobs a distancia: una flecha (o virote) con estela que vuela en arco corto hasta el punto apuntado

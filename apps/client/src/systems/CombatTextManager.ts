@@ -7,6 +7,8 @@
  * de la fuente no depende del zoom.
  */
 
+import { SPELL_COLORS, type SpellType } from '../ui/colors';
+
 /** Forma del evento de red (espejo de `CombatTextEvent` del proto). */
 export interface CombatTextEvent {
     targetId: string | bigint | number;
@@ -50,8 +52,13 @@ export interface CombatTextDeps {
     headOffset: () => number;
 }
 
+/** Cartel "estoy casteando X" sobre el personaje: sube 20 px y se desvanece en 2 s. */
+interface CastLabel { key: string; name: string; icon: HTMLImageElement | null; t: number; primary: string; glow: string }
+const CAST_DUR = 2, CAST_RISE = 20, CAST_LIFT = 50;
+
 export class CombatTextManager {
     private items: Popup[] = [];
+    private casts: CastLabel[] = [];
     private icons = new Map<string, HTMLImageElement>();
 
     constructor(private deps: CombatTextDeps) {}
@@ -78,6 +85,13 @@ export class CombatTextManager {
         this.stackOn(p); this.items.push(p);
     }
 
+    /** Nombre (+ ícono) del hechizo que `targetId` empieza a castear. Reemplaza el cartel anterior de ese personaje. */
+    showCastingSpell(targetId: string | bigint | number, spellName: string, spellType: SpellType = 'PHYSICAL', spellId?: string): void {
+        const key = String(targetId), col = SPELL_COLORS[spellType];
+        this.casts = this.casts.filter((c) => c.key !== key);
+        this.casts.push({ key, name: spellName, icon: spellId ? this.icon(spellId) : null, t: 0, primary: col.primary, glow: col.glow });
+    }
+
     private stackOn(p: Popup): void {
         // fila libre más baja entre los números todavía "frescos" de este objetivo
         const busy = new Set(this.items.filter((q) => q.key === p.key && q.t < STACK_FRESH).map((q) => q.slot));
@@ -90,14 +104,16 @@ export class CombatTextManager {
             const p = this.items[i]; p.t += dt;
             if (p.t >= Math.max(DUR, p.spell ? SPELL_DUR : 0)) this.items.splice(i, 1);
         }
+        for (let i = this.casts.length - 1; i >= 0; i--) if ((this.casts[i].t += dt) >= CAST_DUR) this.casts.splice(i, 1);
     }
 
     /** Dibujar con el contexto en coordenadas de pantalla (CSS px). */
     draw(ctx: CanvasRenderingContext2D): void {
-        if (!this.items.length) return;
+        if (!this.items.length && !this.casts.length) return;
         ctx.save();
         ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.lineJoin = 'round';
         const head = this.deps.headOffset();
+        this.drawCasts(ctx, head);
         for (const p of this.items) {
             const s = this.deps.toScreen(p.gx, p.gy), x = s.x + p.dx, top = s.y - head;
             // número
@@ -128,6 +144,24 @@ export class CombatTextManager {
             }
         }
         ctx.restore();
+    }
+
+    private drawCasts(ctx: CanvasRenderingContext2D, head: number): void {
+        for (const c of this.casts) {
+            const pos = this.deps.resolve(c.key); if (!pos) continue; // sigue al personaje mientras se mueve
+            const s = this.deps.toScreen(pos.x, pos.y), k = c.t / CAST_DUR, ic = 18, gap = 5;
+            const y = s.y - head - CAST_LIFT - k * CAST_RISE;
+            ctx.globalAlpha = 1 - k;
+            ctx.font = SPELL_FONT;
+            const tw = ctx.measureText(c.name).width, w = ic + gap + tw, x0 = s.x - w / 2;
+            if (c.icon?.complete && c.icon.naturalWidth > 0) ctx.drawImage(c.icon, x0, y - ic / 2, ic, ic);
+            else { ctx.fillStyle = c.primary; ctx.fillRect(x0, y - ic / 2, ic, ic); } // sin asset: cuadrado "teñido" con el color de la escuela
+            ctx.strokeStyle = 'rgba(0,0,0,.85)'; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y - ic / 2 + 0.5, ic - 1, ic - 1);
+            ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(10,6,0,.9)';
+            const tx = x0 + ic + gap; ctx.strokeText(c.name, tx, y + 1); ctx.shadowColor = c.primary; ctx.shadowBlur = 6; ctx.fillStyle = c.glow; ctx.fillText(c.name, tx, y + 1); ctx.shadowBlur = 0;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+        }
+        ctx.globalAlpha = 1;
     }
 
     private icon(id: string): HTMLImageElement | null {
