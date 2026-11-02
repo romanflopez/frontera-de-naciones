@@ -23,3 +23,6 @@ SOFTWARE.
 This project includes code from helbreath-base-game
 (https://github.com/ErkoKnoll/helbreath-base-game), used under the MIT License.
 Its original copyright and permission notice are in LICENSE.base-game.
+
+The assets in apps/client/public/assets have their own licenses; see
+apps/client/public/assets/CREDITS.txt.

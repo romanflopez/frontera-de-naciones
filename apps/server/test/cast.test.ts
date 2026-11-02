@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { loadCatalogs, loadSettings } from '../src/config.ts';
+import { loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
 import { WorldRegistry } from '../src/registry.ts';
@@ -15,7 +15,7 @@ import type { PersistedPlayer } from '../src/player.ts';
 import type { GameWorld } from '../src/world.ts';
 import { castMsOf, RUN_MS, WALK_MS } from '../src/systems/pvpCombat.ts';
 
-const settings = loadSettings(), catalogs = loadCatalogs();
+const settings = loadSettings();
 class MemStorage implements Storage {
     private m = new Map<string, AccountRecord>();
     get(k: string) { return this.m.get(k); }
@@ -32,7 +32,7 @@ function clock() {
 }
 
 function setup() {
-    const mem = new MemStorage(), eco = new Economy(mem), reg = new WorldRegistry({ settings, catalogs, economy: eco });
+    const mem = new MemStorage(), eco = new Economy(mem), reg = new WorldRegistry({ settings, economy: eco });
     const w = reg.ensure('solmar_legacy');
     (w as unknown as { mobSim?: unknown }).mobSim = undefined; // sin mobs que molesten
     const join = (name: string, at: { x: number; y: number }, faction: string, cls: string) => {

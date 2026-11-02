@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { loadCatalogs, loadSettings } from '../src/config.ts';
+import { loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
 import { WorldRegistry, type TransferSession } from '../src/registry.ts';
@@ -11,7 +11,7 @@ import type { GameWorld } from '../src/world.ts';
 import { PartyService, setParties } from '../src/party.ts';
 import { LEGACY_VILLA_LINK, PRUEBA_CAZA, PRUEBA_MAZMORRA } from '@fdn/world';
 
-const settings = loadSettings(), catalogs = loadCatalogs();
+const settings = loadSettings();
 class MemStorage implements Storage {
     private m = new Map<string, AccountRecord>();
     get(k: string) { return this.m.get(k); }
@@ -39,7 +39,7 @@ function join(reg: WorldRegistry, eco: Economy, world: GameWorld, name: string, 
 const fresh = (o: Partial<ConstructorParameters<typeof WorldRegistry>[0]> = {}) => {
     mem = new MemStorage();
     const eco = new Economy(mem);
-    const reg = new WorldRegistry({ settings, catalogs, economy: eco, ...o });
+    const reg = new WorldRegistry({ settings, economy: eco, ...o });
     return { eco, reg };
 };
 const saves: PersistedPlayer[] = [];

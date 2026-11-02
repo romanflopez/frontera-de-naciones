@@ -9,7 +9,7 @@ import {
 import { MobSim, type MobHost } from '../src/mobs.ts';
 import type { Player } from '../src/player.ts';
 import { AOE_MAX_TARGETS, PvpLimiter, aoeMult, statsFromChar } from '../src/systems/pvpCombat.ts';
-import { loadCatalogs, loadSettings } from '../src/config.ts';
+import { loadSettings } from '../src/config.ts';
 import { Economy, type EconCtx, type KillInfo } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
 import { WorldRegistry, type TransferSession } from '../src/registry.ts';
@@ -211,8 +211,8 @@ class MemStorage implements Storage {
     flush() {}
 }
 test('exp en el server: matar un mutante da el triple, un salvaje +25 % y los rasgos llegan desde el mob', () => {
-    const settings = loadSettings(), catalogs = loadCatalogs();
-    const mem = new MemStorage(), eco = new Economy(mem), reg = new WorldRegistry({ settings, catalogs, economy: eco });
+    const settings = loadSettings();
+    const mem = new MemStorage(), eco = new Economy(mem), reg = new WorldRegistry({ settings, economy: eco });
     const world: GameWorld = reg.ensure('solmar_legacy');
     const session: TransferSession = { sessionId: 's-x', worldId: world.id };
     const persisted: PersistedPlayer = { mapId: world.mapId, worldId: world.mapId, x: 11, y: 11, direction: 4, gender: 0, skinColor: 0, hairStyleIndex: 0, underwearColorIndex: 0, movementSpeedMs: 270, runningMode: true } as unknown as PersistedPlayer;

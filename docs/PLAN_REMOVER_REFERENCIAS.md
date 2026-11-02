@@ -1,6 +1,19 @@
 # Plan para sacar referencias y material dudoso antes de publicar
 
-Complementa `docs/LICENCIAS_AUDITORIA.md`. Es una guía técnica, no asesoramiento legal. Nada de esto se ejecutó: son comandos para correr a mano, sobre un clon de respaldo.
+Complementa `docs/LICENCIAS_AUDITORIA.md`. Es una guía técnica, no asesoramiento legal.
+
+## Estado (2/11/2026)
+
+**Hecho en el árbol de trabajo** (rama `legal/sacar-datos-de-terceros`):
+- Borrados `reference/server-csharp` y los catálogos `apps/server/data/catalog/*.json`. El cliente no los usaba: el server ya no los carga ni manda `monstersList`; `initialState` va con `spells`, `itemsDirectory` y `npcDirectory` vacíos (el protocolo no cambia).
+- README, `apps/server/package.json`, cabeceras del server y comentarios sin nombrar a Helbreath ni a los `.cs` originales; se conservan `LICENSE.base-game` y la atribución MIT en `LICENSE` y `CREDITS.txt`. `LICENSE` aclara que los assets tienen sus propias licencias.
+- Test `apps/server/test/legal.test.ts`: falla si aparece un nombre de la lista prohibida en código, datos o textos del juego, o si vuelven los catálogos o `reference/server-csharp`. `docs/` queda afuera (notas internas).
+
+**Falta (decisión del dueño):** repo privado (paso 0) y limpiar el historial (opción A o B, paso 2). Mientras el repo siga público, lo borrado sigue en la historia.
+
+**Al final, con los assets definitivos:** bosses 3D, casa, efectos TOMAS, íconos con IA, pantalla de créditos en el juego (sección 1 y bloqueantes 2, 3, 5, 6 y 7 de la auditoría).
+
+Lo que sigue abajo es el plan original: comandos para correr a mano, sobre un clon de respaldo.
 
 ## 0. Primero: el repo hoy es público
 

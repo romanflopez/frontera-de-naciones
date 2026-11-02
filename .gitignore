@@ -3,9 +3,8 @@ dist/
 .vite/
 *.log
 .DS_Store
-# Nunca subir assets del Helbreath original
+# Nunca subir assets de juegos de terceros
 **/*.pak
-reference/**/Chars/
 # Personajes guardados por el server de desarrollo
 apps/server/data/chars/
 reference/flare-game/

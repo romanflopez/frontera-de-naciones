@@ -1,6 +1,6 @@
 /**
- * Carga de configuración y catálogos desde apps/server/data.
- * Equivale a Config.cs del server original, recortado a lo que usa este corte.
+ * Carga de configuración desde apps/server/data (settings y mundos).
+ * Los datos del juego (mobs, ítems, hechizos) viven en packages/world y en apps/server/src/systems.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -50,58 +50,8 @@ export interface GameWorldConfig {
     teleportLocs?: { locs: WorldLocationConfig[]; target: { worldId: string; loc: WorldLocationConfig } }[];
 }
 
-export interface ItemEffectConfig { effect: number; effectColor?: number }
-
-export interface ItemConfig {
-    id: number;
-    name: string;
-    itemType: string;
-    blockedItemSlots?: string[];
-    stackable?: boolean;
-    consumable?: boolean;
-    effects?: ItemEffectConfig[];
-    weaponType?: number;
-    gender?: number;
-}
-
-export interface SpellTemporaryEffectConfig {
-    type: number;
-    duration: number;
-    group?: number;
-    movementSpeedModifier?: number;
-    attackSpeedModifier?: number;
-    castSpeedModifier?: number;
-}
-
-export interface SpellConfig {
-    id: number;
-    name: string;
-    damageType?: number;
-    aoeRadius?: number;
-    projectileSpeed?: number;
-    emissionSteps?: number;
-    startRadius?: number;
-    endRadius?: number;
-    startShards?: number;
-    endShards?: number;
-    duration?: number;
-    projectileDistance?: number;
-    aimAssist?: boolean;
-    temporaryEffects?: SpellTemporaryEffectConfig[];
-}
-
-export interface MonsterConfig { id: number; name: string; sprite: string }
-export interface NpcConfig { id: number; name: string }
-
 function readJson<T>(...parts: string[]): T {
     return JSON.parse(readFileSync(join(DATA_DIR, ...parts), 'utf8')) as T;
-}
-
-export interface Catalogs {
-    items: ItemConfig[];
-    spells: SpellConfig[];
-    monsters: MonsterConfig[];
-    npcs: NpcConfig[];
 }
 
 export function loadSettings(): Settings {
@@ -117,14 +67,4 @@ export function loadSettings(): Settings {
 
 export function loadWorlds(): GameWorldConfig[] {
     return readJson<GameWorldConfig[]>('worlds.json');
-}
-
-export function loadCatalogs(): Catalogs {
-    const byId = <T extends { id: number }>(xs: T[]) => [...xs].sort((a, b) => a.id - b.id);
-    return {
-        items: byId(readJson<ItemConfig[]>('catalog', 'Items.json')),
-        spells: byId(readJson<SpellConfig[]>('catalog', 'Spells.json')),
-        monsters: byId(readJson<MonsterConfig[]>('catalog', 'Monsters.json')),
-        npcs: byId(readJson<NpcConfig[]>('catalog', 'NPCs.json')),
-    };
 }

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
 import { STAT_CAP, cleanStats, defaultStats, mobDef, statBonus, statPointsFree, statPointsTotal, statResetCost } from '@fdn/world';
-import { loadCatalogs, loadSettings } from '../src/config.ts';
+import { loadSettings } from '../src/config.ts';
 import { ECON_VERSION, Economy, migrateEcon, newEcon, type EconCtx, type KillInfo } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
 import { WorldRegistry, type TransferSession } from '../src/registry.ts';
@@ -11,7 +11,7 @@ import type { PersistedPlayer } from '../src/player.ts';
 import type { GameWorld } from '../src/world.ts';
 import { rollSpellDamage, statsFromChar } from '../src/systems/pvpCombat.ts';
 
-const settings = loadSettings(), catalogs = loadCatalogs();
+const settings = loadSettings();
 class MemStorage implements Storage {
     private m = new Map<string, AccountRecord>();
     get(k: string) { return this.m.get(k); }
@@ -19,7 +19,7 @@ class MemStorage implements Storage {
     flush() {}
 }
 function setup() {
-    const mem = new MemStorage(), eco = new Economy(mem), reg = new WorldRegistry({ settings, catalogs, economy: eco });
+    const mem = new MemStorage(), eco = new Economy(mem), reg = new WorldRegistry({ settings, economy: eco });
     const join = (world: GameWorld, name: string, cls = 'guerrero') => {
         const log: ServerMessage[] = [];
         const session: TransferSession = { sessionId: `s-${name}`, worldId: world.id };

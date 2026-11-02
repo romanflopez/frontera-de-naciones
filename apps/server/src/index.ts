@@ -1,5 +1,5 @@
 /**
- * Server de Frontera de Naciones. Port del Server.cs de helbreath-base-game (MIT):
+ * Server de Frontera de Naciones, basado en el server MIT de base (ver LICENSE.base-game):
  * acepta WebSockets en /ws, autentica una vez por conexión, manda los paquetes al mundo
  * donde está el jugador, maneja la gracia de reconexión y guarda el personaje al salir.
  */
@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { ClientMessage, ServerMessage } from '@fdn/proto';
-import { DATA_DIR, loadCatalogs, loadSettings, type GameWorldConfig } from './config.ts';
+import { DATA_DIR, loadSettings, type GameWorldConfig } from './config.ts';
 import { MAPS, MOB_TYPES, getMapDef } from '@fdn/world';
 import { loadPosition, resolveSaved, savePosition } from './persist.ts';
 import * as M from './messages.ts';
@@ -27,7 +27,6 @@ import { ChatManager } from './systems/chat.ts';
 const MAX_INCOMING_BYTES = 24576;
 
 const settings = loadSettings();
-const catalogs = loadCatalogs();
 // el estado económico (oro, bolsa, equipo, nivel) es del server; se guarda en la cuenta por el mismo Storage
 /** Dónde se guardan cuentas y personajes: DATA_DIR (env) o, por defecto, la carpeta data del server. */
 const SAVE_DIR = process.env.DATA_DIR || DATA_DIR;
@@ -36,7 +35,7 @@ const storage: Storage & { close?: () => Promise<void> } = process.env.DATABASE_
 const economy = new Economy(storage);
 // Los mundos se crean a pedido desde el registro de mapas de @fdn/world (un GameWorld por mapa), con un solo reloj; ver registry.ts.
 if (!getMapDef(settings.initialMap)) throw new Error(`initialMap '${settings.initialMap}' no es un mapa conocido (ver packages/world/src/maps.ts)`);
-const registry = new WorldRegistry({ settings, catalogs, economy });
+const registry = new WorldRegistry({ settings, economy });
 registry.ensure(settings.initialMap); // el mapa de entrada ya listo; los demás se crean la primera vez que alguien llega
 registry.start();
 const worldConfigs: GameWorldConfig[] = Object.values(MAPS).map((d) => ({ id: d.id, name: d.name, map: d.id, spawn: d.spawn }));
@@ -48,7 +47,6 @@ auction.notify = (key, ...msgs) => { const s = sessionsByNetworkId.get(`acc:${ke
 setDepot(new Depot(storage));
 
 const worldsListMessage = M.worldsList(worldConfigs);
-const monstersListMessage = M.monstersList(catalogs);
 
 // ---------- posición del personaje (B1) ----------
 // Vive en el registro de la cuenta (`AccountRecord.pos`), junto al estado económico: con Postgres sobrevive a los redeploys.
@@ -148,7 +146,6 @@ wss.on('connection', (ws, req) => {
     };
 
     send(worldsListMessage);
-    send(monstersListMessage);
     const authTimeout = setTimeout(() => { if (!session) disconnect('No llegó la autenticación a tiempo.'); }, settings.ping.timeout);
 
     ws.on('message', (data, isBinary) => {

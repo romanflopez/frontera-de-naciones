@@ -3,14 +3,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
 import { HUNT_ARRIVALS, LEGACY_VHAR_LINK, MAPS, RECALL, VHAR, VHAR_BUILDINGS, VHAR_INTERIORS, VHAR_RESPAWN, buildMap, factionHome, getMapDef, reachableFrom, respawnTarget, roleOf, roomOf, validateMapGraph, vharDoor, type VharBuilding } from '@fdn/world';
-import { loadCatalogs, loadSettings } from '../src/config.ts';
+import { loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
 import { WorldRegistry, type TransferSession } from '../src/registry.ts';
 import type { PersistedPlayer } from '../src/player.ts';
 import type { GameWorld } from '../src/world.ts';
 
-const settings = loadSettings(), catalogs = loadCatalogs();
+const settings = loadSettings();
 class MemStorage implements Storage {
     private m = new Map<string, AccountRecord>();
     get(k: string) { return this.m.get(k); }
@@ -25,7 +25,7 @@ function clock() {
     return { advance: (ms: number) => { off += ms; }, restore: () => { Date.now = real; } };
 }
 function setup() {
-    const mem = new MemStorage(), eco = new Economy(mem), reg = new WorldRegistry({ settings, catalogs, economy: eco });
+    const mem = new MemStorage(), eco = new Economy(mem), reg = new WorldRegistry({ settings, economy: eco });
     const sessions = new Map<string, TransferSession>();
     reg.sessionHook = (id) => { const session = sessions.get(id); return session ? { session } : undefined; };
     const join = (world: GameWorld, name: string, at: { x: number; y: number }, faction = 'vhar') => {
