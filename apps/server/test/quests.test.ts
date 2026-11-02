@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
 import {
-    DAILY_LIMIT, DAILY_QUESTS, MAIN_QUESTS, MAPS, REPEAT_MATS, applyQuestEvent, buildMap, cleanQuestBook, dailyEligible, mobDef, msToReset,
+    DAILY_LIMIT, DAILY_QUESTS, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, MAPS, REPEAT_MATS, applyQuestEvent, buildMap, cleanQuestBook, dailyEligible, mobDef, msToReset,
     newQuestBook, questDay, rewardUniques, roleOf, rollDailies, TRAIT_MUTANT, type MobType,
 } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
@@ -105,8 +105,15 @@ test('el camino recorre los mapas en orden de nivel y cada objetivo de matar apu
             assert.ok(g.mobs.some((t) => zones.some((z) => z.type === t)), `${q.name}: ${g.mobs} no vive en ${g.map}`);
         }
     }
+    // los 6 dungeons: el jefe vive en su piso, cada uno está en el camino y los premios a elección existen
+    for (const d of DUNGEON_IDS) {
+        assert.ok(buildMap(DUNGEON_MAP[d]).zones.some((z) => z.type === DUNGEON_BOSS[d]), `${d}: ${DUNGEON_BOSS[d]} no está en ${DUNGEON_MAP[d]}`);
+        assert.ok(MAIN_QUESTS.some((q) => q.goals.some((g) => g.k === 'dungeon' && g.d === d)), `${d} no está en el camino`);
+    }
+    for (const q of MAIN_QUESTS) if (q.reward.unique) assert.ok(rewardUniques(q.reward.unique, 'mago').length > 0, `${q.name}: sin premio`);
+    assert.ok(MAIN_QUESTS.at(-1)!.minLvl >= 29, 'el camino llega al nivel 30');
     const maps = new Set(MAIN_QUESTS.flatMap((q) => q.goals.flatMap((g) => (g.k === 'kill' ? [g.map] : []))));
-    for (const m of ['campos_de_sal', 'bosque_de_piedra', 'canon_goblin', 'pantano_de_merrimead', 'altas_de_nazia', 'cementerio_de_lochport', 'risco_del_sur']) assert.ok(maps.has(m), `falta ${m}`);
+    for (const m of ['campos_de_sal', 'bosque_de_piedra', 'canon_goblin', 'pantano_de_merrimead', 'altas_de_nazia', 'cementerio_de_lochport', 'risco_del_sur', 'la_brecha', 'paso_de_stormrock', 'cenizas_i', 'cenizas_ii', 'cenizas_iii']) assert.ok(maps.has(m), `falta ${m}`);
 });
 
 test('cadena completa en el server: de Campos de Sal a la Reina, con premios, niveles y elección de ítem', () => {
@@ -132,7 +139,7 @@ test('cadena completa en el server: de Campos de Sal a la Reina, con premios, ni
                 } else if (g.k === 'collect') {
                     Math.random = () => 0.05; for (let n = 0; n < g.n; n++) kill('goblin', { origin: 'pit', map: 'campos_de_sal' }); Math.random = () => 0.99;
                 } else if (g.k === 'dungeon') {
-                    const boss = g.d === 'd1' ? 'goblin_jefe' : 'antlion_reina', map = g.d === 'd1' ? 'minas_goblin' : 'ruinas_de_stormrock';
+                    const boss = DUNGEON_BOSS[g.d], map = DUNGEON_MAP[g.d];
                     kill(boss, { origin: 'dungeon', map: 'campos_de_sal' }); assert.equal(st.qb!.m.st, 'active', 'el jefe fuera de su piso no cuenta');
                     kill(boss, { origin: 'dungeon', map });
                 }
@@ -142,7 +149,7 @@ test('cadena completa en el server: de Campos de Sal a la Reina, con premios, ni
             if (q.reward.unique?.endsWith('_choice')) {
                 assert.equal(ask('m_turnin').code, 'choose');
                 assert.equal(ask('m_turnin', 'Vara de raíz').code, 'choose', 'un guerrero no elige el báculo');
-                const pick = q.reward.unique === 'boss_d2_choice' ? 'Caparazón de la Reina' : 'Hoja de sal';
+                const pick = q.reward.unique === 'class_t1_choice' ? 'Hoja de sal' : rewardUniques(q.reward.unique, 'guerrero')[0].name;
                 assert.equal(ask('m_turnin', pick).ok, true); assert.equal(st.bag.at(-1)!.n, pick);
             } else {
                 const r = ask('m_turnin'); assert.equal(r.ok, true, `${q.name}: ${r.text}`);
