@@ -9,6 +9,7 @@ interface PaperMeta { cw: number; ch: number; ax: number; ay: number; cols: numb
 const LOOKS: Record<string, { set: string; head: string; main?: string; off?: string; dir: number }> = {
     guerrero: { set: 'leather', head: 'head_short', main: 'shortsword', off: 'buckler', dir: 5 },
     mago: { set: 'mage', head: 'head_short', main: 'staff', dir: 6 },
+    healer: { set: 'mage', head: 'head_short', main: 'staff', dir: 4 }, // marcador hasta que lleguen los sprites del healer
 };
 
 let metaP: Promise<PaperMeta | null> | null = null;

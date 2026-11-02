@@ -13,6 +13,8 @@ export interface CharacterStatus {
     /** Grito de guerra (suma defensa) y ralentización: vencen solos; `dirty` avisa al mundo que hay que anunciarlo. */
     warcryEndTime: number;
     slowEndTime: number;
+    /** Bendición sagrada del healer (K5): menos daño, más curación recibida e inmunidad a congelado y aturdido. */
+    blessEndTime: number;
     dirty: boolean;
     /** Rendimiento decreciente de CC: por tipo, cuántos CC entraron en la ventana y hasta cuándo dura la ventana. */
     dr: Partial<Record<CcKind, { n: number; until: number }>>;
@@ -38,7 +40,7 @@ export const IMMUNITY_MS = 8000;
 export const REMOVER_CD_MS = 10000;
 
 export function createDefaultStatus(): CharacterStatus {
-    return { isParalyzed: false, paralysisEndTime: 0, immunityEndTime: 0, removerCooldown: 0, isInvisible: false, invisibleEndTime: 0, hasDetectInvisible: false, detectInvisibleEndTime: 0, warcryEndTime: 0, slowEndTime: 0, dirty: false, dr: {} };
+    return { isParalyzed: false, paralysisEndTime: 0, immunityEndTime: 0, removerCooldown: 0, isInvisible: false, invisibleEndTime: 0, hasDetectInvisible: false, detectInvisibleEndTime: 0, warcryEndTime: 0, slowEndTime: 0, blessEndTime: 0, dirty: false, dr: {} };
 }
 
 /**
@@ -46,7 +48,7 @@ export function createDefaultStatus(): CharacterStatus {
  * No acorta una parálisis más larga ya activa.
  */
 export function applyParalysis(status: CharacterStatus, now: number, durationMs = MAX_PARALYSIS_MS, kind: CcKind = 'paralisis'): number {
-    if (now < status.immunityEndTime) return 0;
+    if (now < status.immunityEndTime || isBlessed(status, now)) return 0;
     const ms = drApply(status, kind, now, Math.min(MAX_PARALYSIS_MS, Math.max(0, durationMs)));
     if (ms <= 0) return 0;
     status.paralysisEndTime = status.isParalyzed ? Math.max(status.paralysisEndTime, now + ms) : now + ms;
@@ -94,9 +96,15 @@ export function applySlow(status: CharacterStatus, now: number, durationMs: numb
     const ms = drApply(status, 'slow', now, durationMs); if (ms <= 0) return 0;
     status.slowEndTime = Math.max(status.slowEndTime, now + ms); status.dirty = true; return ms;
 }
+/** Bendición sagrada: dura `durationMs` y, al entrar, corta el congelado o aturdido que tenga el objetivo. */
+export function applyBless(status: CharacterStatus, now: number, durationMs: number): void {
+    status.blessEndTime = now + durationMs; status.isParalyzed = false; status.paralysisEndTime = 0; status.dirty = true;
+}
+export const isBlessed = (status: CharacterStatus, now: number) => now < status.blessEndTime;
 export const isSlowed = (status: CharacterStatus, now: number) => now < status.slowEndTime;
 /** Vence los estados temporizados nuevos; deja `dirty` si cambió algo que hay que anunciar. */
 export function expireTimed(status: CharacterStatus, now: number): void {
     if (status.warcryEndTime && now >= status.warcryEndTime) { status.warcryEndTime = 0; status.dirty = true; }
     if (status.slowEndTime && now >= status.slowEndTime) { status.slowEndTime = 0; status.dirty = true; }
+    if (status.blessEndTime && now >= status.blessEndTime) { status.blessEndTime = 0; status.dirty = true; }
 }

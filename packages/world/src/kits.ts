@@ -2,11 +2,11 @@
  * Kits de clase: qué habilidad puede usar cada clase y desde qué nivel (paso K1, ver el doc del proyecto `kits-de-clase.md`).
  * Lo usan el server (rechaza lo que no corresponde) y el cliente (bloquea el botón y avisa el nivel).
  *
- * Los niveles salen de los kits de Valdrys (hasta nivel 12 completos desde K3; el healer llega en K5).
+ * Los niveles salen de los kits de Valdrys (hasta nivel 12 completos desde K3; el healer desde K5).
  * Furia, invisibilidad y detectar son utilidad compartida (recargas en K6). Segundo aliento (`aliento`) es común a todas las clases.
  */
 
-export type ClassId = 'guerrero' | 'mago';
+export type ClassId = 'guerrero' | 'mago' | 'healer';
 
 /** Habilidad → nivel mínimo, por clase. `ataque` (golpe básico) lo tienen todas. */
 export const CLASS_KITS: Record<ClassId, Readonly<Record<string, number>>> = {
@@ -18,9 +18,17 @@ export const CLASS_KITS: Record<ClassId, Readonly<Record<string, number>>> = {
         ataque: 1, proyectil: 1, esquirla: 1, paralisis: 3, nova: 5, ignicion: 7, bola: 9, lluvia: 12, remover: 21, blink: 24,
         furia: 1, invisibilidad: 1, detectar: 1, aliento: 1,
     },
+    // Healer sagrado de Valdrys (K5): Castigo y Curación desde el 1, Renovar 3, Bendición 5, Nova 7, Reprender 9, Orbe 12
+    healer: {
+        ataque: 1, castigo: 1, curacion: 1, renovar: 3, bendicion: 5, novasagrada: 7, reprender: 9, orbe: 12,
+        furia: 1, detectar: 1, aliento: 1,
+    },
 };
 
-const isClass = (cls: string): cls is ClassId => cls === 'guerrero' || cls === 'mago';
+/** Clases jugables, en el orden en que se muestran. */
+export const CLASS_IDS: readonly ClassId[] = ['guerrero', 'mago', 'healer'];
+
+export const isClass = (cls: string): cls is ClassId => (CLASS_IDS as readonly string[]).includes(cls);
 
 /** Nivel desde el que `cls` puede usar `id`, o `null` si no es de su kit. */
 export function skillLevel(cls: string, id: string): number | null {

@@ -6,7 +6,7 @@ import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import { MOB_AGGRO, MOB_ASSIST, MOB_TYPES, mobDef, zoneRespawnSecs, type MobDef, type MobType, type WorldMap, type Zone } from '@fdn/world';
 import * as M from './messages.ts';
 import type { Player } from './player.ts';
-import { BURN_EVERY, BURN_TICKS, PVP_SPELLS, aoeMult, burnTickDmg, rollSpellDamage, spellDmgKind, threatOf } from './systems/pvpCombat.ts';
+import { BURN_EVERY, BURN_TICKS, PVP_SPELLS, SKILLS, aoeMult, burnTickDmg, rollSpellDamage, spellDmgKind, threatOf } from './systems/pvpCombat.ts';
 import { ANTI_DAMAGE_MULT, CRIT_MULT, EXPLOSION_MULT, EXPLOSION_RADIUS, FLEE_HP_FRAC, FLEE_SECS, FLEE_SPEED_MULT, MUTANT_CHANCE, POISON_SECS, SKILL_CHANCE, SKILL_TRAITS, TOXIC_FRACTION, TOXIC_TICKS, TRAIT_ANTI_MAGIC, TRAIT_ANTI_PHYS, TRAIT_EXPLOSIVE, TRAIT_MUTANT, TRAIT_TOXIC, TRAIT_WILD, fleeChance, traitDmgMult, traitHpMult } from '@fdn/world';
 
 type Pkt<K extends string> = Extract<NonNullable<ClientMessage['payload']>, { $case: K }>['value'];
@@ -26,6 +26,8 @@ export interface MobHost {
     pay(p: Player, cost: number): boolean;
     /** Cura al jugador en el server (robo de vida) y avisa. */
     heal(p: Player, n: number): void;
+    /** Devuelve maná (Castigo del healer, si pega). Opcional (tests). */
+    refundMp?(p: Player, n: number): void;
     reward(killer: Player, info: { mobId: number; type: MobType; def: MobDef; zoneName: string; origin: 'loose' | 'pit' | 'dungeon'; x: number; y: number; shard?: 'cripta' | 'foso'; /** rasgos del mob (mobTraits.ts): multiplican la exp y el botín */ traits: number }): void;
     /** Murió un mob con dueño del golpe final: el mundo tira el botín de suelo (systems/loot.ts). Opcional (tests). */
     mobDied?(info: { type: MobType; def: MobDef; x: number; y: number; gm: boolean }): void;
@@ -202,6 +204,28 @@ export class MobSim {
     }
     private clearThreat(m: SimMob) { m.threat.clear(); m.tauntBy = null; m.tauntUntil = 0; }
     /** Amenaza que lleva `p` sobre el mob `id` (para tests y depuración). */
+    /**
+     * Curar genera amenaza (K5): cada monstruo que está peleando con el curado (lo tiene en su tabla o lo persigue)
+     * suma `amount` de amenaza al que curó. Devuelve a cuántos monstruos les llegó.
+     */
+    healThreat(healer: Player, healed: Player, amount: number): number {
+        if (amount <= 0) return 0;
+        let n = 0;
+        for (const m of this.mobs.values()) {
+            if (m.dead || m.state === 'return' || (!m.threat.has(healed.playerId) && m.target !== healed.playerId)) continue;
+            this.addThreat(m, healer, amount); n++;
+        }
+        return n;
+    }
+    /** Renovar sobre un monstruo: solo la quemadura (sin golpe directo). La nueva reemplaza a la vieja, como las del mago. */
+    burnMob(p: Player, id: number): boolean {
+        const m = this.mobs.get(id); if (!m || m.dead) return false;
+        const T = this.now();
+        m.burn = T + BURN_TICKS * BURN_EVERY + 0.05; m.burnTick = T + BURN_EVERY; m.burnDmg = burnTickDmg(p.combat); m.burnBy = p.playerId;
+        m.lastAttacker = p.playerId; this.addThreat(m, p, 1);
+        if (m.state !== 'flee' && (m.state === 'idle' || m.target == null)) this.aggro(m, p);
+        return true;
+    }
     threatOn(id: number, p: Player): number { return this.mobs.get(id)?.threat.get(p.playerId) ?? 0; }
     targetOf(id: number): bigint | null { return this.mobs.get(id)?.target ?? null; }
 
@@ -406,7 +430,8 @@ export class MobSim {
         const T = this.now();
         if (slowSecs > 0) m.slow = T + slowSecs;
         if (stunSecs > 0 && m.imm <= T) { m.par = T + stunSecs; m.imm = T + stunSecs + 8; m.moving = false; } // aturdido (corta la carga de un jefe)
-        if (m.traits & TRAIT_ANTI_PHYS) dmg = Math.max(1, Math.round(dmg * ANTI_DAMAGE_MULT)); // las habilidades de guerrero son físicas
+        const phys = (SKILLS[skill] ?? PVP_SPELLS[skill])?.stat !== 'mag'; // Nova de escarcha y Nova sagrada son mágicas; las del paladín, físicas
+        if (m.traits & (phys ? TRAIT_ANTI_PHYS : TRAIT_ANTI_MAGIC)) dmg = Math.max(1, Math.round(dmg * ANTI_DAMAGE_MULT));
         m.lastAttacker = p.playerId; m.hp -= dmg; this.addThreat(m, p, dmg * threatOf(skill));
         if (m.par > T && dmg >= m.hpMax * 0.45) m.par = 0;
         this.broadcastNear(m, M.mobDamaged(m.id, p.playerId, dmg, false, Math.max(0, m.hp)));
@@ -470,7 +495,8 @@ export class MobSim {
             this.broadcastNear(m, M.mobDamaged(m.id, p.playerId, dmg, crit, Math.max(0, m.hp)));
             this.broadcastNear(m, M.combatText(M.mid(m.id), M.pid(p.playerId), dmg, false, spell === 'ataque' ? '' : spell));
             if (phys && p.combat.leech > 0 && dealt > 0) this.host.heal(p, Math.max(1, Math.round((dealt * p.combat.leech) / 100))); // robo de vida: de lo que de verdad quitó
-            if (sp.lifesteal && dealt > 0) this.host.heal(p, Math.max(1, Math.round(dealt * sp.lifesteal)));      // Juicio: se cura la mitad del daño
+            if (sp.lifesteal && dealt > 0) this.host.heal(p, Math.max(1, Math.round(dealt * sp.lifesteal)));      // Juicio y Castigo: se curan parte del daño
+            if (sp.refund && dealt > 0) this.host.refundMp?.(p, sp.refund);                                        // Castigo: devuelve la mitad del maná
             this.addThreat(m, p, dmg * threatOf(spell));
         }
         this.checkFlee(m);

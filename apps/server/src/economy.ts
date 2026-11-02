@@ -60,7 +60,8 @@ export interface Econ {
     imported?: { at: number; gold: number; lvl: number; items: number; clipped: string[] };
 }
 
-const CLASS_KIT: Record<string, { weapon: string; armor: string }> = { guerrero: { weapon: 'Espada corta', armor: 'Coraza de cuero' }, mago: { weapon: 'Báculo de fresno', armor: 'Túnica de mago' } };
+const CLASS_KIT: Record<string, { weapon: string; armor: string }> = { guerrero: { weapon: 'Espada corta', armor: 'Coraza de cuero' }, mago: { weapon: 'Báculo de fresno', armor: 'Túnica de mago' },
+    healer: { weapon: 'Báculo de fresno', armor: 'Túnica de mago' } }; // healer con bastón (K5); sus ítems propios de T1-T2 van aparte
 const FACTIONS = ['solmar', 'vhar'];
 
 const clampInt = (v: unknown, lo: number, hi: number, def = lo): number => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.floor(v))) : def);
@@ -324,7 +325,7 @@ export class Economy {
      * Mago: Báculo del camposanto, Mortaja bordada, Capuchón de duelo y un anillo armado con lo mejor para hechizos (Magia, maná y vida).
      */
     gmBis(p: Player, cls: string): string[] | null {
-        const st = p.econ; if (!st || cls !== 'mago') return null;
+        const st = p.econ; if (!st || (cls !== 'mago' && cls !== 'healer')) return null; // el healer usa el mismo set de Magia
         const top = (name: string, extra: SItem['a'] = []): SItem => {
             const u = UNIQUE_BY_NAME.get(name); if (!u) throw new Error(`BiS: no existe ${name}`);
             const it = newItem(st, name, u.uniq.boss ? 3 : 2, [...u.uniq.attrs.map(([id, v]) => ({ id, v: Math.round(v * (1 + UNIQUE_VARIATION)) })), ...extra]);

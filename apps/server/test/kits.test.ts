@@ -117,7 +117,7 @@ test('K2: las habilidades que se fueron ya no existen en el server ni en los kit
         assert.equal(PVP_SPELLS[id], undefined, `${id} sigue en PVP_SPELLS`);
         for (const kit of Object.values(CLASS_KITS)) assert.equal(kit[id], undefined, `${id} sigue en un kit`);
     }
-    assert.deepEqual(Object.keys(AOE_MAX_TARGETS).sort(), ['aura', 'giro', 'lluvia', 'nova']);
+    assert.deepEqual(Object.keys(AOE_MAX_TARGETS).sort(), ['aura', 'giro', 'lluvia', 'nova', 'novasagrada']);
 });
 
 test('K2: tiempos de casteo y forma de cada hechizo como en Valdrys', () => {
