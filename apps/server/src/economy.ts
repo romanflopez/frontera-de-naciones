@@ -329,6 +329,15 @@ export class Economy {
         return SLOTS.map((sl) => set[sl].n);
     }
 
+    /** Solo GM: equipa una Espada larga con `crit` % de crítico (sirve para probar el sonido y la animación de crítico). */
+    gmSword(p: Player, crit: number): string | null {
+        const st = p.econ; if (!st) return null;
+        const it = newItem(st, 'Espada larga', 3, [{ id: 'crit', v: crit }]);
+        const prev = st.eq.arma; if (prev && st.bag.length < BAG_MAX) st.bag.push(prev);
+        st.eq.arma = it; this.touch(p);
+        return it.n;
+    }
+
     /** Guarda vida y maná del jugador en su estado (al salir y en cada guardado periódico). */
     persistVitals(p: Player): void {
         const st = p.econ; if (!st) return;

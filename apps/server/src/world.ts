@@ -944,6 +944,14 @@ export class GameWorld {
                 this.restat(p); p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; this.sendVitals(p, true); this.econ!.snapshot(p);
                 return [`Equipado (+5, tiradas máximas): ${names.join(', ')}.`];
             }
+            case 'espada': {
+                const n = Math.max(1, Math.min(95, num(args[0]) ?? 45)); // 5 % base + n del arma
+                p.gmCritUncap = true; // sin esto el tope de 35 % la dejaría en 35
+                const name = this.econ?.gmSword(p, n);
+                if (!name) return ['Tu personaje todavía no tiene economía.'];
+                this.restat(p); this.econ!.snapshot(p);
+                return [`${name} equipada: ${Math.min(100, 5 + n)} % de crítico (solo hasta que te desconectes; sin /gm espada el tope vuelve a 35 %).`];
+            }
             case 'curar':
                 p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; this.sendVitals(p, true); return ['Vida y maná al máximo.'];
             case 'dios':
@@ -976,7 +984,7 @@ export class GameWorld {
 
     private restat(p: Player, login = false): void {
         const prevLvl = p.combat.lvl, st = p.econ;
-        p.combat = statsFromChar(st);
+        p.combat = statsFromChar(st, p.gmCritUncap);
         p.pvp.meleeGapMs = meleeIntervalSecs(p.combat.aspd) * 1000; // la velocidad de ataque la fija el equipo que guarda el server
         p.prog = progressFromEcon(st);
         if (login) { p.hp = p.combat.savedHp; p.mp = p.combat.savedMp; }

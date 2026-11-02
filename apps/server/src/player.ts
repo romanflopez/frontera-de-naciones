@@ -102,6 +102,8 @@ export class Player {
     spawnProtection = false;
     /** SOLO GM (/gm dios): no recibe daño. */
     godMode = false;
+    /** Solo pruebas de GM (/gm espada): levanta el tope de crítico del equipo para este jugador. No se guarda. */
+    gmCritUncap = false;
     /** Walk (false) o run (true). Arranca caminando: es el estado que permite castear (docs/COMBATE.md). */
     runningMode = false;
     attackMode = true;

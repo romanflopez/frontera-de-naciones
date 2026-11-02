@@ -266,7 +266,7 @@ const GM_ENV = (process.env.FDN_GM ?? 'rowena').trim().toLowerCase();
 const isGm = (name: string) => GM_ENV === '1' || GM_ENV === 'all' || GM_ENV.split(',').map((x) => x.trim()).filter(Boolean).includes(name.toLowerCase());
 const GM_HELP = [
     'Comandos GM: /gm mapas · /gm ir <mapa> [x y] · /gm pos [x y] · /gm nivel <n> · /gm oro <n> · /gm curar · /gm dios',
-    '/gm mobs · /gm mob <tipo> [nivel] [cantidad] · /gm limpiar · /gm llaves [n] · /gm traer <jugador> · /gm ira <jugador> · /gm menu (o F9)',
+    '/gm mobs · /gm mob <tipo> [nivel] [cantidad] · /gm limpiar · /gm llaves [n] · /gm espada [crit] · /gm traer <jugador> · /gm ira <jugador> · /gm menu (o F9)',
 ];
 /** Prefijo con el que el server le manda al cliente el contenido del menú GM (el cliente lo abre en vez de mostrarlo en el chat). */
 const GM_MENU_TAG = '\u0001GMMENU';
