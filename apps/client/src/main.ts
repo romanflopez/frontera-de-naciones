@@ -613,8 +613,8 @@ const LIB: Record<string, SpellDef> = {
         cast() { skillSend('giro'); } },
     grito: { name: 'Grito de guerra', mp: 20, cd: 25, col: '#c78bff', range: 0, target: false, instant: true,
         cast() { skillSend('grito'); } },
-    furia: { name: 'Furia', mp: 15, cd: 90, col: '#ff3b2f', range: 0, target: false,
-        cast() { sfx('berserk', 0.7); efxLocal('flamme', P.x, P.y); pvpSend('flamme', P.x, P.y, 0n, 'furia'); P.fury = now() + 60; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log(`Furia: +${selectedClass === 'mago' ? 35 : 15}% de daño por 60 s.`, true); } },
+    furia: { name: 'Furia', mp: 15, cd: 90, col: '#ffd23f', range: 0, target: false,
+        cast() { sfx('berserk', 0.7); efxLocal('pilar', P.x, P.y); pvpSend('pilar', P.x, P.y, 0n, 'furia'); P.fury = now() + 60; float(P.x, P.y - 0.4, '¡FURIA!', '#ffd23f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd23f' }); log(`Furia: +${selectedClass === 'mago' ? 35 : 15}% de daño por 60 s.`, true); } },
 };
 let SPELLS: Spell[] = [];
 const SPECIAL_KEY: Record<string, string | undefined> = { remover: 'r', invisibilidad: 'f', detectar: 'g', blink: 'b', carga: 'z', giro: 'x', grito: 'v' };
@@ -814,8 +814,10 @@ const SPR: Record<string, SpriteMeta> = {};
 let WORLD: Record<string, number[]> = {};
 const IMG: Record<string, CanvasImageSource> = {};
 // Efectos TOMAS (Miradin, CC-BY-SA) horneados a cuadros; se dibujan en aditivo. Si no cargan, el juego sigue con los efectos simples.
-let FXM: { cell: number; frames: number; rows: Record<string, { row: number; fps: number; scale: number }> } | null = null;
-const efxLocal = (n: string, x: number, y: number, dy = 0) => { if (FXM?.rows[n]) fx.push({ k: 'efx', n, x, y, t: 0, dy }); };
+let FXM: { cell: number; frames: number; rows: Record<string, { row: number; fps: number; scale: number; img?: string }> } | null = null;
+/** Efectos del atlas privado (fx_priv, fuera de git por licencia) y con qué se reemplazan si no está. */
+const FX_FALLBACK: Record<string, string> = { pilar: 'flamme' };
+const efxLocal = (n: string, x: number, y: number, dy = 0) => { const k = FXM?.rows[n] ? n : FX_FALLBACK[n]; if (k && FXM?.rows[k]) fx.push({ k: 'efx', n: k, x, y, t: 0, dy }); };
 /** Efecto de mis hechizos: lo veo yo y los jugadores cercanos. */
 const efx = (n: string, x: number, y: number, dy = 0) => { efxLocal(n, x, y, dy); if (connected) pvpSend(n, x, y); };
 // ---------- PvP: bandos enemigos (y todos contra todos en la arena) ----------
@@ -1455,11 +1457,11 @@ function render() {
     for (const d of drops) objs.push({ d: d.x + d.y - 0.2, f: () => drawDrop(d, T) });
     for (const c of corpses) objs.push({ d: c.x + c.y - 0.3, f: () => { const p = iso(c.x, c.y), age = T - c.t; drawSprite(c.sprite, 'die', age, c.dir, p.x, p.y, null, age > 2 ? 3 - age : 1); } });
     for (const m of mobs) objs.push({ d: m.x + m.y, f: () => drawMob(m, T) });
-    for (const o of others.values()) objs.push({ d: o.x + o.y, f: () => { const p = iso(o.x, o.y), [a, t] = animFor(o, T); if (unseen(o)) return; drawSprite(otherSprite(o), a, t, o.dir, p.x, p.y, o.inv ? 'rgba(150,200,255,.25)' : null, o.inv ? 0.35 + 0.1 * Math.sin(T * 5) : o.gone ? 0.45 : 1); if (o.fury) { ctx.save(); ctx.globalAlpha = 0.35 + 0.15 * Math.sin(T * 8); ctx.strokeStyle = '#ff5a2a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 22, 11, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); } } });
+    for (const o of others.values()) objs.push({ d: o.x + o.y, f: () => { const p = iso(o.x, o.y), [a, t] = animFor(o, T); if (unseen(o)) return; drawSprite(otherSprite(o), a, t, o.dir, p.x, p.y, o.inv ? 'rgba(150,200,255,.25)' : null, o.inv ? 0.35 + 0.1 * Math.sin(T * 5) : o.gone ? 0.45 : 1); if (o.fury) { ctx.save(); ctx.globalAlpha = 0.35 + 0.15 * Math.sin(T * 8); ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 22, 11, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); } } });
     objs.push({ d: P.x + P.y, f: () => { const p = iso(P.x, P.y); if (P.frozenUntil > T && !P.dead) { ctx.strokeStyle = 'rgba(190,235,255,.85)'; ctx.lineWidth = 1.5; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(p.x, p.y - 8 - i * 14, 16, 6, 0, 0, Math.PI * 2); ctx.stroke(); } } if (P.dead) drawSprite(heroKey(), 'die', T - P.deadT, P.dir, p.x, p.y); else {
             const [a, t] = animFor(P, T), bz = P.fury > T;
             if (P.med) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const k = 0.5 + 0.5 * Math.sin(T * 3); ctx.strokeStyle = `rgba(110,170,255,${0.35 + k * 0.4})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 16 + k * 14, (16 + k * 14) / 2, 0, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.ellipse(p.x, p.y - 20 - k * 22, 5, 2.5, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
-            drawSprite(heroKey(), a, t, P.dir, p.x, p.y, P.flash > 0 ? 'rgba(255,70,50,.35)' : P.inv ? 'rgba(150,200,255,.25)' : bz ? `rgba(255,${90 + (0.5 + 0.5 * Math.sin(T * 9)) * 70 | 0},20,.32)` : null, P.inv ? 0.4 + 0.1 * Math.sin(T * 5) : 1);
+            drawSprite(heroKey(), a, t, P.dir, p.x, p.y, P.flash > 0 ? 'rgba(255,70,50,.35)' : P.inv ? 'rgba(150,200,255,.25)' : bz ? `rgba(255,${190 + (0.5 + 0.5 * Math.sin(T * 9)) * 50 | 0},60,.32)` : null, P.inv ? 0.4 + 0.1 * Math.sin(T * 5) : 1);
         } } });
     objs.sort((a, b) => a.d - b.d).forEach((o) => o.f());
     // nombres arriba de todo
@@ -1509,8 +1511,9 @@ function render() {
     }
     for (const f of fx) if (f.k === 'burst') { const p = iso(f.x, f.y), k = f.t / 0.6; if (k > 0.5) continue; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1 - k * 2; ctx.fillStyle = f.c!; ctx.beginPath(); ctx.arc(p.x, p.y - 34, 10 + k * 30, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
     if (FXM && IMG.fx) for (const f of fx) if (f.k === 'efx') {
-        const r = FXM.rows[f.n!], c = FXM.cell, i = Math.min(FXM.frames - 1, Math.floor(f.t * r.fps)), p = iso(f.x, f.y), w = c * r.scale;
-        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(IMG.fx, i * c, r.row * c, c, c, p.x - w / 2, p.y - w * 0.62 - (f.dy ?? 0), w, w); ctx.restore();
+        const r = FXM.rows[f.n!], c = FXM.cell, i = Math.min(FXM.frames - 1, Math.floor(f.t * r.fps)), p = iso(f.x, f.y), w = c * r.scale, im = IMG[r.img ?? 'fx'];
+        if (!im) continue;
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(im, i * c, r.row * c, c, c, p.x - w / 2, p.y - w * 0.62 - (f.dy ?? 0), w, w); ctx.restore();
     }
     for (const f of fx) if (f.k === 'blizz') {
         // Ventisca procedural: escarcha en el piso y astillas de hielo que caen sin parar sobre el área
@@ -1607,7 +1610,7 @@ function setClass(id: string) {
 }
 /** Cuadraditos de estado con cuenta regresiva (Furia, invisible, detectar, parálisis, inmunidad), como en HB. */
 const BUFFS: { k: string; n: string; c: string; end: () => number; on: () => boolean }[] = [
-    { k: 'F', n: 'Furia', c: '#ff5a2a', end: () => P.fury, on: () => P.fury > now() },
+    { k: 'F', n: 'Furia', c: '#ffc83a', end: () => P.fury, on: () => P.fury > now() },
     { k: 'G', n: 'Grito de guerra (+15 defensa)', c: '#c78bff', end: () => P.wcEnd, on: () => P.wcEnd > now() },
     { k: 'L', n: 'Ralentizado', c: '#8fb4d9', end: () => P.slowEnd, on: () => P.slowEnd > now() },
     { k: 'I', n: 'Invisible', c: '#7fb8ff', end: () => P.invEnd, on: () => P.inv },
@@ -2483,6 +2486,8 @@ async function boot() {
     } catch { $('loading').textContent = 'No se pudieron cargar los gráficos. Recargá la página.'; return; }
     $('loading').hidden = true;
     try { FXM = await (await fetch('assets/fx.json')).json(); IMG.fx = await load('assets/fx.webp'); } catch { FXM = null; }
+    // Atlas privado (opcional, mismo tamaño de celda): si no está, efxLocal usa FX_FALLBACK
+    if (FXM) try { const pm = await (await fetch('assets/fx_priv.json')).json() as NonNullable<typeof FXM>; IMG.fxp = await load('assets/fx_priv.webp'); for (const [n, r] of Object.entries(pm.rows)) FXM.rows[n] = { ...r, img: 'fxp' }; } catch { /* sin atlas privado */ }
     loadBuildingImages();
     refreshLook(); void initKnight();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, toScreen, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };

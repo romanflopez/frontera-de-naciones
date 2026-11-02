@@ -60,6 +60,12 @@ Mazmorra Nv11-12 (Fortaleza infernal y Foso del demonio): mapas "underworld_stro
 Mapas abiertos Nv7-11 (Paso de Stormrock, Cenizas I-III): mapas "stormrock_pass", "underworld", "underworld_catacombs" y "underworld_mines" y tileset de nieve de Flare (flare-game), CC-BY-SA 3.0, modificados (recortes de vínculos, relleno del vacío, mobs) para ERIS.
 
 
+=== Efectos con licencia privada (no están en el repo) ===
+
+  - fx_priv.webp, fila "pilar" (efecto de Furia): "Pixel Art VFX - Priest", VFX 2, de Frostwindz (https://frostwindz.itch.io/), escalado y compuesto sobre negro.
+    Licencia de Frostwindz: uso comercial permitido dentro del juego; prohibido redistribuirlo o dejarlo descargable suelto, por eso
+    fx_priv.* está en .gitignore y se genera con tools/src/fx/private_atlas.py desde los cuadros originales. Sin ese archivo, Furia usa "flamme".
+
 === Sonido ===
 
   - sfx/level-up.ogg: "level-up" por bastianhallo, Freesound #682633 (https://freesound.org/s/682633/). Licencia: PENDIENTE DE CONFIRMAR en la página de Freesound (si es CC-BY hay que dejar esta atribución; si es CC-BY-NC no se puede usar en un juego comercial).

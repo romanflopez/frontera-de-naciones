@@ -22,3 +22,6 @@ __pycache__/
 # Assets crudos de OpenGameArt: licencias sin verificar por pieza (ver docs/MOBS_NUEVOS.md). No se suben.
 /assets/raw/
 
+
+# Efectos con licencia que prohíbe publicarlos (Frostwindz). Se generan con tools/src/fx/private_atlas.py.
+apps/client/public/assets/fx_priv.*
