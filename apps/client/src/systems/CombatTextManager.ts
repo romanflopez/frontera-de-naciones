@@ -52,13 +52,24 @@ export interface CombatTextDeps {
     headOffset: () => number;
 }
 
-/** Cartel "estoy casteando X" sobre el personaje: sube 20 px y se desvanece en 2 s. */
-interface CastLabel { key: string; name: string; icon: HTMLImageElement | null; t: number; primary: string; glow: string }
-const CAST_DUR = 2, CAST_RISE = 20, CAST_LIFT = 50;
+/** Cartel "estoy casteando X": anclado donde estaba el personaje (grilla), sube 30 px y se desvanece en 1,5 s. */
+export interface FloatingSpellText {
+    /** posición en grilla al momento del spawn */
+    x: number; y: number;
+    text: string;
+    primaryColor: string; glowColor: string;
+    /** performance.now() */
+    startTime: number;
+    duration: number;
+    alpha: number;
+    /** desplazamiento vertical actual (px, negativo = arriba) */
+    currentY: number;
+}
+const CAST_DUR_MS = 1500, CAST_RISE = 30, CAST_LIFT = 50;
 
 export class CombatTextManager {
     private items: Popup[] = [];
-    private casts: CastLabel[] = [];
+    readonly activeSpellTexts: FloatingSpellText[] = [];
     private icons = new Map<string, HTMLImageElement>();
 
     constructor(private deps: CombatTextDeps) {}
@@ -85,11 +96,10 @@ export class CombatTextManager {
         this.stackOn(p); this.items.push(p);
     }
 
-    /** Nombre (+ ícono) del hechizo que `targetId` empieza a castear. Reemplaza el cartel anterior de ese personaje. */
-    showCastingSpell(targetId: string | bigint | number, spellName: string, spellType: SpellType = 'PHYSICAL', spellId?: string): void {
-        const key = String(targetId), col = SPELL_COLORS[spellType];
-        this.casts = this.casts.filter((c) => c.key !== key);
-        this.casts.push({ key, name: spellName, icon: spellId ? this.icon(spellId) : null, t: 0, primary: col.primary, glow: col.glow });
+    /** Spawnea el nombre del hechizo sobre la posición de grilla (x, y), con los colores de su escuela. */
+    showCastingSpell(x: number, y: number, spellName: string, spellType: SpellType = 'PHYSICAL'): void {
+        const c = SPELL_COLORS[spellType];
+        this.activeSpellTexts.push({ x, y, text: spellName, primaryColor: c.primary, glowColor: c.glow, startTime: performance.now(), duration: CAST_DUR_MS, alpha: 1, currentY: 0 });
     }
 
     private stackOn(p: Popup): void {
@@ -104,12 +114,11 @@ export class CombatTextManager {
             const p = this.items[i]; p.t += dt;
             if (p.t >= Math.max(DUR, p.spell ? SPELL_DUR : 0)) this.items.splice(i, 1);
         }
-        for (let i = this.casts.length - 1; i >= 0; i--) if ((this.casts[i].t += dt) >= CAST_DUR) this.casts.splice(i, 1);
     }
 
     /** Dibujar con el contexto en coordenadas de pantalla (CSS px). */
     draw(ctx: CanvasRenderingContext2D): void {
-        if (!this.items.length && !this.casts.length) return;
+        if (!this.items.length && !this.activeSpellTexts.length) return;
         ctx.save();
         ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.lineJoin = 'round';
         const head = this.deps.headOffset();
@@ -147,21 +156,21 @@ export class CombatTextManager {
     }
 
     private drawCasts(ctx: CanvasRenderingContext2D, head: number): void {
-        for (const c of this.casts) {
-            const pos = this.deps.resolve(c.key); if (!pos) continue; // sigue al personaje mientras se mueve
-            const s = this.deps.toScreen(pos.x, pos.y), k = c.t / CAST_DUR, ic = 18, gap = 5;
-            const y = s.y - head - CAST_LIFT - k * CAST_RISE;
-            ctx.globalAlpha = 1 - k;
-            ctx.font = SPELL_FONT;
-            const tw = ctx.measureText(c.name).width, w = ic + gap + tw, x0 = s.x - w / 2;
-            if (c.icon?.complete && c.icon.naturalWidth > 0) ctx.drawImage(c.icon, x0, y - ic / 2, ic, ic);
-            else { ctx.fillStyle = c.primary; ctx.fillRect(x0, y - ic / 2, ic, ic); } // sin asset: cuadrado "teñido" con el color de la escuela
-            ctx.strokeStyle = 'rgba(0,0,0,.85)'; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y - ic / 2 + 0.5, ic - 1, ic - 1);
-            ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(10,6,0,.9)';
-            const tx = x0 + ic + gap; ctx.strokeText(c.name, tx, y + 1); ctx.shadowColor = c.primary; ctx.shadowBlur = 6; ctx.fillStyle = c.glow; ctx.fillText(c.name, tx, y + 1); ctx.shadowBlur = 0;
-            ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+        const T = performance.now();
+        for (let i = this.activeSpellTexts.length - 1; i >= 0; i--) {
+            const t = this.activeSpellTexts[i], progress = Math.min((T - t.startTime) / t.duration, 1);
+            if (progress >= 1) { this.activeSpellTexts.splice(i, 1); continue; } // limpieza
+            t.currentY = -progress * CAST_RISE; t.alpha = 1 - progress;
+            const s = this.deps.toScreen(t.x, t.y), x = s.x, y = s.y - head - CAST_LIFT + t.currentY;
+            ctx.save();
+            ctx.globalAlpha = t.alpha;
+            ctx.font = 'bold 16px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+            const tw = ctx.measureText(t.text).width;
+            ctx.fillStyle = t.primaryColor; ctx.fillRect(x + 10 - tw / 2 - 22, y - 13, 16, 16); // "ícono" a la izquierda del texto
+            ctx.strokeStyle = 'black'; ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.strokeText(t.text, x + 10, y);
+            ctx.shadowColor = t.glowColor; ctx.shadowBlur = 6; ctx.fillStyle = t.primaryColor; ctx.fillText(t.text, x + 10, y);
+            ctx.restore();
         }
-        ctx.globalAlpha = 1;
     }
 
     private icon(id: string): HTMLImageElement | null {

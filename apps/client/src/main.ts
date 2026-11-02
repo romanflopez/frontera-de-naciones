@@ -759,7 +759,7 @@ function cast(i: number) {
     const T = now(), len = s.castT ?? CAST_T; P.casting = { i, start: T, end: T + len, len };
     const ty = spellTypeOf(s.id);
     useCastStore.getState().startCast(s.name, len * 1000, ty, spellIcon(s.id ?? '', s.col)); castBarOf = P.casting; // antes de avisar al server
-    combatText.showCastingSpell(myId, s.name, ty, s.id);
+    combatText.showCastingSpell(P.x, P.y, s.name, ty); // predicción local, antes de avisar al server
     net.send({ $case: 'spellCastStartRequest', value: { spellId: 0, spell: s.id ?? '' } }); // el server cuenta el cast time desde acá
 }
 /** Habilidades de clase sin casteo: salen al instante (las de objetivo toman el seleccionado, el del cursor o el enemigo más cercano). */
@@ -1170,7 +1170,7 @@ window.addEventListener('keydown', (e) => {
     // ?debug: Shift+1/2/3 simula un cast de Fuego/Hielo/Sagrado (solo visual: barra + cartel, no va al server).
     if (DEBUG && e.shiftKey && !e.repeat && /^Digit[123]$/.test(e.code)) {
         const [ty, name]: [SpellType, string] = ([['FIRE', 'Firebolt'], ['ICE', 'Chains of Ice'], ['HOLY', 'Heal']] as [SpellType, string][])[+e.code.slice(5) - 1];
-        e.preventDefault(); useCastStore.getState().startCast(name, 1500, ty); combatText.showCastingSpell(myId, name, ty);
+        e.preventDefault(); useCastStore.getState().startCast(name, 1500, ty); combatText.showCastingSpell(P.x, P.y, name, ty);
         setTimeout(() => { if (!P.casting) useCastStore.getState().cancelCast(); }, 1600);
         return;
     }
