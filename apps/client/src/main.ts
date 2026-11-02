@@ -384,8 +384,13 @@ function onMobDamaged(v: { mobId: number; attackerId: bigint; dmg: number; crit:
     if (mine) { hitstop = Math.max(hitstop, v.crit ? 0.09 : 0.045); if (v.crit && !reduce) shake = 0.25; }
 }
 /** Subí de nivel (lo decide el server): efecto y aviso. */
+/** Efectos de sonido (assets/sfx/<nombre>.ogg). Se crean la primera vez que se piden; si el navegador bloquea el audio o falta el archivo, no pasa nada. */
+const SFX: Record<string, HTMLAudioElement> = {};
+function sfx(name: string, vol = 0.6) {
+    try { const a = (SFX[name] ??= new Audio(`assets/sfx/${name}.ogg`)); a.volume = vol; a.currentTime = 0; void a.play().catch(() => { /* sin interacción previa o sin archivo */ }); } catch { /* sin audio */ }
+}
 function onLevelUp() {
-    P.hp = maxHp(); P.mp = maxMp(); float(P.x, P.y - 0.5, `¡Nivel ${P.lvl}!`, '#ffd24a', true); log(`Subiste a nivel ${P.lvl}.`, true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd24a' });
+    sfx('level-up'); P.hp = maxHp(); P.mp = maxMp(); float(P.x, P.y - 0.5, `¡Nivel ${P.lvl}!`, '#ffd24a', true); log(`Subiste a nivel ${P.lvl}.`, true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd24a' });
 }
 /** El server avisó que un mob murió: lo saca del espejo, deja el cadáver y, si el golpe final fue mío, cobro el botín. */
 /** El server avisa quién está invisible y si yo veo invisibles. */
