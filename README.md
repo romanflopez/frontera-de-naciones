@@ -1,8 +1,8 @@
 # Frontera de Naciones
 
-MMO isométrico de naciones con PvP de control al estilo Helbreath. Nombre provisorio.
+MMO isométrico de naciones con PvP de control. Nombre provisorio.
 
-El código parte de [helbreath-base-game](https://github.com/ErkoKnoll/helbreath-base-game) (MIT), pero **no incluye ningún asset del Helbreath**: sprites, mapas, sonidos y música son propios o provisorios generados por código.
+El server y el protocolo parten de un proyecto base con licencia MIT (aviso en `LICENSE.base-game`). No incluye assets ni datos de juegos de terceros.
 
 ## Correrlo
 
@@ -72,7 +72,7 @@ reference           Server original en C#, solo como guía para portarlo (se bor
 
 ## Assets
 
-Regla del proyecto: **nunca** se agregan archivos del Helbreath (ni `.pak`, ni `.spr`, ni mapas, ni sonidos), aunque estén modificados.
+Regla del proyecto: **nunca** se agregan archivos ni datos de juegos de terceros (sprites, mapas, sonidos, tablas de ítems o mobs), aunque estén modificados. Un test (`apps/server/test/legal.test.ts`) falla si aparecen nombres de la lista prohibida.
 Los formatos `.spr` y `.amd` son solo contenedores: lo que va adentro es nuestro.
 
 Los assets provisorios se generan en `apps/client/public/assets/` con `tools/src/placeholders/` y no se suben al repo.
@@ -80,9 +80,9 @@ Cuando haya arte definitivo, va a tener su propia carpeta versionada.
 
 ## Créditos del arte provisorio
 
-El arte que genera `pnpm assets:flare` sale de Flare (Clint Bellanger y colaboradores, ver `reference/flare-game/CREDITS.txt`) bajo [CC-BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
-Lo convertido también queda bajo CC-BY-SA 3.0. No está en este repo: se genera en cada máquina.
+El arte que genera `pnpm assets:flare` sale de Flare (Clint Bellanger y colaboradores) bajo [CC-BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
+Lo convertido también queda bajo CC-BY-SA 3.0. Autores y licencias de cada asset: `apps/client/public/assets/CREDITS.txt`.
 
 ## Licencia
 
-MIT. Incluye código de helbreath-base-game bajo su licencia MIT original (ver `LICENSE.base-game`).
+MIT. Incluye código de un proyecto base bajo su licencia MIT original (ver `LICENSE.base-game`). Los assets tienen sus propias licencias (ver `CREDITS.txt`).

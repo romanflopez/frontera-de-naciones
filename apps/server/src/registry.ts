@@ -8,7 +8,7 @@
  * una instancia por party (`p<id>`) o una propia si el jugador no tiene party (`u<sessionId>`); ver docs/DUNGEONS_INSTANCIAS.md.
  */
 import { QUESTS, getMapDef, linkGateReason, mapHash, type Link, type WorldMap } from '@fdn/world';
-import type { Catalogs, GameWorldConfig, Settings } from './config.ts';
+import type { GameWorldConfig, Settings } from './config.ts';
 import type { Economy } from './economy.ts';
 import { occupancyFromGrid } from './map.ts';
 import * as M from './messages.ts';
@@ -18,7 +18,6 @@ import { GameWorld } from './world.ts';
 
 export interface RegistryOptions {
     settings: Settings;
-    catalogs: Catalogs;
     economy?: Economy;
     /** Un mundo sin jugadores se duerme tras este tiempo (ms). */
     hibernateAfterMs?: number;
@@ -80,7 +79,7 @@ export class WorldRegistry {
         if (!w) {
             const map = this.mapOf(def.id);
             const config: GameWorldConfig = { id: key, name: instanceId ? `${def.name} (instancia ${instanceId})` : def.name, map: def.id, music: def.music, spawn: { ...def.spawn } };
-            w = new GameWorld(config, this.o.settings, this.o.catalogs, occupancyFromGrid(map.blocked), map, this.o.economy, def);
+            w = new GameWorld(config, this.o.settings, occupancyFromGrid(map.blocked), map, this.o.economy, def);
             w.transferHook = (sessionId, dest) => this.transferFromWorld(sessionId, dest);
             this.worlds.set(key, w);
             console.log(`[Registro] Mundo '${key}' creado (${map.size}x${map.size}, ${w.mobCount} mobs). Mundos: ${this.worlds.size}`);

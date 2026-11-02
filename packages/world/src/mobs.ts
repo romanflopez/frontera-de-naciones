@@ -77,7 +77,7 @@ export const MAX_LEVEL = 40;
  */
 export const killsToLevel = (l: number): number => Math.round(l * (11 + 0.1 * l));
 /**
- * Multiplicador de la exp que da CUALQUIER mob según el nivel del jugador (idea de Helbreath Evolution, a escala 40): 100 % al nivel 1 y baja en
+ * Multiplicador de la exp que da CUALQUIER mob según el nivel del jugador (a escala 40): 100 % al nivel 1 y baja en
  * línea recta hasta ~35 % al nivel 40. Un mob "se gasta" a medida que lo superás, y por eso conviene subir de zona. La pendiente es suave a
  * propósito: así la exp que pide cada nivel (que ya lo incluye) sigue creciendo en todo el rango.
  */

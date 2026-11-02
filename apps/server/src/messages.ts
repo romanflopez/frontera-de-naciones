@@ -1,8 +1,8 @@
 /**
- * Constructores de mensajes del server. Port de los Create* de NetworkManager.cs que usa este corte.
+ * Constructores de mensajes del server.
  */
 import { ServerMessage, type DeepPartial, type PlayerEnteredRange } from '@fdn/proto';
-import type { Catalogs, GameWorldConfig, ItemConfig, SpellConfig } from './config.ts';
+import type { GameWorldConfig } from './config.ts';
 import type { Player } from './player.ts';
 import { statPointsFree } from '@fdn/world';
 import type { Econ, SItem } from './economy.ts';
@@ -14,37 +14,11 @@ export function worldsList(worlds: GameWorldConfig[]): ServerMessage {
     return msg({ $case: 'worldsList', value: { worlds: worlds.map((w) => ({ id: w.id, name: w.name, map: w.map })) } });
 }
 
-export function monstersList(catalogs: Catalogs): ServerMessage {
-    return msg({ $case: 'monstersList', value: { monsters: catalogs.monsters.map((m) => ({ name: m.name, sprite: m.sprite })) } });
-}
-
-function spellEntry(s: SpellConfig) {
-    return {
-        id: s.id, name: s.name, damageType: s.damageType, aoeRadius: s.aoeRadius, projectileSpeed: s.projectileSpeed,
-        emissionSteps: s.emissionSteps, startRadius: s.startRadius, endRadius: s.endRadius, startShards: s.startShards,
-        endShards: s.endShards, durationMs: s.duration, projectileDistancePx: s.projectileDistance,
-        aimAssist: s.aimAssist === true ? true : undefined,
-        temporaryEffects: (s.temporaryEffects ?? []).map((fx) => ({
-            type: fx.type, durationMs: fx.duration, group: fx.group,
-            movementSpeedModifier: fx.movementSpeedModifier, attackSpeedModifier: fx.attackSpeedModifier, castSpeedModifier: fx.castSpeedModifier,
-        })),
-    };
-}
-
-function itemDirectoryEntry(i: ItemConfig) {
-    return {
-        id: i.id, name: i.name, itemType: i.itemType, blockedItemSlots: i.blockedItemSlots ?? [],
-        stackable: i.stackable === true ? true : undefined, consumable: i.consumable === true ? true : undefined,
-        effects: (i.effects ?? []).map((fx) => ({ effect: fx.effect, effectColor: fx.effectColor })),
-        weaponType: i.weaponType, equipGender: i.gender,
-    };
-}
-
-export function initialState(p: Player, catalogs: Catalogs, opts: { includeSpells: boolean; pingIntervalMs: number; arrowSpeed: number; pickupMs: number; bowMs: number }): ServerMessage {
+export function initialState(p: Player, opts: { pingIntervalMs: number; arrowSpeed: number; pickupMs: number; bowMs: number }): ServerMessage {
     return msg({
         $case: 'initialState',
         value: {
-            spells: opts.includeSpells ? catalogs.spells.map(spellEntry) : [],
+            spells: [],
             playerId: p.playerId,
             movementSpeedMs: p.movementSpeedMs,
             baseMovementSpeedMs: p.baseMovementMs,
@@ -63,14 +37,14 @@ export function initialState(p: Player, catalogs: Catalogs, opts: { includeSpell
             castSpeedMs: p.castSpeedMs,
             attackType: p.attackType,
             allowDashAttack: p.allowDashAttack,
-            itemsDirectory: catalogs.items.map(itemDirectoryEntry),
+            itemsDirectory: [],
             bagItems: [],
             equippedItems: [],
             gender: p.gender,
             skinColor: p.skinColor,
             hairStyleIndex: p.hairStyleIndex,
             underwearColorIndex: p.underwearColorIndex,
-            npcDirectory: catalogs.npcs.map((n) => ({ id: n.id, name: n.name })),
+            npcDirectory: [],
         },
     });
 }

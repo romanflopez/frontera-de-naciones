@@ -10,7 +10,7 @@ export const PARTY_MAX = 4;
 export const INVITE_MS = 30_000;
 /** Distancia (en celdas) a la que un compañero comparte exp y botín de un mob. */
 export const PARTY_SHARE_RANGE = 20;
-/** Exp total del grupo = exp del mob × min(1 + 0,2 por compañero extra, 4), repartida en partes iguales (misma regla que Helbreath: 2 → ×1,2; 4 → ×1,6). */
+/** Exp total del grupo = exp del mob × min(1 + 0,2 por compañero extra, 4), repartida en partes iguales (2 → ×1,2; 4 → ×1,6). */
 export const partyExpMult = (n: number): number => (n <= 1 ? 1 : Math.min(1 + 0.2 * (n - 1), 4) / n);
 
 export interface MemberInfo { name: string; faction: string; level: number; hp: number; maxHp: number; mp: number; maxMp: number; map: string; online: boolean }

@@ -1,5 +1,5 @@
 /**
- * Un mundo de juego (un mapa). Port recortado de GameWorld.cs, Spawn.cs y Movement.cs.
+ * Un mundo de juego (un mapa), basado en el server MIT de base (ver LICENSE.base-game).
  *
  * En el original cada mundo es un actor con su propio hilo y una cola de mensajes.
  * Node corre en un solo hilo, así que acá los mensajes se procesan apenas llegan y el
@@ -11,7 +11,7 @@ import { AOE_MAX_TARGETS, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castM
 import { HUBS, QUESTS, RECALL, TRAINING, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef } from '@fdn/world';
 import { applyParalysis, applySlow, applyWarcry, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, hasWarcry, isSlowed, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
-import type { Catalogs, GameWorldConfig, Settings } from './config.ts';
+import type { GameWorldConfig, Settings } from './config.ts';
 import { adjacentCellsAt45, distance, findNearestFreeLocation, nextGridDirection } from './location.ts';
 import type { Occupancy } from './map.ts';
 import * as M from './messages.ts';
@@ -57,7 +57,6 @@ export class GameWorld {
     constructor(
         readonly config: GameWorldConfig,
         private readonly settings: Settings,
-        private readonly catalogs: Catalogs,
         private readonly occupancy: Occupancy,
         private readonly map?: WorldMap,
         private readonly econ?: Economy,
@@ -284,7 +283,7 @@ export class GameWorld {
         this.playersById.set(p.playerId, p);
         p.world = this;
         console.log(`[Mundo:${this.id}] Entró ${characterName} (#${p.playerId}) en (${spawn.x}, ${spawn.y}). Jugadores: ${this.players.size}`);
-        this.completeJoin(p, true);
+        this.completeJoin(p);
     }
 
     /**
@@ -302,7 +301,7 @@ export class GameWorld {
         p.resetConnectionState(); // el cliente se trabó armando el mapa: los pings y la cadencia de pasos empiezan de cero
         p.lastDamager = null;
         console.log(`[Mundo:${this.id}] Llegó ${p.characterName} (#${p.playerId}) a (${spawn.x}, ${spawn.y}). Jugadores: ${this.players.size}`);
-        this.completeJoin(p, false, false);
+        this.completeJoin(p, false);
         if (p.econ) this.sendVitals(p, false);
         return spawn;
     }
@@ -329,12 +328,12 @@ export class GameWorld {
     }
 
     /** Port de Spawn.CompletePlayerJoin: estado inicial, protección al aparecer y visibilidad. */
-    private completeJoin(p: Player, includeSpells: boolean, sendInitialState = true): void {
+    private completeJoin(p: Player, sendInitialState = true): void {
         const t = this.settings.timings;
         p.pingGraceUntil = Date.now() + PING_JOIN_GRACE_MS;
         p.groundSeen.clear(); this.floorLoot.forget(p.sessionId); // un socket nuevo no vio nada del suelo: se le manda de nuevo
-        if (sendInitialState) p.send(M.initialState(p, this.catalogs, {
-            includeSpells, pingIntervalMs: this.settings.ping.interval, arrowSpeed: t.arrowSpeed,
+        if (sendInitialState) p.send(M.initialState(p, {
+            pingIntervalMs: this.settings.ping.interval, arrowSpeed: t.arrowSpeed,
             pickupMs: t.playerPickupAnimationTime, bowMs: t.playerBowAnimationTime,
         }));
         p.send(M.initialGameWorldState(this.config, p));
@@ -400,7 +399,7 @@ export class GameWorld {
         p.requestDisconnect = requestDisconnect;
         p.characterName = characterName;
         p.resetConnectionState();
-        this.completeJoin(p, true);
+        this.completeJoin(p);
         this.broadcastNear(p, M.playerReconnected(p.playerId));
         console.log(`[Mundo:${this.id}] ${characterName} volvió a conectarse.`);
         return true;

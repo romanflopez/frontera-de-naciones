@@ -1,5 +1,5 @@
 /**
- * Estado de un jugador dentro de un mundo. Port recortado de GameWorldPlayer.cs:
+ * Estado de un jugador dentro de un mundo (basado en el server MIT de base (ver LICENSE.base-game)):
  * posición, apariencia, velocidad, controles anti-trampa de movimiento y ping.
  */
 import { CAST_NORMAL_MS, DEFAULT_STATS, MOVE_CAP_MS, PvpLimiter, RUN_MS, WALK_MS, type CombatStats } from './systems/pvpCombat.ts';

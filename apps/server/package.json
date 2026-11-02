@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Server autoritativo de Frontera de Naciones en TypeScript (port del server C# de helbreath-base-game, MIT).",
+  "description": "Server autoritativo de Frontera de Naciones en TypeScript (basado en un server MIT, ver LICENSE.base-game).",
   "license": "MIT",
   "scripts": {
     "dev": "tsx watch src/index.ts",

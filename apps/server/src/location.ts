@@ -1,5 +1,5 @@
 /**
- * Utilidades de grilla. Port de Helpers/Location.cs.
+ * Utilidades de grilla, basado en el server MIT de base (ver LICENSE.base-game).
  * Direcciones: 0 N, 1 NE, 2 E, 3 SE, 4 S, 5 SO, 6 O, 7 NO (igual que el cliente).
  */
 

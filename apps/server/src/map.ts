@@ -1,7 +1,7 @@
 /**
  * Mapa: lectura de .amd para saber qué celdas están bloqueadas, y el registro de ocupación
  * (celdas bloqueadas por el mapa + celdas ocupadas por entidades).
- * Port de Map.cs y GameWorldOccupancyTracker.cs.
+ * Basado en el server MIT de base (ver LICENSE.base-game).
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

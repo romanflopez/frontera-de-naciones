@@ -2,16 +2,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { loadCatalogs, loadSettings } from '../src/config.ts';
+import { loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
 import { WorldRegistry, type TransferSession } from '../src/registry.ts';
 import type { PersistedPlayer } from '../src/player.ts';
 
-const settings = loadSettings(), catalogs = loadCatalogs();
+const settings = loadSettings();
 class Mem implements Storage { m = new Map<string, AccountRecord>(); get(k: string) { return this.m.get(k); } put(k: string, r: AccountRecord) { this.m.set(k, r); } flush() {} }
 function join(cls: string) {
-    const mem = new Mem(), eco = new Economy(mem), reg = new WorldRegistry({ settings, catalogs, economy: eco });
+    const mem = new Mem(), eco = new Economy(mem), reg = new WorldRegistry({ settings, economy: eco });
     const w = reg.ensure('solmar_legacy'), log: ServerMessage[] = [];
     const session: TransferSession = { sessionId: 's-1', worldId: w.id };
     const persisted = { mapId: w.mapId, worldId: w.mapId, x: 11, y: 11, direction: 4, gender: 0, skinColor: 0, hairStyleIndex: 0, underwearColorIndex: 0, movementSpeedMs: 270, runningMode: true } as unknown as PersistedPlayer;
