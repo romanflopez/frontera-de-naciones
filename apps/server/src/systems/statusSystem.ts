@@ -15,6 +15,8 @@ export interface CharacterStatus {
     slowEndTime: number;
     /** Bendición sagrada del healer (K5): menos daño, más curación recibida e inmunidad a congelado y aturdido. */
     blessEndTime: number;
+    /** Veneno (K5): −30 % de curación recibida mientras dura (lo pone el golpe físico con chance de veneno o un mob tóxico). */
+    poisonEndTime: number;
     dirty: boolean;
     /** Rendimiento decreciente de CC: por tipo, cuántos CC entraron en la ventana y hasta cuándo dura la ventana. */
     dr: Partial<Record<CcKind, { n: number; until: number }>>;
@@ -40,7 +42,7 @@ export const IMMUNITY_MS = 8000;
 export const REMOVER_CD_MS = 10000;
 
 export function createDefaultStatus(): CharacterStatus {
-    return { isParalyzed: false, paralysisEndTime: 0, immunityEndTime: 0, removerCooldown: 0, isInvisible: false, invisibleEndTime: 0, hasDetectInvisible: false, detectInvisibleEndTime: 0, warcryEndTime: 0, slowEndTime: 0, blessEndTime: 0, dirty: false, dr: {} };
+    return { isParalyzed: false, paralysisEndTime: 0, immunityEndTime: 0, removerCooldown: 0, isInvisible: false, invisibleEndTime: 0, hasDetectInvisible: false, detectInvisibleEndTime: 0, warcryEndTime: 0, slowEndTime: 0, blessEndTime: 0, poisonEndTime: 0, dirty: false, dr: {} };
 }
 
 /**
@@ -101,10 +103,16 @@ export function applyBless(status: CharacterStatus, now: number, durationMs: num
     status.blessEndTime = now + durationMs; status.isParalyzed = false; status.paralysisEndTime = 0; status.dirty = true;
 }
 export const isBlessed = (status: CharacterStatus, now: number) => now < status.blessEndTime;
+/** Veneno: dura `durationMs` (uno nuevo renueva, no se apila). */
+export function applyPoison(status: CharacterStatus, now: number, durationMs: number): void {
+    const was = now < status.poisonEndTime; status.poisonEndTime = Math.max(status.poisonEndTime, now + durationMs); if (!was) status.dirty = true;
+}
+export const isPoisoned = (status: CharacterStatus, now: number) => now < status.poisonEndTime;
 export const isSlowed = (status: CharacterStatus, now: number) => now < status.slowEndTime;
 /** Vence los estados temporizados nuevos; deja `dirty` si cambió algo que hay que anunciar. */
 export function expireTimed(status: CharacterStatus, now: number): void {
     if (status.warcryEndTime && now >= status.warcryEndTime) { status.warcryEndTime = 0; status.dirty = true; }
     if (status.slowEndTime && now >= status.slowEndTime) { status.slowEndTime = 0; status.dirty = true; }
     if (status.blessEndTime && now >= status.blessEndTime) { status.blessEndTime = 0; status.dirty = true; }
+    if (status.poisonEndTime && now >= status.poisonEndTime) { status.poisonEndTime = 0; status.dirty = true; }
 }

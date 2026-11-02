@@ -137,7 +137,7 @@ const P = {
     x: MAP.spawn.x + 0.5, y: MAP.spawn.y + 0.5, dir: 6, ang: undefined as number | undefined, moving: false, phase: 0, ref: 3.4, one: null as OneShot | null, t0: 0, flash: 0,
     name: '', cell: { x: MAP.spawn.x, y: MAP.spawn.y }, path: [] as Cell[], step: null as Step | null, stepMs: 270, frozenUntil: 0, foe: null as Other | null, ally: null as Other | null, med: false, medHp: 0,
     target: null as Mob | null, engage: false, pickup: null as Drop | null, repath: 0, queued: null as number | null,
-    lvl: 1, exp: 0, hp: 100, mp: 60, fury: 0, wcEnd: 0, slowEnd: 0, blessEnd: 0, inv: false, det: false, invEnd: 0, detEnd: 0, immEnd: 0, gold: 0, nextAtk: 0, dead: false, deadT: 0,
+    lvl: 1, exp: 0, hp: 100, mp: 60, fury: 0, wcEnd: 0, slowEnd: 0, blessEnd: 0, poisonEnd: 0, inv: false, det: false, invEnd: 0, detEnd: 0, immEnd: 0, gold: 0, nextAtk: 0, dead: false, deadT: 0,
     bag: [] as Item[], eq: { arma: null, armadura: null, cabeza: null, anillo: null } as Record<Slot, Item | null>,
     running: false, casting: null as Casting | null, ready: null as { i: number; t: number } | null, sentDir: -1,
 };
@@ -444,8 +444,9 @@ function onSkillEffect(v: { casterId: bigint; skill: string; fromX: number; from
     }
     if (v.skill === 'blink' && v.casterId === myId) { const pt = iso(P.x, P.y); if (Math.hypot(pt.x - cam.x, pt.y - cam.y) > 500) { cam.x = pt.x; cam.y = pt.y; } }
 }
-function onStatusUpdate(v: { playerId: bigint; invisible: boolean; detect: boolean; fury: boolean; warcry: boolean; slow: boolean; blessed: boolean }) {
+function onStatusUpdate(v: { playerId: bigint; invisible: boolean; detect: boolean; fury: boolean; warcry: boolean; slow: boolean; blessed: boolean; poisoned: boolean }) {
     if (v.playerId === myId) {
+        if (v.poisoned !== P.poisonEnd > now()) { P.poisonEnd = v.poisoned ? now() + 4 : 0; if (v.poisoned) toast('¡Te envenenaron! Recibís 30 % menos de curación.'); }
         if (v.blessed !== P.blessEnd > now()) { P.blessEnd = v.blessed ? now() + 10 : 0; if (v.blessed) { P.frozenUntil = 0; log('Bendición sagrada: −20 % de daño, +30 % de curación e inmune a congelado y aturdido por 10 s.', true); } }
         if (v.warcry !== P.wcEnd > now()) { P.wcEnd = v.warcry ? now() + 10 : 0; if (v.warcry) log('Grito de guerra: +15 de defensa por 10 s.', true); }
         if (v.slow !== P.slowEnd > now()) { P.slowEnd = v.slow ? now() + 1.5 : 0; if (v.slow) toast('¡Te ralentizaron!'); }
@@ -1691,6 +1692,7 @@ const BUFFS: { k: string; n: string; c: string; end: () => number; on: () => boo
     { k: 'F', n: 'Furia', c: '#ff5a2a', end: () => P.fury, on: () => P.fury > now() },
     { k: 'G', n: 'Grito de guerra (+15 defensa)', c: '#c78bff', end: () => P.wcEnd, on: () => P.wcEnd > now() },
     { k: 'B', n: 'Bendición sagrada (−20 % daño, +30 % curación, inmune a control)', c: '#ffe9a0', end: () => P.blessEnd, on: () => P.blessEnd > now() },
+    { k: 'V', n: 'Envenenado (−30 % de curación)', c: '#7fd05a', end: () => P.poisonEnd, on: () => P.poisonEnd > now() },
     { k: 'L', n: 'Ralentizado', c: '#8fb4d9', end: () => P.slowEnd, on: () => P.slowEnd > now() },
     { k: 'I', n: 'Invisible', c: '#7fb8ff', end: () => P.invEnd, on: () => P.inv },
     { k: 'D', n: 'Detectar invisible', c: '#9be07a', end: () => P.detEnd, on: () => P.det },

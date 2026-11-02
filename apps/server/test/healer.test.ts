@@ -14,8 +14,8 @@ import { WorldRegistry } from '../src/registry.ts';
 import type { PersistedPlayer, Player } from '../src/player.ts';
 import type { GameWorld } from '../src/world.ts';
 import { MobSim, type MobHost } from '../src/mobs.ts';
-import { BLESS_DMG_TAKEN, CAST_MS, HEAL_THREAT, PVP_SPELLS, PvpLimiter, SKILLS, healAmount, healPower, statsFromChar } from '../src/systems/pvpCombat.ts';
-import { applyParalysis, isBlessed } from '../src/systems/statusSystem.ts';
+import { POISON_HEAL_TAKEN, BLESS_DMG_TAKEN, CAST_MS, HEAL_THREAT, PVP_SPELLS, PvpLimiter, SKILLS, healAmount, healPower, statsFromChar } from '../src/systems/pvpCombat.ts';
+import { applyParalysis, applyPoison, isBlessed } from '../src/systems/statusSystem.ts';
 
 let clock = 50_000_000;
 mock.method(Date, 'now', () => clock);
@@ -196,6 +196,29 @@ test('Bendición sagrada: la curación recibida sube un 30 % y vence a los 10 s'
     assert.equal(isBlessed(aliado.p.status, Date.now()), false);
     const last = cases(aliado.log, 'statusUpdate').at(-1)!;
     assert.equal((last.payload as { value: { blessed: boolean } }).value.blessed, false, 'se avisa que venció');
+});
+
+test('veneno sobre un jugador: la curación que recibe baja un 30 % y el cliente se entera', () => {
+    const { w, healer, aliado } = setup();
+    applyPoison(aliado.p.status, Date.now(), 4000); advance(w, 100);
+    const st = cases(aliado.log, 'statusUpdate').map((m) => (m.payload as { value: { poisoned: boolean } }).value.poisoned);
+    assert.ok(st.includes(true), 'aviso de envenenado');
+    aliado.p.hp = 100;
+    castFor(w, healer.sid, 'curacion'); skill(w, healer.sid, 'curacion', aliado.p.playerId);
+    assert.equal(aliado.p.hp, 100 + Math.round(healAmount(0.4, healer.p.combat, aliado.p.combat.maxHp) * POISON_HEAL_TAKEN));
+    advance(w, 4000);
+    const last = cases(aliado.log, 'statusUpdate').at(-1)!;
+    assert.equal((last.payload as { value: { poisoned: boolean } }).value.poisoned, false, 'se avisa que pasó');
+});
+
+test('veneno: un golpe físico con chance de veneno del equipo envenena a un jugador enemigo', () => {
+    const { w, healer, enemigo } = setup();
+    const pala = healer; // cualquiera sirve para el golpe básico
+    pala.p.combat = { ...pala.p.combat, poison: 100 };
+    enemigo.p.setPosition(pala.p.posX + 1, pala.p.posY);
+    pkt(w, pala.sid, 'pvpHitRequest', { fx: '', x: enemigo.p.posX, y: enemigo.p.posY, targetId: enemigo.p.playerId, dmg: 0, secs: 0, r: 0, spell: 'ataque' });
+    assert.ok(enemigo.p.hp < enemigo.p.combat.maxHp, 'pegó');
+    assert.ok(enemigo.p.status.poisonEndTime > Date.now(), 'quedó envenenado');
 });
 
 // ---------- Nova sagrada, Reprender, Castigo ----------

@@ -742,6 +742,7 @@ export interface StatusUpdate {
   warcry: boolean;
   slow: boolean;
   blessed: boolean;
+  poisoned: boolean;
 }
 
 /** Mago: Blink a la celda (x, y) (máx. 4 celdas). El server valida y responde con PlayerTeleported + SkillEffect. */
@@ -10264,7 +10265,16 @@ export const LootRoll: MessageFns<LootRoll> = {
 };
 
 function createBaseStatusUpdate(): StatusUpdate {
-  return { playerId: 0n, invisible: false, detect: false, fury: false, warcry: false, slow: false, blessed: false };
+  return {
+    playerId: 0n,
+    invisible: false,
+    detect: false,
+    fury: false,
+    warcry: false,
+    slow: false,
+    blessed: false,
+    poisoned: false,
+  };
 }
 
 export const StatusUpdate: MessageFns<StatusUpdate> = {
@@ -10292,6 +10302,9 @@ export const StatusUpdate: MessageFns<StatusUpdate> = {
     }
     if (message.blessed !== false) {
       writer.uint32(56).bool(message.blessed);
+    }
+    if (message.poisoned !== false) {
+      writer.uint32(64).bool(message.poisoned);
     }
     return writer;
   },
@@ -10365,6 +10378,14 @@ export const StatusUpdate: MessageFns<StatusUpdate> = {
             message.blessed = reader.bool();
             continue;
           }
+          case 8: {
+            if (tag !== 64) {
+              break;
+            }
+
+            message.poisoned = reader.bool();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -10389,6 +10410,7 @@ export const StatusUpdate: MessageFns<StatusUpdate> = {
     message.warcry = object.warcry ?? false;
     message.slow = object.slow ?? false;
     message.blessed = object.blessed ?? false;
+    message.poisoned = object.poisoned ?? false;
     return message;
   },
 };

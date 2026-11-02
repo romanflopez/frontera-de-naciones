@@ -28,6 +28,8 @@ export interface MobHost {
     heal(p: Player, n: number): void;
     /** Devuelve maná (Castigo del healer, si pega). Opcional (tests). */
     refundMp?(p: Player, n: number): void;
+    /** Envenena al jugador (mob tóxico): −30 % de curación mientras dura. Opcional (tests). */
+    poison?(p: Player, secs: number): void;
     reward(killer: Player, info: { mobId: number; type: MobType; def: MobDef; zoneName: string; origin: 'loose' | 'pit' | 'dungeon'; x: number; y: number; shard?: 'cripta' | 'foso'; /** rasgos del mob (mobTraits.ts): multiplican la exp y el botín */ traits: number }): void;
     /** Murió un mob con dueño del golpe final: el mundo tira el botín de suelo (systems/loot.ts). Opcional (tests). */
     mobDied?(info: { type: MobType; def: MobDef; x: number; y: number; gm: boolean }): void;
@@ -362,6 +364,7 @@ export class MobSim {
     private toxic(m: SimMob, p: Player, dmg: number) {
         if (!(m.traits & TRAIT_TOXIC)) return;
         const tick = Math.max(1, Math.round(dmg * TOXIC_FRACTION)), tid = p.playerId;
+        this.host.poison?.(p, TOXIC_TICKS + 1);
         for (let i = 1; i <= TOXIC_TICKS; i++) this.host.after(i * 1000, () => { const q = this.host.playerById(tid); if (this.eligible(q)) { q.send(M.mobHitPlayer(m.id, tick, 0)); this.host.hurt(q, tick, m.def.name, M.mid(m.id)); } });
     }
 

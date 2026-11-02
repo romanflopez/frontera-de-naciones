@@ -7,16 +7,16 @@
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
 import { PARTY_SHARE_RANGE, partyExpMult, partyMates } from './party.ts';
-import { AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionLockMs, potionMp, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, POTION_LOCK_PVP_MS, PVP_COMBAT_MS, pvpCap, pvpScale, pvpVsCtrl, RECALL_PVP_LOCK_MS, INVIS_CD_MS, DETECT_CD_MS, SECOND_WIND, secondWindHeal, progressFromEcon, PVP_SPELLS, BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, HEAL_THREAT, HEALER_SKILLS, STUN_SPELLS, healAmount, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
+import { AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionLockMs, potionMp, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, POTION_LOCK_PVP_MS, PVP_COMBAT_MS, pvpCap, pvpScale, pvpVsCtrl, RECALL_PVP_LOCK_MS, INVIS_CD_MS, DETECT_CD_MS, SECOND_WIND, secondWindHeal, progressFromEcon, PVP_SPELLS, BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, POISON_HEAL_TAKEN, HEAL_THREAT, HEALER_SKILLS, STUN_SPELLS, healAmount, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
 import { HUBS, QUESTS, RECALL, TRAINING, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef, checkSkill, skillDeniedText } from '@fdn/world';
-import { applyParalysis, applySlow, applyBless, applyWarcry, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, hasWarcry, isBlessed, isSlowed, updateStatus } from './systems/statusSystem.ts';
+import { applyParalysis, applySlow, applyBless, applyPoison, applyWarcry, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, hasWarcry, isBlessed, isPoisoned, isSlowed, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import type { GameWorldConfig, Settings } from './config.ts';
 import { adjacentCellsAt45, distance, findNearestFreeLocation, nextGridDirection } from './location.ts';
 import type { Occupancy } from './map.ts';
 import * as M from './messages.ts';
 import { MobSim } from './mobs.ts';
-import { MOB_TYPES, meleeIntervalSecs, type MobType, type WorldMap } from '@fdn/world';
+import { MOB_TYPES, POISON_SECS, meleeIntervalSecs, type MobType, type WorldMap } from '@fdn/world';
 import { Player, type PersistedPlayer, type Send } from './player.ts';
 import type { Economy, EconCtx } from './economy.ts';
 import { auctionHouse } from './auction.ts';
@@ -84,6 +84,7 @@ export class GameWorld {
                 pay: (p, c) => this.payMp(p, c),
                 heal: (p, n) => this.healPlayer(p, n), // robo de vida, Juicio y Castigo
                 refundMp: (p, n) => this.refundMp(p, n), // Castigo
+                poison: (p, secs) => this.poisonPlayer(p, secs), // mobs tóxicos
                 mobDied: (info) => { if (!info.gm) this.dropLoot(info.type, info.def.name, info.def.lvl, info.x, info.y); },
                 reward: (p, info) => {
                     if (!this.econ) return;
@@ -242,7 +243,7 @@ export class GameWorld {
     /** Estado visible de `p` (invisible, detectar, furia, grito de guerra, ralentizado) para `p` y los cercanos. */
     private statusMsg(p: Player): ServerMessage {
         const now = Date.now();
-        return M.statusUpdate(p.playerId, p.status.isInvisible, p.status.hasDetectInvisible, p.pvp.fury(now), hasWarcry(p.status, now), isSlowed(p.status, now), isBlessed(p.status, now));
+        return M.statusUpdate(p.playerId, p.status.isInvisible, p.status.hasDetectInvisible, p.pvp.fury(now), hasWarcry(p.status, now), isSlowed(p.status, now), isBlessed(p.status, now), isPoisoned(p.status, now));
     }
     private announceStatus(p: Player): void { const m = this.statusMsg(p); p.send(m); this.broadcastNear(p, m); }
 
@@ -528,6 +529,7 @@ export class GameWorld {
                             if (sp.burn) this.burnPlayer(tgt, p);
                             if (sp.lifesteal) this.healPlayer(p, Math.round(dmg * sp.lifesteal));
                             if (sp.refund) this.refundMp(p, sp.refund);
+                            if (spellDmgKind(spell) === 'phys' && p.combat.poison > 0 && Math.random() * 100 < p.combat.poison) this.poisonPlayer(tgt, POISON_SECS); // chance de veneno del equipo, como contra los mobs
                         }
                         if (dmg > 0 || secs > 0) p.send(M.pvpHit(p.playerId, { fx: '', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs, r: 0 })); // para que el que pega vea el número
                     } else if (v.targetId) break; // daño sin hechizo conocido: se descarta
@@ -1154,7 +1156,9 @@ export class GameWorld {
      */
     private healPlayer(p: Player, n: number, by?: Player, spell = ''): number {
         if (p.isDead || n <= 0) return 0;
-        if (isBlessed(p.status, Date.now())) n = Math.round(n * BLESS_HEAL_TAKEN);
+        const now = Date.now();
+        if (isBlessed(p.status, now)) n = Math.round(n * BLESS_HEAL_TAKEN);
+        if (isPoisoned(p.status, now)) n = Math.round(n * POISON_HEAL_TAKEN); // veneno: −30 %
         const got = Math.min(p.combat.maxHp, p.hp + n) - p.hp; if (got <= 0) return 0;
         p.hp += got; this.sendVitals(p, false); this.announceVitals(p); this.combatText(p, got, true, M.pid((by ?? p).playerId), spell);
         if (by) this.mobSim?.healThreat(by, p, Math.round(got * HEAL_THREAT));
@@ -1409,8 +1413,14 @@ export class GameWorld {
         p.mp = Math.min(p.combat.maxMp, p.mp + h.mp);
         this.healPlayer(p, h.hp); this.sendVitals(p, false);
     }
-    /** Veneno sobre jugadores (−30 % de curación): todavía no existe; llega con el healer (K5). */
-    private isPoisoned(_p: Player): boolean { return false; }
+    /** Veneno sobre jugadores (K5): −30 % de curación recibida (curas, robo de vida y Segundo aliento). */
+    private isPoisoned(p: Player): boolean { return isPoisoned(p.status, Date.now()); }
+    /** Envenena a un jugador `secs` segundos y avisa si recién empieza. */
+    private poisonPlayer(p: Player, secs: number): void {
+        if (p.isDead || secs <= 0) return;
+        applyPoison(p.status, Date.now(), secs * 1000);
+        if (p.status.dirty) { p.status.dirty = false; this.announceStatus(p); }
+    }
 
 
     // ---------- maná (lo lleva el server) ----------

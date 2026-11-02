@@ -651,7 +651,7 @@ message DetectInvisibleRequest {}
 message LootAttr { string key = 1; int32 value = 2; }
 /** Botín tirado por el server para quien dio el golpe final. */
 message LootRoll { int32 mob_id = 1; int32 rarity = 2; int32 base_seed = 3; repeated LootAttr attrs = 4; }
-message StatusUpdate { int64 player_id = 1; bool invisible = 2; bool detect = 3; bool fury = 4; bool warcry = 5; bool slow = 6; bool blessed = 7; }
+message StatusUpdate { int64 player_id = 1; bool invisible = 2; bool detect = 3; bool fury = 4; bool warcry = 5; bool slow = 6; bool blessed = 7; bool poisoned = 8; }
 /** Mago: Blink a la celda (x, y) (máx. 4 celdas). El server valida y responde con PlayerTeleported + SkillEffect. */
 message BlinkRequest { int32 x = 1; int32 y = 2; }
 /** Habilidades de clase: carga, giro, grito, nova, mandato, aura y las del healer (curacion, renovar, bendicion, novasagrada, orbe).

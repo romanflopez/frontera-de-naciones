@@ -103,6 +103,8 @@ export const SKILLS: Record<string, ClassSkill> = {
 export const HEALER_SKILLS = ['curacion', 'renovar', 'bendicion', 'novasagrada', 'orbe'] as const;
 /** Bendición sagrada: daño recibido ×0,8 y curación recibida ×1,3 mientras dura; inmune a congelado y aturdido. */
 export const BLESS_DMG_TAKEN = 0.8, BLESS_HEAL_TAKEN = 1.3;
+/** Veneno sobre un jugador: la curación que recibe ×0,7 (Valdrys: −30 %). Es la herramienta contra los healers en PvP. */
+export const POISON_HEAL_TAKEN = 0.7;
 /** Amenaza que genera curar: fracción de lo curado, sobre los monstruos que están peleando con el curado. */
 export const HEAL_THREAT = 0.5;
 /** Poder de curación: el Daño base mágico sin la tirada (nivel × 2 + Magia), con el multiplicador de Magia. */
