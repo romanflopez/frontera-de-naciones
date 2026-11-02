@@ -638,7 +638,6 @@ function usePotion(k: 'hp' | 'mp') {
     const epoch = ++potEpoch, local = !connected; // conectado: la vida y el maná los cura el server (llegan en Vitals); sin server curo yo
     if (connected) net.send({ $case: 'potionRequest', value: { kind: k === 'hp' ? 0 : 1 } });
     if (k === 'hp') {
-        sfx('heal', 0.6); // mismo sonido que los hechizos de cura
         const total = Math.max(50, Math.round(maxHp() * 0.4)), first = Math.round(total * 0.2), rest = total - first, tick = Math.floor(rest / POT_HOT_TICKS);
         const heal = (n: number) => { if (local) P.hp = Math.min(maxHp(), P.hp + n); };
         heal(first); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#e0524a' });
