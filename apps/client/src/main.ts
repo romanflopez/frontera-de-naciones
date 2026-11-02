@@ -435,7 +435,7 @@ function onSkillEffect(v: { casterId: bigint; skill: string; fromX: number; from
         case 'nova': efxLocal('spread', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 3, c: '#bfe8ff' }); break;
         case 'aliento': fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#7fe0a0' }); efxLocal('sphere', tx, ty); break;
         case 'mandato': fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ff7a5a' }); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 6, c: '#ff7a5a' }); break;
-        case 'aura': efxLocal('sphere', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffe9a0' }); break;
+        case 'aura': efxLocal('bendicion', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffe9a0' }); break;
         case 'curacion': case 'renovar': efxLocal('sphere', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#8af0a8' }); break;
         case 'orbe': efxLocal('sphere', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 4, c: '#a8ffd0' }); break;
         case 'bendicion': efxLocal('spread', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffe9a0' }); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#fff6d0' }); break;
@@ -614,7 +614,7 @@ const LIB: Record<string, SpellDef> = {
     nova: { name: 'Nova de escarcha', mp: 60, cd: 8, col: '#bfe8ff', range: 0, target: false, aoe: 3, instant: true, // Ice Blast (Valdrys): congela 2 s alrededor
         cast() { skillSend('nova'); } },
     juicio: { name: 'Juicio', mp: 15, cd: 1.5, col: '#ffe27a', range: 4, castT: 1, target: true, // Smite (Valdrys): se cura la mitad del daño
-        cast(m) { if (!isMob(m)) return false; efx('crosswind', m.x, m.y, 8); damageMob(m, 'juicio'); } },
+        cast(m) { if (!isMob(m)) return false; efx('tajo', m.x, m.y, 8); damageMob(m, 'juicio'); } },
     escudo: { name: 'Escudo vengador', mp: 36, cd: 9, col: '#ffd24a', range: 10, target: true, ctrl: true, instant: true, // Avenger's Shield (Valdrys): aturde 3 s
         cast(m) { return control(m, 'escudo', 3, 'Aturdiste', 'El aturdimiento', 'turbulence'); } },
     mandato: { name: 'Mandato', mp: 42, cd: 6, col: '#ff7a5a', range: 0, target: false, instant: true, // Righteous Mandate (Valdrys): provoca 7 s
@@ -662,8 +662,8 @@ const LIB: Record<string, SpellDef> = {
         cast() { skillSend('novasagrada'); } },
     orbe: { name: 'Orbe sagrado', mp: 56, cd: 10, col: '#a8ffd0', range: 12, castT: 1.5, target: false, // Holy Orb (Valdrys): 20 % al objetivo y a los de al lado
         cast() { return healCast('orbe', 12); } },
-    furia: { name: 'Furia', mp: 15, cd: 90, col: '#ff3b2f', range: 0, target: false,
-        cast() { sfx('berserk', 0.7); efxLocal('flamme', P.x, P.y); pvpSend('flamme', P.x, P.y, 0n, 'furia'); P.fury = now() + 60; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log(`Furia: +${selectedClass === 'mago' ? 35 : selectedClass === 'healer' ? 20 : 15}% de daño por 60 s.`, true); } },
+    furia: { name: 'Furia', mp: 15, cd: 90, col: '#ffd23f', range: 0, target: false,
+        cast() { sfx('berserk', 0.7); efxLocal('pilar', P.x, P.y); pvpSend('pilar', P.x, P.y, 0n, 'furia'); P.fury = now() + 60; float(P.x, P.y - 0.4, '¡FURIA!', '#ffd23f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd23f' }); log(`Furia: +${selectedClass === 'mago' ? 35 : selectedClass === 'healer' ? 20 : 15}% de daño por 60 s.`, true); } },
 };
 let SPELLS: Spell[] = [];
 const SPECIAL_KEY: Record<string, string | undefined> = { remover: 'r', invisibilidad: 'f', detectar: 'g', blink: 'b', carga: 'z', giro: 'x', grito: 'v', aliento: 'y' };
@@ -891,8 +891,10 @@ const SPR: Record<string, SpriteMeta> = {};
 let WORLD: Record<string, number[]> = {};
 const IMG: Record<string, CanvasImageSource> = {};
 // Efectos TOMAS (Miradin, CC-BY-SA) horneados a cuadros; se dibujan en aditivo. Si no cargan, el juego sigue con los efectos simples.
-let FXM: { cell: number; frames: number; rows: Record<string, { row: number; fps: number; scale: number }> } | null = null;
-const efxLocal = (n: string, x: number, y: number, dy = 0) => { if (FXM?.rows[n]) fx.push({ k: 'efx', n, x, y, t: 0, dy }); };
+let FXM: { cell: number; frames: number; rows: Record<string, { row: number; fps: number; scale: number; img?: string }> } | null = null;
+/** Efectos del atlas privado (fx_priv, fuera de git por licencia) y con qué se reemplazan si no está. */
+const FX_FALLBACK: Record<string, string> = { pilar: 'flamme', tajo: 'crosswind', bendicion: 'sphere' };
+const efxLocal = (n: string, x: number, y: number, dy = 0) => { const k = FXM?.rows[n] ? n : FX_FALLBACK[n]; if (k && FXM?.rows[k]) fx.push({ k: 'efx', n: k, x, y, t: 0, dy }); };
 /** Efecto de mis hechizos: lo veo yo y los jugadores cercanos. */
 const efx = (n: string, x: number, y: number, dy = 0) => { efxLocal(n, x, y, dy); if (connected) pvpSend(n, x, y); };
 // ---------- PvP: bandos enemigos (y todos contra todos en la arena) ----------
@@ -916,7 +918,7 @@ function pvpCast(id: string | undefined, o: Other): boolean {
         case 'aturdir': pvpDamage(o, 'aturdir', 'turbulence', 3); return true;
         case 'esquirla': later(dist(P, o) / 12, () => { if (isEnemy(o)) pvpDamage(o, 'esquirla', 'blizz'); }); return true;
         case 'ignicion': pvpDamage(o, 'ignicion', 'flamme'); return true;
-        case 'juicio': pvpDamage(o, 'juicio', 'crosswind'); return true;
+        case 'juicio': pvpDamage(o, 'juicio', 'tajo'); return true;
         case 'escudo': pvpDamage(o, 'escudo', 'turbulence', 3); return true;
         case 'bola': later(dist(P, o) / 9, () => { if (isEnemy(o)) pvpDamage(o, 'bola', 'eruption'); }); return true;
         case 'golpe': pvpDamage(o, 'golpe', 'crosswind'); return true;
@@ -1536,11 +1538,11 @@ function render() {
     for (const d of drops) objs.push({ d: d.x + d.y - 0.2, f: () => drawDrop(d, T) });
     for (const c of corpses) objs.push({ d: c.x + c.y - 0.3, f: () => { const p = iso(c.x, c.y), age = T - c.t; drawSprite(c.sprite, 'die', age, c.dir, p.x, p.y, null, age > 2 ? 3 - age : 1); } });
     for (const m of mobs) objs.push({ d: m.x + m.y, f: () => drawMob(m, T) });
-    for (const o of others.values()) objs.push({ d: o.x + o.y, f: () => { const p = iso(o.x, o.y), [a, t] = animFor(o, T); if (unseen(o)) return; if (o === P.ally) { ctx.save(); ctx.globalAlpha = 0.6 + 0.2 * Math.sin(T * 4); ctx.strokeStyle = '#8af0a8'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 20, 10, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); } drawSprite(otherSprite(o), a, t, o.dir, p.x, p.y, o.inv ? 'rgba(150,200,255,.25)' : null, o.inv ? 0.35 + 0.1 * Math.sin(T * 5) : o.gone ? 0.45 : 1); if (o.fury) { ctx.save(); ctx.globalAlpha = 0.35 + 0.15 * Math.sin(T * 8); ctx.strokeStyle = '#ff5a2a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 22, 11, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); } } });
+    for (const o of others.values()) objs.push({ d: o.x + o.y, f: () => { const p = iso(o.x, o.y), [a, t] = animFor(o, T); if (unseen(o)) return; if (o === P.ally) { ctx.save(); ctx.globalAlpha = 0.6 + 0.2 * Math.sin(T * 4); ctx.strokeStyle = '#8af0a8'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 20, 10, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); } drawSprite(otherSprite(o), a, t, o.dir, p.x, p.y, o.inv ? 'rgba(150,200,255,.25)' : null, o.inv ? 0.35 + 0.1 * Math.sin(T * 5) : o.gone ? 0.45 : 1); if (o.fury) { ctx.save(); ctx.globalAlpha = 0.35 + 0.15 * Math.sin(T * 8); ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 22, 11, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); } } });
     objs.push({ d: P.x + P.y, f: () => { const p = iso(P.x, P.y); if (P.frozenUntil > T && !P.dead) { ctx.strokeStyle = 'rgba(190,235,255,.85)'; ctx.lineWidth = 1.5; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(p.x, p.y - 8 - i * 14, 16, 6, 0, 0, Math.PI * 2); ctx.stroke(); } } if (P.dead) drawSprite(heroKey(), 'die', T - P.deadT, P.dir, p.x, p.y); else {
             const [a, t] = animFor(P, T), bz = P.fury > T;
             if (P.med) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const k = 0.5 + 0.5 * Math.sin(T * 3); ctx.strokeStyle = `rgba(110,170,255,${0.35 + k * 0.4})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 16 + k * 14, (16 + k * 14) / 2, 0, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.ellipse(p.x, p.y - 20 - k * 22, 5, 2.5, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
-            drawSprite(heroKey(), a, t, P.dir, p.x, p.y, P.flash > 0 ? 'rgba(255,70,50,.35)' : P.inv ? 'rgba(150,200,255,.25)' : bz ? `rgba(255,${90 + (0.5 + 0.5 * Math.sin(T * 9)) * 70 | 0},20,.32)` : null, P.inv ? 0.4 + 0.1 * Math.sin(T * 5) : 1);
+            drawSprite(heroKey(), a, t, P.dir, p.x, p.y, P.flash > 0 ? 'rgba(255,70,50,.35)' : P.inv ? 'rgba(150,200,255,.25)' : bz ? `rgba(255,${190 + (0.5 + 0.5 * Math.sin(T * 9)) * 50 | 0},60,.32)` : null, P.inv ? 0.4 + 0.1 * Math.sin(T * 5) : 1);
         } } });
     objs.sort((a, b) => a.d - b.d).forEach((o) => o.f());
     // nombres arriba de todo
@@ -1590,8 +1592,9 @@ function render() {
     }
     for (const f of fx) if (f.k === 'burst') { const p = iso(f.x, f.y), k = f.t / 0.6; if (k > 0.5) continue; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1 - k * 2; ctx.fillStyle = f.c!; ctx.beginPath(); ctx.arc(p.x, p.y - 34, 10 + k * 30, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
     if (FXM && IMG.fx) for (const f of fx) if (f.k === 'efx') {
-        const r = FXM.rows[f.n!], c = FXM.cell, i = Math.min(FXM.frames - 1, Math.floor(f.t * r.fps)), p = iso(f.x, f.y), w = c * r.scale;
-        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(IMG.fx, i * c, r.row * c, c, c, p.x - w / 2, p.y - w * 0.62 - (f.dy ?? 0), w, w); ctx.restore();
+        const r = FXM.rows[f.n!], c = FXM.cell, i = Math.min(FXM.frames - 1, Math.floor(f.t * r.fps)), p = iso(f.x, f.y), w = c * r.scale, im = IMG[r.img ?? 'fx'];
+        if (!im) continue;
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(im, i * c, r.row * c, c, c, p.x - w / 2, p.y - w * 0.62 - (f.dy ?? 0), w, w); ctx.restore();
     }
     for (const f of fx) if (f.k === 'blizz') {
         // Ventisca procedural: escarcha en el piso y astillas de hielo que caen sin parar sobre el área
@@ -1689,7 +1692,7 @@ function setClass(id: string) {
 }
 /** Cuadraditos de estado con cuenta regresiva (Furia, invisible, detectar, parálisis, inmunidad), como en HB. */
 const BUFFS: { k: string; n: string; c: string; end: () => number; on: () => boolean }[] = [
-    { k: 'F', n: 'Furia', c: '#ff5a2a', end: () => P.fury, on: () => P.fury > now() },
+    { k: 'F', n: 'Furia', c: '#ffc83a', end: () => P.fury, on: () => P.fury > now() },
     { k: 'G', n: 'Grito de guerra (+15 defensa)', c: '#c78bff', end: () => P.wcEnd, on: () => P.wcEnd > now() },
     { k: 'B', n: 'Bendición sagrada (−20 % daño, +30 % curación, inmune a control)', c: '#ffe9a0', end: () => P.blessEnd, on: () => P.blessEnd > now() },
     { k: 'V', n: 'Envenenado (−30 % de curación)', c: '#7fd05a', end: () => P.poisonEnd, on: () => P.poisonEnd > now() },
@@ -2567,6 +2570,8 @@ async function boot() {
     } catch { $('loading').textContent = 'No se pudieron cargar los gráficos. Recargá la página.'; return; }
     $('loading').hidden = true;
     try { FXM = await (await fetch('assets/fx.json')).json(); IMG.fx = await load('assets/fx.webp'); } catch { FXM = null; }
+    // Atlas privado (opcional, mismo tamaño de celda): si no está, efxLocal usa FX_FALLBACK
+    if (FXM) try { const pm = await (await fetch('assets/fx_priv.json')).json() as NonNullable<typeof FXM>; IMG.fxp = await load('assets/fx_priv.webp'); for (const [n, r] of Object.entries(pm.rows)) FXM.rows[n] = { ...r, img: 'fxp' }; } catch { /* sin atlas privado */ }
     loadBuildingImages();
     refreshLook(); void initKnight();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, toScreen, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
