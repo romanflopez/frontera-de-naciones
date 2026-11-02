@@ -369,8 +369,10 @@ function onServer(m: ServerPayload) {
 /** Pide el golpe al server: él valida alcance y tope de daño, lo aplica y avisa a todos (`mobDamaged`). */
 /** Los mobs ordenados del más cercano al más lejano al centro de un área: el server pega a los primeros (tope de objetivos). */
 const byDistance = (list: Mob[], x: number, y: number): Mob[] => list.slice().sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y));
+let lastMeleeReq = -9; // cuándo pedí mi último golpe básico: el sonido de la espada suena cuando el server lo confirma
 function damageMob(m: Mob, spell: string, parSecs = 0) {
     if (!mobs.includes(m) || P.dead) return;
+    if (spell === 'ataque') lastMeleeReq = now();
     // Desde el paso 1.3 el server calcula todo (daño, crítico, veneno, robo de vida, recarga y maná): acá solo se pide el golpe.
     net.send({ $case: 'mobHitRequest', value: { mobId: m.id, dmg: 0, melee: spell === 'ataque', crit: false, parSecs, poisonSecs: 0, spell } });
 }
@@ -379,6 +381,7 @@ function onMobDamaged(v: { mobId: number; attackerId: bigint; dmg: number; crit:
     const m = mobMap.get(v.mobId); if (!m) return;
     const mine = v.attackerId === myId, poisonTick = v.dmg === 3 && !v.crit && m.poison > now();
     m.hp = v.hp; m.flash = 0.12;
+    if (mine && !poisonTick && CLS.id === 'guerrero' && now() - lastMeleeReq < 0.6) sfx('sword-hit', 0.5);
     if (!poisonTick && !(m.one && (m.one.anim === 'swing' || m.one.anim === 'special') && now() < m.one.until) && !(m.boss && R() < 0.6)) oneShot(m, 'hit', 0.2);
     float(m.x, m.y, poisonTick ? '3' : (v.crit ? '¡' : '') + v.dmg + (v.crit ? '!' : ''), poisonTick ? '#8fd14f' : v.crit ? '#ffd24a' : '#fff', v.crit);
     if (mine) { hitstop = Math.max(hitstop, v.crit ? 0.09 : 0.045); if (v.crit && !reduce) shake = 0.25; }
