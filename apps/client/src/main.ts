@@ -461,7 +461,7 @@ function onMobSpecial(v: { mobId: number; phase: number; x: number; y: number })
 function onMobHitPlayer(v: { mobId: number; dmg: number; stun: number }) {
     if (P.dead) return;
     const m = mobMap.get(v.mobId);
-    if (v.dmg > 0) hurtPlayer(v.dmg);
+    if (v.dmg > 0) { hurtPlayer(v.dmg); sfx('hurt', 0.7); } // quejido cuando un mob me pega
     if (v.stun > 0 && !P.dead) {
         P.frozenUntil = now() + v.stun; P.path = []; P.engage = false; cancelCast();
         const sp = m?.boss?.special; log(`${m ? m.name : 'Un enemigo'}${sp ? ': ' + sp.name : ''}. Quedaste inmovilizado ${v.stun} s.`, true);

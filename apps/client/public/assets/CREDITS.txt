@@ -67,3 +67,4 @@ Mapas abiertos Nv7-11 (Paso de Stormrock, Cenizas I-III): mapas "stormrock_pass"
   - sfx/goblin-hit.ogg: "hit_goblin" por hydrasound, Freesound #736274 (https://freesound.org/s/736274/), convertido de MP3 a OGG. Licencia: PENDIENTE DE CONFIRMAR en la página de Freesound.
   - sfx/sword-attack.ogg: "sword attack" por mateusz_chenc, Freesound #547600 (https://freesound.org/s/547600/), convertido de WAV a OGG. Licencia: PENDIENTE DE CONFIRMAR en la página de Freesound.
   - sfx/sword-crit.ogg: "hit impact sword 3" por cogfirestudios, Freesound #547042 (https://freesound.org/s/547042/), convertido de WAV a OGG. Licencia: PENDIENTE DE CONFIRMAR en la página de Freesound.
+  - sfx/hurt.ogg: recorte del quejido (0,10 s a 0,70 s, filtrado) de "melee weapon hit with male moan body fall" por paul368, Freesound #264062 (https://freesound.org/s/264062/), convertido de WAV a OGG. Licencia: PENDIENTE DE CONFIRMAR en la página de Freesound.
