@@ -84,7 +84,7 @@ export class GameWorld {
                     // party: cada compañero cerca (mismo mundo, vivo) recibe su propio botín y una parte de la exp (docs/PARTY_Y_ARENAS.md §1)
                     const near = partyMates(p.sessionId).map((sid) => this.players.get(sid)).filter((m): m is Player => !!m && (m === p || (m.hp > 0 && Math.hypot(m.posX - p.posX, m.posY - p.posY) <= PARTY_SHARE_RANGE)));
                     const mult = partyExpMult(near.length);
-                    for (const m of near.length ? near : [p]) this.econ.reward(m, this.econCtx, info, mult);
+                    for (const m of near.length ? near : [p]) this.econ.reward(m, this.econCtx, { ...info, map: this.mapId }, mult);
                 },
             });
         }
@@ -934,7 +934,7 @@ export class GameWorld {
         if (dest.step !== undefined) {
             const t = TRAINING[dest.step];
             if (!p.prog.unlocked.includes(t.id) && !trainingUnlocked(t.step, p.prog.qi, p.prog.lvl)) {
-                p.send(M.sendMessage(`Portal bloqueado (${t.zone}): ${t.after ? `entregá «${t.after}» al Capitán` : 'todavía no'} o llegá al nivel ${t.lvl}.`));
+                p.send(M.sendMessage(`Portal bloqueado (${t.zone}): se abre al llegar al nivel ${t.lvl}.`));
                 return;
             }
         }
@@ -1104,7 +1104,8 @@ export class GameWorld {
         const r = this.floorLoot.pickup(lootId, p.posX, p.posY);
         if (!r.ok) { if (r.reason === 'far') p.send(M.sendMessage('Estás muy lejos para levantarlo.')); return; }
         const e = r.loot;
-        this.econ.addLoot(p, e.itemId, e.amount);
+        const lvl0 = p.econ?.lvl; this.econ.addLoot(p, e.itemId, e.amount);
+        if (p.econ && p.econ.lvl !== lvl0) this.restat(p); // un encargo del día cobrado al levantar puede subir de nivel
         const m = M.itemPickedUp(e.lootId, M.pid(p.playerId), e.itemName, e.amount, p.characterName), to = new Set([p.sessionId, ...viewers, ...this.nearbyPlayers(e.x, e.y).map((o) => o.sessionId), ...partyMates(p.sessionId)]);
         for (const sid of to) this.players.get(sid)?.send(m);
     }
@@ -1151,9 +1152,22 @@ export class GameWorld {
         p.status.isParalyzed = false;
         const k = p.lastDamager && Date.now() - p.lastDamager.t < 15000 ? p.lastDamager : null;
         const note = M.pvpKill(p.playerId, k?.id ?? 0n, p.characterName, k?.name ?? '');
+        this.pvpQuestCredit(p, k?.id);
         for (const o of this.players.values()) if (!o.disconnected) o.send(note);
         this.sendVitals(p, true);
         console.log(`[Mundo:${this.id}] ${p.characterName} murió${k ? ` (${k.name})` : ''}`);
+    }
+    /**
+     * Encargo "Defensa de la frontera": ganó una pelea contra la otra nación en un mapa de facción. No cuenta si la víctima
+     * está más de 5 niveles por debajo (freno al farmeo de novatos). A cada rival se le cuenta una vez por día (dos cuentas
+     * de naciones distintas no pueden pasarse kills para completarlo).
+     */
+    private pvpQuestCredit(victim: Player, killerId?: bigint): void {
+        if (!killerId || this.def?.pvp !== 'faction') return;
+        const killer = this.playersById.get(killerId); if (!killer || killer === victim || !killer.econ || !victim.econ) return;
+        if (this.factionOf(killer) === this.factionOf(victim) || victim.econ.lvl < killer.econ.lvl - 5) return;
+        const lvl0 = killer.econ.lvl; this.econ?.questPvp(killer, victim.accountKey || victim.characterName);
+        if (killer.econ.lvl !== lvl0) this.restat(killer);
     }
     private respawn(p: Player): void {
         if (!p.isDead || Date.now() - p.deadAt < 1800) return;

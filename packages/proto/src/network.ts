@@ -1631,6 +1631,8 @@ export interface InventoryState {
   statMag: number;
   statLuk: number;
   statFree: number;
+  /** Misiones del corte del MVP (cadena, encargos del día y materiales): JSON de QuestBookView (@fdn/world quests.ts). */
+  questBook: string;
 }
 
 /** Respuesta a una acción de economía: ok=false con un motivo (code) y texto para mostrar. */
@@ -20639,6 +20641,7 @@ function createBaseInventoryState(): InventoryState {
     statMag: 0,
     statLuk: 0,
     statFree: 0,
+    questBook: "",
   };
 }
 
@@ -20718,6 +20721,9 @@ export const InventoryState: MessageFns<InventoryState> = {
     }
     if (message.statFree !== 0) {
       writer.uint32(200).int32(message.statFree);
+    }
+    if (message.questBook !== "") {
+      writer.uint32(210).string(message.questBook);
     }
     return writer;
   },
@@ -20935,6 +20941,14 @@ export const InventoryState: MessageFns<InventoryState> = {
             message.statFree = reader.int32();
             continue;
           }
+          case 26: {
+            if (tag !== 210) {
+              break;
+            }
+
+            message.questBook = reader.string();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -20977,6 +20991,7 @@ export const InventoryState: MessageFns<InventoryState> = {
     message.statMag = object.statMag ?? 0;
     message.statLuk = object.statLuk ?? 0;
     message.statFree = object.statFree ?? 0;
+    message.questBook = object.questBook ?? "";
     return message;
   },
 };

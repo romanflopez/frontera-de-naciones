@@ -17,6 +17,7 @@ import { DEFAULT_MAP, RECALL, STAT_CAP, STAT_DESC, STAT_IDS, STAT_NAMES, default
 import { UNIQUE_BY_NAME, UP_MAX, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Quest, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
+import { DAILY_BY_ID, DAILY_LIMIT, MAIN_QUESTS, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, dailyGold, rewardUniques, type QuestBookView, type QuestGoal } from '@fdn/world';
 import { spellIcon } from './icons.ts';
 import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
 import { coinIcon, itemIcon, keyIcon, potionIcon, shardIcon } from './itemicons.ts';
@@ -316,7 +317,7 @@ function onServer(m: ServerPayload) {
         case 'combatTextEvent': onCombatText(m.value); break;
         case 'partyStatsUpdate': updatePartyStats(m.value.name, m.value.hp, m.value.mp); break;
         case 'partyInvited': showPartyInvite(m.value.fromName, Number(m.value.expiresMs)); break;
-        case 'econResult': deposit.onResult(m.value.ok, m.value.text); if (m.value.ok) log(esc(m.value.text)); else { toast(m.value.text); log(esc(m.value.text)); } break;
+        case 'econResult': deposit.onResult(m.value.ok, m.value.text); if (m.value.ok) { log(esc(m.value.text), ['daily_done', 'quest_ready'].includes(m.value.code)); if (['daily_done', 'quest_ready'].includes(m.value.code)) toast(m.value.text); } else { toast(m.value.text); log(esc(m.value.text)); } break;
         case 'killReward': onKillReward(m.value); break;
         case 'statusUpdate': onStatusUpdate(m.value); break;
         case 'skillEffect': onSkillEffect(m.value); break;
@@ -457,11 +458,12 @@ function onLootSpawn(v: { lootId: string; x: number; y: number; itemId: string; 
     drops.push({ x: v.x + 0.5, y: v.y + 0.5, t: 0, loot: { id: v.lootId, itemId: v.itemId, name: v.itemName, amount: v.amount, mock } });
 }
 function onLootPicked(v: { lootId: string; playerId: string; itemName: string; amount: number; playerName: string }) {
-    const i = drops.findIndex((d) => d.loot?.id === v.lootId);
+    const i = drops.findIndex((d) => d.loot?.id === v.lootId), li = i >= 0 ? drops[i].loot?.itemId : undefined;
     if (i >= 0) { if (P.pickup === drops[i]) P.pickup = null; if (hoverDrop === drops[i]) hoverDrop = null; drops.splice(i, 1); }
     if (!v.playerId) return; // venció
     const item = `<span style="color:${LOOT_PURPLE}">[${esc(v.itemName)}]</span>`;
     if (v.playerId === myId.toString()) {
+        if (li && li !== 'gold') MAT_NAMES[li] = v.itemName;
         logToChat('combat', 'System', `¡Has obtenido ${item} x${v.amount}!`, undefined, true); // canal combat: sale en All y en System
     } else if (v.playerName && partyRows.has(v.playerName)) logToChat('party', '', `[${esc(v.playerName)}] obtuvo ${item}`, undefined, true);
 }
@@ -479,8 +481,7 @@ function onKillReward(v: { mobId: number; x: number; y: number; exp: number; gol
     if (v.forge) log(`Encontraste ${v.forge} piedra${v.forge > 1 ? 's' : ''} de forja.`, true);
     if (v.potion === 'hp' || v.potion === 'mp') log(`Encontraste una ${POTS[v.potion].name.toLowerCase()}.`, true);
     if (v.shard === 'cripta' || v.shard === 'foso') { const kd = KEYDEFS[v.shard]; log(`El boss soltó una <b>${kd.shard}</b>. Con ${SHARDS_PER_KEY} esquirlas y ${kd.gold} de oro el Capitán te forja una ${kd.name}.`, true); }
-    if (v.questReady) { const q = QUESTS[Q.i]; log(`Misión lista: volvé con el Capitán${q ? ` (${q.name})` : ''}.`, true); }
-    else if (v.questProg > 0) { const q = QUESTS[Q.i]; if (q) float(P.x, P.y - 0.9, `${v.questProg}/${q.n}`, '#ffd24a'); }
+    // los avisos de misión llegan como econResult (quest_ready); la cadena vieja de 10 quedó jubilada
 }
 /** Habilidad distintiva del boss (el server decide cuándo y a quién pega): fase 0 = aviso y carga, fase 1 = el golpe en área. */
 function onMobSpecial(v: { mobId: number; phase: number; x: number; y: number }) {
@@ -1907,38 +1908,89 @@ const UNLOCKED = new Set<string>();
 const trainOpen = (t: TrainingStep) => UNLOCKED.has(t.id) || trainingUnlocked(t.step, Q.i, P.lvl);
 const portalProgress = () => ({ qi: Q.i, lvl: P.lvl, keys: Q.keys as Record<string, number>, unlocked: [...UNLOCKED] });
 function refreshUnlocks(_announce: boolean) { /* los portales abiertos los decide el server (inventoryState.unlocked) */ }
+/** Seguimiento en el HUD: el Camino del aventurero, los encargos del día y las llaves viejas (la cadena vieja de 10 quedó jubilada). */
 function renderQuest() {
-    const q = QUESTS[Q.i], el = $('quest');
-    el.hidden = (!q || Q.st === 'new') && !hasKeyStuff();
-    if (!q || Q.st === 'new') { el.innerHTML = `<b>Mazmorras</b>${keyLines()}`; return; }
-    el.innerHTML = `<b>${q.name}</b><span>${Q.st === 'ready' ? 'Volvé con el Capitán' : `${q.zone}: ${Q.prog}/${q.n}`}</span>${keyLines()}`;
+    const el = $('quest'), book = bookLines();
+    el.hidden = !hasKeyStuff() && !book;
+    el.innerHTML = `${book}${hasKeyStuff() ? `<b>Mazmorras</b>${keyLines()}` : ''}`;
 }
-function questLevel(q: Quest) { const l = mobDef(q.type, zoneByName(q.zone, q.type)).lvl; return `Nv ${Math.max(1, l - 1)}–${l + 1}`; }
+// ---------- libro de misiones del corte (cadena de 5, encargos del día, repetible): el server decide todo, acá solo se muestra ----------
+let QB: QuestBookView | null = null;
+/** Nombres de los materiales (los del suelo los aprende al levantarlos; los de las llaves vienen de @fdn/world). */
+const MAT_NAMES: Record<string, string> = Object.fromEntries(Object.entries(QUEST_MATS).map(([id, m]) => [id, m.name]));
+const matName = (id: string) => MAT_NAMES[id] ?? id.replace(/^trophy_/, 'trofeo ').replace(/_/g, ' ');
+const goalLine = (g: QuestGoal, n: number) => `${g.what}: ${Math.min(n, g.n)}/${g.n}`;
+const fmtReset = (ms: number) => { const h = Math.floor(ms / 3_600_000), m = Math.floor((ms % 3_600_000) / 60_000); return h ? `${h} h ${m} min` : `${m} min`; };
+function bookLines(): string {
+    if (!QB) return '';
+    const q = MAIN_QUESTS[QB.m.i]; let out = '';
+    if (q && QB.m.st !== 'new') out += `<b>${q.name}</b>` + (QB.m.st === 'ready' ? '<span>Volvé con el Capitán</span>' : q.goals.map((g, j) => `<span>${goalLine(g, QB!.m.prog[j] ?? 0)}</span>`).join(''));
+    // encargos del día: avanzan y se cobran solos (sin NPC), hasta DAILY_LIMIT por día
+    const done = QB.d.done.length, full = done >= DAILY_LIMIT, open = full ? [] : QB.d.ids.filter((id) => !QB!.d.done.includes(id));
+    if (QB.d.ids.length) out += `<b>Encargos del día ${done}/${DAILY_LIMIT}</b>` + (full ? `<span>Listo por hoy · se renuevan en ${fmtReset(QB.d.resetMs)}</span>` : open.map((id) => `<span>${goalLine(DAILY_BY_ID.get(id)!.goal, QB!.d.prog[id] ?? 0)}</span>`).join(''));
+    return out;
+}
+const bookSend = (n: Npc, action: string, key = '') => net.send({ $case: 'econQuestRequest', value: { npcId: n.id, action, key } });
+/** Sección del libro en el diálogo del Capitán. */
+function renderBook(n: Npc) {
+    const el = $('qdBook'); el.innerHTML = ''; if (!QB) return;
+    const add = (html: string, btns: [string, () => void, boolean?][] = []) => {
+        const div = document.createElement('div'); div.className = 'qbk'; div.innerHTML = `<div class="qtx">${html}</div>`;
+        for (const [label, fn, off] of btns) { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.disabled = !!off; b.onclick = fn; div.appendChild(b); }
+        el.appendChild(div);
+    };
+    // cadena
+    const q = MAIN_QUESTS[QB.m.i];
+    if (!q) add('<b>Camino del aventurero</b><br><small>Completaste el camino. Seguí con los encargos del día.</small>');
+    else {
+        const rw = q.reward, prize = rw.unique === 'class_t1_random' ? ' · un único de tu clase' : rw.unique ? ' · un único a elección' : '';
+        const rtxt = `<small>Recompensa: ${rw.expPct} % de tu nivel en exp · ${rw.gold} oro${rw.forge ? ` · ${rw.forge} piedras de forja` : ''}${prize}</small>`;
+        const head = `<b>Camino del aventurero ${QB.m.i + 1}/${MAIN_QUESTS.length}: ${q.name}</b>`;
+        if (QB.m.st === 'new') add(`${head}<br>${q.say}<br>${rtxt}${P.lvl < q.minLvl ? `<br><small>Pide nivel ${q.minLvl}.</small>` : ''}`, [['Aceptar', () => bookSend(n, 'm_accept'), P.lvl < q.minLvl]]);
+        else if (QB.m.st === 'active') add(`${head}<br>${q.goals.map((g, j) => goalLine(g, QB!.m.prog[j] ?? 0)).join('<br>')}`);
+        else if (rw.unique?.endsWith('_choice')) add(`${head}<br>${q.done}<br><small>Elegí tu premio:</small>`, rewardUniques(rw.unique, CLS.id).map((u) => [u.name, () => bookSend(n, 'm_turnin', u.name)] as [string, () => void]));
+        else add(`${head}<br>${q.done}<br>${rtxt}`, [['Entregar', () => bookSend(n, 'm_turnin')]]);
+    }
+    // los encargos del día no pasan por el Capitán: se ven en el HUD y se cobran solos
+    const ess = QB.d.ess ? '' : ' El primero del día paga además una Esencia.';
+    add(`<small>Encargos del día: se cobran solos al cumplirlos, hasta ${DAILY_LIMIT} por día (${dailyGold(P.lvl)} oro y 10 % de tu nivel cada uno).${ess}</small>`);
+    // repetible
+    const extra = Object.entries(QB.mats).filter(([id, c]) => c >= REPEAT_MATS && !RESERVED_MATS.has(id));
+    add(`<b>Sobrantes</b><br><small>${REPEAT_MATS} materiales iguales por oro o una piedra de forja.${extra.length ? '' : ' Todavía no juntaste suficientes.'}</small>`);
+    for (const [id, c] of extra) add(`${matName(id)} <small>×${c}</small>`, [['Oro', () => bookSend(n, 'r_turnin', `${id}|gold`)], ['Piedra', () => bookSend(n, 'r_turnin', `${id}|forge`)]]);
+    const keyMats = Object.keys(QUEST_MATS).filter((id) => QB!.mats[id]).map((id) => `${matName(id)}: ${QB!.mats[id]}`);
+    if (keyMats.length) add(`<small>Para las llaves: ${keyMats.join(' · ')}</small>`);
+}
+/** Al abrir la charla con un NPC: si la misión actual pide hablar con ese rol, se avisa al server. */
+function bookTalk(n: Npc) {
+    const q = QB && QB.m.st === 'active' ? MAIN_QUESTS[QB.m.i] : undefined;
+    if (q?.goals.some((g, j) => g.k === 'talk' && g.role === roleOf(n) && (QB!.m.prog[j] ?? 0) < g.n)) bookSend(n, 'talk');
+}
 function openQuestDlg(n: Npc) {
-    const q = QUESTS[Q.i], d = $('qdlg'); shopNpc = n; talkNpc = null;
+    const d = $('qdlg'); shopNpc = n; talkNpc = null;
     $('qdName').textContent = n.name; d.hidden = false;
-    let body = '', btn = '';
-    if (!q) body = 'Ya limpiaste todo lo que te pedí. Más encargos cuando abramos nuevos caminos. Para abrir las escaleras selladas forjá las llaves (abajo).';
-    else if (Q.st === 'new') { body = `<b>${q.name}</b> <small>${q.zone} · ${questLevel(q)}</small><br>${q.say}<br><small>Recompensa: ${q.xp} exp · ${q.gold} oro${q.shard ? ' · ' + KEYDEFS[q.shard].shard : ''}</small>`; btn = 'Aceptar'; }
-    else if (Q.st === 'active') body = `<b>${q.name}</b><br>Todavía te faltan ${q.n - Q.prog} en ${q.zone}.`;
-    else { body = `<b>${q.name}</b><br>Buen trabajo. Tomá tu paga.<br><small>${q.xp} exp · ${q.gold} oro${q.shard ? ' · ' + KEYDEFS[q.shard].shard : ''}</small>`; btn = 'Entregar'; }
-    if (q && Q.st !== 'ready') body += `<br><small>Portal de entrenamiento: «${q.zone}» (Portal de Frontera de la ciudad${trainOpen(TRAINING[Q.i]) ? '' : ', todavía bloqueado'}).</small>`;
-    body += `<br><small>Forja: ${SHARDS_PER_KEY} esquirlas (las sueltan los bosses) + oro = 1 llave.</small>`;
+    // la cadena vieja de 10 quedó jubilada: el Capitán da el Camino del aventurero y los encargos del día (renderBook), y sigue forjando las llaves viejas
+    $('qdBody').innerHTML = `<small>Forja: ${SHARDS_PER_KEY} esquirlas (las sueltan los jefes) + oro = 1 llave.</small>`;
+    $('qdBtn').hidden = true;
     const fg = $('qdForges'); fg.innerHTML = '';
     for (const k of KEY_IDS) {
-        const kd = KEYDEFS[k]; if (k === 'foso' && Q.i < 7 && !Q.shards.foso && !Q.keys.foso) continue;
+        const kd = KEYDEFS[k]; if (!Q.shards[k] && !Q.keys[k]) continue;
         const fb = document.createElement('button'); fb.type = 'button'; fb.textContent = `Forjar ${kd.name} (${Q.shards[k]}/${SHARDS_PER_KEY} esq. · ${kd.gold} oro)`; fb.disabled = Q.shards[k] < SHARDS_PER_KEY || P.gold < kd.gold;
         fb.onclick = () => { if (Q.shards[k] < SHARDS_PER_KEY || P.gold < kd.gold) return; net.send({ $case: 'econQuestRequest', value: { npcId: n.id, action: 'forge', key: k } }); };
         fg.appendChild(fb);
     }
-    $('qdBody').innerHTML = body; const b = $('qdBtn'); b.hidden = !btn; b.textContent = btn;
-    b.onclick = () => {
-        if (Q.st === 'new') net.send({ $case: 'econQuestRequest', value: { npcId: n.id, action: 'accept', key: '' } });
-        else if (Q.st === 'ready') net.send({ $case: 'econQuestRequest', value: { npcId: n.id, action: 'turnin', key: '' } });
-    };
+    $('qdBody').hidden = !KEY_IDS.some((k) => Q.shards[k] || Q.keys[k]);
+    renderBook(n);
 }
+/** Rango de nivel de una zona de entrenamiento (sale de la tabla vieja de misiones, que se sigue usando solo como dato de zonas). */
+function questLevel(q: Quest) { const l = mobDef(q.type, zoneByName(q.zone, q.type)).lvl; return `Nv ${Math.max(1, l - 1)}–${l + 1}`; }
 /** "!" amarillo sobre el Capitán cuando tiene misión para vos; "?" cuando podés entregar. */
-const questMark = () => (!QUESTS[Q.i] ? '' : Q.st === 'new' ? '!' : Q.st === 'ready' ? '?' : '');
+const questMark = () => {
+    const bm = QB ? MAIN_QUESTS[QB.m.i] : undefined;
+    if (bm && QB!.m.st === 'ready') return '?';
+    if (bm && QB!.m.st === 'new' && P.lvl >= bm.minLvl) return '!';
+    return '';
+};
 
 // ---------- vendedores y servicios de las ciudades: cada NPC tiene un rol (ver roleOf) ----------
 // el stock, los precios y los vendedores viven en @fdn/world (economy.ts): el server valida las compras con la misma tabla
@@ -1980,7 +2032,7 @@ const auction = createAuctionUI({ send: (p) => net.send(p), bag: () => P.bag, go
 /** Depósito por cuenta (ventana propia en deposit.ts; el server valida todo, ver docs/DEPOSITO.md). */
 const deposit = createDepositUI({ send: (p) => net.send(p), bag: () => P.bag, gold: () => P.gold, pots: () => pots, keys: () => Q.keys, shards: () => Q.shards, fromInv: itemFromInv, icon: ico, attrText, esc, fmt: fmtNum, requestClose: () => closeShop() });
 function openShop(n: Npc = MAP.npcs[0]) {
-    const role = roleOf(n);
+    const role = roleOf(n); bookTalk(n);
     if (role === 'subastador') { closeShop(); shopNpc = n; talkNpc = null; auction.open(n); return; }
     if (role === 'depositario') { if (shopNpc !== n) closeShop(); shopNpc = n; talkNpc = null; deposit.open(n); return; }
     if (role === 'capitan') { openQuestDlg(n); return; }
@@ -2154,7 +2206,7 @@ function currentTrainStep(): number {
 }
 const LOCK_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4.5 7V5a3.5 3.5 0 017 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="7" width="10" height="7" rx="1.4" fill="currentColor"/></svg>';
 const inHomeCity = () => cityAt(P.cell.x, P.cell.y)?.faction === selectedFaction && factionHome(selectedFaction)?.map === MAP_DEF.id;
-const lockMsg = (t: TrainingStep) => `Portal bloqueado (${t.zone}): ${t.after ? `entregá «${t.after}» al Capitán` : 'todavía no'} o llegá al nivel ${t.lvl}.`;
+const lockMsg = (t: TrainingStep) => `Portal bloqueado (${t.zone}): se abre al llegar al nivel ${t.lvl}.`;
 function renderWp() {
     if (!wpOpen) return;
     const city = selectedFaction === 'solmar' ? { name: 'Villa de Solmar' } : selectedFaction === 'vhar' ? { name: 'Ciudadela de Vhar' } : MAP.cities?.find((c) => c.faction === selectedFaction), inCity = inHomeCity(), cur = inCity ? -1 : currentTrainStep();
@@ -2163,7 +2215,7 @@ function renderWp() {
     const rows = [`<button type="button" class="wprow home${inCity ? ' cur' : ''}" data-wp="city"${inCity ? ' disabled' : ''}><i class="wpn">&#8962;</i><span class="wpt"><b>${inCity ? 'Estás en ' : 'Volver a '}${esc(city?.name ?? 'la ciudad')}</b><small>${inCity ? 'Zona segura' : 'Zona segura · tu facción'}</small></span>${inCity ? '<em class="wptag">Estás aquí</em>' : ''}</button>`];
     for (const t of TRAINING) {
         const open = trainOpen(t), here = t.step === cur, qq = QUESTS[t.step], lv = qq ? questLevel(qq) : '';
-        const sub = open ? `<small>Nivel recomendado ${lv.replace('Nv ', '')}</small>` : `<small class="req">${LOCK_SVG} Misión «${esc(t.after ?? '')}» o nivel ${t.lvl}</small>`;
+        const sub = open ? `<small>Nivel recomendado ${lv.replace('Nv ', '')}</small>` : `<small class="req">${LOCK_SVG} Nivel ${t.lvl}</small>`;
         rows.push(`<button type="button" class="wprow${open ? '' : ' locked'}${here ? ' cur' : ''}" data-wp="${t.id}" style="--zc:${t.col}"><i class="wpn">${t.step + 1}</i><span class="wpt"><b>${esc(t.zone)}</b>${sub}</span>${here ? '<em class="wptag">Estás aquí</em>' : `<em class="wplv">${lv}</em>`}</button>`);
     }
     $('wpList').innerHTML = rows.join('');
@@ -2344,6 +2396,7 @@ function applyInventory(v: InventoryState) {
     stats = { str: v.statStr || 10, vit: v.statVit || 10, dex: v.statDex || 10, mag: v.statMag || 10, luk: v.statLuk || 10 }; statFree = v.statFree;
     Q.i = v.questI; Q.st = v.questState === 'active' || v.questState === 'ready' ? v.questState : 'new'; Q.prog = v.questProg;
     Q.keys.cripta = v.keysCripta; Q.keys.foso = v.keysFoso; Q.shards.cripta = v.shardsCripta; Q.shards.foso = v.shardsFoso;
+    try { QB = v.questBook ? JSON.parse(v.questBook) as QuestBookView : null; } catch { QB = null; }
     for (const id of v.unlocked) if (!UNLOCKED.has(id)) {
         const t = TRAINING.find((x) => x.id === id); if (!t) continue;
         UNLOCKED.add(id);

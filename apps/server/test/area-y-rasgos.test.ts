@@ -221,6 +221,7 @@ test('exp en el server: matar un mutante da el triple, un salvaje +25 % y los ra
     world.bindAccount(session.sessionId, 'acc-x');
     world.onClientSave(session.sessionId, JSON.stringify({ cls: 'guerrero', faction: 'solmar' }));
     const p = world.playerOf(session.sessionId)!, st = p.econ!;
+    eco.snapshot(p); st.qb!.d.done = ['pits', 'recolector', 'frontera']; // tope del día alcanzado: el encargo del mutante no se cobra y no suma exp
     const ctx: EconCtx = { npcs: [], restat: () => {}, ground: { add: () => {} } as never };
     const k = (traits: number): KillInfo => ({ mobId: 1, type: 'goblin', def: mobDef('goblin', { lvl: 1 }), zoneName: 'prueba', origin: 'pit', x: 0, y: 0, traits });
     const gain = (traits: number) => { st.lvl = 1; st.exp = 0; eco.reward(p, ctx, k(traits)); return st.exp; };

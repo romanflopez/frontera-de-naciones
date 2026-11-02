@@ -63,7 +63,7 @@ export interface PortalProgress { qi: number; lvl: number; keys: Record<string, 
 /** Motivo por el que el portal no deja pasar, o null si deja. */
 export function portalGate(p: Portal, g: PortalProgress): string | null {
     const t = p.train;
-    if (t && !g.unlocked.includes(t.id) && !trainingUnlocked(t.step, g.qi, g.lvl)) return `Portal bloqueado (${t.zone}): ${t.after ? `entregá «${t.after}» al Capitán` : 'todavía no'} o llegá al nivel ${t.lvl}.`;
+    if (t && !g.unlocked.includes(t.id) && !trainingUnlocked(t.step, g.qi, g.lvl)) return `Portal bloqueado (${t.zone}): se abre al llegar al nivel ${t.lvl}.`; // la cadena vieja de misiones quedó jubilada: solo cuenta el nivel (los ya abiertos siguen abiertos)
     if (p.key && !(g.keys[p.key] >= 1)) return `La escalera está sellada: necesitás la llave (${p.key}).`;
     return null;
 }

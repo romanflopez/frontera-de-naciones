@@ -1416,6 +1416,8 @@ message InventoryState {
   int32 stat_mag = 23;
   int32 stat_luk = 24;
   int32 stat_free = 25;
+  // Misiones del corte del MVP (cadena, encargos del día y materiales): JSON de QuestBookView (@fdn/world quests.ts).
+  string quest_book = 26;
 }
 /** Respuesta a una acción de economía: ok=false con un motivo (code) y texto para mostrar. */
 message EconResult { bool ok = 1; string code = 2; string text = 3; }
