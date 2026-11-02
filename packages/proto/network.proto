@@ -128,6 +128,8 @@ message ClientMessage {
     StatAllocRequest stat_alloc_request = 700;
     // Chat por canales (apps/server/src/systems/chat.ts). Rango propio de tags desde 800.
     ClientChatMessage client_chat_message = 800;
+    // Botín de materiales / oro en el suelo (apps/server/src/systems/loot.ts). Rango propio de tags desde 900.
+    ClientPickupItem client_pickup_item = 900;
   }
   // P0-A: el cliente ya no fija números de combate (velocidad de movimiento, de ataque, de casteo, alcance, daño, stun).
   // Los calcula el server. Tags retirados: no reutilizar.
@@ -515,7 +517,34 @@ message ServerMessage {
     CombatTextEvent combat_text_event = 700;
     // Chat por canales. Rango propio de tags desde 800.
     ServerChatMessage server_chat_message = 800;
+    // Botín de materiales / oro en el suelo. Rango propio de tags desde 900.
+    LootSpawnEvent loot_spawn_event = 900;
+    ServerItemPickedUp server_item_picked_up = 901;
   }
+}
+
+// Botín que cae al suelo al morir un mob (server-autoritativo). Lo reciben los jugadores en rango de visión.
+message LootSpawnEvent {
+  string loot_id = 1;      // ID único del botín en el suelo
+  int32 x = 2;             // Celda donde cae
+  int32 y = 3;
+  string item_id = 4;      // Ej: "viper_skin" ("gold" = oro)
+  string item_name = 5;    // Ej: "Viper Skin"
+  int32 amount = 6;        // Cantidad
+}
+
+// El cliente pide levantar un botín (a 1,5 celdas o menos).
+message ClientPickupItem {
+  string loot_id = 1;
+}
+
+// Alguien levantó el botín: el cliente lo saca del suelo. player_id vacío = venció (nadie lo levantó).
+message ServerItemPickedUp {
+  string loot_id = 1;
+  string player_id = 2;    // player_id en decimal de quien lo levantó
+  string item_name = 3;
+  int32 amount = 4;
+  string player_name = 5;  // nombre del personaje (para "[Nombre] obtuvo [Item]" en el chat de party)
 }
 
 // Número de combate para el texto flotante. Lo reciben solo los jugadores en rango de visión del objetivo.

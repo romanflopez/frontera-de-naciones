@@ -45,6 +45,8 @@ export interface Econ {
     eq: Record<Slot, SItem | null>;
     /** Piedras de forja (material de mejora). Las cuentas viejas no lo tienen: se toma como 0. */
     forge?: number;
+    /** Materiales apilables levantados del suelo (systems/loot.ts), por id. Las cuentas viejas no lo tienen. */
+    mats?: Record<string, number>;
     pots: { hp: number; mp: number };
     q: { i: number; st: 'new' | 'active' | 'ready'; prog: number; keys: Record<KeyId, number>; shards: Record<KeyId, number> };
     /** Portales de entrenamiento ya abiertos. */
@@ -561,6 +563,16 @@ export class Economy {
     }
 
     /** El server decide el botín del golpe final: exp, item o oro, poción, esquirla y avance de misión. Se llama una sola vez por mob muerto. */
+    /** Suma un botín levantado del suelo (systems/loot.ts): oro o material apilable. */
+    addLoot(p: Player, itemId: string, amount: number): boolean {
+        const st = p.econ; if (!st || !(amount > 0)) return false;
+        const n = Math.floor(amount);
+        if (itemId === 'gold') addGold(st, n);
+        else { const mats = (st.mats ??= {}); mats[itemId] = Math.min(9999, (mats[itemId] ?? 0) + n); }
+        this.touch(p); this.snapshot(p);
+        return true;
+    }
+
     reward(p: Player, ctx: EconCtx, k: KillInfo, expMult = 1): void {
         const st = p.econ; if (!st) return;
         const def = k.def, boss = def.boss;

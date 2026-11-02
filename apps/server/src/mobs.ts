@@ -27,6 +27,8 @@ export interface MobHost {
     /** Cura al jugador en el server (robo de vida) y avisa. */
     heal(p: Player, n: number): void;
     reward(killer: Player, info: { mobId: number; type: MobType; def: MobDef; zoneName: string; origin: 'loose' | 'pit' | 'dungeon'; x: number; y: number; shard?: 'cripta' | 'foso'; /** rasgos del mob (mobTraits.ts): multiplican la exp y el botín */ traits: number }): void;
+    /** Murió un mob con dueño del golpe final: el mundo tira el botín de suelo (systems/loot.ts). Opcional (tests). */
+    mobDied?(info: { type: MobType; def: MobDef; x: number; y: number; gm: boolean }): void;
 }
 
 interface SimMob {
@@ -331,6 +333,7 @@ export class MobSim {
             for (const q of this.host.nearby(m.x, m.y)) if (this.eligible(q) && Math.hypot(m.x - (q.posX + 0.5), m.y - (q.posY + 0.5)) <= EXPLOSION_RADIUS) { q.send(M.mobHitPlayer(m.id, dmg, 0)); this.host.hurt(q, dmg, `${m.def.name} (explosión)`, M.mid(m.id)); }
         }
         this.broadcastNear(m, M.mobDied(m.id, killer ? killer.playerId : 0n, m.x, m.y, m.typeIdx, m.zoneIdx));
+        if (killer) this.host.mobDied?.({ type: m.type, def: m.def, x: m.x, y: m.y, gm: !!m.gm }); // después del mobDied: el cliente ya sacó al mob cuando aparece el botín
         if (!m.gm) this.host.after(zoneRespawnSecs(m.type, m.zone) * 1000, () => this.spawn(m.zone, m.zoneIdx));
     }
 

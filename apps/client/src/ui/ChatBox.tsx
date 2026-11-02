@@ -34,7 +34,9 @@ function Line({ m }: { m: ChatMessage }) {
             <span style={S.ts}>{m.timestamp}</span>
             {sys
                 ? m.sender && m.sender !== 'System' ? <><span style={{ color: m.color ?? '#c9c9c9' }}>{m.sender}: </span>{body}</> : body
-                : <><span style={{ color: NAME_COLOR[m.channel] ?? '#5fd3e6', fontWeight: 600 }}>{m.sender}: </span><span style={{ color: m.color ?? '#fff' }}>{body}</span></>}
+                : m.sender
+                    ? <><span style={{ color: NAME_COLOR[m.channel] ?? '#5fd3e6', fontWeight: 600 }}>{m.sender}: </span><span style={{ color: m.color ?? '#fff' }}>{body}</span></>
+                    : <span style={{ color: m.color ?? NAME_COLOR[m.channel] ?? '#fff' }}>{body}</span>}
         </p>
     );
 }

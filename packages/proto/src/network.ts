@@ -154,6 +154,9 @@ export interface ClientMessage {
     | //
     /** Chat por canales (apps/server/src/systems/chat.ts). Rango propio de tags desde 800. */
     { $case: "clientChatMessage"; value: ClientChatMessage }
+    | //
+    /** Botín de materiales / oro en el suelo (apps/server/src/systems/loot.ts). Rango propio de tags desde 900. */
+    { $case: "clientPickupItem"; value: ClientPickupItem }
     | undefined;
 }
 
@@ -561,7 +564,42 @@ export interface ServerMessage {
     | //
     /** Chat por canales. Rango propio de tags desde 800. */
     { $case: "serverChatMessage"; value: ServerChatMessage }
+    | //
+    /** Botín de materiales / oro en el suelo. Rango propio de tags desde 900. */
+    { $case: "lootSpawnEvent"; value: LootSpawnEvent }
+    | { $case: "serverItemPickedUp"; value: ServerItemPickedUp }
     | undefined;
+}
+
+/** Botín que cae al suelo al morir un mob (server-autoritativo). Lo reciben los jugadores en rango de visión. */
+export interface LootSpawnEvent {
+  /** ID único del botín en el suelo */
+  lootId: string;
+  /** Celda donde cae */
+  x: number;
+  y: number;
+  /** Ej: "viper_skin" ("gold" = oro) */
+  itemId: string;
+  /** Ej: "Viper Skin" */
+  itemName: string;
+  /** Cantidad */
+  amount: number;
+}
+
+/** El cliente pide levantar un botín (a 1,5 celdas o menos). */
+export interface ClientPickupItem {
+  lootId: string;
+}
+
+/** Alguien levantó el botín: el cliente lo saca del suelo. player_id vacío = venció (nadie lo levantó). */
+export interface ServerItemPickedUp {
+  lootId: string;
+  /** player_id en decimal de quien lo levantó */
+  playerId: string;
+  itemName: string;
+  amount: number;
+  /** nombre del personaje (para "[Nombre] obtuvo [Item]" en el chat de party) */
+  playerName: string;
 }
 
 /**
@@ -1981,6 +2019,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "clientChatMessage":
         ClientChatMessage.encode(message.payload.value, writer.uint32(6402).fork()).join();
         break;
+      case "clientPickupItem":
+        ClientPickupItem.encode(message.payload.value, writer.uint32(7202).fork()).join();
+        break;
     }
     return writer;
   },
@@ -2628,6 +2669,14 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "clientChatMessage", value: ClientChatMessage.decode(reader, reader.uint32()) };
             continue;
           }
+          case 900: {
+            if (tag !== 7202) {
+              break;
+            }
+
+            message.payload = { $case: "clientPickupItem", value: ClientPickupItem.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -3141,6 +3190,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "clientChatMessage": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "clientChatMessage", value: ClientChatMessage.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "clientPickupItem": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "clientPickupItem", value: ClientPickupItem.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -6978,6 +7033,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "serverChatMessage":
         ServerChatMessage.encode(message.payload.value, writer.uint32(6402).fork()).join();
         break;
+      case "lootSpawnEvent":
+        LootSpawnEvent.encode(message.payload.value, writer.uint32(7202).fork()).join();
+        break;
+      case "serverItemPickedUp":
+        ServerItemPickedUp.encode(message.payload.value, writer.uint32(7210).fork()).join();
+        break;
     }
     return writer;
   },
@@ -7826,6 +7887,25 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "serverChatMessage", value: ServerChatMessage.decode(reader, reader.uint32()) };
             continue;
           }
+          case 900: {
+            if (tag !== 7202) {
+              break;
+            }
+
+            message.payload = { $case: "lootSpawnEvent", value: LootSpawnEvent.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 901: {
+            if (tag !== 7210) {
+              break;
+            }
+
+            message.payload = {
+              $case: "serverItemPickedUp",
+              value: ServerItemPickedUp.decode(reader, reader.uint32()),
+            };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -8489,7 +8569,295 @@ export const ServerMessage: MessageFns<ServerMessage> = {
         }
         break;
       }
+      case "lootSpawnEvent": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "lootSpawnEvent", value: LootSpawnEvent.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "serverItemPickedUp": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "serverItemPickedUp",
+            value: ServerItemPickedUp.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
     }
+    return message;
+  },
+};
+
+function createBaseLootSpawnEvent(): LootSpawnEvent {
+  return { lootId: "", x: 0, y: 0, itemId: "", itemName: "", amount: 0 };
+}
+
+export const LootSpawnEvent: MessageFns<LootSpawnEvent> = {
+  encode(message: LootSpawnEvent, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.lootId !== "") {
+      writer.uint32(10).string(message.lootId);
+    }
+    if (message.x !== 0) {
+      writer.uint32(16).int32(message.x);
+    }
+    if (message.y !== 0) {
+      writer.uint32(24).int32(message.y);
+    }
+    if (message.itemId !== "") {
+      writer.uint32(34).string(message.itemId);
+    }
+    if (message.itemName !== "") {
+      writer.uint32(42).string(message.itemName);
+    }
+    if (message.amount !== 0) {
+      writer.uint32(48).int32(message.amount);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): LootSpawnEvent {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseLootSpawnEvent();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.lootId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.x = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.y = reader.int32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.itemId = reader.string();
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.itemName = reader.string();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.amount = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<LootSpawnEvent>, I>>(base?: I): LootSpawnEvent {
+    return LootSpawnEvent.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<LootSpawnEvent>, I>>(object: I): LootSpawnEvent {
+    const message = createBaseLootSpawnEvent();
+    message.lootId = object.lootId ?? "";
+    message.x = object.x ?? 0;
+    message.y = object.y ?? 0;
+    message.itemId = object.itemId ?? "";
+    message.itemName = object.itemName ?? "";
+    message.amount = object.amount ?? 0;
+    return message;
+  },
+};
+
+function createBaseClientPickupItem(): ClientPickupItem {
+  return { lootId: "" };
+}
+
+export const ClientPickupItem: MessageFns<ClientPickupItem> = {
+  encode(message: ClientPickupItem, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.lootId !== "") {
+      writer.uint32(10).string(message.lootId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ClientPickupItem {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseClientPickupItem();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.lootId = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<ClientPickupItem>, I>>(base?: I): ClientPickupItem {
+    return ClientPickupItem.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ClientPickupItem>, I>>(object: I): ClientPickupItem {
+    const message = createBaseClientPickupItem();
+    message.lootId = object.lootId ?? "";
+    return message;
+  },
+};
+
+function createBaseServerItemPickedUp(): ServerItemPickedUp {
+  return { lootId: "", playerId: "", itemName: "", amount: 0, playerName: "" };
+}
+
+export const ServerItemPickedUp: MessageFns<ServerItemPickedUp> = {
+  encode(message: ServerItemPickedUp, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.lootId !== "") {
+      writer.uint32(10).string(message.lootId);
+    }
+    if (message.playerId !== "") {
+      writer.uint32(18).string(message.playerId);
+    }
+    if (message.itemName !== "") {
+      writer.uint32(26).string(message.itemName);
+    }
+    if (message.amount !== 0) {
+      writer.uint32(32).int32(message.amount);
+    }
+    if (message.playerName !== "") {
+      writer.uint32(42).string(message.playerName);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ServerItemPickedUp {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseServerItemPickedUp();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.lootId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.playerId = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.itemName = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.amount = reader.int32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.playerName = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<ServerItemPickedUp>, I>>(base?: I): ServerItemPickedUp {
+    return ServerItemPickedUp.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ServerItemPickedUp>, I>>(object: I): ServerItemPickedUp {
+    const message = createBaseServerItemPickedUp();
+    message.lootId = object.lootId ?? "";
+    message.playerId = object.playerId ?? "";
+    message.itemName = object.itemName ?? "";
+    message.amount = object.amount ?? 0;
+    message.playerName = object.playerName ?? "";
     return message;
   },
 };

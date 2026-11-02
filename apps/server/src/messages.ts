@@ -182,6 +182,11 @@ export const mobDamaged = (mobId: number, attackerId: bigint, dmg: number, crit:
 /** Texto flotante de combate. IDs: jugador = player_id en decimal, mob = "m" + id. */
 export const combatText = (targetId: string, sourceId: string, amount: number, isHeal: boolean, spell = ''): ServerMessage =>
     msg({ $case: 'combatTextEvent', value: { targetId, sourceId, amount: Math.round(amount), isHeal, spellName: spell, spellIcon: spell } });
+export const lootSpawn = (e: { lootId: string; x: number; y: number; itemId: string; itemName: string; amount: number }): ServerMessage =>
+    msg({ $case: 'lootSpawnEvent', value: { lootId: e.lootId, x: e.x, y: e.y, itemId: e.itemId, itemName: e.itemName, amount: e.amount } });
+/** playerId vacío = el botín venció. */
+export const itemPickedUp = (lootId: string, playerId: string, itemName: string, amount: number, playerName = ''): ServerMessage =>
+    msg({ $case: 'serverItemPickedUp', value: { lootId, playerId, itemName, amount, playerName } });
 export const pid = (id: bigint): string => id.toString();
 export const mid = (id: number): string => `m${id}`;
 export const mobAttack = (mobId: number, tx: number, ty: number): ServerMessage => msg({ $case: 'mobAttack', value: { mobId, tx, ty } });

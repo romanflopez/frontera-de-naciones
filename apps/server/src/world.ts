@@ -22,6 +22,7 @@ import type { Economy, EconCtx } from './economy.ts';
 import { auctionHouse } from './auction.ts';
 import { depotService } from './deposit.ts';
 import { canPickup, GroundLoot, type GroundApi } from './ground.ts';
+import { LootManager, rollLoot } from './systems/loot.ts';
 
 interface Timer { at: number; fn: () => void }
 
@@ -50,6 +51,8 @@ export class GameWorld {
     /** Botín en el suelo de este mundo (solo en memoria). */
     private readonly loot = new GroundLoot();
     private lastGroundSync = 0;
+    /** Botín de materiales / oro (systems/loot.ts); aparte de `loot`, que son los items de la economía. */
+    private readonly floorLoot = new LootManager(Math.random().toString(36).slice(2, 7));
 
     constructor(
         readonly config: GameWorldConfig,
@@ -76,6 +79,7 @@ export class GameWorld {
                 stun: (p, secs) => { const ms = applyParalysis(p.status, Date.now(), paralysisSecs(secs, p.combat) * 1000, 'aturdir'); return ms / 1000; },
                 pay: (p, c) => this.payMp(p, c),
                 heal: (p, n) => { if (p.isDead) return; const got = Math.min(p.combat.maxHp, p.hp + n) - p.hp; p.hp += got; this.sendVitals(p, false); this.announceVitals(p); this.combatText(p, got, true, M.pid(p.playerId)); }, // robo de vida
+                mobDied: (info) => { if (!info.gm) this.dropLoot(info.type, info.def.name, info.def.lvl, info.x, info.y); },
                 reward: (p, info) => {
                     if (!this.econ) return;
                     // party: cada compañero cerca (mismo mundo, vivo) recibe su propio botín y una parte de la exp (docs/PARTY_Y_ARENAS.md §1)
@@ -177,6 +181,7 @@ export class GameWorld {
     private syncGround(now = Date.now()): void {
         this.lastGroundSync = now;
         for (const g of this.loot.expired(now)) this.loot.take(g.id);
+        for (const { loot, viewers } of this.floorLoot.expire()) { const m = M.itemPickedUp(loot.lootId, '', loot.itemName, loot.amount); for (const sid of viewers) this.players.get(sid)?.send(m); }
         const { viewRadiusX: rx, viewRadiusY: ry } = this.settings.radius;
         for (const p of this.players.values()) {
             if (p.disconnected) continue;
@@ -187,6 +192,7 @@ export class GameWorld {
                 const free = canPickup(g, key, now);
                 p.send(M.groundItemSpawned(g, !free, free ? 0 : g.freeAt - now, g.expiresAt - now));
             }
+            for (const e of this.floorLoot.unseenNear(p.sessionId, p.posX, p.posY, rx, ry)) p.send(M.lootSpawn(e)); // los que llegan después también lo ven
             for (const id of [...p.groundSeen]) {
                 const g = this.loot.items.get(id);
                 if (!g || Math.abs(g.x - p.posX) > rx + 2 || Math.abs(g.y - p.posY) > ry + 2) { p.groundSeen.delete(id); p.send(M.groundItemRemoved(id)); }
@@ -316,7 +322,7 @@ export class GameWorld {
             if (!o.playersInRange.delete(p.playerId)) continue;
             this.sendTo(o, left);
         }
-        p.playersInRange.clear(); p.groundSeen.clear(); p.world = null; p.lastDamager = null;
+        p.playersInRange.clear(); p.groundSeen.clear(); this.floorLoot.forget(p.sessionId); p.world = null; p.lastDamager = null;
         this.cancelRecall(p, ''); // cruzar de mapa corta el recall (si es el propio recall, ya terminó)
         console.log(`[Mundo:${this.id}] Se fue ${p.characterName} (cruza de mapa). Jugadores: ${this.players.size}`);
         return p;
@@ -326,7 +332,7 @@ export class GameWorld {
     private completeJoin(p: Player, includeSpells: boolean, sendInitialState = true): void {
         const t = this.settings.timings;
         p.pingGraceUntil = Date.now() + PING_JOIN_GRACE_MS;
-        p.groundSeen.clear(); // un socket nuevo no vio nada del suelo: se le manda de nuevo
+        p.groundSeen.clear(); this.floorLoot.forget(p.sessionId); // un socket nuevo no vio nada del suelo: se le manda de nuevo
         if (sendInitialState) p.send(M.initialState(p, this.catalogs, {
             includeSpells, pingIntervalMs: this.settings.ping.interval, arrowSpeed: t.arrowSpeed,
             pickupMs: t.playerPickupAnimationTime, bowMs: t.playerBowAnimationTime,
@@ -406,6 +412,7 @@ export class GameWorld {
         if (!p) return undefined;
         const saved = p.toPersisted(this.mapId);
         this.players.delete(sessionId);
+        this.floorLoot.forget(sessionId);
         p.world = null;
         this.playersById.delete(p.playerId);
         this.occupancy.setFree(p.posX, p.posY);
@@ -519,6 +526,7 @@ export class GameWorld {
                 case 'econDropRequest': this.econ?.drop(p, this.ctx, payload.value.uid); break;
                 case 'econSortRequest': this.econ?.sort(p, this.ctx); break;
                 case 'pickupRequest': this.econ?.pickup(p, this.ctx, payload.value.id); break;
+                case 'clientPickupItem': this.pickupLoot(p, payload.value.lootId.slice(0, 64)); break;
                 case 'econQuestRequest': this.econ?.quest(p, this.ctx, payload.value.npcId, payload.value.action, payload.value.key); break;
                 case 'auctionRequest': auctionHouse()?.handle(p, this.ctx, payload.value); break; // casa de subastas (docs/SUBASTAS.md)
                 case 'depositRequest': depotService()?.handle(p, this.ctx, payload.value); break; // depósito por cuenta (docs/DEPOSITO.md)
@@ -1019,6 +1027,23 @@ export class GameWorld {
         return this.factionOf(a) !== this.factionOf(b) || (arena(a) && arena(b));
     }
     /** Le saca vida a un jugador: DF (físico) o RM (mágico) del server, daño × 100/(100+X); si llega a 0 muere. Devuelve el daño aplicado. */
+    /** Tirada de botín de suelo al morir un mob: si cae algo, lo ven en el acto los jugadores cercanos. */
+    private dropLoot(type: MobType, name: string, lvl: number, x: number, y: number): void {
+        const r = rollLoot(type, name, lvl); if (!r) return;
+        const e = this.floorLoot.spawn(x, y, r), m = M.lootSpawn(e);
+        for (const o of this.nearbyPlayers(e.x, e.y)) { this.floorLoot.markSeen(o.sessionId, e.lootId); o.send(m); }
+    }
+    /** ClientPickupItem: vivo, a ≤ 1,5 celdas y que siga ahí. Lo levanta, lo suma a la cuenta y avisa a los que lo ven y a la party. */
+    private pickupLoot(p: Player, lootId: string): void {
+        if (p.isDead || !this.econ) return;
+        const viewers = this.floorLoot.viewersOf(lootId);
+        const r = this.floorLoot.pickup(lootId, p.posX, p.posY);
+        if (!r.ok) { if (r.reason === 'far') p.send(M.sendMessage('Estás muy lejos para levantarlo.')); return; }
+        const e = r.loot;
+        this.econ.addLoot(p, e.itemId, e.amount);
+        const m = M.itemPickedUp(e.lootId, M.pid(p.playerId), e.itemName, e.amount, p.characterName), to = new Set([p.sessionId, ...viewers, ...this.nearbyPlayers(e.x, e.y).map((o) => o.sessionId), ...partyMates(p.sessionId)]);
+        for (const sid of to) this.players.get(sid)?.send(m);
+    }
     /** Número flotante (daño o cura) para el objetivo y todos los que lo ven. */
     private combatText(tgt: Player, amount: number, heal: boolean, sourceId: string, spell = ''): void {
         if (amount <= 0) return;

@@ -142,7 +142,9 @@ interface Other extends Ent { hp?: number; maxHp?: number; fury?: boolean; inv?:
 const others = new Map<bigint, Other>();
 
 /** Botín en el suelo (lo manda el server con `groundItemSpawned`). `lockedUntil`: hasta cuándo (reloj local) no lo puedo recoger; 0 = es mío o ya está libre. */
-interface Drop { x: number; y: number; item?: Item; gold?: number; t: number; gid?: number; lockedUntil?: number }
+interface Drop { x: number; y: number; item?: Item; gold?: number; t: number; gid?: number; lockedUntil?: number; loot?: FloorLoot }
+/** Botín de materiales / oro del server (LootSpawnEvent). `mock`: lo armó la tecla L de ?debug, no existe en el server. */
+interface FloorLoot { id: string; itemId: string; name: string; amount: number; mock?: boolean }
 interface Proj { x: number; y: number; m: Mob | null; spd: number; dmg: number; col: string; aoe?: number; tx?: number; ty?: number; sx?: number; sy?: number; arc?: number; trail?: { x: number; y: number }[] }
 interface Fx { k: 'ring' | 'boom' | 'burst' | 'click' | 'efx' | 'blizz'; d?: number; n?: string; dy?: number; x: number; y: number; t: number; c?: string; r?: number }
 const scorch: { x: number; y: number; t: number; r: number }[] = [];
@@ -298,6 +300,8 @@ function onServer(m: ServerPayload) {
             if (old) Object.assign(old, nd, { t: old.t }); else drops.push(nd);
             break;
         }
+        case 'lootSpawnEvent': onLootSpawn(m.value); break;
+        case 'serverItemPickedUp': onLootPicked(m.value); break;
         case 'groundItemRemoved': { const i = drops.findIndex((d) => d.gid === m.value.id); if (i >= 0) { if (P.pickup === drops[i]) P.pickup = null; drops.splice(i, 1); } break; }
         case 'auctionSearchResult': case 'auctionMyState': case 'auctionHistory': auction.onMessage(m); break;
         case 'depositState': deposit.onMessage(m); break;
@@ -437,6 +441,21 @@ function onMobDied(v: { mobId: number; killerId: bigint; x: number; y: number; t
     corpses.push({ sprite: mobDef(type, z).sprite ?? type, x: v.x, y: v.y, dir: mob?.dir ?? 6, t: now() });
 }
 /** El server ya aplicó el botín del golpe final (exp, oro, item, pociones, misión): acá solo se muestra. El estado nuevo llega en `inventoryState`. */
+// ---------- botín de suelo (LootSpawnEvent / ClientPickupItem / ServerItemPickedUp; server: systems/loot.ts) ----------
+const LOOT_PURPLE = '#b26bff';
+function onLootSpawn(v: { lootId: string; x: number; y: number; itemId: string; itemName: string; amount: number }, mock = false) {
+    if (drops.some((d) => d.loot?.id === v.lootId)) return;
+    drops.push({ x: v.x + 0.5, y: v.y + 0.5, t: 0, loot: { id: v.lootId, itemId: v.itemId, name: v.itemName, amount: v.amount, mock } });
+}
+function onLootPicked(v: { lootId: string; playerId: string; itemName: string; amount: number; playerName: string }) {
+    const i = drops.findIndex((d) => d.loot?.id === v.lootId);
+    if (i >= 0) { if (P.pickup === drops[i]) P.pickup = null; if (hoverDrop === drops[i]) hoverDrop = null; drops.splice(i, 1); }
+    if (!v.playerId) return; // venció
+    const item = `<span style="color:${LOOT_PURPLE}">[${esc(v.itemName)}]</span>`;
+    if (v.playerId === myId.toString()) {
+        logToChat('combat', 'System', `¡Has obtenido ${item} x${v.amount}!`, undefined, true); // canal combat: sale en All y en System
+    } else if (v.playerName && partyRows.has(v.playerName)) logToChat('party', '', `[${esc(v.playerName)}] obtuvo ${item}`, undefined, true);
+}
 function onKillReward(v: { mobId: number; x: number; y: number; exp: number; gold: number; goldD: number; item?: InvItemMsg; bagFull: boolean; potion: string; shard: string; forge?: number; newLvl: number; questReady: boolean; questProg: number }) {
     const mob = mobMap.get(v.mobId), boss = !!mob?.boss;
     combatText.showAt(P.x, P.y, `+${v.exp} exp`, '#f0c84a', 22, myId.toString()); // sobre mi personaje, no sobre el mob (ahí va el daño)
@@ -592,8 +611,8 @@ const LIB: Record<string, SpellDef> = {
         cast() { skillSend('giro'); } },
     grito: { name: 'Grito de guerra', mp: 20, cd: 25, col: '#c78bff', range: 0, target: false, instant: true,
         cast() { skillSend('grito'); } },
-    furia: { name: 'Furia', mp: 15, cd: 20, col: '#ff3b2f', range: 0, target: false,
-        cast() { sfx('berserk', 0.7); efxLocal('flamme', P.x, P.y); pvpSend('flamme', P.x, P.y, 0n, 'furia'); P.fury = now() + 10; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log('Furia: +30% de daño físico y +20% de daño en hechizos por 10 s, sin castigo.', true); } },
+    furia: { name: 'Furia', mp: 15, cd: 90, col: '#ff3b2f', range: 0, target: false,
+        cast() { sfx('berserk', 0.7); efxLocal('flamme', P.x, P.y); pvpSend('flamme', P.x, P.y, 0n, 'furia'); P.fury = now() + 60; float(P.x, P.y - 0.4, '¡FURIA!', '#ff3b2f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ff3b2f' }); log(`Furia: +${selectedClass === 'mago' ? 35 : 15}% de daño por 60 s.`, true); } },
 };
 let SPELLS: Spell[] = [];
 const SPECIAL_KEY: Record<string, string | undefined> = { remover: 'r', invisibilidad: 'f', detectar: 'g', blink: 'b', carga: 'z', giro: 'x', grito: 'v' };
@@ -924,7 +943,7 @@ async function initKnight() {
         ims.forEach((im, i) => { for (let d = 0; d < 8; d++) g.drawImage(im, 0, ((d + 4) % 8) * 128, 15 * 128, 128, 0, (i * 8 + d) * 128, 15 * 128, 128); });
         const A = (row: number, dur: number, type: string): Anim => ({ row, n: 15, dur, type });
         IMG.hero_knight = c;
-        SPR.hero_knight = { cw: 128, ch: 128, ax: 64, ay: 96, sc: 1.3, anims: { stance: A(0, 1500, 'looped'), run: A(8, 640, 'looped'), swing: A(16, 400, 'play_once'), hit: A(24, 250, 'play_once'), die: A(32, 1000, 'play_once'), cast: A(40, 290, 'play_once'), crit: A(48, 800, 'play_once') } };
+        SPR.hero_knight = { cw: 128, ch: 128, ax: 64, ay: 108, sc: 1.3, anims: { stance: A(0, 1500, 'looped'), run: A(8, 640, 'looped'), swing: A(16, 400, 'play_once'), hit: A(24, 250, 'play_once'), die: A(32, 1000, 'play_once'), cast: A(40, 290, 'play_once'), crit: A(48, 800, 'play_once') } };
         knightReady = true; console.info('[skin] caballero activo');
     } catch (e) { console.warn('[skin] caballero no cargó (se ve el muñeco normal). Revisá assets/skins/caballero/*.png:', e); }
 }
@@ -976,6 +995,12 @@ function pickMob(sx: number, sy: number) {
 /** Pide al server recoger un item del suelo (él valida distancia, permiso y lugar en la bolsa). */
 let lastPickupAt = 0;
 function requestPickup(d: Drop) {
+    if (d.loot && !P.dead) {
+        const T = now(); if (T - lastPickupAt < 0.15) return; lastPickupAt = T;
+        if (d.loot.mock) onLootPicked({ lootId: d.loot.id, playerId: myId.toString(), itemName: d.loot.name, amount: d.loot.amount, playerName: '' }); // ?debug L: el server no lo conoce
+        else net.send({ $case: 'clientPickupItem', value: { lootId: d.loot.id } });
+        return;
+    }
     if (d.gid == null || P.dead) return;
     const T = now();
     if (d.lockedUntil && d.lockedUntil > T) { toast(`Todavía no es tuyo (${Math.ceil(d.lockedUntil - T)} s).`); return; }
@@ -1143,6 +1168,11 @@ window.addEventListener('keydown', (e) => {
         const me = myId.toString(), sp = SPELLS.find((x) => x.id && x.id !== 'ataque');
         onCombatText({ targetId: me, amount: 326, isHeal: false, spellName: sp?.id ?? 'proyectil', spellIcon: sp?.id ?? 'proyectil' });
         setTimeout(() => onCombatText({ targetId: me, amount: 92, isHeal: true, spellName: '', spellIcon: '' }), 250);
+        return;
+    }
+    // ?debug: L simula un LootSpawnEvent a mis pies (un item falso que solo existe en el cliente).
+    if (DEBUG && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'l' || e.key === 'L')) {
+        onLootSpawn({ lootId: `mock-${Date.now()}`, x: P.cell.x, y: P.cell.y, itemId: 'viper_skin', itemName: 'Viper Skin', amount: 1 }, true);
         return;
     }
     if (e.key === 'i' || e.key === 'I') toggleBag();
@@ -1412,11 +1442,6 @@ function render() {
     objs.push({ d: P.x + P.y, f: () => { const p = iso(P.x, P.y); if (P.frozenUntil > T && !P.dead) { ctx.strokeStyle = 'rgba(190,235,255,.85)'; ctx.lineWidth = 1.5; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(p.x, p.y - 8 - i * 14, 16, 6, 0, 0, Math.PI * 2); ctx.stroke(); } } if (P.dead) drawSprite(heroKey(), 'die', T - P.deadT, P.dir, p.x, p.y); else {
             const [a, t] = animFor(P, T), bz = P.fury > T;
             if (P.med) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const k = 0.5 + 0.5 * Math.sin(T * 3); ctx.strokeStyle = `rgba(110,170,255,${0.35 + k * 0.4})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 16 + k * 14, (16 + k * 14) / 2, 0, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.ellipse(p.x, p.y - 20 - k * 22, 5, 2.5, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
-            if (bz) { // berserk: aura de brasas bajo los pies y piel enrojecida que late (los últimos 2 s parpadea para avisar que se acaba)
-                const k = 0.5 + 0.5 * Math.sin(T * 9), warn = P.fury - T < 2 && Math.floor(T * 5) % 2 === 0;
-                ctx.save(); ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(p.x, p.y, 2, p.x, p.y, 34); g.addColorStop(0, `rgba(255,${120 + k * 80 | 0},40,${warn ? 0.2 : 0.55})`); g.addColorStop(1, 'rgba(255,60,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(p.x, p.y, 34, 17, 0, 0, Math.PI * 2); ctx.fill();
-                ctx.strokeStyle = `rgba(255,${150 + k * 90 | 0},60,.6)`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 20 + k * 6, (20 + k * 6) / 2, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
-            }
             drawSprite(heroKey(), a, t, P.dir, p.x, p.y, P.flash > 0 ? 'rgba(255,70,50,.35)' : P.inv ? 'rgba(150,200,255,.25)' : bz ? `rgba(255,${90 + (0.5 + 0.5 * Math.sin(T * 9)) * 70 | 0},20,.32)` : null, P.inv ? 0.4 + 0.1 * Math.sin(T * 5) : 1);
         } } });
     objs.sort((a, b) => a.d - b.d).forEach((o) => o.f());
@@ -1522,8 +1547,9 @@ function drawMob(m: Mob, T: number) {
     } else if (m.hp < m.hpMax) { const w = 34; ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - w / 2 - 1, p.y - m.head - 5, w + 2, 5); ctx.fillStyle = '#c43e2b'; ctx.fillRect(p.x - w / 2, p.y - m.head - 4, w * Math.max(0, m.hp / m.hpMax), 3); }
 }
 function drawDrop(d: Drop, T: number) {
-    const p = iso(d.x, d.y), bob = reduce ? 0 : Math.sin(T * 3 + d.x) * 1.5, y = p.y - 4 - bob;
-    const c = d.gold ? '#e8c34a' : d.item!.rar.c, k = d.gold ? 0 : d.item!.rar.k;
+    const fl = d.loot, isGold = !!d.gold || fl?.itemId === 'gold';
+    const p = iso(d.x, d.y), bob = reduce ? 0 : Math.sin(T * 3 + d.x) * (fl ? 3 : 1.5), y = p.y - 4 - bob - (fl ? 3 : 0); // el botín de materiales flota más alto
+    const c = isGold ? '#e8c34a' : fl ? LOOT_PURPLE : d.item!.rar.c, k = fl ? 1 : d.gold ? 0 : d.item!.rar.k;
     const locked = !!d.lockedUntil && d.lockedUntil > now();
     ctx.save();
     if (locked) ctx.globalAlpha = 0.6;
@@ -1539,7 +1565,7 @@ function drawDrop(d: Drop, T: number) {
     if (locked) { ctx.strokeStyle = c + 'aa'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.ellipse(p.x, p.y, 11, 5, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
     if (hoverDrop === d || P.pickup === d) { // el nombre aparece al pasar el mouse
         ctx.font = "600 11px 'Alegreya Sans', system-ui, sans-serif"; ctx.textAlign = 'center';
-        const label = (d.gold ? `${fmtNum(d.gold)} oro` : d.item!.name) + (locked ? ` · libre en ${Math.ceil(d.lockedUntil! - now())} s` : ''); const tw = ctx.measureText(label).width;
+        const label = (fl ? (fl.itemId === 'gold' ? `${fmtNum(fl.amount)} oro` : `${fl.name} x${fl.amount}`) : d.gold ? `${fmtNum(d.gold)} oro` : d.item!.name) + (locked ? ` · libre en ${Math.ceil(d.lockedUntil! - now())} s` : ''); const tw = ctx.measureText(label).width;
         ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(p.x - tw / 2 - 4, y - 28, tw + 8, 15);
         ctx.fillStyle = c; ctx.fillText(label, p.x, y - 17);
     }
