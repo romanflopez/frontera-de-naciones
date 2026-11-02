@@ -20,6 +20,7 @@ export * from './mobTraits';
 export * from './economy';
 export * from './uniques';
 export * from './stats';
+export * from './kits';
 export * from './auction';
 export * from './deposit';
 export * from './maps';

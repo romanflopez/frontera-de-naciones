@@ -8,7 +8,7 @@
  */
 import { PARTY_SHARE_RANGE, partyExpMult, partyMates } from './party.ts';
 import { AOE_MAX_TARGETS, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionMp, POTION_GCD_MS, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, progressFromEcon, PVP_SPELLS, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
-import { HUBS, QUESTS, RECALL, TRAINING, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef } from '@fdn/world';
+import { HUBS, QUESTS, RECALL, TRAINING, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef, checkSkill, skillDeniedText } from '@fdn/world';
 import { applyParalysis, applySlow, applyWarcry, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, hasWarcry, isSlowed, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import type { GameWorldConfig, Settings } from './config.ts';
@@ -479,6 +479,7 @@ export class GameWorld {
                     // los avisos de efecto van con tope de ritmo; los golpes con hechizo los limita cada hechizo (recarga y ritmo)
                     if (!spell) { if (now - p.lastPvpMs < 40) break; p.lastPvpMs = now; }
                     const x = num(v.x, 0, 200), y = num(v.y, 0, 200), r = num(v.r, 0, 6);
+                    if (spell && !this.kitOk(p, spell)) break; // habilidad de otra clase o de un nivel que no tiene
                     // Furia: la lleva el server
                     if (spell === 'furia') {
                         if (!p.isDead && now >= p.pvp.furyCdUntil && this.payMp(p, UTIL_MP.furia) && p.pvp.castFury(now)) {
@@ -530,16 +531,16 @@ export class GameWorld {
                 case 'auctionRequest': auctionHouse()?.handle(p, this.ctx, payload.value); break; // casa de subastas (docs/SUBASTAS.md)
                 case 'depositRequest': depotService()?.handle(p, this.ctx, payload.value); break; // depósito por cuenta (docs/DEPOSITO.md)
                 case 'respawnRequest': this.respawn(p); break;
-                case 'invisibilityRequest': { if (p.isDead || !this.payMp(p, UTIL_MP.invisibilidad)) break; this.changeStatus(p, () => castInvisibility(p.status, Date.now())); break; }
-                case 'detectInvisibleRequest': { if (p.isDead || !this.payMp(p, UTIL_MP.detectar)) break; this.changeStatus(p, () => castDetectInvisible(p.status, Date.now())); break; }
+                case 'invisibilityRequest': { if (p.isDead || !this.kitOk(p, 'invisibilidad') || !this.payMp(p, UTIL_MP.invisibilidad)) break; this.changeStatus(p, () => castInvisibility(p.status, Date.now())); break; }
+                case 'detectInvisibleRequest': { if (p.isDead || !this.kitOk(p, 'detectar') || !this.payMp(p, UTIL_MP.detectar)) break; this.changeStatus(p, () => castDetectInvisible(p.status, Date.now())); break; }
                 case 'removerRequest': {
-                    if (p.mp < UTIL_MP.remover || !castRemover(p.status, Date.now())) break;
+                    if (!this.kitOk(p, 'remover') || p.mp < UTIL_MP.remover || !castRemover(p.status, Date.now())) break;
                     this.payMp(p, UTIL_MP.remover);
                     const m = M.pvpHit(p.playerId, { fx: 'sphere', x: p.posX, y: p.posY, targetId: p.playerId, dmg: 0, secs: -1, r: 0 });
                     p.send(m); this.broadcastNear(p, m);
                     break;
                 }
-                case 'mobHitRequest': if (!this.castOk(p, payload.value.spell ?? '', Date.now())) break; this.changeStatus(p, () => breakInvisibility(p.status)); this.mobSim?.hit(p, payload.value); break;
+                case 'mobHitRequest': if (!this.kitOk(p, payload.value.spell ?? '') || !this.castOk(p, payload.value.spell ?? '', Date.now())) break; this.changeStatus(p, () => breakInvisibility(p.status)); this.mobSim?.hit(p, payload.value); break;
                 case 'pveStatusRequest': this.mobSim?.status(p, payload.value); break;
                 case 'changePlayerProfileRequest': {
                     const v = String(payload.value.profile ?? '').slice(0, 240);
@@ -626,9 +627,19 @@ export class GameWorld {
     private startCast(p: Player, raw: string): void {
         const spell = /^[a-z0-9]{1,16}$/.test(raw ?? '') ? raw : '', now = Date.now();
         if (!isCast(spell)) return;
+        if (!this.kitOk(p, spell)) { p.cast = null; p.send(M.spellCastFailed()); return; }
         if (p.isDead || p.isParalyzed(now) || !p.canCast) { p.cast = null; p.send(M.spellCastFailed()); return; }
         const ms = castMsOf(spell);
         p.cast = { spell, okAt: now + ms - CAST_SLACK_MS, until: now + ms + CAST_READY_MS, fired: false };
+    }
+
+    /** Kit de clase (paso K1): la habilidad tiene que ser de la clase del jugador y de un nivel que ya alcanzó. Si no, se avisa y se descarta. */
+    private kitOk(p: Player, spell: string): boolean {
+        const kit = checkSkill(p.combat.cls, p.combat.lvl, spell);
+        if (kit.ok) return true;
+        const now = Date.now();
+        if (now - p.lastKitDeniedMs > 1500) { p.lastKitDeniedMs = now; p.send(M.sendMessage(skillDeniedText(kit))); }
+        return false;
     }
 
     /** true si el golpe de `spell` sale de un cast que el server vio empezar y terminar. Los que no se castean (cuerpo a cuerpo) pasan siempre. */
@@ -665,7 +676,8 @@ export class GameWorld {
         const sp = SKILLS[id], now = Date.now();
         if (!sp || !this.map) return false;
         if (p.isDead) { this.skillDenied(p, id, ''); return false; }
-        if (p.combat.cls !== sp.cls) { this.skillDenied(p, id, `Esa habilidad es de ${sp.cls === 'mago' ? 'Mago' : 'Paladin'}.`); return false; }
+        const kit = checkSkill(p.combat.cls, p.combat.lvl, id);
+        if (!kit.ok) { this.skillDenied(p, id, skillDeniedText(kit)); return false; }
         if (p.isParalyzed(now)) { this.skillDenied(p, id, 'Estás paralizado.'); return false; }
         if (!p.pvp.skillReady(id, now)) { this.skillDenied(p, id, 'Todavía se está recargando.'); return false; }
         if (p.mp < sp.mp) { this.skillDenied(p, id, 'No te alcanza el maná.'); return false; }
