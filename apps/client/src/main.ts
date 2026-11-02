@@ -12,6 +12,7 @@ import { useCastStore } from './ui/castStore';
 import { spellTypeOf, type SpellType } from './ui/colors';
 import { chatBus, logToChat, type ChatChannel } from './ui/chatStore';
 import { drawPortalFloor, drawPortalFx, PORTAL_CITY, PORTAL_ZONE } from './portal';
+import { checkSkill, skillDeniedText, canUseSkill, skillLevel } from '@fdn/world';
 import { DEFAULT_MAP, RECALL, STAT_CAP, STAT_DESC, STAT_IDS, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, traitLabel, traitHpMult, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
 import { UNIQUE_BY_NAME, UP_MAX, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Quest, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
@@ -748,6 +749,8 @@ function pickEnemy(sx: number, sy: number) { for (const o of others.values()) { 
 const CAST_T = 0.75; // cast "rápido" de docs/COMBATE.md; el server valida el mismo valor (castMsOf)
 function cast(i: number) {
     if (P.dead) return; const s = SPELLS[i];
+    const kit = checkSkill(CLS.id, P.lvl, s.id ?? ''); // kit de clase (paso K1): el server rechaza igual, acá solo se avisa
+    if (!kit.ok) { toast(skillDeniedText(kit)); return; }
     if (P.ready && P.ready.i === i && s.target) { const m = autoTarget(s.range), e = m ? null : nearestEnemy(s.range); if (m) release(m); else if (e) release({ x: e.x, y: e.y, pvp: e }); else toast('Hacé clic en el objetivo.'); return; }
     if (s.fury && P.fury <= now()) { toast(`${s.name} solo se puede usar con Furia.`); return; }
     if (P.casting && !s.instant) { toast('Ya estás casteando.'); return; }
@@ -1634,6 +1637,7 @@ function hud() {
         if (left > 0) { cd.style.display = 'flex'; cd.style.background = `conic-gradient(rgba(0,0,0,0) 0 ${(1 - left / s.cd) * 100}%, rgba(5,3,8,.74) 0 100%)`; const t = left >= 10 ? String(Math.ceil(left)) : left.toFixed(1); if (cd.textContent !== t) cd.textContent = t; }
         else if (cd.style.display) { cd.style.display = ''; cd.textContent = ''; }
         el.hidden = !!s.fury && P.fury <= T; el.classList.toggle('nomp', P.mp < s.mp); el.classList.toggle('ready', !!(P.ready && P.ready.i === i));
+        const locked = !canUseSkill(CLS.id, P.lvl, s.id ?? ''); el.classList.toggle('locked', locked); if (locked) el.dataset.lvl = `Nv ${skillLevel(CLS.id, s.id ?? '') ?? '-'}`;
     });
     const tt = totals(), wd: [number, number] = tt.wdmg[1] > 0 ? tt.wdmg : CLS.melee;
     const chips: [string, string][] = [['Nv.', String(P.lvl)], ['Exp', `${Math.floor(P.exp).toLocaleString('es-AR')} / ${expNeed().toLocaleString('es-AR')}`], ['Ataque', `${wd[0]}–${wd[1]}`], ['Defensa', `${tt.def} · RM ${tt.rm}`], ['Vel. mov.', Math.round((270 / P.stepMs) * 100) + '%'], ['Crítico', critTotal(tt.crit) + '%']];

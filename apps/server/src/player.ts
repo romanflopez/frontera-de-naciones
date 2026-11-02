@@ -54,6 +54,8 @@ export class Player {
     /** Bando;clase;piezas visibles, lo manda el cliente (solo se retransmite a los demás). */
     profile = '';
     lastPvpMs = 0;
+    /** Último aviso de "habilidad bloqueada" (para no inundar el chat). */
+    lastKitDeniedMs = 0;
     /** Stats de combate sacados del último guardado validado, y límites del PvP. */
     combat: CombatStats = { ...DEFAULT_STATS };
     /** Progreso del último guardado validado, para decidir si un portal deja pasar (misiones entregadas, nivel, llaves, portales abiertos). */

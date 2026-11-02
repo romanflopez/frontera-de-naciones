@@ -58,6 +58,7 @@
 .sq{position:relative;width:100%;height:100%;box-sizing:border-box;border-radius:7px;background:#0b080d;overflow:hidden;box-shadow:inset 0 0 0 1px #000,inset 0 0 10px rgba(0,0,0,.85)}
 .sq img{width:100%;height:100%;display:block;object-fit:cover}
 .sw.nomp .sq img{filter:brightness(.42) saturate(.55)}
+.sw.locked{cursor:not-allowed}.sw.locked .sq img{filter:grayscale(1) brightness(.32)}.sw.locked::after{content:attr(data-lvl);position:absolute;inset:auto 0 4px 0;text-align:center;font:700 11px/1 Inter,sans-serif;color:#e8d9b0;text-shadow:0 1px 2px #000;pointer-events:none}
 .sw.ready{animation:selpulse 1.8s ease-in-out infinite}
 .sw.ready .sq::after{content:"";position:absolute;top:0;bottom:0;left:0;width:40%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:sweep 2.6s ease-in-out infinite}
 .sw.fired{animation:fired .35s ease-out}
