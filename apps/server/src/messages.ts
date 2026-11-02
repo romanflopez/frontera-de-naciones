@@ -162,6 +162,8 @@ export const logoutResponse = (wait: number): ServerMessage => msg({ $case: 'log
 export const pingResponse = (sequence: number, gameWorldQueueLength: number, playersInMap: number, pingVariance: number): ServerMessage =>
     msg({ $case: 'pingResponse', value: { sequence, gameWorldQueueLength, playersInMap, pingVariance } });
 
+export const serverChat = (channel: string, senderName: string, text: string, senderId: string): ServerMessage =>
+    msg({ $case: 'serverChatMessage', value: { channel, senderName, text, senderId } });
 export const chatMessageReceived = (senderCharacterName: string, text: string, channel = 'global'): ServerMessage =>
     msg({ $case: 'chatMessageReceived', value: { senderCharacterName, timestampMs: BigInt(Date.now()), message: text, channel } });
 
@@ -177,6 +179,11 @@ export const mobsSnapshot = (mobs: { id: number; type: number; zone: number; x: 
     msg({ $case: 'mobsSnapshot', value: { mobs } });
 export const mobDamaged = (mobId: number, attackerId: bigint, dmg: number, crit: boolean, hp: number): ServerMessage =>
     msg({ $case: 'mobDamaged', value: { mobId, attackerId, dmg, crit, hp } });
+/** Texto flotante de combate. IDs: jugador = player_id en decimal, mob = "m" + id. */
+export const combatText = (targetId: string, sourceId: string, amount: number, isHeal: boolean, spell = ''): ServerMessage =>
+    msg({ $case: 'combatTextEvent', value: { targetId, sourceId, amount: Math.round(amount), isHeal, spellName: spell, spellIcon: spell } });
+export const pid = (id: bigint): string => id.toString();
+export const mid = (id: number): string => `m${id}`;
 export const mobAttack = (mobId: number, tx: number, ty: number): ServerMessage => msg({ $case: 'mobAttack', value: { mobId, tx, ty } });
 export const mobHitPlayer = (mobId: number, dmg: number, stun: number): ServerMessage => msg({ $case: 'mobHitPlayer', value: { mobId, dmg, stun } });
 export const mobProjectile = (mobId: number, fromX: number, fromY: number, toX: number, toY: number, travelMs: number, kind: number): ServerMessage => msg({ $case: 'mobProjectile', value: { mobId, fromX, fromY, toX, toY, travelMs, kind } });

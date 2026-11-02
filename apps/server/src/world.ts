@@ -72,10 +72,10 @@ export class GameWorld {
                 playerById: (id) => this.playersById.get(id),
                 nearby: (cx, cy) => this.nearbyPlayers(cx, cy),
                 after: (ms, fn) => this.setTimeout(ms, fn),
-                hurt: (p, raw, source) => this.damagePlayer(p, raw, 'phys', null, source), // los ataques de mobs son físicos (los mitiga la DF)
+                hurt: (p, raw, source, srcId) => this.damagePlayer(p, raw, 'phys', null, source, '', srcId), // los ataques de mobs son físicos (los mitiga la DF)
                 stun: (p, secs) => { const ms = applyParalysis(p.status, Date.now(), paralysisSecs(secs, p.combat) * 1000, 'aturdir'); return ms / 1000; },
                 pay: (p, c) => this.payMp(p, c),
-                heal: (p, n) => { if (p.isDead) return; p.hp = Math.min(p.combat.maxHp, p.hp + n); this.sendVitals(p, false); this.announceVitals(p); },
+                heal: (p, n) => { if (p.isDead) return; const got = Math.min(p.combat.maxHp, p.hp + n) - p.hp; p.hp += got; this.sendVitals(p, false); this.announceVitals(p); this.combatText(p, got, true, M.pid(p.playerId)); }, // robo de vida
                 reward: (p, info) => {
                     if (!this.econ) return;
                     // party: cada compañero cerca (mismo mundo, vivo) recibe su propio botín y una parte de la exp (docs/PARTY_Y_ARENAS.md §1)
@@ -96,6 +96,11 @@ export class GameWorld {
     /** El simulador de mobs (tests y mediciones); undefined si el mundo duerme o no tiene mapa. */
     get mobs(): MobSim | undefined { return this.mobSim; }
     playerOf(sessionId: string): Player | undefined { return this.players.get(sessionId); }
+    /** Sesiones que ven a este jugador (radio de visión, mismo mapa), incluida la suya. Para el chat de área. */
+    viewersOf(sessionId: string): string[] {
+        const p = this.players.get(sessionId); if (!p) return [];
+        return [p.sessionId, ...this.nearbyPlayers(p.posX, p.posY, p.sessionId).filter((o) => !this.hiddenFrom(o, p)).map((o) => o.sessionId)];
+    }
 
     /** Duerme el mundo vacío: se tiran los temporizadores y los mobs (al despertar nacen de nuevo con la vida llena). */
     hibernate(): void {
@@ -495,7 +500,7 @@ export class GameWorld {
                             secs = applyParalysis(tgt.status, now, secs * 1000, spell === 'aturdir' ? 'aturdir' : 'paralisis') / 1000;
                             if (secs <= 0) { p.send(M.pvpHit(tgt.playerId, { fx: 'resist', x: tgt.posX, y: tgt.posY, targetId: 0n, dmg: 0, secs: 0, r: 0 })); if (dmg <= 0) break; }
                         }
-                        if (dmg > 0) dmg = this.damagePlayer(tgt, dmg, spellDmgKind(spell), p);              // la vida del que recibe la lleva el server
+                        if (dmg > 0) dmg = this.damagePlayer(tgt, dmg, spellDmgKind(spell), p, '', spell === 'ataque' ? '' : spell);              // la vida del que recibe la lleva el server
                         if (dmg > 0 || secs > 0) p.send(M.pvpHit(p.playerId, { fx: '', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs, r: 0 })); // para que el que pega vea el número
                     } else if (v.targetId) break; // daño sin hechizo conocido: se descarta
                     this.broadcastNear(p, M.pvpHit(p.playerId, { fx, x, y, targetId: v.targetId, dmg, secs, r }));
@@ -730,7 +735,7 @@ export class GameWorld {
         const sp = SKILLS[skill], now = Date.now();
         const rollDmg = () => rollSpellDamage(skill, p.combat, p.pvp.fury(now));
         const hitPlayer = (tgt: Player, slow: boolean) => {
-            const dmg = this.damagePlayer(tgt, rollDmg(), 'phys', p);
+            const dmg = this.damagePlayer(tgt, rollDmg(), 'phys', p, '', skill);
             if (slow && sp.slow && applySlow(tgt.status, now, sp.slow * 1000) > 0) this.announceStatus(tgt);
             p.send(M.pvpHit(p.playerId, { fx: '', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs: 0, r: 0 })); // número para el que pega
             this.broadcastNear(p, M.pvpHit(p.playerId, { fx: 'crosswind', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs: 0, r: 0 }));
@@ -755,7 +760,7 @@ export class GameWorld {
             }
             if (!this.cellSafe(p.posX, p.posY)) {
                 const hits = (this.mobSim?.near(cx, cy, sp.aoe!) ?? []).sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy)).slice(0, AOE_MAX_TARGETS.giro); // los más cercanos, con tope y caída de daño
-                hits.forEach((m, i) => this.mobSim!.skillHit(p, m.id, Math.max(1, Math.round(rollDmg() * aoeMult(i)))));
+                hits.forEach((m, i) => this.mobSim!.skillHit(p, m.id, Math.max(1, Math.round(rollDmg() * aoeMult(i))), 0, skill));
             }
             this.skillBroadcast(p, 'giro', p.posX, p.posY);
             return;
@@ -789,7 +794,7 @@ export class GameWorld {
         const fx = p.posX, fy = p.posY;
         this.skillCommit(p, 'carga');
         if (dest.x !== fx || dest.y !== fy) this.jumpTo(p, dest.x, dest.y);
-        if (tgt) hitPlayer(tgt, true); else this.mobSim!.skillHit(p, mobId, rollDmg(), sp.slow);
+        if (tgt) hitPlayer(tgt, true); else this.mobSim!.skillHit(p, mobId, rollDmg(), sp.slow, skill);
         this.skillBroadcast(p, 'carga', fx, fy);
     }
 
@@ -1014,10 +1019,18 @@ export class GameWorld {
         return this.factionOf(a) !== this.factionOf(b) || (arena(a) && arena(b));
     }
     /** Le saca vida a un jugador: DF (físico) o RM (mágico) del server, daño × 100/(100+X); si llega a 0 muere. Devuelve el daño aplicado. */
-    private damagePlayer(p: Player, raw: number, kind: DmgKind, killer: Player | null, source = ''): number {
+    /** Número flotante (daño o cura) para el objetivo y todos los que lo ven. */
+    private combatText(tgt: Player, amount: number, heal: boolean, sourceId: string, spell = ''): void {
+        if (amount <= 0) return;
+        const m = M.combatText(M.pid(tgt.playerId), sourceId, amount, heal, spell);
+        tgt.send(m);
+        for (const o of this.nearbyPlayers(tgt.posX, tgt.posY, tgt.sessionId)) if (!this.hiddenFrom(o, tgt)) o.send(m);
+    }
+    private damagePlayer(p: Player, raw: number, kind: DmgKind, killer: Player | null, source = '', spell = '', srcId = ''): number {
         if (p.isDead || p.spawnProtection || p.godMode || raw <= 0) return 0;
         const dmg = damageAfterDefense(raw, hasWarcry(p.status, Date.now()) ? { ...p.combat, def: p.combat.def + WARCRY_DEF } : p.combat, kind); // el Grito de guerra suma a la defensa antes de la fórmula
         p.hp = Math.max(0, p.hp - dmg); p.meditating = false;
+        this.combatText(p, dmg, false, killer ? M.pid(killer.playerId) : srcId, spell);
         if (dmg > 0) this.cancelRecall(p, 'Te pegaron: se cortó el regreso a la ciudad.');
         if (killer) p.lastDamager = { id: killer.playerId, name: killer.characterName, t: Date.now() };
         else if (source) p.lastDamager = { id: 0n, name: source, t: Date.now() };
@@ -1092,7 +1105,7 @@ export class GameWorld {
         this.econ?.snapshot(p);
         if (kind === 1) { p.mp = Math.min(max, p.mp + potionMp(max)); this.sendVitals(p, false); return; }
         const [first, ...ticks] = potionHpSplit(potionHp(max)), epoch = p.potionEpoch;
-        const heal = (w: GameWorld, n: number) => { p.hp = Math.min(p.combat.maxHp, p.hp + n); w.sendVitals(p, false); w.announceVitals(p); };
+        const heal = (w: GameWorld, n: number) => { const got = Math.min(p.combat.maxHp, p.hp + n) - p.hp; p.hp += got; w.sendVitals(p, false); w.announceVitals(p); w.combatText(p, got, true, ''); };
         heal(this, first);
         // la curación en el tiempo sigue al jugador: si cruza de mapa, la termina el mundo donde esté
         ticks.forEach((n, i) => this.playerTimer(p, (i + 1) * POTION_HOT_EVERY_MS, (w) => { if (!p.disconnected && !p.isDead && p.potionEpoch === epoch) heal(w, n); }));

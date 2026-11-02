@@ -8,6 +8,7 @@
     "noUnusedLocals": true,
     "skipLibCheck": true,
     "noEmit": true,
+    "jsx": "react-jsx",
     "allowImportingTsExtensions": true,
     "types": ["vite/client"]
   },

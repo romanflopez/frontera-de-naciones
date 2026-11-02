@@ -18,7 +18,7 @@ export interface MobHost {
     nearby(cx: number, cy: number): Player[];
     after(ms: number, fn: () => void): void;
     /** Le saca vida al jugador en el server (defensa incluida) y avisa. */
-    hurt(p: Player, raw: number, source: string): void;
+    hurt(p: Player, raw: number, source: string, srcId?: string): void;
     /** Paraliza al jugador (si no es inmune): devuelve los segundos que quedó. */
     stun(p: Player, secs: number): number;
     /** Botín y exp del golpe final: lo decide y lo aplica el server (economía autoritativa). */
@@ -198,6 +198,7 @@ export class MobSim {
                 m.poisonTick = T + 1; m.hp -= 3;
                 const killer = m.lastAttacker != null ? this.host.playerById(m.lastAttacker) : undefined;
                 this.broadcastNear(m, M.mobDamaged(m.id, m.lastAttacker ?? 0n, 3, false, Math.max(0, m.hp)));
+                this.broadcastNear(m, M.combatText(M.mid(m.id), m.lastAttacker != null ? M.pid(m.lastAttacker) : '', 3, false, ''));
                 if (m.hp <= 0) { this.kill(m, killer ?? null); continue; }
             }
             if (m.par > T) continue;
@@ -247,7 +248,7 @@ export class MobSim {
                     this.host.after(200, () => {
                         const p = this.host.playerById(tid);
                         if (!this.mobs.has(m.id) || m.par > this.now() || !this.eligible(p)) return;
-                        if (Math.hypot(m.x - (p.posX + 0.5), m.y - (p.posY + 0.5)) < 1.8) { p.send(M.mobHitPlayer(m.id, dmg, 0)); this.host.hurt(p, dmg, d.name); this.toxic(m, p, dmg); }
+                        if (Math.hypot(m.x - (p.posX + 0.5), m.y - (p.posY + 0.5)) < 1.8) { p.send(M.mobHitPlayer(m.id, dmg, 0)); this.host.hurt(p, dmg, d.name, M.mid(m.id)); this.toxic(m, p, dmg); }
                     });
                 }
             } else if (m.state === 'flee') {
@@ -285,7 +286,7 @@ export class MobSim {
         this.host.after(travel, () => {
             const p = this.host.playerById(tid);
             if (!this.mobs.has(m.id) || !this.eligible(p)) return;
-            if (Math.hypot(px - (p.posX + 0.5), py - (p.posY + 0.5)) < 1.0) { p.send(M.mobHitPlayer(m.id, dmg, 0)); this.host.hurt(p, dmg, d.name); this.toxic(m, p, dmg); }
+            if (Math.hypot(px - (p.posX + 0.5), py - (p.posY + 0.5)) < 1.0) { p.send(M.mobHitPlayer(m.id, dmg, 0)); this.host.hurt(p, dmg, d.name, M.mid(m.id)); this.toxic(m, p, dmg); }
         });
     }
 
@@ -293,7 +294,7 @@ export class MobSim {
     private toxic(m: SimMob, p: Player, dmg: number) {
         if (!(m.traits & TRAIT_TOXIC)) return;
         const tick = Math.max(1, Math.round(dmg * TOXIC_FRACTION)), tid = p.playerId;
-        for (let i = 1; i <= TOXIC_TICKS; i++) this.host.after(i * 1000, () => { const q = this.host.playerById(tid); if (this.eligible(q)) { q.send(M.mobHitPlayer(m.id, tick, 0)); this.host.hurt(q, tick, m.def.name); } });
+        for (let i = 1; i <= TOXIC_TICKS; i++) this.host.after(i * 1000, () => { const q = this.host.playerById(tid); if (this.eligible(q)) { q.send(M.mobHitPlayer(m.id, tick, 0)); this.host.hurt(q, tick, m.def.name, M.mid(m.id)); } });
     }
 
     /** Huida: al caer por debajo de FLEE_HP_FRAC de vida, un mob cobarde (según su tipo) corre unos segundos; los jefes y los paralizados no huyen. */
@@ -315,7 +316,7 @@ export class MobSim {
             for (const p of this.host.nearby(m.x, m.y)) {
                 if (!this.eligible(p) || Math.hypot(m.x - (p.posX + 0.5), m.y - (p.posY + 0.5)) > sp.r) continue;
                 const dmg = sp.dmg ? rint(sp.dmg[0], sp.dmg[1]) : 0, stun = sp.stun ? this.host.stun(p, sp.stun) : 0;
-                p.send(M.mobHitPlayer(m.id, dmg, stun)); if (dmg > 0) this.host.hurt(p, dmg, m.def.name);
+                p.send(M.mobHitPlayer(m.id, dmg, stun)); if (dmg > 0) this.host.hurt(p, dmg, m.def.name, M.mid(m.id));
             }
         });
     }
@@ -327,7 +328,7 @@ export class MobSim {
         if (killer) this.host.reward(killer, { mobId: m.id, type: m.type, def: m.def, zoneName: m.zone.name, origin: m.zone.tier === 'dungeon' ? 'dungeon' : m.zone.name.startsWith('Merodeadores') ? 'loose' : 'pit', x: m.x, y: m.y, shard: m.zone.drops?.shard, traits: m.traits }); // una sola vez: el mob ya salió del mapa
         if (m.traits & TRAIT_EXPLOSIVE) { // explosivo: al morir pega a todos los jugadores cercanos (aunque no sea el que lo mató)
             const dmg = Math.round(((m.def.dmg[0] + m.def.dmg[1]) / 2) * EXPLOSION_MULT * traitDmgMult(m.traits));
-            for (const q of this.host.nearby(m.x, m.y)) if (this.eligible(q) && Math.hypot(m.x - (q.posX + 0.5), m.y - (q.posY + 0.5)) <= EXPLOSION_RADIUS) { q.send(M.mobHitPlayer(m.id, dmg, 0)); this.host.hurt(q, dmg, `${m.def.name} (explosión)`); }
+            for (const q of this.host.nearby(m.x, m.y)) if (this.eligible(q) && Math.hypot(m.x - (q.posX + 0.5), m.y - (q.posY + 0.5)) <= EXPLOSION_RADIUS) { q.send(M.mobHitPlayer(m.id, dmg, 0)); this.host.hurt(q, dmg, `${m.def.name} (explosión)`, M.mid(m.id)); }
         }
         this.broadcastNear(m, M.mobDied(m.id, killer ? killer.playerId : 0n, m.x, m.y, m.typeIdx, m.zoneIdx));
         if (!m.gm) this.host.after(zoneRespawnSecs(m.type, m.zone) * 1000, () => this.spawn(m.zone, m.zoneIdx));
@@ -355,7 +356,7 @@ export class MobSim {
     }
     get(id: number): { id: number; x: number; y: number } | undefined { const m = this.mobs.get(id); return m && !m.dead && !this.isSafe(m.x, m.y) ? { id: m.id, x: m.x, y: m.y } : undefined; }
     /** Daño ya calculado por el server (sin tope del cliente) + ralentización opcional. */
-    skillHit(p: Player, id: number, dmg: number, slowSecs = 0): void {
+    skillHit(p: Player, id: number, dmg: number, slowSecs = 0, skill = ''): void {
         const m = this.mobs.get(id); if (!m || m.dead) return;
         const T = this.now();
         if (slowSecs > 0) m.slow = T + slowSecs;
@@ -363,6 +364,7 @@ export class MobSim {
         m.lastAttacker = p.playerId; m.hp -= dmg;
         if (m.par > T && dmg >= m.hpMax * 0.45) m.par = 0;
         this.broadcastNear(m, M.mobDamaged(m.id, p.playerId, dmg, false, Math.max(0, m.hp)));
+        this.broadcastNear(m, M.combatText(M.mid(m.id), M.pid(p.playerId), dmg, false, skill));
         this.checkFlee(m);
         if (m.state !== 'flee' && (m.state === 'idle' || m.target == null)) this.aggro(m, p);
         if (m.hp <= 0) this.kill(m, p);
@@ -415,6 +417,7 @@ export class MobSim {
             m.hp -= dmg;
             if (m.par > T && dmg >= m.hpMax * 0.45) m.par = 0; // un golpe fuerte rompe la parálisis
             this.broadcastNear(m, M.mobDamaged(m.id, p.playerId, dmg, crit, Math.max(0, m.hp)));
+            this.broadcastNear(m, M.combatText(M.mid(m.id), M.pid(p.playerId), dmg, false, spell === 'ataque' ? '' : spell));
             if (phys && p.combat.leech > 0 && dealt > 0) this.host.heal(p, Math.max(1, Math.round((dealt * p.combat.leech) / 100))); // robo de vida: de lo que de verdad quitó
         }
         this.checkFlee(m);

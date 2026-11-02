@@ -140,6 +140,8 @@ export class PartyService {
 
     private broadcast(party: Party, text: string): void { for (const m of party.members) this.say(m, text); }
 
+    /** Sesiones de los miembros de la party de `sid` (vacío si no está en ninguna). */
+    partyMembers(sid: string): string[] { return [...(this.parties.get(this.partyOf.get(sid) ?? -1)?.members ?? [])]; }
     /** Chat de party: lo recibe cada miembro. Devuelve false si no tiene party. */
     chat(sid: string, text: string, senderName: string): boolean {
         const party = this.parties.get(this.partyOf.get(sid) ?? -1); if (!party) return false;

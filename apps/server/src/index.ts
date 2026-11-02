@@ -22,6 +22,7 @@ import { FileStorage, PgStorage, type Storage } from './storage.ts';
 import { AuctionHouse, setAuctionHouse } from './auction.ts';
 import { Depot, setDepot } from './deposit.ts';
 import { PartyService, setParties } from './party.ts';
+import { ChatManager } from './systems/chat.ts';
 
 const MAX_INCOMING_BYTES = 24576;
 
@@ -213,6 +214,11 @@ wss.on('connection', (ws, req) => {
             case 'chatMessageSendRequest':
                 handleChat(session, payload.value.message, send);
                 return;
+            case 'clientChatMessage': {
+                const err = chat.handle(chatSender(session), payload.value.channel, payload.value.text);
+                if (err) send(M.sendMessage(err));
+                return;
+            }
             case 'saveCharacterRequest': {
                 // el guardado del cliente ya NO define oro, items ni nivel: solo sirve para crear el personaje de una cuenta nueva (clase y bando)
                 const t = Date.now(); if (t - lastSaveAt < 800) return; lastSaveAt = t;
@@ -336,22 +342,22 @@ function handleGm(s: Session, text: string, reply: (m: ServerMessage) => void): 
  * El canal manda en el mensaje (`channel`) para que el cliente lo pinte distinto.
  */
 function handleChat(sender: Session, raw: string, reply: (m: ServerMessage) => void): void {
-    let text = raw.trim(), channel: 'global' | 'nacion' | 'party' | 'guild' = 'global';
+    let text = raw.trim(), channel = 'global';
     if (/^\/gm(\s|$)/i.test(text)) { handleGm(sender, text, reply); return; } // comandos de GM (modo GM)
-    const pre = /^\/(gu|g|n|p)\s+/i.exec(text);
-    if (pre) { channel = ({ gu: 'guild', g: 'global', n: 'nacion', p: 'party' } as const)[pre[1].toLowerCase() as 'gu' | 'g' | 'n' | 'p']; text = text.slice(pre[0].length).trim(); }
-    if (!text) { reply(M.sendMessage('El mensaje no puede estar vacío.')); return; }
-    if (text.length > settings.chatMessageMaxLength) { reply(M.sendMessage(`El mensaje no puede pasar los ${settings.chatMessageMaxLength} caracteres.`)); return; }
-    if (channel === 'guild') { reply(M.sendMessage('Las guilds llegan próximamente.')); return; }
-    if (channel === 'party') { if (!parties.chat(sender.sessionId, text, sender.characterName)) reply(M.sendMessage('No estás en una party.')); return; }
-    const data = encode(M.chatMessageReceived(sender.characterName, text, channel));
-    if (channel === 'nacion') {
-        const fac = factionOfSession(sender); if (!fac) { reply(M.sendMessage('Todavía no tenés nación.')); return; }
-        for (const s of sessionsByNetworkId.values()) if (s.socket?.readyState === s.socket?.OPEN && factionOfSession(s) === fac) s.socket?.send(data);
-        return;
-    }
-    for (const s of sessionsByNetworkId.values()) if (s.socket?.readyState === s.socket?.OPEN) s.socket?.send(data);
+    const pre = /^\/(gu|g|n|p|a)\s+/i.exec(text);
+    if (pre) { channel = ({ gu: 'guild', g: 'global', n: 'nacion', p: 'party', a: 'area' } as Record<string, string>)[pre[1].toLowerCase()]; text = text.slice(pre[0].length); }
+    const err = chat.handle(chatSender(sender), channel, text);
+    if (err) reply(M.sendMessage(err));
 }
+const chatSender = (s: Session) => ({ sessionId: s.sessionId, name: s.characterName, playerId: worldOf(s)?.playerOf(s.sessionId)?.playerId.toString() ?? '' });
+const chat = new ChatManager({
+    maxLength: settings.chatMessageMaxLength,
+    allSessions: () => [...sessionsById.values()].filter((s) => s.socket?.readyState === s.socket?.OPEN).map((s) => s.sessionId),
+    viewersOf: (sid) => { const s = sessionsById.get(sid); return s ? worldOf(s)?.viewersOf(sid) ?? [sid] : []; },
+    partyOf: (sid) => parties.partyMembers(sid),
+    factionOf: (sid) => { const s = sessionsById.get(sid); return s ? factionOfSession(s) : undefined; },
+    send: (sid, m) => { const s = sessionsById.get(sid); if (s?.socket && s.socket.readyState === s.socket.OPEN) s.socket.send(encode(m)); },
+});
 const factionOfSession = (s: Session): string | undefined => worldOf(s)?.playerOf(s.sessionId)?.profile.split(';')[0] || undefined;
 
 async function shutdown(): Promise<void> {

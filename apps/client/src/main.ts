@@ -5,6 +5,9 @@
  * quién ve a quién y el chat. Lo que todavía corre solo en este navegador, como en el prototipo:
  * mobs, combate, hechizos, loot y experiencia (pasan al server en la fase 1b).
  */
+import { CombatTextManager, type CombatTextEvent } from './systems/CombatTextManager';
+import { mountChat } from './ui/mountChat';
+import { chatBus, logToChat, type ChatChannel } from './ui/chatStore';
 import { drawPortalFloor, drawPortalFx, PORTAL_CITY, PORTAL_ZONE } from './portal';
 import { DEFAULT_MAP, RECALL, STAT_CAP, STAT_DESC, STAT_IDS, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, traitLabel, traitHpMult, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
 import { UNIQUE_BY_NAME, UP_MAX, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Quest, type Slot, type Stock } from '@fdn/world';
@@ -202,9 +205,10 @@ const maxMp = () => CLS.mp + (P.lvl - 1) * CLS.mpL + totals().mp;
 const expNeed = () => expToLevel(P.lvl);
 
 // ---------- log ----------
-const logEl = $('log'); const lines: { t: string; cls: string }[] = [];
+mountChat($('chatRoot'));
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-function log(t: string, hi = false, cls = '') { lines.push({ t, cls: cls || (hi ? 'hi' : '') }); if (lines.length > 7) lines.shift(); logEl.innerHTML = lines.map((l) => `<p class="${l.cls}">${l.t}</p>`).join(''); }
+/** Línea del sistema en el chat. `t` es HTML ya escapado (puede traer colores de rareza). */
+function log(t: string, hi = false, _cls = '') { logToChat('system', 'System', t, hi ? '#e9dfc0' : undefined, true); }
 function float(x: number, y: number, text: string, col: string, big = false) { floats.push({ x, y, text, col, t: 0, big }); }
 const later = (dt: number, fn: () => void) => pending.push({ t: now() + dt, fn });
 const oneShot = (e: Ent, anim: string, len: number) => { e.one = { anim, t: now(), until: now() + len }; };
@@ -299,6 +303,7 @@ function onServer(m: ServerPayload) {
         case 'depositState': deposit.onMessage(m); break;
         case 'recallState': onRecallState(m.value); break;
         case 'partyState': renderParty(m.value.members); break;
+        case 'combatTextEvent': onCombatText(m.value); break;
         case 'partyStatsUpdate': updatePartyStats(m.value.name, m.value.hp, m.value.mp); break;
         case 'partyInvited': showPartyInvite(m.value.fromName, Number(m.value.expiresMs)); break;
         case 'econResult': deposit.onResult(m.value.ok, m.value.text); if (m.value.ok) log(esc(m.value.text)); else { toast(m.value.text); log(esc(m.value.text)); } break;
@@ -352,11 +357,8 @@ function onServer(m: ServerPayload) {
             if (m.value.message.startsWith(GM_TAG)) { try { renderGm(JSON.parse(m.value.message.slice(GM_TAG.length))); } catch { /* menú GM mal formado: se ignora */ } break; }
             log(esc(m.value.message), false, 'sys');
             break;
-        case 'chatMessageReceived': {
-            const ch = CHAT_CH.find((c) => c.name === m.value.channel) ?? CHAT_CH[0];
-            log(`<span class="ch">[${ch.label}]</span><b>${esc(m.value.senderCharacterName)}:</b> ${esc(m.value.message)}`, false, `chat ch-${ch.name}`);
-            break;
-        }
+        case 'chatMessageReceived': logToChat(chatChannel(m.value.channel), m.value.senderCharacterName, m.value.message); break;
+        case 'serverChatMessage': logToChat(chatChannel(m.value.channel), m.value.senderName, m.value.text); break;
             break;
         case 'pingResponse':
             playersOnline = m.value.playersInMap;
@@ -443,7 +445,7 @@ function onKillReward(v: { mobId: number; x: number; y: number; exp: number; gol
         if (boss) { log(`¡${mob?.name ?? 'El boss'} cayó! Soltó un item <span style="color:${it.rar.c}">${it.rar.n.toLowerCase()}</span>.`, true); shake = Math.max(shake, 0.4); }
         if (v.bagFull) { log(`Bolsa llena: <span style="color:${it.rar.c}">${esc(it.name)}</span> cayó al suelo, a tus pies. Es tuyo durante 60 s; recogelo con Espacio o clic.`, true); toast('Bolsa llena: el item cayó al suelo'); }
         else if (it.rar.k >= 2 && !boss) log(`¡Cayó un item <span style="color:${it.rar.c}">${it.rar.n.toLowerCase()}</span>!`, true);
-        else log(`Agarraste <span style="color:${it.rar.c}">${esc(it.name)}</span>.`);
+        else logToChat('combat', 'Loot', `¡Has obtenido [${it.name}] x1!`, it.rar.c);
     }
     if (v.gold || v.goldD) log(`Juntaste ${fmtNum(v.goldD || v.gold)} de oro.`);
     if (v.forge) log(`Encontraste ${v.forge} piedra${v.forge > 1 ? 's' : ''} de forja.`, true);
@@ -938,6 +940,27 @@ function resize() { DPR = Math.min(2, window.devicePixelRatio || 1); W = cv.clie
 window.addEventListener('resize', resize); resize();
 const cam = { x: 0, y: 0, sx: 0, sy: 0 };
 const toScreen = (gx: number, gy: number) => { const p = iso(gx, gy); return { x: (p.x - cam.x) * Z + W / 2 + cam.sx, y: (p.y - cam.y) * Z + H / 2 + cam.sy }; };
+/** Textos flotantes de combate (CombatTextEvent). IDs: jugador = player_id decimal, mob = "m" + id. */
+const combatText = new CombatTextManager({
+    resolve: (id) => {
+        const s = String(id);
+        if (s.startsWith('m')) { const m = mobs.find((x) => x.id === Number(s.slice(1))); return m ? { x: m.x, y: m.y } : null; }
+        let b: bigint; try { b = BigInt(s); } catch { return null; }
+        if (b === myId) return { x: P.x, y: P.y };
+        const o = others.get(b); return o ? { x: o.x, y: o.y } : null;
+    },
+    toScreen: (gx, gy) => toScreen(gx, gy),
+    iconUrl: (id) => { const sp = SPELLS.find((x) => x.id === id); return spellIcon(id, sp?.col ?? '#c9a24a'); },
+    headOffset: () => 62 * Z,
+});
+const spellLabel = (id: string) => SPELLS.find((x) => x.id === id)?.name ?? id;
+function onCombatText(v: { targetId: string; sourceId?: string; amount: number; isHeal: boolean; spellName: string; spellIcon: string }) {
+    const ev: CombatTextEvent = { targetId: v.targetId, amount: v.amount, isHeal: v.isHeal, spellName: v.spellName ? spellLabel(v.spellName) : '', spellId: v.spellIcon || undefined };
+    combatText.onEvent(ev);
+    const me = myId.toString(), spell = ev.spellName ? ` de ${ev.spellName}` : '';
+    if (v.targetId === me) logToChat('combat', 'System', v.isHeal ? `Te curaste ${v.amount}${spell}.` : `Recibiste ${v.amount} de daño${spell}.`);
+    else if (v.sourceId === me && !v.isHeal) logToChat('combat', 'System', `Hiciste ${v.amount} de daño${spell}.`);
+}
 const toGrid = (sx: number, sy: number) => { const x = (sx - W / 2 - cam.sx) / Z + cam.x, y = (sy - H / 2 - cam.sy) / Z + cam.y; return { x: (x / (TW / 2) + y / (TH / 2)) / 2, y: (y / (TH / 2) - x / (TW / 2)) / 2 }; };
 
 let hover: Mob | null = null, hoverDrop: Drop | null = null, mouse = { x: -1, y: -1 };
@@ -1022,10 +1045,23 @@ cv.addEventListener('pointermove', (e) => { const r = cv.getBoundingClientRect()
 cv.addEventListener('pointerleave', () => { mouse = { x: -1, y: -1 }; });
 
 // ---------- chat por canales: Global, Nación (tu facción), Party; Guild llega más adelante ----------
-const CHAT_CH = [{ name: 'global', key: 'g', label: 'Global' }, { name: 'nacion', key: 'n', label: 'Nación' }, { name: 'party', key: 'p', label: 'Party' }];
-let chatCh = 0;
-function setChatCh(i: number) { chatCh = (i + CHAT_CH.length) % CHAT_CH.length; const b = $('chatCh'); b.textContent = CHAT_CH[chatCh].label; b.className = CHAT_CH[chatCh].name; }
-$('chatCh').addEventListener('click', () => { setChatCh(chatCh + 1); chatIn.focus(); });
+const CHAT_NET = new Set<ChatChannel>(['global', 'area', 'party', 'guild', 'nacion']);
+function chatChannel(c: string): ChatChannel { const k = (c || 'global') as ChatChannel; return CHAT_NET.has(k) ? k : 'global'; }
+const CHAT_HELP = () => `Comandos: /meditar${DEBUG ? ', /look' : ''}; chat: /g global, /a área, /n nación, /p party, /gu guild (pronto); party: /invitar /aceptar /rechazar /salir /expulsar /lider`;
+/** Lo que se escribe en el ChatBox: comandos locales, o mensaje al server por el canal de la pestaña (o el del prefijo). */
+chatBus.on('chat:send', ({ text, channel }) => {
+    cv.focus({ preventScroll: true });
+    if (!connected) return;
+    if (/^\/meditar$/i.test(text)) { toggleMeditate(); return; }
+    if (DEBUG && /^\/look(\s|$)/i.test(text)) { lookCommand(text); return; }
+    if (partyCommand(text)) return;
+    if (/^\/gm(\s|$)/i.test(text)) { net.send({ $case: 'chatMessageSendRequest', value: { message: text } }); return; } // comandos de GM: los resuelve el server (FDN_GM)
+    const pre = /^\/(gu|g|n|p|a)\s+/i.exec(text);
+    if (pre) { const ch = ({ gu: 'guild', g: 'global', n: 'nacion', p: 'party', a: 'area' } as Record<string, string>)[pre[1].toLowerCase()]; net.send({ $case: 'clientChatMessage', value: { channel: ch, text: text.slice(pre[0].length) } }); return; }
+    if (text.startsWith('/')) { log(CHAT_HELP()); return; }
+    if (channel === 'private') { log('Los mensajes privados llegan próximamente.'); return; }
+    net.send({ $case: 'clientChatMessage', value: { channel: channel === 'all' || channel === 'system' ? 'global' : channel, text } });
+});
 // ---------- party (docs/PARTY_Y_ARENAS.md): comandos de chat y panel de compañeros ----------
 const PARTY_CMDS: Record<string, string> = { invitar: 'invite', inv: 'invite', aceptar: 'accept', rechazar: 'decline', salir: 'leave', expulsar: 'kick', lider: 'leader' };
 function partyCommand(text: string): boolean {
@@ -1088,26 +1124,10 @@ function showPartyInvite(from: string, expiresMs: number, mock = false): void {
     clearTimeout(inviteTimer); inviteTimer = window.setTimeout(hidePartyInvite, ms);
 }
 
-const chatIn = $('chatIn') as HTMLInputElement;
 window.addEventListener('keydown', (e) => {
     if (!connected) return;
-    if (document.activeElement === chatIn) {
-        if (e.key === 'Enter') {
-            const text = chatIn.value.trim();
-            if (/^\/meditar$/i.test(text)) toggleMeditate();
-            else if (DEBUG && /^\/look(\s|$)/i.test(text)) lookCommand(text);
-            else if (partyCommand(text)) { /* resuelto */ }
-            else if (/^\/gm(\s|$)/i.test(text)) net.send({ $case: 'chatMessageSendRequest', value: { message: text } }); // comandos de GM: los resuelve el server (FDN_GM)
-            else if (/^\/(gu|g|n|p)\s/i.test(text)) net.send({ $case: 'chatMessageSendRequest', value: { message: text } }); // canal explícito
-            else if (text.startsWith('/')) log(DEBUG ? 'Comandos: /meditar, /look, chat: /g global, /n nación, /p party, /gu guild (pronto); party: /invitar /aceptar /rechazar /salir /expulsar /lider' : 'Comandos: /meditar, chat: /g global, /n nación, /p party, /gu guild (pronto); party: /invitar /aceptar /rechazar /salir /expulsar /lider');
-            else if (text) net.send({ $case: 'chatMessageSendRequest', value: { message: `/${CHAT_CH[chatCh].key} ${text}` } }); // va por el canal elegido
-            chatIn.value = ''; chatIn.blur(); cv.focus({ preventScroll: true }); e.preventDefault();
-        } else if (e.key === 'Escape') { chatIn.blur(); cv.focus({ preventScroll: true }); }
-        else if (e.key === 'Tab') { e.preventDefault(); setChatCh(chatCh + (e.shiftKey ? -1 : 1)); }
-        return;
-    }
     if (e.target instanceof HTMLInputElement) return;
-    if (e.key === 'Enter') { e.preventDefault(); chatIn.focus(); return; }
+    if (e.key === 'Enter') { e.preventDefault(); ($('chatIn') as HTMLInputElement).focus(); return; }
     if (e.key === 'F9') { e.preventDefault(); toggleGm(); return; }
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'q' || e.key === 'Q')) { usePotion('hp'); return; }
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'e' || e.key === 'E')) { usePotion('mp'); return; }
@@ -1118,6 +1138,13 @@ window.addEventListener('keydown', (e) => {
     if (e.code === 'Space' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); pickupNearest(); return; }
     // ?debug: Shift+I simula una invitación de KingLuthor (la I sola sigue abriendo la bolsa).
     if (DEBUG && e.shiftKey && e.code === 'KeyI' && !e.repeat) { showPartyInvite('KingLuthor', Date.now() + 30_000, true); return; }
+    // ?debug: K simula un golpe de 326 y una cura de +92 sobre mi personaje.
+    if (DEBUG && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'k' || e.key === 'K')) {
+        const me = myId.toString(), sp = SPELLS.find((x) => x.id && x.id !== 'ataque');
+        onCombatText({ targetId: me, amount: 326, isHeal: false, spellName: sp?.id ?? 'proyectil', spellIcon: sp?.id ?? 'proyectil' });
+        setTimeout(() => onCombatText({ targetId: me, amount: 92, isHeal: true, spellName: '', spellIcon: '' }), 250);
+        return;
+    }
     if (e.key === 'i' || e.key === 'I') toggleBag();
     if (e.key === 'c' || e.key === 'C') toggleChar();
     if (e.key === 'Escape') { if (P.casting || P.ready) cancelCast('Hechizo cancelado.'); else P.target = null; }
@@ -1229,6 +1256,7 @@ function update(dt: number) {
         p.x += ((pm.x - p.x) / d) * p.spd * dt; p.y += ((pm.y - p.y) / d) * p.spd * dt;
     }
     for (const c of corpses.slice()) if (T - c.t > 3) corpses.splice(corpses.indexOf(c), 1);
+    combatText.update(dt);
     for (const f of floats.slice()) { f.t += dt; if (f.t > 1.1) floats.splice(floats.indexOf(f), 1); }
     for (const f of fx.slice()) { f.t += dt; if (f.t > (f.d ?? (f.k === 'efx' ? 0.72 : 0.6))) fx.splice(fx.indexOf(f), 1); }
     for (const d of drops) d.t += dt;
@@ -1468,6 +1496,7 @@ function render() {
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     const pp = toScreen(P.x, P.y); const g = ctx.createRadialGradient(pp.x, pp.y - 25 * Z, 110 * Z, pp.x, pp.y - 25 * Z, Math.max(W, H) * 0.6);
     g.addColorStop(0, 'rgba(6,8,12,0)'); g.addColorStop(1, 'rgba(6,8,12,.82)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    combatText.draw(ctx); // números de combate, en pantalla y por encima de la oscuridad
     if (MAP.fog) drawFog(MAP.fog, T);
     if (inDungeon(P.x, P.y)) { ctx.fillStyle = 'rgba(12,8,24,.28)'; ctx.fillRect(0, 0, W, H); }
     ctx.textAlign = 'center';
@@ -1976,6 +2005,7 @@ let mapLoading = false;
 const perf = { build: 0, minimap: 0, fps: 0, frames: 0, since: 0 };
 function loadMap(def: MapDef): string {
     const t0 = performance.now();
+    if (MAP_DEF?.id !== def.id && def.name) logToChat('system', 'System', `Entraste a ${def.name}.`);
     MAP_DEF = def; MAP = def.build(); N = MAP.size;
     ({ tiles, blocked, safe, props, decals } = MAP);
     ZONES = MAP.zones; WAYPOINTS = MAP.waypoints ?? []; LINKS = def.links; LINK_WPS = linkWps(LINKS);

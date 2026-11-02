@@ -126,6 +126,8 @@ message ClientMessage {
     PartyRequest party_request = 600;
     // Puntos de stats del personaje (ver docs/PLAN_DE_TRABAJO.md paso 1.2). Rango propio de tags desde 700.
     StatAllocRequest stat_alloc_request = 700;
+    // Chat por canales (apps/server/src/systems/chat.ts). Rango propio de tags desde 800.
+    ClientChatMessage client_chat_message = 800;
   }
   // P0-A: el cliente ya no fija números de combate (velocidad de movimiento, de ataque, de casteo, alcance, daño, stun).
   // Los calcula el server. Tags retirados: no reutilizar.
@@ -509,7 +511,22 @@ message ServerMessage {
     PartyState party_state = 600;
     PartyInvited party_invited = 601;
     PartyStatsUpdate party_stats_update = 602;
+    // Texto flotante de combate (daño / cura). Rango propio de tags desde 700.
+    CombatTextEvent combat_text_event = 700;
+    // Chat por canales. Rango propio de tags desde 800.
+    ServerChatMessage server_chat_message = 800;
   }
+}
+
+// Número de combate para el texto flotante. Lo reciben solo los jugadores en rango de visión del objetivo.
+// IDs: jugador = su player_id en decimal ("42"); mob = "m" + mob id ("m17"). source_id vacío = sin autor (veneno, poción).
+message CombatTextEvent {
+  string target_id = 1;    // A quién le pegan o a quién curan
+  string source_id = 2;    // Quién hace el daño o la cura
+  int32 amount = 3;        // El número (ej: 326)
+  bool is_heal = 4;        // true = verde (+), false = daño
+  string spell_name = 5;   // id del hechizo (ej: "proyectil"); vacío = golpe básico / sin cartel
+  string spell_icon = 6;   // id del ícono para buscarlo en el cliente
 }
 
 // Party: el cliente manda una acción ('invite', 'accept', 'decline', 'leave', 'kick', 'leader') con el nombre del otro jugador cuando hace falta.
@@ -1040,6 +1057,19 @@ message PlayerParalyzed {
 
 message SendMessage {
   string message = 1;
+}
+
+// Chat por canales. channel: 'global', 'area' (radio de visión), 'party' o 'nacion'.
+message ClientChatMessage {
+  string channel = 1;
+  string text = 2;
+}
+
+message ServerChatMessage {
+  string channel = 1;
+  string sender_name = 2;
+  string text = 3;
+  string sender_id = 4;   // player_id del que habla, en decimal
 }
 
 message ChatMessageSendRequest {

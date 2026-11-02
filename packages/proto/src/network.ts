@@ -151,6 +151,9 @@ export interface ClientMessage {
     | //
     /** Puntos de stats del personaje (ver docs/PLAN_DE_TRABAJO.md paso 1.2). Rango propio de tags desde 700. */
     { $case: "statAllocRequest"; value: StatAllocRequest }
+    | //
+    /** Chat por canales (apps/server/src/systems/chat.ts). Rango propio de tags desde 800. */
+    { $case: "clientChatMessage"; value: ClientChatMessage }
     | undefined;
 }
 
@@ -552,7 +555,32 @@ export interface ServerMessage {
     { $case: "partyState"; value: PartyState }
     | { $case: "partyInvited"; value: PartyInvited }
     | { $case: "partyStatsUpdate"; value: PartyStatsUpdate }
+    | //
+    /** Texto flotante de combate (daño / cura). Rango propio de tags desde 700. */
+    { $case: "combatTextEvent"; value: CombatTextEvent }
+    | //
+    /** Chat por canales. Rango propio de tags desde 800. */
+    { $case: "serverChatMessage"; value: ServerChatMessage }
     | undefined;
+}
+
+/**
+ * Número de combate para el texto flotante. Lo reciben solo los jugadores en rango de visión del objetivo.
+ * IDs: jugador = su player_id en decimal ("42"); mob = "m" + mob id ("m17"). source_id vacío = sin autor (veneno, poción).
+ */
+export interface CombatTextEvent {
+  /** A quién le pegan o a quién curan */
+  targetId: string;
+  /** Quién hace el daño o la cura */
+  sourceId: string;
+  /** El número (ej: 326) */
+  amount: number;
+  /** true = verde (+), false = daño */
+  isHeal: boolean;
+  /** id del hechizo (ej: "proyectil"); vacío = golpe básico / sin cartel */
+  spellName: string;
+  /** id del ícono para buscarlo en el cliente */
+  spellIcon: string;
 }
 
 /**
@@ -1177,6 +1205,20 @@ export interface PlayerParalyzed {
 
 export interface SendMessage {
   message: string;
+}
+
+/** Chat por canales. channel: 'global', 'area' (radio de visión), 'party' o 'nacion'. */
+export interface ClientChatMessage {
+  channel: string;
+  text: string;
+}
+
+export interface ServerChatMessage {
+  channel: string;
+  senderName: string;
+  text: string;
+  /** player_id del que habla, en decimal */
+  senderId: string;
 }
 
 export interface ChatMessageSendRequest {
@@ -1936,6 +1978,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "statAllocRequest":
         StatAllocRequest.encode(message.payload.value, writer.uint32(5602).fork()).join();
         break;
+      case "clientChatMessage":
+        ClientChatMessage.encode(message.payload.value, writer.uint32(6402).fork()).join();
+        break;
     }
     return writer;
   },
@@ -2575,6 +2620,14 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "statAllocRequest", value: StatAllocRequest.decode(reader, reader.uint32()) };
             continue;
           }
+          case 800: {
+            if (tag !== 6402) {
+              break;
+            }
+
+            message.payload = { $case: "clientChatMessage", value: ClientChatMessage.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -3082,6 +3135,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "statAllocRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "statAllocRequest", value: StatAllocRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "clientChatMessage": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "clientChatMessage", value: ClientChatMessage.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -6913,6 +6972,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "partyStatsUpdate":
         PartyStatsUpdate.encode(message.payload.value, writer.uint32(4818).fork()).join();
         break;
+      case "combatTextEvent":
+        CombatTextEvent.encode(message.payload.value, writer.uint32(5602).fork()).join();
+        break;
+      case "serverChatMessage":
+        ServerChatMessage.encode(message.payload.value, writer.uint32(6402).fork()).join();
+        break;
     }
     return writer;
   },
@@ -7745,6 +7810,22 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "partyStatsUpdate", value: PartyStatsUpdate.decode(reader, reader.uint32()) };
             continue;
           }
+          case 700: {
+            if (tag !== 5602) {
+              break;
+            }
+
+            message.payload = { $case: "combatTextEvent", value: CombatTextEvent.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 800: {
+            if (tag !== 6402) {
+              break;
+            }
+
+            message.payload = { $case: "serverChatMessage", value: ServerChatMessage.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -8396,7 +8477,134 @@ export const ServerMessage: MessageFns<ServerMessage> = {
         }
         break;
       }
+      case "combatTextEvent": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "combatTextEvent", value: CombatTextEvent.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "serverChatMessage": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "serverChatMessage", value: ServerChatMessage.fromPartial(object.payload.value) };
+        }
+        break;
+      }
     }
+    return message;
+  },
+};
+
+function createBaseCombatTextEvent(): CombatTextEvent {
+  return { targetId: "", sourceId: "", amount: 0, isHeal: false, spellName: "", spellIcon: "" };
+}
+
+export const CombatTextEvent: MessageFns<CombatTextEvent> = {
+  encode(message: CombatTextEvent, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.targetId !== "") {
+      writer.uint32(10).string(message.targetId);
+    }
+    if (message.sourceId !== "") {
+      writer.uint32(18).string(message.sourceId);
+    }
+    if (message.amount !== 0) {
+      writer.uint32(24).int32(message.amount);
+    }
+    if (message.isHeal !== false) {
+      writer.uint32(32).bool(message.isHeal);
+    }
+    if (message.spellName !== "") {
+      writer.uint32(42).string(message.spellName);
+    }
+    if (message.spellIcon !== "") {
+      writer.uint32(50).string(message.spellIcon);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CombatTextEvent {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseCombatTextEvent();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.targetId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.sourceId = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.amount = reader.int32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.isHeal = reader.bool();
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.spellName = reader.string();
+            continue;
+          }
+          case 6: {
+            if (tag !== 50) {
+              break;
+            }
+
+            message.spellIcon = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<CombatTextEvent>, I>>(base?: I): CombatTextEvent {
+    return CombatTextEvent.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CombatTextEvent>, I>>(object: I): CombatTextEvent {
+    const message = createBaseCombatTextEvent();
+    message.targetId = object.targetId ?? "";
+    message.sourceId = object.sourceId ?? "";
+    message.amount = object.amount ?? 0;
+    message.isHeal = object.isHeal ?? false;
+    message.spellName = object.spellName ?? "";
+    message.spellIcon = object.spellIcon ?? "";
     return message;
   },
 };
@@ -15786,6 +15994,164 @@ export const SendMessage: MessageFns<SendMessage> = {
   fromPartial<I extends Exact<DeepPartial<SendMessage>, I>>(object: I): SendMessage {
     const message = createBaseSendMessage();
     message.message = object.message ?? "";
+    return message;
+  },
+};
+
+function createBaseClientChatMessage(): ClientChatMessage {
+  return { channel: "", text: "" };
+}
+
+export const ClientChatMessage: MessageFns<ClientChatMessage> = {
+  encode(message: ClientChatMessage, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.channel !== "") {
+      writer.uint32(10).string(message.channel);
+    }
+    if (message.text !== "") {
+      writer.uint32(18).string(message.text);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ClientChatMessage {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseClientChatMessage();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.channel = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.text = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<ClientChatMessage>, I>>(base?: I): ClientChatMessage {
+    return ClientChatMessage.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ClientChatMessage>, I>>(object: I): ClientChatMessage {
+    const message = createBaseClientChatMessage();
+    message.channel = object.channel ?? "";
+    message.text = object.text ?? "";
+    return message;
+  },
+};
+
+function createBaseServerChatMessage(): ServerChatMessage {
+  return { channel: "", senderName: "", text: "", senderId: "" };
+}
+
+export const ServerChatMessage: MessageFns<ServerChatMessage> = {
+  encode(message: ServerChatMessage, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.channel !== "") {
+      writer.uint32(10).string(message.channel);
+    }
+    if (message.senderName !== "") {
+      writer.uint32(18).string(message.senderName);
+    }
+    if (message.text !== "") {
+      writer.uint32(26).string(message.text);
+    }
+    if (message.senderId !== "") {
+      writer.uint32(34).string(message.senderId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ServerChatMessage {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseServerChatMessage();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.channel = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.senderName = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.text = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.senderId = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<ServerChatMessage>, I>>(base?: I): ServerChatMessage {
+    return ServerChatMessage.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ServerChatMessage>, I>>(object: I): ServerChatMessage {
+    const message = createBaseServerChatMessage();
+    message.channel = object.channel ?? "";
+    message.senderName = object.senderName ?? "";
+    message.text = object.text ?? "";
+    message.senderId = object.senderId ?? "";
     return message;
   },
 };
