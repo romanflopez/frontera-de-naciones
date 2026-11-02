@@ -753,11 +753,12 @@ export class GameWorld {
         if (!this.skillGate(p, skill)) return;
         const sp = SKILLS[skill], now = Date.now();
         const rollDmg = () => rollSpellDamage(skill, p.combat, p.pvp.fury(now));
-        const hitPlayer = (tgt: Player, slow: boolean) => {
+        const hitPlayer = (tgt: Player, control: boolean) => {
             const dmg = this.damagePlayer(tgt, rollDmg(), 'phys', p, '', skill);
-            if (slow && sp.slow && applySlow(tgt.status, now, sp.slow * 1000) > 0) this.announceStatus(tgt);
-            p.send(M.pvpHit(p.playerId, { fx: '', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs: 0, r: 0 })); // número para el que pega
-            this.broadcastNear(p, M.pvpHit(p.playerId, { fx: 'crosswind', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs: 0, r: 0 }));
+            if (control && sp.slow && applySlow(tgt.status, now, sp.slow * 1000) > 0) this.announceStatus(tgt);
+            const secs = control && sp.stun ? applyParalysis(tgt.status, now, sp.stun * 1000, 'aturdir') / 1000 : 0; // Carga sagrada: aturde al llegar (con DR)
+            p.send(M.pvpHit(p.playerId, { fx: '', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs, r: 0 })); // número para el que pega
+            this.broadcastNear(p, M.pvpHit(p.playerId, { fx: 'crosswind', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs, r: 0 }));
             return dmg;
         };
         if (skill === 'grito') {
@@ -777,10 +778,16 @@ export class GameWorld {
                 if (!this.isEnemyPair(p, o) || o.isDead || Math.hypot(o.posX + 0.5 - cx, o.posY + 0.5 - cy) > sp.aoe!) continue;
                 hitPlayer(o, false);
             }
-            if (!this.cellSafe(p.posX, p.posY)) {
+            const sweepMobs = () => {
+                if (this.cellSafe(p.posX, p.posY) || p.isDead) return;
                 const hits = (this.mobSim?.near(cx, cy, sp.aoe!) ?? []).sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy)).slice(0, AOE_MAX_TARGETS.giro); // los más cercanos, con tope y caída de daño
                 hits.forEach((m, i) => this.mobSim!.skillHit(p, m.id, Math.max(1, Math.round(rollDmg() * aoeMult(i))), 0, skill));
-            }
+            };
+            sweepMobs();
+            for (let k = 1; k < (sp.sweeps ?? 1); k++) this.playerTimer(p, 250 * k, () => { // Barrido: el segundo corte 0,25 s después, en el mismo lugar
+                sweepMobs();
+                for (const o of this.nearbyPlayers(p.posX, p.posY, p.sessionId)) if (this.isEnemyPair(p, o) && !o.isDead && Math.hypot(o.posX + 0.5 - cx, o.posY + 0.5 - cy) <= sp.aoe!) hitPlayer(o, false);
+            });
             this.skillBroadcast(p, 'giro', p.posX, p.posY);
             return;
         }
@@ -803,7 +810,7 @@ export class GameWorld {
             for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
                 const x = tx + dx, y = ty + dy;
                 if ((!dx && !dy) || !this.cellWalkable(x, y) || !this.occupancy.isFreeAndNotTeleportCell(x, y) || this.isPortalCell(x, y) || this.cellSafe(x, y)) continue;
-                const len = this.pathLen(p.posX, p.posY, x, y, 9);
+                const len = this.pathLen(p.posX, p.posY, x, y, Math.ceil(sp.range) + 3);
                 if (len < 0) continue;
                 const score = len + Math.hypot(x - p.posX, y - p.posY) * 0.01;
                 if (score < best) { best = score; dest = { x, y }; }
@@ -813,7 +820,7 @@ export class GameWorld {
         const fx = p.posX, fy = p.posY;
         this.skillCommit(p, 'carga');
         if (dest.x !== fx || dest.y !== fy) this.jumpTo(p, dest.x, dest.y);
-        if (tgt) hitPlayer(tgt, true); else this.mobSim!.skillHit(p, mobId, rollDmg(), sp.slow, skill);
+        if (tgt) hitPlayer(tgt, true); else this.mobSim!.skillHit(p, mobId, rollDmg(), sp.slow, skill, sp.stun);
         this.skillBroadcast(p, 'carga', fx, fy);
     }
 

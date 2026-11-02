@@ -142,8 +142,8 @@ export function initLoginUI(ctx: FlowCtx) {
     // --- tarjetas de clase / facción ---
     function bullets(c: ClassInfo): string[] {
         const sp = (...ids: string[]) => ids.map((i) => ctx.spellName(i)).join(', ');
-        if (c.id === 'mago') return [`Hechizos a distancia: ${sp('proyectil', 'bola', 'lanza')}`, `Parálisis y curación (${sp('paralisis', 'curar')})`, `Mucho maná: ${c.mp} base, +${c.mpL} por nivel`, `Frágil: ${c.hp} de vida base`];
-        if (c.id === 'guerrero') return [`Cuerpo a cuerpo: ${c.melee[0]}–${c.melee[1]} de daño`, `Resistente: ${c.hp} de vida base, +${c.hpL} por nivel`, `Frena enemigos (${sp('aturdir', 'sismo')})`, `Poco maná: ${c.mp} base`];
+        if (c.id === 'mago') return [`Hechizos a distancia: ${sp('proyectil', 'bola', 'lluvia')}`, `Congela para controlar (${sp('paralisis')})`, `Mucho maná: ${c.mp} base, +${c.mpL} por nivel`, `Frágil: ${c.hp} de vida base`];
+        if (c.id === 'guerrero') return [`Cuerpo a cuerpo: ${c.melee[0]}–${c.melee[1]} de daño`, `Resistente: ${c.hp} de vida base, +${c.hpL} por nivel`, `Aturde y barre (${sp('aturdir', 'giro')})`, `Poco maná: ${c.mp} base`];
         return [c.desc];
     }
     function cardsHtml(kind: 'cls' | 'fac'): string {

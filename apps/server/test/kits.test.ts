@@ -12,7 +12,7 @@ import type { AccountRecord, Storage } from '../src/storage.ts';
 import { WorldRegistry } from '../src/registry.ts';
 import type { PersistedPlayer, Player } from '../src/player.ts';
 import type { GameWorld } from '../src/world.ts';
-import { PVP_SPELLS, SKILLS } from '../src/systems/pvpCombat.ts';
+import { AOE_MAX_TARGETS, CAST_MS, PVP_SPELLS, SKILLS, rollSpellDamage, statsFromChar } from '../src/systems/pvpCombat.ts';
 
 const settings = loadSettings();
 class MemStorage implements Storage {
@@ -108,4 +108,43 @@ test('server: invisibilidad es del mago; el paladín no la puede pedir', () => {
     assert.equal(pala.p.status.isInvisible, false);
     pkt(w, mago.sid, 'invisibilityRequest', {});
     assert.equal(mago.p.status.isInvisible, true);
+});
+
+// ---------- K2: habilidades ajustadas a Valdrys ----------
+
+test('K2: las habilidades que se fueron ya no existen en el server ni en los kits', () => {
+    for (const id of ['hoja', 'lanza', 'marejada', 'ventisca', 'sismo', 'torbellino', 'tajo', 'luz', 'curar', 'curar2', 'vendar']) {
+        assert.equal(PVP_SPELLS[id], undefined, `${id} sigue en PVP_SPELLS`);
+        for (const kit of Object.values(CLASS_KITS)) assert.equal(kit[id], undefined, `${id} sigue en un kit`);
+    }
+    assert.deepEqual(Object.keys(AOE_MAX_TARGETS).sort(), ['giro', 'lluvia']);
+});
+
+test('K2: tiempos de casteo y forma de cada hechizo como en Valdrys', () => {
+    assert.deepEqual([CAST_MS.proyectil, CAST_MS.paralisis, CAST_MS.bola, CAST_MS.lluvia], [750, 1000, 1500, 2400]);
+    assert.equal(PVP_SPELLS.bola.aoe, undefined, 'Bola de fuego es de un objetivo');
+    assert.equal(PVP_SPELLS.lluvia.aoe, 4.5, 'Infierno: radio 4,5');
+    assert.equal(PVP_SPELLS.aturdir.range, 8, 'Martillo de justicia: a distancia');
+    assert.equal(SKILLS.carga.range, 15); assert.equal(SKILLS.carga.stun, 1);
+    assert.equal(SKILLS.giro.sweeps, 2); assert.equal(SKILLS.blink.mp, 0);
+});
+
+test('K2: el daño es un múltiplo del Daño base (Saeta 1×, Cadenas 0,2×, Bola 3×, Infierno 1,2×)', () => {
+    const s = statsFromChar({ lvl: 10, cls: 'mago', eq: {} }), rnd = Math.random;
+    Math.random = () => 0.5;
+    try {
+        const base = rollSpellDamage('proyectil', s, false);
+        const ratio = (id: string) => rollSpellDamage(id, s, false) / base;
+        assert.ok(Math.abs(ratio('bola') - 3) < 0.05, `bola ${ratio('bola')}`);
+        assert.ok(Math.abs(ratio('lluvia') - 1.2) < 0.05, `infierno ${ratio('lluvia')}`);
+        assert.ok(Math.abs(ratio('paralisis') - 0.2) < 0.05, `cadenas ${ratio('paralisis')}`);
+    } finally { Math.random = rnd; }
+});
+
+test('K2: la Carga sagrada aturde al llegar (y no frena)', () => {
+    const { w, mago, pala } = setup();
+    setLevel(pala.p, 20);
+    pkt(w, pala.sid, 'skillRequest', { skill: 'carga', targetId: mago.p.playerId, mobId: 0 });
+    assert.ok(mago.p.hp < mago.p.combat.maxHp || cases(pala.log, 'pvpHit').length > 0, 'la carga pegó');
+    assert.ok(mago.p.isParalyzed(Date.now()), 'quedó aturdido');
 });

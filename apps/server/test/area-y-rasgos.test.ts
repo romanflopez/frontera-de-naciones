@@ -51,7 +51,7 @@ function setup(o: Opts = {}) {
 test('área: 100 %, 88 %, 76 %, 64 %, 52 % y nunca menos de 50 %', () => {
     assert.deepEqual([0, 1, 2, 3, 4].map(aoeMult), [1, 0.88, 0.76, 0.64, 0.52]);
     assert.equal(aoeMult(5), 0.5); assert.equal(aoeMult(50), 0.5); assert.equal(aoeMult(-3), 1);
-    assert.equal(AOE_MAX_TARGETS.bola, 5); assert.equal(AOE_MAX_TARGETS.lluvia, 5); assert.equal(AOE_MAX_TARGETS.giro, 4);
+    assert.equal(AOE_MAX_TARGETS.lluvia, 5); assert.equal(AOE_MAX_TARGETS.giro, 4);
 });
 
 test('área: el daño total con 1, 2, 3 y 6 objetivos crece pero cada vez menos', () => {
@@ -60,10 +60,10 @@ test('área: el daño total con 1, 2, 3 y 6 objetivos crece pero cada vez menos'
 });
 
 // ---------- B. tope de objetivos en el server ----------
-test('área: de 8 mobs en el área, "bola" solo le pega a 5, con daño decreciente', () => {
+test('área: de 8 mobs en el área, "lluvia" (Infierno) solo le pega a 5, con daño decreciente', () => {
     const { raws, hit, dmgs } = setup({ cls: 'mago', n: 8, r: 1.5, at: { x: 12, y: 20 } });
     assert.equal(raws.length, 8);
-    for (const m of raws) hit(m, 'bola'); // el cliente manda a todos los del área
+    for (const m of raws) hit(m, 'lluvia'); // el cliente manda a todos los del área
     const d = dmgs();
     assert.equal(d.length, 5, 'tope de 5 objetivos');
     assert.equal(new Set(d.map((x) => x.mobId)).size, 5);
@@ -73,23 +73,23 @@ test('área: de 8 mobs en el área, "bola" solo le pega a 5, con daño decrecien
 
 test('área: un cliente tramposo que repite el golpe sobre otros mobs dentro del mismo lanzamiento no pasa del tope', () => {
     const { raws, hit, dmgs } = setup({ cls: 'mago', n: 8, r: 1.5, at: { x: 12, y: 20 } });
-    for (let k = 0; k < 20; k++) for (const m of raws) hit(m, 'bola');
+    for (let k = 0; k < 20; k++) for (const m of raws) hit(m, 'lluvia');
     assert.equal(dmgs().length, 5);
 });
 
 test('área: la recarga habilita otro lanzamiento y vuelven a entrar 5', () => {
     const { raws, hit, dmgs } = setup({ cls: 'mago', n: 8, r: 1.5, at: { x: 12, y: 20 } });
-    for (const m of raws) hit(m, 'bola');
-    clock += 4000;
-    for (const m of raws) hit(m, 'bola');
+    for (const m of raws) hit(m, 'lluvia');
+    clock += 19000; // recarga del Infierno: 18 s
+    for (const m of raws) hit(m, 'lluvia');
     assert.equal(dmgs().length, 10);
 });
 
 test('un solo objetivo no tiene castigo: pega el daño completo', () => {
     const { raws, hit, dmgs } = setup({ cls: 'mago', n: 1 });
-    hit(raws[0], 'bola');
-    // bola de nivel 10: (18..26) + 2·10 sin arma/Magia, ×0,85..1,15
-    assert.ok(dmgs()[0].dmg >= Math.round(38 * 0.85) - 1 && dmgs()[0].dmg <= Math.round(46 * 1.15) + 1, String(dmgs()[0].dmg));
+    hit(raws[0], 'lluvia');
+    // Infierno de nivel 10: (14..21 + 2·10) × 1,2 sin arma ni Magia
+    assert.ok(dmgs()[0].dmg >= Math.round(34 * 1.2) - 1 && dmgs()[0].dmg <= Math.round(41 * 1.2) + 1, String(dmgs()[0].dmg));
 });
 
 // ---------- B. huida ----------
@@ -151,7 +151,7 @@ test('anti-físico: el daño físico se reduce a la mitad de verdad; el mágico 
     // el mismo mob anti-físico recibe el hechizo mágico completo
     const mg = setup({ type: 'goblin', cls: 'mago', lvl: 20 }), mg0 = setup({ type: 'goblin', cls: 'mago', lvl: 20 });
     mg.raws[0].traits = TRAIT_ANTI_PHYS;
-    let x = 0, y = 0; for (let i = 0; i < 100; i++) { mg.hit(mg.raws[0], 'hoja'); mg0.hit(mg0.raws[0], 'hoja'); clock += 2000; }
+    let x = 0, y = 0; for (let i = 0; i < 100; i++) { mg.hit(mg.raws[0], 'proyectil'); mg0.hit(mg0.raws[0], 'proyectil'); clock += 2000; }
     x = mg.dmgs().reduce((s, t) => s + t.dmg, 0); y = mg0.dmgs().reduce((s, t) => s + t.dmg, 0);
     assert.ok(Math.abs(x / y - 1) < 0.05, `magia contra anti-físico ${(x / y).toFixed(3)}`);
 });
@@ -159,7 +159,7 @@ test('anti-físico: el daño físico se reduce a la mitad de verdad; el mágico 
 test('anti-mágico: el daño mágico se reduce a la mitad; el físico no', () => {
     const base = setup({ type: 'goblin', cls: 'mago', lvl: 20 }), anti = setup({ type: 'goblin', cls: 'mago', lvl: 20 });
     anti.raws[0].traits = TRAIT_ANTI_MAGIC;
-    for (let i = 0; i < 100; i++) { base.hit(base.raws[0], 'hoja'); anti.hit(anti.raws[0], 'hoja'); clock += 2000; }
+    for (let i = 0; i < 100; i++) { base.hit(base.raws[0], 'proyectil'); anti.hit(anti.raws[0], 'proyectil'); clock += 2000; }
     const a = base.dmgs().reduce((s, x) => s + x.dmg, 0), b = anti.dmgs().reduce((s, x) => s + x.dmg, 0);
     assert.ok(Math.abs(b / a - ANTI_DAMAGE_MULT) < 0.05, `razón ${(b / a).toFixed(3)}`);
     const f = setup({ type: 'goblin', cls: 'guerrero', lvl: 20 }), f0 = setup({ type: 'goblin', cls: 'guerrero', lvl: 20 });

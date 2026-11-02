@@ -7,6 +7,8 @@ import { BASE_BY_NAME, CRIT_BASE, MAX_LEVEL, aspdTotal, critTotal, leechTotal, m
 export type Stat = 'mag' | 'wdmg' | 'melee';
 export interface PvpSpell {
     dmg?: [number, number]; lvlK?: number; stat?: Stat;
+    /** Multiplicador sobre el "Daño" base de la clase, como en Valdrys (1× = Saeta / Golpe). Si está, reemplaza a dmg/lvlK. */
+    k?: number;
     /** Paralización (s) sobre el objetivo; solo se aplica si el cliente la pide (último tick) y no más seguido que `cd`. */
     secs?: number;
     /** Costo de maná (igual al del cliente); se cobra una vez por ráfaga. */
@@ -25,7 +27,7 @@ export const WALK_MS = 333, RUN_MS = 200, MOVE_CAP_MS = 200;
 export const CAST_FAST_MS = 750, CAST_NORMAL_MS = 1000, CAST_HEAVY_MS = 1500, CAST_TELEGRAPH_MS = 2400;
 /** true si el hechizo es un cast (no golpe cuerpo a cuerpo): esos no se pueden lanzar corriendo. */
 /** Cast time de cada hechizo (ms); los que no figuran usan CAST_FAST_MS. Lo decide el server: el cliente no lo puede cambiar. */
-export const CAST_MS: Record<string, number> = { proyectil: 1500, paralisis: CAST_NORMAL_MS };
+export const CAST_MS: Record<string, number> = { proyectil: CAST_FAST_MS, paralisis: CAST_NORMAL_MS, bola: CAST_HEAVY_MS, lluvia: CAST_TELEGRAPH_MS };
 export const castMsOf = (id: string): number => CAST_MS[id] ?? CAST_FAST_MS;
 /** Margen de red al validar que el cast terminó (ms). */
 export const CAST_SLACK_MS = 150;
@@ -36,35 +38,28 @@ export const CAST_MULTI_HIT_MS = 3000;
 export const isCast = (id: string): boolean => { const sp = PVP_SPELLS[id] ?? SKILLS[id]; return !!sp && !sp.melee && sp.stat !== 'melee' && sp.stat !== 'wdmg' && id !== 'blink'; };
 export const PVP_SPELLS: Record<string, PvpSpell> = {
     ataque: { mp: 0, dmg: [0, 0], lvlK: 1, stat: 'melee', range: 2.6, cd: 0.3, melee: true },
-    proyectil: { mp: 8, dmg: [14, 21], lvlK: 2, stat: 'mag', range: 15, cd: 0.35 }, // Firebolt: cast 1.5 s (cliente), 14–17 tiles
-    paralisis: { mp: 20, secs: 5, range: 7.5, cd: 15 }, // Chains of Ice: cast 1 s (cliente), freeze 5 s, cd 15 s
-    aturdir: { mp: 18, secs: 3, range: 2.8, cd: 5 },
-    hoja: { mp: 14, dmg: [13, 19], lvlK: 2, stat: 'mag', range: 8.5, cd: 1.4 },
-    lanza: { mp: 30, dmg: [30, 42], lvlK: 3, stat: 'mag', range: 8.5, cd: 4.5 },
-    golpe: { mp: 10, dmg: [14, 20], lvlK: 2, stat: 'wdmg', range: 2.8, cd: 0.9, melee: true }, // Strike: melee 2 tiles (+0.8 de tolerancia), sin cast
-    tajo: { mp: 12, dmg: [22, 30], lvlK: 3, stat: 'wdmg', range: 2.8, cd: 0.9, melee: true },
-    bola: { mp: 25, kind: 'eruption', dmg: [22, 31], lvlK: 2, stat: 'mag', range: 9, cd: 3.6, aoe: 1.9 },
-    lluvia: { mp: 45, kind: 'cataclysm', dmg: [11, 16], lvlK: 2, stat: 'mag', range: 9, cd: 8.5, ticks: 4, every: 0.5, aoe: 2.4 },
-    ventisca: { mp: 50, kind: 'blizz', dmg: [9, 14], lvlK: 2, stat: 'mag', range: 9, cd: 9.5, ticks: 6, every: 0.4, aoe: 2.7, secs: 1.5 },
-    marejada: { mp: 40, kind: 'tidal', dmg: [12, 17], lvlK: 2, stat: 'mag', range: 9, cd: 7.5, ticks: 3, every: 0.6, aoe: 2.2, secs: 1.2 },
-    sismo: { mp: 25, dmg: [12, 18], lvlK: 2, stat: 'wdmg', range: 2.5, cd: 5.5, aoe: 2.4 },
-    torbellino: { mp: 22, dmg: [12, 18], lvlK: 2, stat: 'wdmg', range: 2.4, cd: 5, melee: true, aoe: 2.2 },
-    luz: { mp: 35, dmg: [14, 20], lvlK: 2, stat: 'mag', range: 9, cd: 6.5, ticks: 2, every: 0.7, aoe: 1.9 },
+    // Mago (kits de Valdrys, ver el doc del proyecto kits-de-clase.md). Daño = múltiplo del Daño base mágico.
+    proyectil: { mp: 14, dmg: [14, 21], k: 1, stat: 'mag', range: 15, cd: 0.35 },                     // Saeta ígnea: cast 0,75 s
+    paralisis: { mp: 36, dmg: [14, 21], k: 0.2, stat: 'mag', secs: 5, range: 15, cd: 6 },             // Cadenas de hielo: cast 1 s, congela 5 s
+    bola: { mp: 72, kind: 'eruption', dmg: [14, 21], k: 3, stat: 'mag', range: 15, cd: 10 },          // Bola de fuego: cast 1,5 s, un objetivo
+    lluvia: { mp: 90, kind: 'cataclysm', dmg: [14, 21], k: 1.2, stat: 'mag', range: 15, cd: 18, aoe: 4.5 }, // Infierno: cast 2,4 s, área
+    // Paladín. Daño = múltiplo del Daño base físico (arma).
+    golpe: { mp: 10, dmg: [14, 20], lvlK: 2, stat: 'wdmg', range: 2.8, cd: 0.9, melee: true },        // Golpe: cuerpo a cuerpo, sin cast
+    aturdir: { mp: 30, dmg: [14, 20], k: 0.8, stat: 'wdmg', secs: 3, range: 8, cd: 11 },              // Martillo de justicia: a distancia, aturde 3 s
 };
 /**
  * Habilidades de clase (las valida y cobra el server): Mago = blink; Paladin (id interno 'guerrero', persistido) = carga, giro, grito.
  * Van aparte de PVP_SPELLS a propósito: no se pueden pedir por pvpHitRequest para pegar sin moverse.
  */
-export interface ClassSkill extends PvpSpell { cls: 'mago' | 'guerrero'; /** ralentización (s) que aplica */ slow?: number }
+export interface ClassSkill extends PvpSpell { cls: 'mago' | 'guerrero'; /** ralentización (s) que aplica */ slow?: number; /** aturdimiento (s) al llegar */ stun?: number; /** barridos seguidos (Barrido: 2, a 0,25 s) */ sweeps?: number }
 export const SKILLS: Record<string, ClassSkill> = {
-    // blink: ≈ 39 % del maná base del Mago a nivel 1 (90); alcance 7 tiles (+0.25 por redondeo de diagonales)
-    blink: { cls: 'mago', mp: 35, range: 7.25, cd: 12 },
-    carga: { cls: 'guerrero', mp: 15, dmg: [14, 20], lvlK: 2, stat: 'wdmg', range: 15, cd: 10, melee: true, slow: 1.5 },
-    giro: { cls: 'guerrero', mp: 8, dmg: [16, 22], lvlK: 2, stat: 'wdmg', range: 0, cd: 4, melee: true, aoe: 1.9 },
-    grito: { cls: 'guerrero', mp: 20, range: 0, cd: 25 },
+    blink: { cls: 'mago', mp: 0, range: 7.25, cd: 12 },                                                   // Parpadeo: sin maná (Valdrys)
+    carga: { cls: 'guerrero', mp: 60, dmg: [14, 20], k: 0.6, stat: 'wdmg', range: 15, cd: 18, melee: true, stun: 1 }, // Carga sagrada: aturde 1 s al llegar
+    giro: { cls: 'guerrero', mp: 36, dmg: [14, 20], k: 0.75, stat: 'wdmg', range: 0, cd: 8, melee: true, aoe: 2, sweeps: 2 }, // Barrido: 2 × 0,75
+    grito: { cls: 'guerrero', mp: 20, range: 0, cd: 25 },                                                  // pasa a Bendición de poder en K8
 };
 /** Golpes de área contra mobs (paso 1.4): máximo de objetivos por lanzamiento (los más cercanos al centro) y caída de daño por cada objetivo extra. */
-export const AOE_MAX_TARGETS: Record<string, number> = { bola: 5, lluvia: 5, ventisca: 5, marejada: 5, luz: 5, sismo: 5, torbellino: 4, giro: 4 };
+export const AOE_MAX_TARGETS: Record<string, number> = { lluvia: 5, giro: 4 };
 export const AOE_FALLOFF = 0.12, AOE_MIN_MULT = 0.5, AOE_GROUP_MS = 250;
 /** Multiplicador de daño del objetivo número `index` (0 = el más cercano al centro): 100 %, 88 %, 76 %, 64 %, 52 %... mínimo 50 %. */
 export const aoeMult = (index: number): number => Math.max(AOE_MIN_MULT, 1 - AOE_FALLOFF * Math.max(0, index));
@@ -152,12 +147,14 @@ export function potionHpSplit(total: number): number[] {
 const rint = (a: number, b: number) => Math.floor(a + Math.random() * (b - a + 1));
 
 /** Daño de un golpe del hechizo `id` (sin resistencias ni defensa: eso lo aplica quien lo recibe). */
+/** Daño base por nivel (lo que suma cada nivel al Daño 1×). */
+export const BASE_LVL_K = 2;
 export function rollSpellDamage(id: string, s: CombatStats, fury: boolean): number {
     const sp = PVP_SPELLS[id] ?? SKILLS[id]; if (!sp || !sp.dmg) return 0;
     let d = id === 'ataque' ? rint(...(MELEE[s.cls] ?? MELEE.guerrero)) + s.lvl + rint(s.wdmg[0], s.wdmg[1])
+        : sp.k !== undefined ? (rint(sp.dmg[0], sp.dmg[1]) + s.lvl * BASE_LVL_K + (sp.stat === 'mag' ? s.mag : rint(s.wdmg[0], s.wdmg[1]))) * sp.k // múltiplo del Daño base (Valdrys)
         : rint(sp.dmg[0], sp.dmg[1]) + s.lvl * (sp.lvlK ?? 0) + (sp.stat === 'mag' ? s.mag : sp.stat === 'wdmg' ? rint(s.wdmg[0], s.wdmg[1]) : 0);
     d = Math.round(d * (id === 'ataque' || sp.stat === 'wdmg' || sp.stat === 'melee' || sp.melee ? s.meleeMult : sp.stat === 'mag' ? s.magicMult : 1)); // Fuerza / Magia
-    if (sp.aoe && (sp.stat === 'mag' && id === 'bola')) d = Math.round(d * (0.85 + Math.random() * 0.3));
     if (fury) d = Math.round(d * (FURY_MULT[s.cls] ?? 1.15));
     return Math.max(1, d);
 }
