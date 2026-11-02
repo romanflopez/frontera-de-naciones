@@ -169,8 +169,8 @@ export const mobProjectile = (mobId: number, fromX: number, fromY: number, toX: 
 export const mobSpecialEvent = (mobId: number, phase: number, x: number, y: number): ServerMessage => msg({ $case: 'mobSpecialEvent', value: { mobId, phase, x, y } });
 export const lootRoll = (mobId: number, rarity: number, baseSeed: number, attrs: { key: string; value: number }[]): ServerMessage =>
     msg({ $case: 'lootRoll', value: { mobId, rarity, baseSeed, attrs } });
-export const statusUpdate = (playerId: bigint, invisible: boolean, detect: boolean, fury = false, warcry = false, slow = false): ServerMessage =>
-    msg({ $case: 'statusUpdate', value: { playerId, invisible, detect, fury, warcry, slow } });
+export const statusUpdate = (playerId: bigint, invisible: boolean, detect: boolean, fury = false, warcry = false, slow = false, blessed = false, poisoned = false): ServerMessage =>
+    msg({ $case: 'statusUpdate', value: { playerId, invisible, detect, fury, warcry, slow, blessed, poisoned } });
 export const skillEffect = (casterId: bigint, skill: string, fromX: number, fromY: number, toX: number, toY: number, ok = true): ServerMessage =>
     msg({ $case: 'skillEffect', value: { casterId, skill, fromX, fromY, toX, toY, ok } });
 export const vitals = (hp: number, maxHp: number, dead: boolean, mp: number, maxMp: number): ServerMessage => msg({ $case: 'vitals', value: { hp, maxHp, dead, mp, maxMp } });
@@ -210,4 +210,7 @@ export const partyInvited = (fromName: string, expiresMs: number, partyId = ''):
 export const partyStatsUpdate = (name: string, hp: number, mp: number): ServerMessage => msg({ $case: 'partyStatsUpdate', value: { name, hp, mp } });
 
 /** El server no aceptó el inicio del cast (corriendo, paralizado o muerto). */
+/** Canal y recarga del Segundo aliento ('aliento') o del bloqueo de pociones ('pocion'), para el que lo usa (K6). */
+export const abilityState = (id: string, v: { channeling?: boolean; channelMs?: number; remainingMs?: number; cooldownMs?: number; cooldownTotalMs?: number; reason?: string }): ServerMessage =>
+    msg({ $case: 'abilityState', value: { id, channeling: !!v.channeling, channelMs: Math.round(v.channelMs ?? 0), remainingMs: Math.max(0, Math.round(v.remainingMs ?? 0)), cooldownMs: Math.max(0, Math.round(v.cooldownMs ?? 0)), cooldownTotalMs: Math.round(v.cooldownTotalMs ?? 0), reason: v.reason ?? '' } });
 export const spellCastFailed = (): ServerMessage => msg({ $case: 'spellCastFailed', value: {} });

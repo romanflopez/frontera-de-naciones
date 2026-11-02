@@ -13,7 +13,7 @@ export type SpellType = keyof typeof SPELL_COLORS;
 const TYPE_OF: Record<string, SpellType> = {
     proyectil: 'FIRE', bola: 'FIRE',
     paralisis: 'ICE',
-    luz: 'HOLY',
+    luz: 'HOLY', castigo: 'HOLY', curacion: 'HOLY', renovar: 'HOLY', bendicion: 'HOLY', novasagrada: 'HOLY', reprender: 'HOLY', orbe: 'HOLY',
     golpe: 'PHYSICAL', carga: 'PHYSICAL', giro: 'PHYSICAL',
 };
 
