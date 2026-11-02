@@ -71,7 +71,6 @@ export interface ClientMessage {
     | { $case: "pingRequest"; value: PingRequest }
     | { $case: "requestMovement"; value: RequestMovement }
     | { $case: "makeServerCellOccupiedRequest"; value: MakeServerCellOccupiedRequest }
-    | { $case: "changePlayerMovementSpeedRequest"; value: ChangePlayerMovementSpeedRequest }
     | { $case: "playerMovementStateChangeRequest"; value: PlayerMovementStateChangeRequest }
     | { $case: "authenticateRequest"; value: AuthenticateRequest }
     | { $case: "logoutRequest"; value: LogoutRequest }
@@ -87,16 +86,11 @@ export interface ClientMessage {
     | { $case: "playerPickupRequested"; value: PlayerPickupRequested }
     | { $case: "playerBowStanceRequested"; value: PlayerBowStanceRequested }
     | { $case: "playerAttackedPlayerRequest"; value: PlayerAttackedPlayerRequest }
-    | { $case: "changePlayerAttackStunDurationRequest"; value: ChangePlayerAttackStunDurationRequest }
-    | { $case: "changePlayerAttackSpeedRequest"; value: ChangePlayerAttackSpeedRequest }
-    | { $case: "changePlayerAttackRangeRequest"; value: ChangePlayerAttackRangeRequest }
-    | { $case: "changePlayerAttackDamageRequest"; value: ChangePlayerAttackDamageRequest }
     | { $case: "killAllMonstersRequested"; value: KillAllMonstersRequested }
     | { $case: "playerTeleportRequested"; value: PlayerTeleportRequested }
     | { $case: "spellCastStartRequest"; value: SpellCastStartRequest }
     | { $case: "spellCastCancelRequest"; value: SpellCastCancelRequest }
     | { $case: "spellCastRequest"; value: SpellCastRequest }
-    | { $case: "changePlayerCastSpeedRequest"; value: ChangePlayerCastSpeedRequest }
     | { $case: "changePlayerAttackTypeRequest"; value: ChangePlayerAttackTypeRequest }
     | { $case: "changePlayerAllowDashAttackRequest"; value: ChangePlayerAllowDashAttackRequest }
     | { $case: "createItemRequest"; value: CreateItemRequest }
@@ -223,6 +217,8 @@ export interface ChangePlayerAllowDashAttackRequest {
 
 export interface SpellCastStartRequest {
   spellId: number;
+  /** Id del hechizo ('proyectil', 'paralisis'...). El server arranca el cast con SU cast time; el golpe que llegue antes se descarta. */
+  spell: string;
 }
 
 export interface SpellCastCancelRequest {
@@ -258,26 +254,6 @@ export interface PlayerTeleportRequested {
 }
 
 export interface KillAllMonstersRequested {
-}
-
-export interface ChangePlayerAttackSpeedRequest {
-  attackSpeedMs: number;
-}
-
-export interface ChangePlayerAttackRangeRequest {
-  attackRangeCells: number;
-}
-
-export interface ChangePlayerAttackDamageRequest {
-  attackDamage: number;
-}
-
-export interface ChangePlayerAttackStunDurationRequest {
-  attackStunDurationMs: number;
-}
-
-export interface ChangePlayerCastSpeedRequest {
-  castSpeedMs: number;
 }
 
 export interface PlayerBowStanceRequested {
@@ -361,10 +337,6 @@ export interface LogoutResponse {
 
 /** Server pushes this when a pending timed logout is invalidated (e.g. combat damage). */
 export interface LogoutCancelled {
-}
-
-export interface ChangePlayerMovementSpeedRequest {
-  movementSpeedMs: number;
 }
 
 export interface PlayerMovementStateChangeRequest {
@@ -1762,9 +1734,6 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "makeServerCellOccupiedRequest":
         MakeServerCellOccupiedRequest.encode(message.payload.value, writer.uint32(26).fork()).join();
         break;
-      case "changePlayerMovementSpeedRequest":
-        ChangePlayerMovementSpeedRequest.encode(message.payload.value, writer.uint32(34).fork()).join();
-        break;
       case "playerMovementStateChangeRequest":
         PlayerMovementStateChangeRequest.encode(message.payload.value, writer.uint32(42).fork()).join();
         break;
@@ -1804,18 +1773,6 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "playerAttackedPlayerRequest":
         PlayerAttackedPlayerRequest.encode(message.payload.value, writer.uint32(138).fork()).join();
         break;
-      case "changePlayerAttackStunDurationRequest":
-        ChangePlayerAttackStunDurationRequest.encode(message.payload.value, writer.uint32(146).fork()).join();
-        break;
-      case "changePlayerAttackSpeedRequest":
-        ChangePlayerAttackSpeedRequest.encode(message.payload.value, writer.uint32(154).fork()).join();
-        break;
-      case "changePlayerAttackRangeRequest":
-        ChangePlayerAttackRangeRequest.encode(message.payload.value, writer.uint32(162).fork()).join();
-        break;
-      case "changePlayerAttackDamageRequest":
-        ChangePlayerAttackDamageRequest.encode(message.payload.value, writer.uint32(170).fork()).join();
-        break;
       case "killAllMonstersRequested":
         KillAllMonstersRequested.encode(message.payload.value, writer.uint32(178).fork()).join();
         break;
@@ -1830,9 +1787,6 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         break;
       case "spellCastRequest":
         SpellCastRequest.encode(message.payload.value, writer.uint32(210).fork()).join();
-        break;
-      case "changePlayerCastSpeedRequest":
-        ChangePlayerCastSpeedRequest.encode(message.payload.value, writer.uint32(218).fork()).join();
         break;
       case "changePlayerAttackTypeRequest":
         ChangePlayerAttackTypeRequest.encode(message.payload.value, writer.uint32(226).fork()).join();
@@ -2010,17 +1964,6 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             };
             continue;
           }
-          case 4: {
-            if (tag !== 34) {
-              break;
-            }
-
-            message.payload = {
-              $case: "changePlayerMovementSpeedRequest",
-              value: ChangePlayerMovementSpeedRequest.decode(reader, reader.uint32()),
-            };
-            continue;
-          }
           case 5: {
             if (tag !== 42) {
               break;
@@ -2161,50 +2104,6 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             };
             continue;
           }
-          case 18: {
-            if (tag !== 146) {
-              break;
-            }
-
-            message.payload = {
-              $case: "changePlayerAttackStunDurationRequest",
-              value: ChangePlayerAttackStunDurationRequest.decode(reader, reader.uint32()),
-            };
-            continue;
-          }
-          case 19: {
-            if (tag !== 154) {
-              break;
-            }
-
-            message.payload = {
-              $case: "changePlayerAttackSpeedRequest",
-              value: ChangePlayerAttackSpeedRequest.decode(reader, reader.uint32()),
-            };
-            continue;
-          }
-          case 20: {
-            if (tag !== 162) {
-              break;
-            }
-
-            message.payload = {
-              $case: "changePlayerAttackRangeRequest",
-              value: ChangePlayerAttackRangeRequest.decode(reader, reader.uint32()),
-            };
-            continue;
-          }
-          case 21: {
-            if (tag !== 170) {
-              break;
-            }
-
-            message.payload = {
-              $case: "changePlayerAttackDamageRequest",
-              value: ChangePlayerAttackDamageRequest.decode(reader, reader.uint32()),
-            };
-            continue;
-          }
           case 22: {
             if (tag !== 178) {
               break;
@@ -2255,17 +2154,6 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             }
 
             message.payload = { $case: "spellCastRequest", value: SpellCastRequest.decode(reader, reader.uint32()) };
-            continue;
-          }
-          case 27: {
-            if (tag !== 218) {
-              break;
-            }
-
-            message.payload = {
-              $case: "changePlayerCastSpeedRequest",
-              value: ChangePlayerCastSpeedRequest.decode(reader, reader.uint32()),
-            };
             continue;
           }
           case 28: {
@@ -2710,15 +2598,6 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         }
         break;
       }
-      case "changePlayerMovementSpeedRequest": {
-        if (object.payload?.value !== undefined && object.payload?.value !== null) {
-          message.payload = {
-            $case: "changePlayerMovementSpeedRequest",
-            value: ChangePlayerMovementSpeedRequest.fromPartial(object.payload.value),
-          };
-        }
-        break;
-      }
       case "playerMovementStateChangeRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = {
@@ -2833,42 +2712,6 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         }
         break;
       }
-      case "changePlayerAttackStunDurationRequest": {
-        if (object.payload?.value !== undefined && object.payload?.value !== null) {
-          message.payload = {
-            $case: "changePlayerAttackStunDurationRequest",
-            value: ChangePlayerAttackStunDurationRequest.fromPartial(object.payload.value),
-          };
-        }
-        break;
-      }
-      case "changePlayerAttackSpeedRequest": {
-        if (object.payload?.value !== undefined && object.payload?.value !== null) {
-          message.payload = {
-            $case: "changePlayerAttackSpeedRequest",
-            value: ChangePlayerAttackSpeedRequest.fromPartial(object.payload.value),
-          };
-        }
-        break;
-      }
-      case "changePlayerAttackRangeRequest": {
-        if (object.payload?.value !== undefined && object.payload?.value !== null) {
-          message.payload = {
-            $case: "changePlayerAttackRangeRequest",
-            value: ChangePlayerAttackRangeRequest.fromPartial(object.payload.value),
-          };
-        }
-        break;
-      }
-      case "changePlayerAttackDamageRequest": {
-        if (object.payload?.value !== undefined && object.payload?.value !== null) {
-          message.payload = {
-            $case: "changePlayerAttackDamageRequest",
-            value: ChangePlayerAttackDamageRequest.fromPartial(object.payload.value),
-          };
-        }
-        break;
-      }
       case "killAllMonstersRequested": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = {
@@ -2908,15 +2751,6 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "spellCastRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "spellCastRequest", value: SpellCastRequest.fromPartial(object.payload.value) };
-        }
-        break;
-      }
-      case "changePlayerCastSpeedRequest": {
-        if (object.payload?.value !== undefined && object.payload?.value !== null) {
-          message.payload = {
-            $case: "changePlayerCastSpeedRequest",
-            value: ChangePlayerCastSpeedRequest.fromPartial(object.payload.value),
-          };
         }
         break;
       }
@@ -4032,13 +3866,16 @@ export const ChangePlayerAllowDashAttackRequest: MessageFns<ChangePlayerAllowDas
 };
 
 function createBaseSpellCastStartRequest(): SpellCastStartRequest {
-  return { spellId: 0 };
+  return { spellId: 0, spell: "" };
 }
 
 export const SpellCastStartRequest: MessageFns<SpellCastStartRequest> = {
   encode(message: SpellCastStartRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.spellId !== 0) {
       writer.uint32(8).int32(message.spellId);
+    }
+    if (message.spell !== "") {
+      writer.uint32(18).string(message.spell);
     }
     return writer;
   },
@@ -4064,6 +3901,14 @@ export const SpellCastStartRequest: MessageFns<SpellCastStartRequest> = {
             message.spellId = reader.int32();
             continue;
           }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.spell = reader.string();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -4082,6 +3927,7 @@ export const SpellCastStartRequest: MessageFns<SpellCastStartRequest> = {
   fromPartial<I extends Exact<DeepPartial<SpellCastStartRequest>, I>>(object: I): SpellCastStartRequest {
     const message = createBaseSpellCastStartRequest();
     message.spellId = object.spellId ?? 0;
+    message.spell = object.spell ?? "";
     return message;
   },
 };
@@ -4525,291 +4371,6 @@ export const KillAllMonstersRequested: MessageFns<KillAllMonstersRequested> = {
   },
   fromPartial<I extends Exact<DeepPartial<KillAllMonstersRequested>, I>>(_: I): KillAllMonstersRequested {
     const message = createBaseKillAllMonstersRequested();
-    return message;
-  },
-};
-
-function createBaseChangePlayerAttackSpeedRequest(): ChangePlayerAttackSpeedRequest {
-  return { attackSpeedMs: 0 };
-}
-
-export const ChangePlayerAttackSpeedRequest: MessageFns<ChangePlayerAttackSpeedRequest> = {
-  encode(message: ChangePlayerAttackSpeedRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.attackSpeedMs !== 0) {
-      writer.uint32(8).int32(message.attackSpeedMs);
-    }
-    return writer;
-  },
-
-  decode(input: BinaryReader | Uint8Array, length?: number): ChangePlayerAttackSpeedRequest {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
-    if (previousRecursionDepth >= 100) {
-      throw new globalThis.Error("protobuf decode recursion limit exceeded");
-    }
-    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
-    try {
-      const end = length === undefined ? reader.len : reader.pos + length;
-      const message = createBaseChangePlayerAttackSpeedRequest();
-      while (reader.pos < end) {
-        const tag = reader.uint32();
-        switch (tag >>> 3) {
-          case 1: {
-            if (tag !== 8) {
-              break;
-            }
-
-            message.attackSpeedMs = reader.int32();
-            continue;
-          }
-        }
-        if ((tag & 7) === 4 || tag === 0) {
-          break;
-        }
-        reader.skip(tag & 7);
-      }
-      return message;
-    } finally {
-      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
-    }
-  },
-
-  create<I extends Exact<DeepPartial<ChangePlayerAttackSpeedRequest>, I>>(base?: I): ChangePlayerAttackSpeedRequest {
-    return ChangePlayerAttackSpeedRequest.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<ChangePlayerAttackSpeedRequest>, I>>(
-    object: I,
-  ): ChangePlayerAttackSpeedRequest {
-    const message = createBaseChangePlayerAttackSpeedRequest();
-    message.attackSpeedMs = object.attackSpeedMs ?? 0;
-    return message;
-  },
-};
-
-function createBaseChangePlayerAttackRangeRequest(): ChangePlayerAttackRangeRequest {
-  return { attackRangeCells: 0 };
-}
-
-export const ChangePlayerAttackRangeRequest: MessageFns<ChangePlayerAttackRangeRequest> = {
-  encode(message: ChangePlayerAttackRangeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.attackRangeCells !== 0) {
-      writer.uint32(8).int32(message.attackRangeCells);
-    }
-    return writer;
-  },
-
-  decode(input: BinaryReader | Uint8Array, length?: number): ChangePlayerAttackRangeRequest {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
-    if (previousRecursionDepth >= 100) {
-      throw new globalThis.Error("protobuf decode recursion limit exceeded");
-    }
-    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
-    try {
-      const end = length === undefined ? reader.len : reader.pos + length;
-      const message = createBaseChangePlayerAttackRangeRequest();
-      while (reader.pos < end) {
-        const tag = reader.uint32();
-        switch (tag >>> 3) {
-          case 1: {
-            if (tag !== 8) {
-              break;
-            }
-
-            message.attackRangeCells = reader.int32();
-            continue;
-          }
-        }
-        if ((tag & 7) === 4 || tag === 0) {
-          break;
-        }
-        reader.skip(tag & 7);
-      }
-      return message;
-    } finally {
-      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
-    }
-  },
-
-  create<I extends Exact<DeepPartial<ChangePlayerAttackRangeRequest>, I>>(base?: I): ChangePlayerAttackRangeRequest {
-    return ChangePlayerAttackRangeRequest.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<ChangePlayerAttackRangeRequest>, I>>(
-    object: I,
-  ): ChangePlayerAttackRangeRequest {
-    const message = createBaseChangePlayerAttackRangeRequest();
-    message.attackRangeCells = object.attackRangeCells ?? 0;
-    return message;
-  },
-};
-
-function createBaseChangePlayerAttackDamageRequest(): ChangePlayerAttackDamageRequest {
-  return { attackDamage: 0 };
-}
-
-export const ChangePlayerAttackDamageRequest: MessageFns<ChangePlayerAttackDamageRequest> = {
-  encode(message: ChangePlayerAttackDamageRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.attackDamage !== 0) {
-      writer.uint32(8).int32(message.attackDamage);
-    }
-    return writer;
-  },
-
-  decode(input: BinaryReader | Uint8Array, length?: number): ChangePlayerAttackDamageRequest {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
-    if (previousRecursionDepth >= 100) {
-      throw new globalThis.Error("protobuf decode recursion limit exceeded");
-    }
-    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
-    try {
-      const end = length === undefined ? reader.len : reader.pos + length;
-      const message = createBaseChangePlayerAttackDamageRequest();
-      while (reader.pos < end) {
-        const tag = reader.uint32();
-        switch (tag >>> 3) {
-          case 1: {
-            if (tag !== 8) {
-              break;
-            }
-
-            message.attackDamage = reader.int32();
-            continue;
-          }
-        }
-        if ((tag & 7) === 4 || tag === 0) {
-          break;
-        }
-        reader.skip(tag & 7);
-      }
-      return message;
-    } finally {
-      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
-    }
-  },
-
-  create<I extends Exact<DeepPartial<ChangePlayerAttackDamageRequest>, I>>(base?: I): ChangePlayerAttackDamageRequest {
-    return ChangePlayerAttackDamageRequest.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<ChangePlayerAttackDamageRequest>, I>>(
-    object: I,
-  ): ChangePlayerAttackDamageRequest {
-    const message = createBaseChangePlayerAttackDamageRequest();
-    message.attackDamage = object.attackDamage ?? 0;
-    return message;
-  },
-};
-
-function createBaseChangePlayerAttackStunDurationRequest(): ChangePlayerAttackStunDurationRequest {
-  return { attackStunDurationMs: 0 };
-}
-
-export const ChangePlayerAttackStunDurationRequest: MessageFns<ChangePlayerAttackStunDurationRequest> = {
-  encode(message: ChangePlayerAttackStunDurationRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.attackStunDurationMs !== 0) {
-      writer.uint32(8).int32(message.attackStunDurationMs);
-    }
-    return writer;
-  },
-
-  decode(input: BinaryReader | Uint8Array, length?: number): ChangePlayerAttackStunDurationRequest {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
-    if (previousRecursionDepth >= 100) {
-      throw new globalThis.Error("protobuf decode recursion limit exceeded");
-    }
-    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
-    try {
-      const end = length === undefined ? reader.len : reader.pos + length;
-      const message = createBaseChangePlayerAttackStunDurationRequest();
-      while (reader.pos < end) {
-        const tag = reader.uint32();
-        switch (tag >>> 3) {
-          case 1: {
-            if (tag !== 8) {
-              break;
-            }
-
-            message.attackStunDurationMs = reader.int32();
-            continue;
-          }
-        }
-        if ((tag & 7) === 4 || tag === 0) {
-          break;
-        }
-        reader.skip(tag & 7);
-      }
-      return message;
-    } finally {
-      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
-    }
-  },
-
-  create<I extends Exact<DeepPartial<ChangePlayerAttackStunDurationRequest>, I>>(
-    base?: I,
-  ): ChangePlayerAttackStunDurationRequest {
-    return ChangePlayerAttackStunDurationRequest.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<ChangePlayerAttackStunDurationRequest>, I>>(
-    object: I,
-  ): ChangePlayerAttackStunDurationRequest {
-    const message = createBaseChangePlayerAttackStunDurationRequest();
-    message.attackStunDurationMs = object.attackStunDurationMs ?? 0;
-    return message;
-  },
-};
-
-function createBaseChangePlayerCastSpeedRequest(): ChangePlayerCastSpeedRequest {
-  return { castSpeedMs: 0 };
-}
-
-export const ChangePlayerCastSpeedRequest: MessageFns<ChangePlayerCastSpeedRequest> = {
-  encode(message: ChangePlayerCastSpeedRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.castSpeedMs !== 0) {
-      writer.uint32(8).int32(message.castSpeedMs);
-    }
-    return writer;
-  },
-
-  decode(input: BinaryReader | Uint8Array, length?: number): ChangePlayerCastSpeedRequest {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
-    if (previousRecursionDepth >= 100) {
-      throw new globalThis.Error("protobuf decode recursion limit exceeded");
-    }
-    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
-    try {
-      const end = length === undefined ? reader.len : reader.pos + length;
-      const message = createBaseChangePlayerCastSpeedRequest();
-      while (reader.pos < end) {
-        const tag = reader.uint32();
-        switch (tag >>> 3) {
-          case 1: {
-            if (tag !== 8) {
-              break;
-            }
-
-            message.castSpeedMs = reader.int32();
-            continue;
-          }
-        }
-        if ((tag & 7) === 4 || tag === 0) {
-          break;
-        }
-        reader.skip(tag & 7);
-      }
-      return message;
-    } finally {
-      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
-    }
-  },
-
-  create<I extends Exact<DeepPartial<ChangePlayerCastSpeedRequest>, I>>(base?: I): ChangePlayerCastSpeedRequest {
-    return ChangePlayerCastSpeedRequest.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<ChangePlayerCastSpeedRequest>, I>>(object: I): ChangePlayerCastSpeedRequest {
-    const message = createBaseChangePlayerCastSpeedRequest();
-    message.castSpeedMs = object.castSpeedMs ?? 0;
     return message;
   },
 };
@@ -5664,65 +5225,6 @@ export const LogoutCancelled: MessageFns<LogoutCancelled> = {
   },
   fromPartial<I extends Exact<DeepPartial<LogoutCancelled>, I>>(_: I): LogoutCancelled {
     const message = createBaseLogoutCancelled();
-    return message;
-  },
-};
-
-function createBaseChangePlayerMovementSpeedRequest(): ChangePlayerMovementSpeedRequest {
-  return { movementSpeedMs: 0 };
-}
-
-export const ChangePlayerMovementSpeedRequest: MessageFns<ChangePlayerMovementSpeedRequest> = {
-  encode(message: ChangePlayerMovementSpeedRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.movementSpeedMs !== 0) {
-      writer.uint32(8).int32(message.movementSpeedMs);
-    }
-    return writer;
-  },
-
-  decode(input: BinaryReader | Uint8Array, length?: number): ChangePlayerMovementSpeedRequest {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
-    if (previousRecursionDepth >= 100) {
-      throw new globalThis.Error("protobuf decode recursion limit exceeded");
-    }
-    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
-    try {
-      const end = length === undefined ? reader.len : reader.pos + length;
-      const message = createBaseChangePlayerMovementSpeedRequest();
-      while (reader.pos < end) {
-        const tag = reader.uint32();
-        switch (tag >>> 3) {
-          case 1: {
-            if (tag !== 8) {
-              break;
-            }
-
-            message.movementSpeedMs = reader.int32();
-            continue;
-          }
-        }
-        if ((tag & 7) === 4 || tag === 0) {
-          break;
-        }
-        reader.skip(tag & 7);
-      }
-      return message;
-    } finally {
-      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
-    }
-  },
-
-  create<I extends Exact<DeepPartial<ChangePlayerMovementSpeedRequest>, I>>(
-    base?: I,
-  ): ChangePlayerMovementSpeedRequest {
-    return ChangePlayerMovementSpeedRequest.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<ChangePlayerMovementSpeedRequest>, I>>(
-    object: I,
-  ): ChangePlayerMovementSpeedRequest {
-    const message = createBaseChangePlayerMovementSpeedRequest();
-    message.movementSpeedMs = object.movementSpeedMs ?? 0;
     return message;
   },
 };

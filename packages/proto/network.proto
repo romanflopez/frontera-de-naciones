@@ -55,7 +55,6 @@ message ClientMessage {
     PingRequest ping_request = 1;
     RequestMovement request_movement = 2;
     MakeServerCellOccupiedRequest make_server_cell_occupied_request = 3;
-    ChangePlayerMovementSpeedRequest change_player_movement_speed_request = 4;
     PlayerMovementStateChangeRequest player_movement_state_change_request = 5;
     AuthenticateRequest authenticate_request = 6;
     LogoutRequest logout_request = 7;
@@ -70,16 +69,11 @@ message ClientMessage {
     PlayerPickupRequested player_pickup_requested = 15;
     PlayerBowStanceRequested player_bow_stance_requested = 16;
     PlayerAttackedPlayerRequest player_attacked_player_request = 17;
-    ChangePlayerAttackStunDurationRequest change_player_attack_stun_duration_request = 18;
-    ChangePlayerAttackSpeedRequest change_player_attack_speed_request = 19;
-    ChangePlayerAttackRangeRequest change_player_attack_range_request = 20;
-    ChangePlayerAttackDamageRequest change_player_attack_damage_request = 21;
     KillAllMonstersRequested kill_all_monsters_requested = 22;
     PlayerTeleportRequested player_teleport_requested = 23;
     SpellCastStartRequest spell_cast_start_request = 24;
     SpellCastCancelRequest spell_cast_cancel_request = 25;
     SpellCastRequest spell_cast_request = 26;
-    ChangePlayerCastSpeedRequest change_player_cast_speed_request = 27;
     ChangePlayerAttackTypeRequest change_player_attack_type_request = 28;
     ChangePlayerAllowDashAttackRequest change_player_allow_dash_attack_request = 29;
     CreateItemRequest create_item_request = 30;
@@ -133,6 +127,9 @@ message ClientMessage {
     // Puntos de stats del personaje (ver docs/PLAN_DE_TRABAJO.md paso 1.2). Rango propio de tags desde 700.
     StatAllocRequest stat_alloc_request = 700;
   }
+  // P0-A: el cliente ya no fija números de combate (velocidad de movimiento, de ataque, de casteo, alcance, daño, stun).
+  // Los calcula el server. Tags retirados: no reutilizar.
+  reserved 4, 18, 19, 20, 21, 27;
 }
 
 message WeatherChangeRequest {
@@ -198,6 +195,8 @@ message ChangePlayerAllowDashAttackRequest {
 
 message SpellCastStartRequest {
   int32 spell_id = 1;
+  // Id del hechizo ('proyectil', 'paralisis'...). El server arranca el cast con SU cast time; el golpe que llegue antes se descarta.
+  string spell = 2;
 }
 
 message SpellCastCancelRequest {
@@ -230,26 +229,6 @@ message PlayerTeleportRequested {
 }
 
 message KillAllMonstersRequested {
-}
-
-message ChangePlayerAttackSpeedRequest {
-  int32 attack_speed_ms = 1;
-}
-
-message ChangePlayerAttackRangeRequest {
-  int32 attack_range_cells = 1;
-}
-
-message ChangePlayerAttackDamageRequest {
-  int32 attack_damage = 1;
-}
-
-message ChangePlayerAttackStunDurationRequest {
-  int32 attack_stun_duration_ms = 1;
-}
-
-message ChangePlayerCastSpeedRequest {
-  int32 cast_speed_ms = 1;
 }
 
 message PlayerBowStanceRequested {
@@ -327,10 +306,6 @@ message LogoutResponse {
 
 /** Server pushes this when a pending timed logout is invalidated (e.g. combat damage). */
 message LogoutCancelled {
-}
-
-message ChangePlayerMovementSpeedRequest {
-  int32 movement_speed_ms = 1;
 }
 
 message PlayerMovementStateChangeRequest {

@@ -19,6 +19,21 @@ export interface PvpSpell {
 export type DmgKind = 'phys' | 'magic';
 /** Físico = ataque cuerpo a cuerpo, golpe, tajo, sismo (todo lo que escala con el arma); mágico = el resto de los hechizos. */
 export const spellDmgKind = (id: string): DmgKind => { const sp = PVP_SPELLS[id]; return sp && (sp.stat === 'melee' || sp.stat === 'wdmg' || sp.melee) ? 'phys' : 'magic'; };
+/** Movimiento (docs/COMBATE.md): walk 333 ms/celda permite castear; run 200 ms/celda no. Cap duro 200 ms/celda: ningún buff baja de ahí. */
+export const WALK_MS = 333, RUN_MS = 200, MOVE_CAP_MS = 200;
+/** Escala de cast times (ms). */
+export const CAST_FAST_MS = 750, CAST_NORMAL_MS = 1000, CAST_HEAVY_MS = 1500, CAST_TELEGRAPH_MS = 2400;
+/** true si el hechizo es un cast (no golpe cuerpo a cuerpo): esos no se pueden lanzar corriendo. */
+/** Cast time de cada hechizo (ms); los que no figuran usan CAST_FAST_MS. Lo decide el server: el cliente no lo puede cambiar. */
+export const CAST_MS: Record<string, number> = { proyectil: 1500, paralisis: CAST_NORMAL_MS };
+export const castMsOf = (id: string): number => CAST_MS[id] ?? CAST_FAST_MS;
+/** Margen de red al validar que el cast terminó (ms). */
+export const CAST_SLACK_MS = 150;
+/** Cuánto vale un cast terminado sin soltar (el cliente lo deja "listo" hasta que elegís objetivo). */
+export const CAST_READY_MS = 10000;
+/** Ventana tras el primer golpe para los demás objetivos y ticks del MISMO cast (áreas y canalizados). */
+export const CAST_MULTI_HIT_MS = 3000;
+export const isCast = (id: string): boolean => { const sp = PVP_SPELLS[id] ?? SKILLS[id]; return !!sp && !sp.melee && sp.stat !== 'melee' && sp.stat !== 'wdmg' && id !== 'blink'; };
 export const PVP_SPELLS: Record<string, PvpSpell> = {
     ataque: { mp: 0, dmg: [0, 0], lvlK: 1, stat: 'melee', range: 2.6, cd: 0.3, melee: true },
     proyectil: { mp: 8, dmg: [12, 18], lvlK: 2, stat: 'mag', range: 15, cd: 0.35 }, // Firebolt: cast 1.5 s (cliente), 14–17 tiles

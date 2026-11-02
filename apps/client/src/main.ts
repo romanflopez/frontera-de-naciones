@@ -131,7 +131,7 @@ const P = {
     target: null as Mob | null, engage: false, pickup: null as Drop | null, repath: 0, queued: null as number | null,
     lvl: 1, exp: 0, hp: 100, mp: 60, fury: 0, wcEnd: 0, slowEnd: 0, inv: false, det: false, invEnd: 0, detEnd: 0, immEnd: 0, gold: 0, nextAtk: 0, dead: false, deadT: 0,
     bag: [] as Item[], eq: { arma: null, armadura: null, cabeza: null, anillo: null } as Record<Slot, Item | null>,
-    casting: null as Casting | null, ready: null as { i: number; t: number } | null, sentDir: -1,
+    running: false, casting: null as Casting | null, ready: null as { i: number; t: number } | null, sentDir: -1,
 };
 
 /** Otros jugadores, según lo que manda el server. */
@@ -327,8 +327,9 @@ function onServer(m: ServerPayload) {
         }
         case 'playerDisconnected': { const o = others.get(m.value.playerId); if (o) o.gone = true; break; }
         case 'playerReconnected': { const o = others.get(m.value.playerId); if (o) o.gone = false; break; }
+        case 'spellCastFailed': cancelCast(P.running ? 'Corriendo no podés castear. Apretá T para caminar.' : 'No podés castear ahora.'); break;
         case 'playerMovementStateChanged':
-            if (m.value.playerId === myId) P.stepMs = m.value.movementSpeedMs || P.stepMs;
+            if (m.value.playerId === myId) { P.stepMs = m.value.movementSpeedMs || P.stepMs; P.running = m.value.runningMode; }
             else { const o = others.get(m.value.playerId); if (o) o.stepMs = m.value.movementSpeedMs || o.stepMs; }
             break;
         case 'resetPosition':
@@ -704,7 +705,7 @@ function toggleMeditate() {
 }
 function nearestEnemy(range: number) { let b: Other | null = null, bd = range; for (const o of others.values()) { if (!isEnemy(o)) continue; const d = dist(P, o); if (d <= bd) { bd = d; b = o; } } return b; }
 function pickEnemy(sx: number, sy: number) { for (const o of others.values()) { if (!isEnemy(o)) continue; const p = toScreen(o.x, o.y); if (Math.abs(sx - p.x) < 24 * Z && sy > p.y - 76 * Z && sy < p.y + 12 * Z) return o; } return null; }
-const CAST_T = 0.7; // como en HB: todos los hechizos tardan lo mismo en cargar
+const CAST_T = 0.75; // cast "rápido" de docs/COMBATE.md; el server valida el mismo valor (castMsOf)
 function cast(i: number) {
     if (P.dead) return; const s = SPELLS[i];
     if (P.ready && P.ready.i === i && s.target) { const m = autoTarget(s.range), e = m ? null : nearestEnemy(s.range); if (m) release(m); else if (e) release({ x: e.x, y: e.y, pvp: e }); else toast('Hacé clic en el objetivo.'); return; }
@@ -713,8 +714,10 @@ function cast(i: number) {
     if (cds[i] > now()) { toast(`${s.name} se está recargando.`); return; }
     if (P.mp < s.mp) { toast('No te alcanza el maná.'); return; }
     if (s.instant) { instantCast(i); return; }
+    if (P.running) { toast('Corriendo no podés castear. Apretá T para caminar.'); return; }
     P.ready = null; P.engage = false; P.queued = null; P.path = []; holding = false;
     const T = now(), len = s.castT ?? CAST_T; P.casting = { i, start: T, end: T + len, len };
+    net.send({ $case: 'spellCastStartRequest', value: { spellId: 0, spell: s.id ?? '' } }); // el server cuenta el cast time desde acá
 }
 /** Habilidades de clase sin casteo: salen al instante (las de objetivo toman el seleccionado, el del cursor o el enemigo más cercano). */
 function instantCast(i: number) {
@@ -757,7 +760,9 @@ function fire(i: number, m: Target | null) {
     fx.push({ k: 'burst', x: P.x, y: P.y, t: 0, c: s.col });
     const b = $('sp' + i); b.classList.remove('fired'); void b.offsetWidth; b.classList.add('fired');
 }
-function cancelCast(why?: string | null) { if (!P.casting && !P.ready) return; P.casting = null; P.ready = null; if (why) toast(why); }
+function cancelCast(why?: string | null) { if (!P.casting && !P.ready) return; P.casting = null; P.ready = null; net.send({ $case: 'spellCastCancelRequest', value: {} }); if (why) toast(why); }
+/** Walk (castea, 333 ms/celda) o run (no castea, 200 ms/celda). La velocidad la manda el server en playerMovementStateChanged. */
+function toggleRun() { P.running = !P.running; if (P.running) cancelCast(P.casting || P.ready ? 'Hechizo cancelado: estás corriendo.' : null); net.send({ $case: 'playerMovementStateChangeRequest', value: { runningMode: P.running } }); toast(P.running ? 'Corriendo (no podés castear).' : 'Caminando.'); }
 let toastT: ReturnType<typeof setTimeout> | undefined;
 function toast(t: string) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 1600); }
 
@@ -1027,6 +1032,7 @@ window.addEventListener('keydown', (e) => {
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'q' || e.key === 'Q')) { usePotion('hp'); return; }
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'e' || e.key === 'E')) { usePotion('mp'); return; }
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'h' || e.key === 'H')) { toggleRecall(); return; }
+    if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 't' || e.key === 'T')) { toggleRun(); return; }
     const hk = SPELLS.findIndex((x) => SPECIAL_KEY[x.id ?? ''] === e.key.toLowerCase()) >= 0 ? SPELLS.findIndex((x) => SPECIAL_KEY[x.id ?? ''] === e.key.toLowerCase()) : KEYS.indexOf(e.key), dm = /^(?:Digit|Numpad)([0-9])$/.exec(e.code), k = hk >= 0 ? hk : dm ? KEYS.indexOf(dm[1]) : null;
     if (k != null && k < SPELLS.length && !e.repeat) { e.preventDefault(); cast(k); }
     if (e.code === 'Space' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); pickupNearest(); return; }

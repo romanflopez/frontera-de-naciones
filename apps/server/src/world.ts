@@ -7,7 +7,7 @@
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
 import { PARTY_SHARE_RANGE, partyExpMult, partyMates } from './party.ts';
-import { AOE_MAX_TARGETS, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionMp, POTION_GCD_MS, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, progressFromEcon, PVP_SPELLS, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
+import { AOE_MAX_TARGETS, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionMp, POTION_GCD_MS, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, progressFromEcon, PVP_SPELLS, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, WARCRY_DEF, WARCRY_MS, WARCRY_RADIUS, type DmgKind } from './systems/pvpCombat.ts';
 import { HUBS, QUESTS, RECALL, TRAINING, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef } from '@fdn/world';
 import { applyParalysis, applySlow, applyWarcry, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, hasWarcry, isSlowed, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
@@ -439,12 +439,11 @@ export class GameWorld {
                     if (payload.value.gameWorldId && payload.value.gameWorldId !== this.id) break;
                     this.handleRequestMovement(p, payload.value);
                     break;
-                case 'changePlayerMovementSpeedRequest':
-                    p.setMovementSpeedMs(payload.value.movementSpeedMs);
-                    p.send(M.playerMovementStateChanged(p.playerId, p.runningMode, p.movementSpeedMs));
-                    break;
+                case 'spellCastStartRequest': this.startCast(p, payload.value.spell); break;
+                case 'spellCastCancelRequest': if (p.cast && !p.cast.fired) p.cast = null; break;
                 case 'playerMovementStateChangeRequest': {
                     p.setRunningMode(payload.value.runningMode);
+                    if (p.runningMode && p.cast && !p.cast.fired) p.cast = null; // correr cancela el cast
                     const m = M.playerMovementStateChanged(p.playerId, p.runningMode, p.movementSpeedMs);
                     p.send(m);
                     this.broadcastNear(p, m);
@@ -478,6 +477,7 @@ export class GameWorld {
                         break;
                     }
                     const sp = PVP_SPELLS[spell];
+                    if (sp && !this.castOk(p, spell, now)) break; // hechizo sin cast terminado en el server: se descarta
                     let dmg = 0, secs = 0;
                     if (sp && v.targetId) {
                         const tgt = this.playersById.get(v.targetId);
@@ -527,7 +527,7 @@ export class GameWorld {
                     p.send(m); this.broadcastNear(p, m);
                     break;
                 }
-                case 'mobHitRequest': this.changeStatus(p, () => breakInvisibility(p.status)); this.mobSim?.hit(p, payload.value); break;
+                case 'mobHitRequest': if (!this.castOk(p, payload.value.spell ?? '', Date.now())) break; this.changeStatus(p, () => breakInvisibility(p.status)); this.mobSim?.hit(p, payload.value); break;
                 case 'pveStatusRequest': this.mobSim?.status(p, payload.value); break;
                 case 'changePlayerProfileRequest': {
                     const v = String(payload.value.profile ?? '').slice(0, 240);
@@ -557,13 +557,8 @@ export class GameWorld {
                     if (payload.value.cancel) this.cancelRecall(p, 'Cancelaste el regreso a la ciudad.');
                     else this.startRecall(p);
                     break;
-                case 'changePlayerAttackStunDurationRequest': p.attackStunDurationMs = clampInt(payload.value.attackStunDurationMs, 100, 2000); break;
-                case 'changePlayerAttackSpeedRequest': p.attackSpeedMs = clampInt(payload.value.attackSpeedMs, 100, 2000); break;
-                case 'changePlayerCastSpeedRequest': p.castSpeedMs = clampInt(payload.value.castSpeedMs, 200, 2000); break;
                 case 'changePlayerAttackTypeRequest': p.attackType = clampInt(payload.value.attackType, 0, 3); break;
                 case 'changePlayerAllowDashAttackRequest': p.allowDashAttack = payload.value.allowDashAttack; break;
-                case 'changePlayerAttackRangeRequest': p.attackRangeCells = clampInt(payload.value.attackRangeCells, 1, 10); break;
-                case 'changePlayerAttackDamageRequest': p.damage = clampInt(payload.value.attackDamage, 1, 100000); break;
                 default:
                     // Combate, hechizos, items, mobs y NPCs llegan en los próximos cortes de la fase 1.
                     break;
@@ -611,7 +606,28 @@ export class GameWorld {
             p.send(M.sendMessage(`Te movés demasiado rápido. Si estás tocando cosas que no deberías, frená: por ahora te quedás quieto ${secs} segundos.`));
             return;
         }
+        if (p.cast && !p.cast.fired) p.cast = null; // un paso cancela el cast
         this.moveTo(p, p.posX, p.posY, req.destX, req.destY, req.dashAttack);
+    }
+
+    // ---------- casteo (el cast time lo decide el server) ----------
+    private startCast(p: Player, raw: string): void {
+        const spell = /^[a-z0-9]{1,16}$/.test(raw ?? '') ? raw : '', now = Date.now();
+        if (!isCast(spell)) return;
+        if (p.isDead || p.isParalyzed(now) || !p.canCast) { p.cast = null; p.send(M.spellCastFailed()); return; }
+        const ms = castMsOf(spell);
+        p.cast = { spell, okAt: now + ms - CAST_SLACK_MS, until: now + ms + CAST_READY_MS, fired: false };
+    }
+
+    /** true si el golpe de `spell` sale de un cast que el server vio empezar y terminar. Los que no se castean (cuerpo a cuerpo) pasan siempre. */
+    private castOk(p: Player, spell: string, now: number): boolean {
+        if (!isCast(spell)) return true;
+        const c = p.cast;
+        if (!c || c.spell !== spell || now < c.okAt || now > c.until) return false;
+        if (!c.fired) { c.fired = true; c.until = now + CAST_MULTI_HIT_MS; }
+        const sp = PVP_SPELLS[spell];
+        if (!sp?.aoe && !sp?.ticks) p.cast = null; // un solo objetivo: el cast se consume con el golpe
+        return true;
     }
 
     private moveTo(p: Player, fromX: number, fromY: number, toX: number, toY: number, dashAttack: boolean, teleport = false): void {

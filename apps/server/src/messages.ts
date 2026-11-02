@@ -220,3 +220,6 @@ export const recallState = (channeling: boolean, channelMs: number, remainingMs:
 
 export const partyState = (members: { name: string; level: number; hp: number; maxHp: number; map: string; leader: boolean; online: boolean }[]): ServerMessage => msg({ $case: 'partyState', value: { members } });
 export const partyInvited = (fromName: string, expiresMs: number): ServerMessage => msg({ $case: 'partyInvited', value: { fromName, expiresMs: BigInt(expiresMs) } });
+
+/** El server no aceptó el inicio del cast (corriendo, paralizado o muerto). */
+export const spellCastFailed = (): ServerMessage => msg({ $case: 'spellCastFailed', value: {} });

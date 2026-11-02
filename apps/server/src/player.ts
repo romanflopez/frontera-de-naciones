@@ -2,7 +2,7 @@
  * Estado de un jugador dentro de un mundo. Port recortado de GameWorldPlayer.cs:
  * posición, apariencia, velocidad, controles anti-trampa de movimiento y ping.
  */
-import { DEFAULT_STATS, PvpLimiter, type CombatStats } from './systems/pvpCombat.ts';
+import { CAST_NORMAL_MS, DEFAULT_STATS, MOVE_CAP_MS, PvpLimiter, RUN_MS, WALK_MS, type CombatStats } from './systems/pvpCombat.ts';
 import { createDefaultStatus } from './systems/statusSystem.ts';
 import type { ServerMessage } from '@fdn/proto';
 import type { Settings } from './config.ts';
@@ -102,13 +102,15 @@ export class Player {
     spawnProtection = false;
     /** SOLO GM (/gm dios): no recibe daño. */
     godMode = false;
-    runningMode = true;
+    /** Walk (false) o run (true). Arranca caminando: es el estado que permite castear (docs/COMBATE.md). */
+    runningMode = false;
     attackMode = true;
     attackStunDurationMs = 500;
     attackRangeCells = 3;
     damage = 100;
     attackSpeedMs = 600;
-    castSpeedMs = 1200;
+    /** Cast time de referencia que ve el cliente ("Normal" en docs/COMBATE.md). El cliente no lo puede cambiar. */
+    castSpeedMs = CAST_NORMAL_MS;
     /** 0 sin interrumpir, 1 interrumpe, 2 aturde, 3 empuja (como AttackType del original). */
     attackType = 2;
     allowDashAttack = true;
@@ -118,8 +120,6 @@ export class Player {
     /** Ids de items del suelo que este jugador tiene a la vista (para mandar solo las diferencias). */
     readonly groundSeen = new Set<number>();
 
-    /** 380 ms por celda: el ritmo del prototipo (unas 2,6 celdas por segundo). */
-    private baseMovementSpeedMs = 270;
     private lastMovementRequestMs = 0;
     private paralysisUntil = 0;
     private violations: SlidingWindow;
@@ -140,21 +140,15 @@ export class Player {
     }
 
     get isDead(): boolean { return this.hp < 1; }
-    get baseMovementMs(): number { return this.baseMovementSpeedMs; }
-    /** Milisegundos por celda, igual que el cliente: caminar es el doble que correr. */
-    get movementSpeedMs(): number {
-        const ms = this.runningMode ? this.baseMovementSpeedMs : this.baseMovementSpeedMs * 2;
-        return Math.min(1000, Math.max(100, ms));
-    }
+    get baseMovementMs(): number { return RUN_MS; }
+    /** Milisegundos por celda: los decide el server según walk/run. Nunca por debajo del cap de combate. */
+    get movementSpeedMs(): number { return Math.max(MOVE_CAP_MS, this.runningMode ? RUN_MS : WALK_MS); }
+    /** Corriendo no se castea (docs/COMBATE.md): el hechizo no inicia. */
+    get canCast(): boolean { return !this.runningMode; }
+    /** Cast en curso validado por el server: el golpe de `spell` vale desde `okAt` hasta `until`. Un paso o ponerse a correr lo corta (si no salió todavía). */
+    cast: { spell: string; okAt: number; until: number; fired: boolean } | null = null;
 
     setPosition(x: number, y: number): void { this.posX = x; this.posY = y; }
-
-    setMovementSpeedMs(ms: number): void {
-        const clamped = Math.min(500, Math.max(100, Math.round(ms)));
-        if (clamped === this.baseMovementSpeedMs) return;
-        this.baseMovementSpeedMs = clamped;
-        this.lastMovementRequestMs = 0;
-    }
 
     setRunningMode(value: boolean): void {
         if (value === this.runningMode) return;
@@ -221,7 +215,7 @@ export class Player {
         return {
             mapId, worldId: mapId, x: at?.x ?? this.posX, y: at?.y ?? this.posY, direction: this.facingDirection,
             gender: this.gender, skinColor: this.skinColor, hairStyleIndex: this.hairStyleIndex, underwearColorIndex: this.underwearColorIndex,
-            movementSpeedMs: this.baseMovementSpeedMs, runningMode: this.runningMode, attackMode: this.attackMode,
+            movementSpeedMs: this.movementSpeedMs, runningMode: this.runningMode, attackMode: this.attackMode,
         };
     }
 
@@ -231,8 +225,8 @@ export class Player {
         this.skinColor = p.skinColor ?? 0;
         this.hairStyleIndex = p.hairStyleIndex ?? 0;
         this.underwearColorIndex = p.underwearColorIndex ?? 0;
-        this.baseMovementSpeedMs = p.movementSpeedMs ?? 270;
-        this.runningMode = p.runningMode ?? true;
+        // movementSpeedMs y runningMode del guardado se ignoran: la velocidad la calcula el server y siempre se entra caminando.
+        this.runningMode = false;
         this.attackMode = p.attackMode ?? true;
     }
 }
