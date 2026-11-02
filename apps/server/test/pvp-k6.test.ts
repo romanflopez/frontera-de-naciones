@@ -12,7 +12,7 @@ import { WorldRegistry } from '../src/registry.ts';
 import type { PersistedPlayer } from '../src/player.ts';
 import type { GameWorld } from '../src/world.ts';
 import {
-    DETECT_CD_MS, INVIS_CD_MS, mitigate, POTION_LOCK_PVE_MS, POTION_LOCK_PVP_MS, potionHp, PVP_COMBAT_MS, PVP_HIT_CAP, pvpCap, pvpScale, pvpVsCtrl,
+    DETECT_CD_MS, INVIS_CD_MS, mitigate, POTION_LOCK_PVE_MS, POTION_LOCK_PVP_MS, potionHp, PVP_COMBAT_MS, PVP_DMG_MULT, PVP_HIT_CAP, pvpMpRegen, pvpCap, pvpScale, pvpVsCtrl,
     RECALL_PVP_LOCK_MS, rollSpellDamage, SECOND_WIND, secondWindHeal, statsFromChar,
 } from '../src/systems/pvpCombat.ts';
 
@@ -57,8 +57,9 @@ function setup(clsA = 'mago', clsB = 'guerrero') {
 }
 
 // ---------- funciones puras ----------
-test('PvP: multiplicador ×0,6 antes de la defensa, tope del 25 % por golpe y bonus sobre controlado de 1,2× como mucho', () => {
-    assert.equal(pvpScale(100), 60); assert.equal(pvpScale(1), 1);
+test('PvP: multiplicador (×1 desde K7) antes de la defensa, tope del 25 % por golpe y bonus sobre controlado de 1,2× como mucho', () => {
+    assert.equal(pvpScale(100), Math.round(100 * PVP_DMG_MULT)); assert.equal(pvpScale(1), 1);
+    assert.equal(PVP_DMG_MULT, 1);
     assert.equal(pvpCap(900, 1000), 250); assert.equal(pvpCap(100, 1000), 100);
     assert.equal(pvpVsCtrl(1.5), 1.2); assert.equal(pvpVsCtrl(2), 1.2); assert.equal(pvpVsCtrl(1.1), 1.1);
     assert.equal(PVP_HIT_CAP, 0.25);
@@ -78,7 +79,6 @@ test('el daño contra un jugador pasa por el multiplicador PvP y la defensa', ()
         const raw = rollSpellDamage('ataque', A.p.combat, false), hp0 = B.p.hp;
         hit('ataque');
         assert.equal(hp0 - B.p.hp, mitigate(pvpScale(raw), B.p.combat.def));
-        assert.ok(hp0 - B.p.hp < mitigate(raw, B.p.combat.def), 'menos que el mismo golpe sin la regla');
     } finally { (Math.random as any).mock.restore(); }
 });
 
@@ -120,7 +120,7 @@ test('el recall se bloquea 10 s después de recibir daño de un jugador', () => 
 });
 
 // ---------- pociones ----------
-test('pociones: bloqueo de 1 min en PvE; al entrar en PvP se acorta a 10 s y la poción cura la mitad', () => {
+test('pociones: bloqueo de 1 min en PvE; al entrar en PvP se acorta a 30 s y la poción cura un cuarto', () => {
     const { w, A, B, hit } = setup('guerrero', 'guerrero');
     const max = B.p.combat.maxHp;
     B.p.hp = Math.round(max * 0.3);
@@ -132,13 +132,14 @@ test('pociones: bloqueo de 1 min en PvE; al entrar en PvP se acorta a 10 s y la 
     B.p.hp = Math.round(max * 0.3); const hp1 = B.p.hp;
     pkt(w, B.sid, 'potionRequest', { kind: 0 }); advance(w, 3000);
     assert.equal(B.p.hp, hp1, 'en PvE no se puede tomar otra antes del minuto');
-    hit('ataque', A, B); // entra en PvP: el bloqueo pasa a 10 s desde la última poción
+    hit('ataque', A, B); // entra en PvP: el bloqueo pasa a 30 s desde la última poción
     assert.ok(B.p.potionReadyAt <= B.p.lastPotionAt + POTION_LOCK_PVP_MS);
     advance(w, POTION_LOCK_PVP_MS);
+    B.p.hp = Math.round(max * 0.3); // que la poción no llene la barra
     hit('ataque', A, B); const hp2 = B.p.hp;
     pkt(w, B.sid, 'potionRequest', { kind: 0 }); advance(w, 2200);
     assert.equal(B.p.hp, hp2 + potionHp(max, true), 'PvP: poción chica');
-    assert.equal(potionHp(max, true), Math.round(max * 0.2), 'la mitad de la normal (40 % → 20 %)');
+    assert.equal(potionHp(max, true), Math.round(max * 0.1), 'un cuarto de la normal (40 % → 10 %)');
     assert.equal(last(B.log, 'abilityState').cooldownTotalMs, POTION_LOCK_PVP_MS);
 });
 
@@ -198,4 +199,15 @@ test('invisibilidad: recarga de 60 s y se corta al recibir daño o al castear; d
     pkt(w, B.sid, 'detectInvisibleRequest', {}); assert.equal(B.p.status.hasDetectInvisible, false, 'en recarga');
     advance(w, DETECT_CD_MS - 11000);
     pkt(w, B.sid, 'detectInvisibleRequest', {}); assert.ok(B.p.status.hasDetectInvisible);
+});
+
+// ---------- K7: maná en combate PvP ----------
+test('K7: en combate PvP el maná regenera al menos 5 por segundo; fuera del PvP, la regla de siempre (1 %, mínimo 2)', () => {
+    const { w, A, B, hit } = setup('guerrero', 'guerrero');
+    assert.equal(pvpMpRegen(84), 5); assert.equal(pvpMpRegen(1000), 10);
+    A.p.combat.maxMp = 84; // un paladín de nivel 12
+    A.p.mp = 0; advance(w, 1100);
+    const calm = A.p.mp; assert.ok(calm >= 1 && calm <= 4, `fuera del PvP: ${calm}`);
+    hit('ataque', A, B); A.p.mp = 0; advance(w, 1100);
+    assert.ok(A.p.mp >= 5, `en PvP: ${A.p.mp}`);
 });

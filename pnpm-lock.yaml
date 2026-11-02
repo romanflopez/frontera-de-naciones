@@ -94,6 +94,9 @@ importers:
 
   tools:
     dependencies:
+      '@fdn/world':
+        specifier: workspace:*
+        version: link:../packages/world
       '@napi-rs/canvas':
         specifier: ^0.1.65
         version: 0.1.100
