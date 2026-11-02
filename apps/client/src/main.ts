@@ -899,7 +899,7 @@ let knightReady = false, knightTried = false;
 const skinOn = () => /^rowena$/i.test(P.name) || new URLSearchParams(location.search).get('skin') === 'caballero';
 const heroKey = () => (knightReady && skinOn() ? 'hero_knight' : 'hero');
 async function initKnight() {
-    if (knightTried || !skinOn()) return; knightTried = true;
+    if (knightTried || !skinOn()) return; knightTried = true; console.info('[skin] cargando caballero…');
     try {
         const ims = await Promise.all(KNIGHT_SHEETS.map(([, f]) => load(`assets/skins/caballero/${f}.png`)));
         const c = document.createElement('canvas'), g = c.getContext('2d')!; c.width = 15 * 128; c.height = KNIGHT_SHEETS.length * 8 * 128;
@@ -908,8 +908,8 @@ async function initKnight() {
         const A = (row: number, dur: number, type: string): Anim => ({ row, n: 15, dur, type });
         IMG.hero_knight = c;
         SPR.hero_knight = { cw: 128, ch: 128, ax: 64, ay: 96, sc: 1.3, anims: { stance: A(0, 1500, 'looped'), run: A(8, 640, 'looped'), swing: A(16, 400, 'play_once'), hit: A(24, 250, 'play_once'), die: A(32, 1000, 'play_once'), cast: A(40, 290, 'play_once') } };
-        knightReady = true;
-    } catch { /* sin las hojas locales se ve el muñeco de siempre */ }
+        knightReady = true; console.info('[skin] caballero activo');
+    } catch (e) { console.warn('[skin] caballero no cargó (se ve el muñeco normal). Revisá assets/skins/caballero/*.png:', e); }
 }
 /** Atlas extra (cripta de Kenney y terreno de SBS): id -> imagen y recorte [x, y, w, h, ox, oy]. */
 const EXT: Record<number, { im: CanvasImageSource; p: number[] }> = {};
