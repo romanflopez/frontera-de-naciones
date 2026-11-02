@@ -62,9 +62,9 @@ Mapas abiertos Nv7-11 (Paso de Stormrock, Cenizas I-III): mapas "stormrock_pass"
 
 === Efectos con licencia privada (no están en el repo) ===
 
-  - fx_priv.webp, fila "pilar" (efecto de Furia): "Pixel Art VFX - Priest", VFX 2, de Frostwindz (https://frostwindz.itch.io/), escalado y compuesto sobre negro.
+  - fx_priv.webp, filas "pilar" (Furia, VFX 2), "tajo" (Juicio, VFX 1) y "bendicion" (Aura sagrada, VFX 3): "Pixel Art VFX - Priest", de Frostwindz (https://frostwindz.itch.io/), escalado y compuesto sobre negro.
     Licencia de Frostwindz: uso comercial permitido dentro del juego; prohibido redistribuirlo o dejarlo descargable suelto, por eso
-    fx_priv.* está en .gitignore y se genera con tools/src/fx/private_atlas.py desde los cuadros originales. Sin ese archivo, Furia usa "flamme".
+    fx_priv.* está en .gitignore y se genera con tools/src/fx/private_atlas.py desde los cuadros originales. Sin ese archivo se usan los efectos de antes.
 
 === Sonido ===
 

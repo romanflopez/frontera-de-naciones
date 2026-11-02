@@ -430,7 +430,7 @@ function onSkillEffect(v: { casterId: bigint; skill: string; fromX: number; from
         case 'giro': efxLocal('cyclone', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 1.9, c: '#ffd0a0' }); break;
         case 'nova': efxLocal('spread', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 3, c: '#bfe8ff' }); break;
         case 'mandato': fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ff7a5a' }); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 6, c: '#ff7a5a' }); break;
-        case 'aura': efxLocal('sphere', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffe9a0' }); break;
+        case 'aura': efxLocal('bendicion', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffe9a0' }); break;
         case 'grito': efxLocal('godsbreath', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#c78bff' }); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffe27a' }); break;
     }
     if (v.skill === 'blink' && v.casterId === myId) { const pt = iso(P.x, P.y); if (Math.hypot(pt.x - cam.x, pt.y - cam.y) > 500) { cam.x = pt.x; cam.y = pt.y; } }
@@ -582,7 +582,7 @@ const LIB: Record<string, SpellDef> = {
     nova: { name: 'Nova de escarcha', mp: 60, cd: 8, col: '#bfe8ff', range: 0, target: false, aoe: 3, instant: true, // Ice Blast (Valdrys): congela 2 s alrededor
         cast() { skillSend('nova'); } },
     juicio: { name: 'Juicio', mp: 15, cd: 1.5, col: '#ffe27a', range: 4, castT: 1, target: true, // Smite (Valdrys): se cura la mitad del daño
-        cast(m) { if (!isMob(m)) return false; efx('crosswind', m.x, m.y, 8); damageMob(m, 'juicio'); } },
+        cast(m) { if (!isMob(m)) return false; efx('tajo', m.x, m.y, 8); damageMob(m, 'juicio'); } },
     escudo: { name: 'Escudo vengador', mp: 36, cd: 9, col: '#ffd24a', range: 10, target: true, ctrl: true, instant: true, // Avenger's Shield (Valdrys): aturde 3 s
         cast(m) { return control(m, 'escudo', 3, 'Aturdiste', 'El aturdimiento', 'turbulence'); } },
     mandato: { name: 'Mandato', mp: 42, cd: 6, col: '#ff7a5a', range: 0, target: false, instant: true, // Righteous Mandate (Valdrys): provoca 7 s
@@ -816,7 +816,7 @@ const IMG: Record<string, CanvasImageSource> = {};
 // Efectos TOMAS (Miradin, CC-BY-SA) horneados a cuadros; se dibujan en aditivo. Si no cargan, el juego sigue con los efectos simples.
 let FXM: { cell: number; frames: number; rows: Record<string, { row: number; fps: number; scale: number; img?: string }> } | null = null;
 /** Efectos del atlas privado (fx_priv, fuera de git por licencia) y con qué se reemplazan si no está. */
-const FX_FALLBACK: Record<string, string> = { pilar: 'flamme' };
+const FX_FALLBACK: Record<string, string> = { pilar: 'flamme', tajo: 'crosswind', bendicion: 'sphere' };
 const efxLocal = (n: string, x: number, y: number, dy = 0) => { const k = FXM?.rows[n] ? n : FX_FALLBACK[n]; if (k && FXM?.rows[k]) fx.push({ k: 'efx', n: k, x, y, t: 0, dy }); };
 /** Efecto de mis hechizos: lo veo yo y los jugadores cercanos. */
 const efx = (n: string, x: number, y: number, dy = 0) => { efxLocal(n, x, y, dy); if (connected) pvpSend(n, x, y); };
@@ -841,7 +841,7 @@ function pvpCast(id: string | undefined, o: Other): boolean {
         case 'aturdir': pvpDamage(o, 'aturdir', 'turbulence', 3); return true;
         case 'esquirla': later(dist(P, o) / 12, () => { if (isEnemy(o)) pvpDamage(o, 'esquirla', 'blizz'); }); return true;
         case 'ignicion': pvpDamage(o, 'ignicion', 'flamme'); return true;
-        case 'juicio': pvpDamage(o, 'juicio', 'crosswind'); return true;
+        case 'juicio': pvpDamage(o, 'juicio', 'tajo'); return true;
         case 'escudo': pvpDamage(o, 'escudo', 'turbulence', 3); return true;
         case 'bola': later(dist(P, o) / 9, () => { if (isEnemy(o)) pvpDamage(o, 'bola', 'eruption'); }); return true;
         case 'golpe': pvpDamage(o, 'golpe', 'crosswind'); return true;

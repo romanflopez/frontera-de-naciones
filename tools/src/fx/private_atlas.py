@@ -7,7 +7,10 @@ Uso: python3 tools/src/fx/private_atlas.py <nombre> <dir con *_frame1.png..N> [f
   - factor: escala de los cuadros antes de pegarlos en la celda de 160 px.
   - ancla_y: fila del cuadro original donde están los pies del efecto; se ubica a 0,62 de la celda,
     que es donde el cliente dibuja los pies del personaje.
-Ejemplo (Furia): python3 tools/src/fx/private_atlas.py pilar "<Pixel Art VFX - Priest>/VFX 2/frames" 15 1.6 0.85 116"""
+Efectos actuales (dir = carpeta del pack "Pixel Art VFX - Priest"):
+  pilar (Furia):        python3 tools/src/fx/private_atlas.py pilar "<dir>/VFX 2/frames" 15 1.6 0.85 116
+  tajo (Juicio):        python3 tools/src/fx/private_atlas.py tajo "<dir>/VFX 1/frames" 15 1.4 0.85 92
+  bendicion (Aura):     python3 tools/src/fx/private_atlas.py bendicion "<dir>/VFX 3/frames" 17 1.6 0.85 116"""
 import sys, re, os, json
 from PIL import Image
 S, N = 160, 14
