@@ -892,6 +892,25 @@ function drawSprite(name: string, anim: string, t: number, dir: number, x: numbe
     }
     ctx.globalAlpha = 1;
 }
+// ---------- skin de prueba: caballero (solo cuenta GM o ?skin=caballero) ----------
+// Hojas de 15 cuadros x 8 direcciones de 128x128. Los PNG son locales y NO van al repo (assets/skins/caballero/, ver docs/SKIN_CABALLERO.md); si faltan, no pasa nada.
+const KNIGHT_SHEETS: [string, string][] = [['stance', 'Idle'], ['run', 'Run'], ['swing', 'Melee'], ['hit', 'TakeDamage'], ['die', 'Die'], ['cast', 'CastSpell']];
+let knightReady = false, knightTried = false;
+const skinOn = () => /^rowena$/i.test(P.name) || new URLSearchParams(location.search).get('skin') === 'caballero';
+const heroKey = () => (knightReady && skinOn() ? 'hero_knight' : 'hero');
+async function initKnight() {
+    if (knightTried || !skinOn()) return; knightTried = true;
+    try {
+        const ims = await Promise.all(KNIGHT_SHEETS.map(([, f]) => load(`assets/skins/caballero/${f}.png`)));
+        const c = document.createElement('canvas'), g = c.getContext('2d')!; c.width = 15 * 128; c.height = KNIGHT_SHEETS.length * 8 * 128;
+        // las hojas rotan en sentido horario desde el este; el juego usa 0=O,1=NO,2=N,... => la dirección d toma la fila (d+4)%8
+        ims.forEach((im, i) => { for (let d = 0; d < 8; d++) g.drawImage(im, 0, ((d + 4) % 8) * 128, 15 * 128, 128, 0, (i * 8 + d) * 128, 15 * 128, 128); });
+        const A = (row: number, dur: number, type: string): Anim => ({ row, n: 15, dur, type });
+        IMG.hero_knight = c;
+        SPR.hero_knight = { cw: 128, ch: 128, ax: 64, ay: 96, sc: 1.3, anims: { stance: A(0, 1500, 'looped'), run: A(8, 640, 'looped'), swing: A(16, 400, 'play_once'), hit: A(24, 250, 'play_once'), die: A(32, 1000, 'play_once'), cast: A(40, 290, 'play_once') } };
+        knightReady = true;
+    } catch { /* sin las hojas locales se ve el muñeco de siempre */ }
+}
 /** Atlas extra (cripta de Kenney y terreno de SBS): id -> imagen y recorte [x, y, w, h, ox, oy]. */
 const EXT: Record<number, { im: CanvasImageSource; p: number[] }> = {};
 function drawWorld(id: number, x: number, y: number) { const e = EXT[id]; if (e) { const q = e.p; ctx.drawImage(e.im, q[0], q[1], q[2], q[3], Math.round(x - q[4]), Math.round(y - q[5]), q[2], q[3]); return; } const w = WORLD[id]; if (!w) return; ctx.drawImage(IMG.world, w[0], w[1], w[2], w[3], x - w[4], y - w[5], w[2], w[3]); }
@@ -1299,7 +1318,7 @@ function render() {
     for (const c of corpses) objs.push({ d: c.x + c.y - 0.3, f: () => { const p = iso(c.x, c.y), age = T - c.t; drawSprite(c.sprite, 'die', age, c.dir, p.x, p.y, null, age > 2 ? 3 - age : 1); } });
     for (const m of mobs) objs.push({ d: m.x + m.y, f: () => drawMob(m, T) });
     for (const o of others.values()) objs.push({ d: o.x + o.y, f: () => { const p = iso(o.x, o.y), [a, t] = animFor(o, T); if (unseen(o)) return; drawSprite(otherSprite(o), a, t, o.dir, p.x, p.y, o.inv ? 'rgba(150,200,255,.25)' : null, o.inv ? 0.35 + 0.1 * Math.sin(T * 5) : o.gone ? 0.45 : 1); if (o.fury) { ctx.save(); ctx.globalAlpha = 0.35 + 0.15 * Math.sin(T * 8); ctx.strokeStyle = '#ff5a2a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 22, 11, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); } } });
-    objs.push({ d: P.x + P.y, f: () => { const p = iso(P.x, P.y); if (P.frozenUntil > T && !P.dead) { ctx.strokeStyle = 'rgba(190,235,255,.85)'; ctx.lineWidth = 1.5; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(p.x, p.y - 8 - i * 14, 16, 6, 0, 0, Math.PI * 2); ctx.stroke(); } } if (P.dead) drawSprite('hero', 'die', T - P.deadT, P.dir, p.x, p.y); else {
+    objs.push({ d: P.x + P.y, f: () => { const p = iso(P.x, P.y); if (P.frozenUntil > T && !P.dead) { ctx.strokeStyle = 'rgba(190,235,255,.85)'; ctx.lineWidth = 1.5; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(p.x, p.y - 8 - i * 14, 16, 6, 0, 0, Math.PI * 2); ctx.stroke(); } } if (P.dead) drawSprite(heroKey(), 'die', T - P.deadT, P.dir, p.x, p.y); else {
             const [a, t] = animFor(P, T), bz = P.fury > T;
             if (P.med) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const k = 0.5 + 0.5 * Math.sin(T * 3); ctx.strokeStyle = `rgba(110,170,255,${0.35 + k * 0.4})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 16 + k * 14, (16 + k * 14) / 2, 0, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.ellipse(p.x, p.y - 20 - k * 22, 5, 2.5, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
             if (bz) { // berserk: aura de brasas bajo los pies y piel enrojecida que late (los últimos 2 s parpadea para avisar que se acaba)
@@ -1307,7 +1326,7 @@ function render() {
                 ctx.save(); ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(p.x, p.y, 2, p.x, p.y, 34); g.addColorStop(0, `rgba(255,${120 + k * 80 | 0},40,${warn ? 0.2 : 0.55})`); g.addColorStop(1, 'rgba(255,60,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(p.x, p.y, 34, 17, 0, 0, Math.PI * 2); ctx.fill();
                 ctx.strokeStyle = `rgba(255,${150 + k * 90 | 0},60,.6)`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 20 + k * 6, (20 + k * 6) / 2, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
             }
-            drawSprite('hero', a, t, P.dir, p.x, p.y, P.flash > 0 ? 'rgba(255,70,50,.35)' : P.inv ? 'rgba(150,200,255,.25)' : bz ? `rgba(255,${90 + (0.5 + 0.5 * Math.sin(T * 9)) * 70 | 0},20,.32)` : null, P.inv ? 0.4 + 0.1 * Math.sin(T * 5) : 1);
+            drawSprite(heroKey(), a, t, P.dir, p.x, p.y, P.flash > 0 ? 'rgba(255,70,50,.35)' : P.inv ? 'rgba(150,200,255,.25)' : bz ? `rgba(255,${90 + (0.5 + 0.5 * Math.sin(T * 9)) * 70 | 0},20,.32)` : null, P.inv ? 0.4 + 0.1 * Math.sin(T * 5) : 1);
         } } });
     objs.sort((a, b) => a.d - b.d).forEach((o) => o.f());
     // nombres arriba de todo
@@ -2250,7 +2269,7 @@ function startFlow(name: string) {
     });
 }
 function enterWorld(name: string) {
-    setClass(selectedClass); if (pendingSave) applySave(pendingSave); refreshUnlocks(false); connected = true; P.name = name; lookKey = ''; refreshLook(); sendProfile();
+    setClass(selectedClass); if (pendingSave) applySave(pendingSave); refreshUnlocks(false); connected = true; P.name = name; lookKey = ''; refreshLook(); sendProfile(); void initKnight();
     $('login').hidden = true; ($('loginBtn') as HTMLButtonElement).disabled = false;
     cv.focus({ preventScroll: true });
     invApplied = false; if (lastInv) applyInventory(lastInv); invApplied = false; saver.start(); saver.tick(true); // el primer guardado le dice al server clase y bando si es un personaje nuevo
@@ -2284,7 +2303,7 @@ async function boot() {
     $('loading').hidden = true;
     try { FXM = await (await fetch('assets/fx.json')).json(); IMG.fx = await load('assets/fx.webp'); } catch { FXM = null; }
     loadBuildingImages();
-    refreshLook();
+    refreshLook(); void initKnight();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, toScreen, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, perf: () => ({ ...perf }), mobCount: () => mobs.length, arrows: () => arrows.length });
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5), recall: () => ({ on: !!recall, k: recallK(now()), cd: Math.max(0, recallCdEnd - now()) }) });
