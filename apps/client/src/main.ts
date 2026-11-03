@@ -6,6 +6,7 @@
  * mobs, combate, hechizos, loot y experiencia (pasan al server en la fase 1b).
  */
 import { CombatTextManager, type CombatTextEvent } from './systems/CombatTextManager';
+import './ui/craftpix.css';
 import { mountChat } from './ui/mountChat';
 import { mountCastBar } from './ui/CastBar';
 import { useCastStore } from './ui/castStore';

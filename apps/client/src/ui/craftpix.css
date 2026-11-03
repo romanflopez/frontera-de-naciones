@@ -1,0 +1,27 @@
+/* Texturas del pack Craftpix "RPG MMO Game User Interface" sobre la cabecera, el cerrar, las ranuras y los tooltips.
+   Los PNG no están en git (licencia); se instalan con tools/src/ui/install_craftpix.py.
+   Cada regla suma capas ENCIMA del diseño de index.html: si el archivo falta, la capa no se pinta
+   y queda el diseño anterior. */
+/* cabecera: degradé del pack encima del carmesí */
+.fw-head{
+  background:
+    url("/assets/ui/craftpix/hdr-tribal.png") 50% 50%/auto 130% no-repeat,
+    url("/assets/ui/craftpix/hdr-gradient.png") 0 0/100% 100% no-repeat,
+    linear-gradient(#8a1a28,#4c0c16 55%,#2e060c);
+  background-blend-mode:soft-light,normal,normal;
+}
+/* cerrar: cuadrado oscuro con marco dorado y la X del pack */
+.fw-x{
+  font-size:0;
+  background:
+    url("/assets/ui/craftpix/icon-close.png") 50% 50%/16px 16px no-repeat,
+    url("/assets/ui/craftpix/btn-sq.png") 0 0/100% 100% no-repeat,
+    linear-gradient(#d02a2a,#7a0c10);
+}
+/* ranuras de equipo/bolsa */
+.sl{background-image:url("/assets/ui/craftpix/slot.png"),linear-gradient(145deg,#15110d,#0a0807);background-size:100% 100%,auto}
+.cell{background-image:url("/assets/ui/craftpix/slot.png");background-size:100% 100%}
+/* tooltips de ítem y de atributo */
+#itip>div,#atip{
+  background:url("/assets/ui/craftpix/tooltip-bg.png") 0 0/64px 64px repeat,linear-gradient(#1b1510,#0c0a08);
+}
