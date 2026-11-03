@@ -19,7 +19,7 @@ import { adjacentCellsAt45, distance, findNearestFreeLocation, nextGridDirection
 import type { Occupancy } from './map.ts';
 import * as M from './messages.ts';
 import { MobSim } from './mobs.ts';
-import { MOB_TYPES, POISON_SECS, meleeIntervalSecs, type MobType, type WorldMap } from '@fdn/world';
+import { ARENA_RULES, MOB_TYPES, POISON_SECS, arenaHealMult, meleeIntervalSecs, type MobType, type WorldMap } from '@fdn/world';
 import { Player, type PersistedPlayer, type Send } from './player.ts';
 import type { Economy, EconCtx } from './economy.ts';
 import { auctionHouse } from './auction.ts';
@@ -130,7 +130,7 @@ export class GameWorld {
      * Corrida de mazmorra (docs/MAZMORRAS.md): una instancia (`mapa#id`) de un mapa temporal. Adentro nada reaparece, hay élites, los mobs se
      * escalan con la party y se tiene una sola vida: al reaparecer después de caer, volvés a la superficie y esa corrida se terminó para vos.
      */
-    get isDungeonRun(): boolean { return this.id.includes('#') && !!this.def?.temporary; }
+    get isDungeonRun(): boolean { return this.id.includes('#') && !!this.def?.temporary && this.def.region !== 'arena'; }
     /** Jugadores con los que se escaló la instancia (1 por defecto). */
     private partySize = 1;
     /** Cuándo arrancó la corrida (ms, lo fija el registro; 0 = sin cronómetro). */
@@ -153,6 +153,46 @@ export class GameWorld {
         this.partySize = Math.max(1, Math.floor(n) || 1);
         return this.mobSim?.setPartyScale(this.partySize);
     }
+
+    // ---------- arena 2v2 / 3v3 (apps/server/src/arena.ts manda; acá van las reglas dentro del mapa) ----------
+    /**
+     * Partida de arena de esta instancia: equipo de cada sesión, puesto de salida (la "jaula" de la preparación), fase y usos de
+     * invisibilidad que quedan. Sin partida (un GM que entra a mirar) la arena es todos contra todos.
+     */
+    arena?: { teams: Map<string, 0 | 1>; cages: Map<string, { x: number; y: number }>; phase: 'prep' | 'fight' | 'end'; fightStart: number; invis: Map<string, number> };
+    arenaSetup(teams: Map<string, 0 | 1>, cages: Map<string, { x: number; y: number }>): void {
+        this.arena = { teams, cages, phase: 'prep', fightStart: 0, invis: new Map() };
+    }
+    /** Al llegar a la arena: sin buffs ni escudos (se sacan al entrar), vida y maná llenos y nada a medias (recall, Segundo aliento, pociones). */
+    arenaPrepare(sessionId: string): void {
+        const p = this.players.get(sessionId); if (!p || !this.arena) return;
+        this.cancelRecall(p, ''); this.cancelWind(p, ''); p.cast = null; p.meditating = false; p.potionEpoch++; p.burnSeq++; p.renewSeq++;
+        this.changeStatus(p, () => breakInvisibility(p.status));
+        clearBuffs(p.status); p.status.statDirty = false; this.restat(p);
+        p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; p.deadAt = 0; p.lastDamager = null;
+        this.announceStatus(p); this.sendVitals(p, true); this.announceVitals(p, true);
+        p.send(M.sendMessage(`Preparación: quedate en tu puesto. La pelea arranca en ${ARENA_RULES.prepMs / 1000} s.`));
+    }
+    arenaFight(now = Date.now()): void {
+        if (!this.arena) return;
+        this.arena.phase = 'fight'; this.arena.fightStart = now;
+        for (const p of this.players.values()) if (p.spawnProtection) this.disableSpawnProtection(p);
+    }
+    /** Fin de la partida: nadie pega más y todos quedan vivos y llenos para volver. */
+    arenaEnd(): void {
+        if (!this.arena) return;
+        this.arena.phase = 'end';
+        for (const p of this.players.values()) {
+            p.potionEpoch++; p.burnSeq++; p.renewSeq++;
+            clearBuffs(p.status); p.status.statDirty = false; this.restat(p);
+            p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; p.deadAt = 0; p.lastDamager = null;
+            this.announceStatus(p); this.sendVitals(p, true); this.announceVitals(p, true);
+        }
+    }
+    /** Multiplicador de curación y regeneración de vida en la arena (−20 % cada 3 min de pelea, piso 20 %); 1 afuera. */
+    private healMult(now: number): number { return this.arena?.phase === 'fight' ? arenaHealMult(now - this.arena.fightStart) : 1; }
+    /** Bando para ver invisibles y para curar: el equipo en una partida de arena, la nación en el resto. */
+    private sideOf(p: Player): string { const t = this.arena?.teams.get(p.sessionId); return t === undefined ? this.factionOf(p) : `arena${t}`; }
 
     /** Clave del mundo: el id del mapa, más `#instancia` si es una instancia privada. */
     get id(): string { return this.config.id; }
@@ -301,7 +341,7 @@ export class GameWorld {
     private factionOf(p: Player): string { return p.profile.split(';')[0]; }
     /** `target` es invisible para `viewer`: de otra facción y sin Detectar invisible. Los aliados se ven siempre. */
     private hiddenFrom(viewer: Player, target: Player): boolean {
-        return target.status.isInvisible && !viewer.status.hasDetectInvisible && this.factionOf(viewer) !== this.factionOf(target);
+        return target.status.isInvisible && !viewer.status.hasDetectInvisible && this.sideOf(viewer) !== this.sideOf(target);
     }
 
     /** Estado visible de `p` (invisible, detectar, furia, Bendición de poder, ralentizado, bendiciones y auras de K8) para `p` y los cercanos. */
@@ -624,7 +664,10 @@ export class GameWorld {
                     const now = Date.now();
                     if (p.isDead || !this.kitOk(p, 'invisibilidad')) break;
                     if (now < p.invisCdUntil - 1000) { p.send(M.sendMessage(`La invisibilidad se está recargando (faltan ${Math.ceil((p.invisCdUntil - now) / 1000)} s).`)); break; }
+                    const left = this.arena ? this.arena.invis.get(p.sessionId) ?? ARENA_RULES.invisUses : Infinity;
+                    if (left <= 0) { p.send(M.sendMessage(`Ya usaste las ${ARENA_RULES.invisUses} invisibilidades de esta partida.`)); break; }
                     if (!this.payMp(p, UTIL_MP.invisibilidad)) break;
+                    if (this.arena) { this.arena.invis.set(p.sessionId, left - 1); p.send(M.sendMessage(`Invisibilidad: te quedan ${left - 1} en esta partida.`)); }
                     p.invisCdUntil = now + INVIS_CD_MS; this.cancelWind(p, '');
                     this.changeStatus(p, () => castInvisibility(p.status, now)); break;
                 }
@@ -690,6 +733,7 @@ export class GameWorld {
         if (p.spawnProtection) this.disableSpawnProtection(p);
         const deltaMs = p.getAndUpdateLastMovementRequestMs(now);
         if (p.isParalyzed(now)) { p.send(M.resetPosition(this.id, p.posX, p.posY)); return; }
+        if (!this.inCage(p, req.destX, req.destY)) { p.send(M.resetPosition(this.id, p.posX, p.posY)); return; }
 
         if (distance(req.curX, req.curY, p.posX, p.posY) > this.settings.maxCellsJumpDistance) {
             p.send(M.resetPosition(this.id, p.posX, p.posY));
@@ -808,7 +852,13 @@ export class GameWorld {
      * pero no muros: la línea no puede cruzar celdas bloqueadas, y el destino tiene que ser caminable, libre (sin jugador ni mob),
      * sin portal y del mismo lado de la zona segura.
      */
+    /** Preparación de arena: no se sale del puesto de salida. */
+    private inCage(p: Player, x: number, y: number): boolean {
+        const c = this.arena?.phase === 'prep' ? this.arena.cages.get(p.sessionId) : undefined;
+        return !c || Math.hypot(x - c.x, y - c.y) <= ARENA_RULES.cageR;
+    }
     private handleBlink(p: Player, x: number, y: number, skill: 'blink' | 'pasoluz' = 'blink'): void {
+        if (!this.inCage(p, x, y)) return this.skillDenied(p, skill, 'Todavía no arrancó la pelea: quedate en tu puesto.');
         if (!this.skillGate(p, skill)) return;
         const sp = SKILLS[skill], fx = p.posX, fy = p.posY, name = skill === 'blink' ? 'el Blink' : 'el Paso de luz';
         if (!Number.isInteger(x) || !Number.isInteger(y)) return this.skillDenied(p, skill, '');
@@ -968,7 +1018,7 @@ export class GameWorld {
      * Con FDN_DEBUG_WARP=1 vale cualquier celda libre (solo para pruebas).
      */
     private handleTeleport(p: Player, reqX: number, reqY: number): void {
-        if (p.isDead || (reqX === p.posX && reqY === p.posY)) return;
+        if (p.isDead || (reqX === p.posX && reqY === p.posY) || this.arena) return;
         // al entrar (30 s): ir al hogar de la propia facción, que puede estar en otro mapa (Solmar vive en la Villa de Solmar)
         const home = factionHome(this.factionOf(p)), toHome = !!home && reqX === home.x && reqY === home.y && Date.now() - p.joinedAt < 30000;
         if (toHome && home.map !== this.mapId) { this.transferHook?.(p.sessionId, home, 'home'); return; }
@@ -1179,6 +1229,10 @@ export class GameWorld {
     }
     private isEnemyPair(a: Player, b: Player): boolean {
         if (a === b || a.disconnected || b.disconnected) return false;
+        if (this.arena) { // partida de arena: solo en la pelea y entre equipos distintos (puede ser la misma nación)
+            const ta = this.arena.teams.get(a.sessionId), tb = this.arena.teams.get(b.sessionId);
+            return this.arena.phase === 'fight' && ta !== undefined && tb !== undefined && ta !== tb;
+        }
         const safe = (p: Player) => !!this.map?.safe[Math.floor(p.posY)]?.[Math.floor(p.posX)];
         if (safe(a) || safe(b)) return false;
         const mode = this.def?.pvp ?? 'faction';
@@ -1222,6 +1276,7 @@ export class GameWorld {
         const now = Date.now();
         if (isBlessed(p.status, now)) n = Math.round(n * BLESS_HEAL_TAKEN);
         if (isPoisoned(p.status, now)) n = Math.round(n * POISON_HEAL_TAKEN); // veneno: −30 %
+        const am = this.healMult(now); if (am < 1) n = Math.round(n * am); // arena: −20 % cada 3 min de pelea
         const got = Math.min(p.combat.maxHp, p.hp + n) - p.hp; if (got <= 0) return 0;
         p.hp += got; this.sendVitals(p, false); this.announceVitals(p); this.combatText(p, got, true, M.pid((by ?? p).playerId), spell);
         if (by) this.mobSim?.healThreat(by, p, Math.round(got * HEAL_THREAT));
@@ -1237,7 +1292,7 @@ export class GameWorld {
     /** Aliado al que el healer puede curar o bendecir: él mismo o alguien de su nación, vivo, que no sea su enemigo en este lugar (arena, todos contra todos). */
     private isAlly(p: Player, o: Player): boolean {
         if (o === p) return true;
-        return !o.disconnected && !o.isDead && this.factionOf(o) === this.factionOf(p) && !this.isEnemyPair(p, o);
+        return !o.disconnected && !o.isDead && this.sideOf(o) === this.sideOf(p) && !this.isEnemyPair(p, o);
     }
     /** Objetivo aliado de una cura: `targetId` 0 (o el propio) es uno mismo. Valida nación, vida y alcance. */
     private allyTarget(p: Player, targetId: bigint, range: number): Player | string {
@@ -1267,6 +1322,7 @@ export class GameWorld {
         const sp = SKILLS[skill];
         if (sp.cast && !this.castOk(p, skill, now)) return this.skillDenied(p, skill, ''); // bendiciones de grupo (0,8 s) y Despertar (2,4 s) se castean
         if (sp.revive) { // Despertar: a un aliado caído
+            if (this.arena) return this.skillDenied(p, skill, 'En la arena no se resucita.');
             const o = targetId ? this.playersById.get(targetId) : undefined;
             if (!o || o === p || o.disconnected || !o.isDead || this.factionOf(o) !== this.factionOf(p) || this.isEnemyPair(p, o)) return this.skillDenied(p, skill, 'Elegí a un aliado caído.');
             if (Math.hypot(o.posX - p.posX, o.posY - p.posY) > sp.range + 1.5) return this.skillDenied(p, skill, 'Está muy lejos.');
@@ -1407,7 +1463,7 @@ export class GameWorld {
         return dmg;
     }
     private killPlayer(p: Player): void {
-        p.hp = 0; p.deadAt = Date.now(); p.potionEpoch++; this.econ?.onDeath(p); // corta la curación en el tiempo de pociones
+        p.hp = 0; p.deadAt = Date.now(); p.potionEpoch++; if (!this.arena) this.econ?.onDeath(p); // en la arena morir no cuesta exp // corta la curación en el tiempo de pociones
         this.cancelRecall(p, ''); this.cancelWind(p, ''); p.potionReadyAt = 0; // al morir se libera el bloqueo de pociones (el cliente hace lo mismo)
         clearBuffs(p.status); if (p.status.statDirty) { p.status.statDirty = false; this.restat(p); } // K8: se pierden escudos y bendiciones
         this.changeStatus(p, () => breakInvisibility(p.status));
@@ -1433,6 +1489,7 @@ export class GameWorld {
     }
     private respawn(p: Player): void {
         if (!p.isDead || Date.now() - p.deadAt < 1800) return;
+        if (this.arena) { p.send(M.sendMessage('Caíste: esperá el final de la partida. Al terminar volvés con la vida llena.')); return; }
         p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; p.meditating = false; p.lastDamager = null; p.potionEpoch++;
         // cada mapa define dónde reaparecés (MapDef.respawn): el hogar de tu facción, la entrada de la mazmorra, la posta del claro...
         const fallback = this.config.spawn ?? { x: 6, y: 7 };
@@ -1462,7 +1519,8 @@ export class GameWorld {
         if (want > p.hp) {
             p.healLog = p.healLog.filter(([t]) => now - t < 5000);
             const room = max - p.healLog.reduce((a, [, n]) => a + n, 0);
-            const up = Math.max(0, Math.min(want - p.hp, Math.ceil(max * 0.5 * dt) + 2, room));
+            const am = this.healMult(now); // arena: la regeneración también baja con el tiempo de pelea
+            const up = Math.floor(Math.max(0, Math.min(want - p.hp, Math.ceil(max * 0.5 * dt) + 2, room)) * am);
             if (up > 0) { p.hp += up; p.healLog.push([now, up]); }
         }
         this.announceVitals(p);
@@ -1476,6 +1534,7 @@ export class GameWorld {
      */
     private usePotion(p: Player, kind: number): void {
         if (p.isDead || p.disconnected || (kind !== 0 && kind !== 1)) return;
+        if (this.arena) { p.send(M.sendMessage('En la arena no se usan pociones.')); return; }
         const now = Date.now();
         if (now < p.potionReadyAt - POTION_GCD_SLACK_MS) { this.sendPotionLock(p, now); return; }
         const max = kind === 0 ? p.combat.maxHp : p.combat.maxMp;

@@ -698,7 +698,7 @@ function blinkDest(max = 7): Cell | null {
 }
 const skillSend = (skill: string, targetId = 0n, mobId = 0) => net.send({ $case: 'skillRequest', value: { skill, targetId, mobId } });
 /** Aliado elegido para las curas (click en alguien de tu nación): sigue valiendo mientras esté a la vista y no sea enemigo acá. */
-const isAlly = (o: Other) => !o.gone && others.has(o.id) && facOf(o.profile) === selectedFaction && !isEnemy(o);
+const isAlly = (o: Other) => !o.gone && others.has(o.id) && sameSide(o) && !isEnemy(o);
 function allyTarget(): Other | null { if (P.ally && !isAlly(P.ally)) P.ally = null; return P.ally; }
 /** Cura o bendición: al aliado elegido si está a tiro; si no hay aliado, a vos. */
 function healCast(skill: string, range: number): false | void {
@@ -1078,8 +1078,12 @@ const efx = (n: string, x: number, y: number, dy = 0) => { efxLocal(n, x, y, dy)
 // ---------- PvP: bandos enemigos (y todos contra todos en la arena) ----------
 const inArena = (x: number, y: number) => !!MAP_DEF.ffaRect && inMapRect(MAP_DEF.ffaRect, Math.floor(x), Math.floor(y));
 const facOf = (profile: string) => profile.split(';')[0];
-const unseen = (o: Other) => !!o.inv && !P.det && facOf(o.profile) !== selectedFaction;
-const isEnemy = (o: Other) => MAP_DEF.pvp !== 'off' && !o.gone && !unseen(o) && !isSafe(o.x, o.y) && !isSafe(P.x, P.y) && (MAP_DEF.pvp === 'ffa' || facOf(o.profile) !== selectedFaction || (inArena(P.x, P.y) && inArena(o.x, o.y)));
+/** Arenas 2v2 / 3v3 (`/arena`): el equipo es la party; el resto es rival aunque sea de tu nación. El server decide igual (y no deja pegar en la preparación). */
+const onArenaMap = () => MAP_DEF.region === 'arena';
+const teammate = (o: Other) => partyRows.has(o.name);
+const sameSide = (o: Other) => (onArenaMap() ? teammate(o) : facOf(o.profile) === selectedFaction);
+const unseen = (o: Other) => !!o.inv && !P.det && !sameSide(o);
+const isEnemy = (o: Other) => MAP_DEF.pvp !== 'off' && !o.gone && !unseen(o) && !isSafe(o.x, o.y) && !isSafe(P.x, P.y) && (onArenaMap() ? !teammate(o) : MAP_DEF.pvp === 'ffa' || facOf(o.profile) !== selectedFaction || (inArena(P.x, P.y) && inArena(o.x, o.y)));
 const enemiesNear = (x: number, y: number, r: number) => [...others.values()].filter((o) => isEnemy(o) && Math.hypot(o.x - x, o.y - y) <= r);
 /** Avisa al server qué hechizo lancé y sobre quién; el daño lo calcula el server (el campo dmg ya no se usa). */
 function pvpSend(fx: string, x: number, y: number, targetId = 0n, spell = '', secs = 0, r = 0) { net.send({ $case: 'pvpHitRequest', value: { fx, x, y, targetId, dmg: 0, secs, r, spell } }); }
@@ -1362,7 +1366,7 @@ cv.addEventListener('pointerleave', () => { mouse = { x: -1, y: -1 }; });
 // ---------- chat por canales: Global, Nación (tu facción), Party; Guild llega más adelante ----------
 const CHAT_NET = new Set<ChatChannel>(['global', 'comercio', 'area', 'party', 'guild', 'nacion']);
 function chatChannel(c: string): ChatChannel { const k = (c || 'global') as ChatChannel; return CHAT_NET.has(k) ? k : 'global'; }
-const CHAT_HELP = () => `Comandos: /meditar${DEBUG ? ', /look' : ''}; chat: /g global, /c comercio, /a área, /n nación, /p party, /gu guild (pronto); party: /invitar /aceptar /rechazar /salir /expulsar /lider`;
+const CHAT_HELP = () => `Comandos: /meditar${DEBUG ? ', /look' : ''}; chat: /g global, /c comercio, /a área, /n nación, /p party, /gu guild (pronto); party: /invitar /aceptar /rechazar /salir /expulsar /lider; arena: /arena (2v2, 3v3, salir, aceptar, rechazar, ranking, rating)`;
 /** Lo que se escribe en el ChatBox: comandos locales, o mensaje al server por el canal de la pestaña (o el del prefijo). */
 chatBus.on('chat:send', ({ text, channel }) => {
     cv.focus({ preventScroll: true });
@@ -1371,6 +1375,7 @@ chatBus.on('chat:send', ({ text, channel }) => {
     if (DEBUG && /^\/look(\s|$)/i.test(text)) { lookCommand(text); return; }
     if (partyCommand(text)) return;
     if (/^\/gm(\s|$)/i.test(text)) { net.send({ $case: 'chatMessageSendRequest', value: { message: text } }); return; } // comandos de GM: los resuelve el server (FDN_GM)
+    if (/^\/arena(\s|$)/i.test(text)) { net.send({ $case: 'chatMessageSendRequest', value: { message: text } }); return; } // arenas 2v2 / 3v3: los resuelve el server
     const pre = /^\/(gu|g|n|p|a|c)\s+/i.exec(text);
     if (pre) { const ch = ({ gu: 'guild', g: 'global', n: 'nacion', p: 'party', a: 'area', c: 'comercio' } as Record<string, string>)[pre[1].toLowerCase()]; net.send({ $case: 'clientChatMessage', value: { channel: ch, text: text.slice(pre[0].length) } }); return; }
     if (text.startsWith('/')) { log(CHAT_HELP()); return; }
