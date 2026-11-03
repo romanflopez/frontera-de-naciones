@@ -949,6 +949,29 @@ function toggleMeditate() {
 }
 function nearestEnemy(range: number) { let b: Other | null = null, bd = range; for (const o of others.values()) { if (!isEnemy(o)) continue; const d = dist(P, o); if (d <= bd) { bd = d; b = o; } } return b; }
 /** Alguien de tu nación bajo el cursor (para elegirlo como objetivo de curas). */
+// ---------- objetivo de foco: una segunda marca que no se pierde al cambiar de objetivo ----------
+// Shift+clic sobre un mob, un aliado o un jugador enemigo lo fija (de nuevo sobre el mismo, lo suelta); Tab pasa a él.
+type Focus = { k: 'mob'; m: Mob } | { k: 'player'; o: Other };
+let focus: Focus | null = null;
+/** El foco que sigue existiendo (mob vivo en el mapa, o jugador que sigue visible); si no, se suelta solo. */
+function focusNow(): Focus | null {
+    if (focus?.k === 'mob' && !alive(focus.m)) focus = null;
+    else if (focus?.k === 'player' && (!others.has(focus.o.id) || focus.o.gone)) focus = null;
+    return focus;
+}
+function toggleFocus(m: Mob | null, o: Other | null) {
+    const cur = focusNow();
+    if (m ? cur?.k === 'mob' && cur.m === m : o ? cur?.k === 'player' && cur.o === o : false) { focus = null; toast('Foco suelto.'); return; }
+    if (m) focus = { k: 'mob', m }; else if (o) focus = { k: 'player', o }; else return;
+    toast(`Foco: ${m ? m.name : o!.name}. Tab para pasar a él.`);
+}
+/** Tab: el foco pasa a ser el objetivo (mob), el blanco de las curas (aliado) o el enemigo al que apuntan los hechizos (jugador enemigo). */
+function focusToTarget() {
+    const f = focusNow(); if (!f) { toast('No tenés ningún foco: Shift+clic sobre un mob o un jugador.'); return; }
+    if (f.k === 'mob') { cancelCast(); P.target = f.m; P.engage = false; P.pickup = null; P.foe = null; }
+    else if (isAlly(f.o)) { P.ally = f.o; toast(`Curás a ${f.o.name}.`); }
+    else if (isEnemy(f.o)) { P.target = null; P.engage = false; P.foe = f.o; }
+}
 function pickAlly(sx: number, sy: number) { for (const o of others.values()) { if (!isAlly(o)) continue; const p = toScreen(o.x, o.y); if (Math.abs(sx - p.x) < 24 * Z && sy > p.y - 76 * Z && sy < p.y + 12 * Z) return o; } return null; }
 function pickEnemy(sx: number, sy: number) { for (const o of others.values()) { if (!isEnemy(o)) continue; const p = toScreen(o.x, o.y); if (Math.abs(sx - p.x) < 24 * Z && sy > p.y - 76 * Z && sy < p.y + 12 * Z) return o; } return null; }
 const CAST_T = 0.75; // cast "rápido" de docs/COMBATE.md; el server valida el mismo valor (castMsOf)
@@ -1273,6 +1296,10 @@ cv.addEventListener('pointerdown', (e) => {
     cv.focus({ preventScroll: true });
     if (P.dead || !connected) return; const r = cv.getBoundingClientRect(); const sx = e.clientX - r.left, sy = e.clientY - r.top;
     const m = pickMob(sx, sy), en = !m ? pickEnemy(sx, sy) : null;
+    if (e.shiftKey && !P.ready) { // Shift+clic: fijar o soltar el foco sin tocar el objetivo
+        const other = !m ? pickAlly(sx, sy) ?? en : null;
+        if (m || other) { toggleFocus(m, other); return; }
+    }
     talkNpc = null; P.foe = null;
     const npc = !m && !P.ready ? pickNpc(sx, sy) : null;
     if (npc) { talkTo(npc); return; }
@@ -1389,6 +1416,8 @@ window.addEventListener('keydown', (e) => {
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'e' || e.key === 'E')) { usePotion('mp'); return; }
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'h' || e.key === 'H')) { toggleRecall(); return; }
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 't' || e.key === 'T')) { toggleRun(); return; }
+    if (e.key === 'Tab' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (document.activeElement === cv || document.activeElement === document.body)) { // en un botón o ventana, Tab sigue navegando
+         e.preventDefault(); focusToTarget(); return; }
     const hk = SPELLS.findIndex((x) => SPECIAL_KEY[x.id ?? ''] === e.key.toLowerCase()) >= 0 ? SPELLS.findIndex((x) => SPECIAL_KEY[x.id ?? ''] === e.key.toLowerCase()) : KEYS.indexOf(e.key), dm = /^(?:Digit|Numpad)([0-9])$/.exec(e.code), k = hk >= 0 ? hk : dm ? KEYS.indexOf(dm[1]) : null;
     // ?debug: Shift+1/2/3 simula un cast de Fuego/Hielo/Sagrado (solo visual: barra + cartel, no va al server).
     if (DEBUG && e.shiftKey && !e.repeat && /^Digit[123]$/.test(e.code)) {
@@ -1633,7 +1662,17 @@ function drawLinkLabels() {
         }
         nameTag(l.kind === 'oneway' ? `${dest} (solo ida)` : dest, c.x, c.y - 52, why ? '#ff9a8a' : LINK_COL[l.kind], 1, 11);
         if (d < 4 && why) nameTag(why, c.x, c.y - 40, '#d9d2b8', 1, 9);
+        else if (d < 8 && !why && getMapDef(l.to.map)?.temporary && !MAP_DEF.temporary) { const r = runDoorLine(); nameTag(r.t, c.x, c.y - 40, r.c, 1, 10); }
     }
+}
+/** Cupo de la party en la puerta de una mazmorra: el primero que entra crea la instancia y solo la party puede sumarse a ella. */
+function runDoorLine(): { t: string; c: string } {
+    const ms = [...partyRows.values()].map((r) => r.m);
+    if (ms.length < 2) return { t: 'Instancia propia: solo entrás vos', c: '#d9d2b8' };
+    const inside = ms.filter((m) => m.online && getMapDef(m.map)?.temporary).length;
+    return inside > 0
+        ? { t: `Tu party ya está adentro (${inside}/${ms.length}): entrás a su instancia`, c: '#8af0a8' }
+        : { t: `Party 0/${ms.length} adentro: el primero que entre crea la instancia, solo la party puede pasar`, c: '#ffd24a' };
 }
 function render() {
     const T = now();
@@ -1679,6 +1718,8 @@ function render() {
     for (const d of drops) objs.push({ d: d.x + d.y - 0.2, f: () => drawDrop(d, T) });
     for (const c of corpses) objs.push({ d: c.x + c.y - 0.3, f: () => { const p = iso(c.x, c.y), age = T - c.t; drawSprite(c.sprite, 'die', age, c.dir, p.x, p.y, null, age > 2 ? 3 - age : 1); } });
     for (const m of mobs) objs.push({ d: m.x + m.y, f: () => drawMob(m, T) });
+    const fc = focusNow();
+    if (fc) { const e = fc.k === 'mob' ? fc.m : fc.o; objs.push({ d: e.x + e.y + 0.05, f: () => { const p = iso(e.x, e.y); ctx.save(); ctx.globalAlpha = 0.65 + 0.2 * Math.sin(T * 4); ctx.strokeStyle = '#4fc3f7'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.ellipse(p.x, p.y, 24, 12, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); } }); }
     for (const o of others.values()) objs.push({ d: o.x + o.y, f: () => { const p = iso(o.x, o.y), [a, t] = animFor(o, T); if (unseen(o)) return; if (o === P.ally) { ctx.save(); ctx.globalAlpha = 0.6 + 0.2 * Math.sin(T * 4); ctx.strokeStyle = '#8af0a8'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 20, 10, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); } drawSprite(otherSprite(o), a, t, o.dir, p.x, p.y, o.inv ? 'rgba(150,200,255,.25)' : null, o.inv ? 0.35 + 0.1 * Math.sin(T * 5) : o.gone ? 0.45 : 1); if (o.fury) { ctx.save(); ctx.globalAlpha = 0.35 + 0.15 * Math.sin(T * 8); ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 22, 11, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); } } });
     objs.push({ d: P.x + P.y, f: () => { const p = iso(P.x, P.y); if (P.frozenUntil > T && !P.dead) { ctx.strokeStyle = 'rgba(190,235,255,.85)'; ctx.lineWidth = 1.5; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(p.x, p.y - 8 - i * 14, 16, 6, 0, 0, Math.PI * 2); ctx.stroke(); } } if (P.dead) drawSprite(heroKey(), 'die', T - P.deadT, P.dir, p.x, p.y); else {
             const [a, t] = animFor(P, T), bz = P.fury > T;
@@ -1836,7 +1877,7 @@ function setClass(id: string) {
     $('bar').innerHTML = Array.from({ length: 10 }, (_, i) => SPELLS[i] ? slotHtml(SPELLS[i], i, false) : emptyHtml(KEYS[i], false)).join('');
     const rest = SPELLS.slice(10); $('quick').innerHTML = Array.from({ length: Math.max(4, rest.length) }, (_, j) => rest[j] ? slotHtml(rest[j], 10 + j, true) : emptyHtml('F' + (j + 1), true)).join('');
     SPELLS.forEach((_, i) => $('sp' + i).addEventListener('click', () => { cast(i); cv.focus({ preventScroll: true }); }));
-    $('helpKeys').textContent = `Click o mantener: caminar · Click en mob: atacar · teclas 1–0 usar habilidad (las de objetivo: esperá que cargue y click en el blanco) · Click derecho: cancelar · ${SPELLS.map((x) => x.key + ' ' + x.name).join(' · ')} · I Bolsa · H Volver a la ciudad (tarda 8 s y se corta si te pegan) · Enter chat`;
+    $('helpKeys').textContent = `Click o mantener: caminar · Click en mob: atacar · teclas 1–0 usar habilidad (las de objetivo: esperá que cargue y click en el blanco) · Click derecho: cancelar · ${SPELLS.map((x) => x.key + ' ' + x.name).join(' · ')} · Shift+clic fijar foco · Tab pasar al foco · I Bolsa · H Volver a la ciudad (tarda 8 s y se corta si te pegan) · Enter chat`;
 }
 /** Cuadraditos de estado con cuenta regresiva (Furia, invisible, detectar, parálisis, inmunidad), como en HB. */
 const BUFFS: { k: string; n: string; c: string; end: () => number; on: () => boolean }[] = [
@@ -1888,6 +1929,13 @@ function hud() {
         if (m.poison > T) ch.push(`<span class="chip ven">Envenenado</span>`);
         $('tChips').innerHTML = ch.join('');
     }
+    const fcs = focusNow();
+    $('focus').hidden = !fcs;
+    if (fcs) {
+        const hp = fcs.k === 'mob' ? fcs.m.hp : fcs.o.hp ?? 0, mx = fcs.k === 'mob' ? fcs.m.hpMax : fcs.o.maxHp ?? 0;
+        $('fName').textContent = fcs.k === 'mob' ? fcs.m.name : fcs.o.name; $('fLvl').textContent = fcs.k === 'mob' ? 'Nv ' + fcs.m.lvl : '';
+        $('fHpI').style.width = mx > 0 ? Math.max(0, Math.min(100, (hp / mx) * 100)) + '%' : '0%'; $('fHpT').textContent = mx > 0 ? `${Math.max(0, Math.ceil(hp))} / ${mx}` : '';
+    }
     $('gold').textContent = fmtNum(P.gold);
     const netEl = $('net');
     netEl.textContent = connected ? `En línea · ${playersOnline || 1} ${playersOnline === 1 ? 'jugador' : 'jugadores'}` : 'Sin conexión';
@@ -1920,6 +1968,7 @@ $('bagClose').addEventListener('click', () => { $('bag').hidden = true; renderBa
 $('charClose').addEventListener('click', () => { $('char').hidden = true; renderBag(); });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && (bagOpen() || charOpen()) && !(e.target instanceof HTMLInputElement)) closeWins(); });
 document.querySelectorAll<HTMLElement>('#invTabs [data-tab]').forEach((b) => b.addEventListener('click', () => { invTab = b.dataset.tab as typeof invTab; renderBag(); }));
+$('focus').addEventListener('click', () => { if (focus) { focus = null; toast('Foco suelto.'); } });
 $('sortBtn').addEventListener('click', () => net.send({ $case: 'econSortRequest', value: {} }));
 $('dropBtn').addEventListener('click', () => {
     if (!sel || sel.from !== 'bag') return;
