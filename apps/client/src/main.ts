@@ -1054,7 +1054,7 @@ function toast(t: string) { const el = $('toast'); el.textContent = t; el.hidden
 
 // ---------- assets ----------
 interface Anim { row: number; n: number; dur: number; type: string }
-interface SpriteMeta { sc?: number; cw: number; ch: number; ax: number; ay: number; anims: Record<string, Anim> }
+interface SpriteMeta { sc?: number; hum?: boolean; cw: number; ch: number; ax: number; ay: number; anims: Record<string, Anim> }
 const SPR: Record<string, SpriteMeta> = {};
 let WORLD: Record<string, number[]> = {};
 const IMG: Record<string, CanvasImageSource> = {};
@@ -1116,6 +1116,12 @@ function frameIndex(A: Anim, t: number) {
     return Math.min(A.n - 1, k);
 }
 const SS = 0.8; // escala de personajes y mobs respecto del mundo
+/**
+ * Cuánto más grandes se ven los humanoides "nuestros" (jugadores y NPCs del Character Creator, los marcados con `hum`) que los
+ * bichos de Flare. Es solo visual: colisión, alcance y hitbox se calculan en celdas, así que tocarlo no cambia nada de juego.
+ * Para calibrar, mirar al personaje al lado de un goblin y de un esqueleto; arriba de ~1,25 se empieza a desbordar la celda.
+ */
+const HS = 1.18;
 // ---------- muñeco por capas ----------
 interface Paper { cw: number; ch: number; cols: number; order: Record<string, string[]>; pieces: Record<string, string>; sets: Record<string, string[]> }
 let PAPER: Paper;
@@ -1182,7 +1188,7 @@ function refreshLook() {
 }
 function drawSprite(name: string, anim: string, t: number, dir: number, x: number, y: number, tint?: string | null, alpha?: number) {
     const M = SPR[name], A = M?.anims[anim], im = IMG[name]; if (!A || !im) return;
-    const i = frameIndex(A, t), sx = i * M.cw, sy = (A.row + dir) * M.ch, k = SS * (M.sc ?? 1), dw = M.cw * k, dh = M.ch * k, dx = x - M.ax * k, dy = y - M.ay * k;
+    const i = frameIndex(A, t), sx = i * M.cw, sy = (A.row + dir) * M.ch, k = SS * (M.sc ?? 1) * (M.hum ? HS : 1), dw = M.cw * k, dh = M.ch * k, dx = x - M.ax * k, dy = y - M.ay * k;
     ctx.globalAlpha = alpha ?? 1;
     ctx.drawImage(im, sx, sy, M.cw, M.ch, dx, dy, dw, dh);
     if (tint) {
@@ -1209,13 +1215,19 @@ async function initKnight() {
         ims.forEach((im, i) => { for (let d = 0; d < 8; d++) g.drawImage(im, 0, ((d + 4) % 8) * 128, 15 * 128, 128, 0, (i * 8 + d) * 128, 15 * 128, 128); });
         const A = (row: number, dur: number, type: string): Anim => ({ row, n: 15, dur, type });
         IMG.hero_knight = c;
-        SPR.hero_knight = { cw: 128, ch: 128, ax: 64, ay: 108, sc: 1.3, anims: { stance: A(0, 1500, 'looped'), run: A(8, 640, 'looped'), swing: A(16, 400, 'play_once'), hit: A(24, 250, 'play_once'), die: A(32, 1000, 'play_once'), cast: A(40, 290, 'play_once'), crit: A(48, 800, 'play_once') } };
+        SPR.hero_knight = { cw: 128, ch: 128, ax: 64, ay: 108, sc: 1.3, hum: true, anims: { stance: A(0, 1500, 'looped'), run: A(8, 640, 'looped'), swing: A(16, 400, 'play_once'), hit: A(24, 250, 'play_once'), die: A(32, 1000, 'play_once'), cast: A(40, 290, 'play_once'), crit: A(48, 800, 'play_once') } };
         knightReady = true; console.info('[skin] caballero activo');
     } catch (e) { console.warn('[skin] caballero no cargó (se ve el muñeco normal). Revisá assets/skins/caballero/*.png:', e); }
 }
 /** Atlas extra (cripta de Kenney y terreno de SBS): id -> imagen y recorte [x, y, w, h, ox, oy]. */
+/**
+ * Tiles de los atlas externos. `p` = [sx, sy, sw, sh, ox, oy, dw, dh]: los cuatro primeros son el recorte en el atlas y los cuatro
+ * últimos, el destino en geometría del mundo. Los dos juegos difieren cuando el atlas viene a escala nativa (meta `s` = 2, ver
+ * tools/src/flare/mapatlas.ts): ahí el tile ocupa 192x96 en el atlas pero se dibuja en los 96x48 de siempre, o sea reduciendo en vez
+ * de ampliar. La celda del mundo (TW x TH) no cambia nunca: la resolución del arte y la geometría son cosas separadas.
+ */
 const EXT: Record<number, { im: CanvasImageSource; p: number[] }> = {};
-function drawWorld(id: number, x: number, y: number) { const e = EXT[id]; if (e) { const q = e.p; ctx.drawImage(e.im, q[0], q[1], q[2], q[3], Math.round(x - q[4]), Math.round(y - q[5]), q[2], q[3]); return; } const w = WORLD[id]; if (!w) return; ctx.drawImage(IMG.world, w[0], w[1], w[2], w[3], x - w[4], y - w[5], w[2], w[3]); }
+function drawWorld(id: number, x: number, y: number) { const e = EXT[id]; if (e) { const q = e.p; ctx.drawImage(e.im, q[0], q[1], q[2], q[3], Math.round(x - q[4]), Math.round(y - q[5]), q[6], q[7]); return; } const w = WORLD[id]; if (!w) return; ctx.drawImage(IMG.world, w[0], w[1], w[2], w[3], x - w[4], y - w[5], w[2], w[3]); }
 
 // ---------- canvas ----------
 const cv = $('cv') as HTMLCanvasElement, ctx = cv.getContext('2d')!;
@@ -3042,9 +3054,13 @@ async function boot() {
         ldTotal = 2 + atlases.length + 23 + 1; // 23 = hojas de sprites de abajo; +1 el atlas de efectos
         for (const k of atlases) {
             const m = meta[k]; delete meta[k]; if (!m) { ldTick(); continue; }
-            try { const im = await loadT(`assets/${k}.webp`); for (const [id, p] of Object.entries(m.pos as Record<string, number[]>)) EXT[Number(id)] = { im, p }; } catch { /* sin ese atlas se ve el mapa sin esas piezas */ }
+            // `s` (solo en los atlas a escala nativa) = píxeles de atlas por píxel de geometría. El tamaño de destino y los offsets se
+            // dividen por él una vez acá, para que el dibujo por tile no tenga que hacer cuentas.
+            const s = (m.s as number) || 1;
+            try { const im = await loadT(`assets/${k}.webp`); for (const [id, p] of Object.entries(m.pos as Record<string, number[]>)) EXT[Number(id)] = { im, p: s === 1 ? [...p, p[2], p[3]] : [p[0], p[1], p[2], p[3], p[4] / s, p[5] / s, p[2] / s, p[3] / s] }; } catch { /* sin ese atlas se ve el mapa sin esas piezas */ }
         }
         PAPER = meta.paper; delete meta.paper; SPR.hero = SPR.hero_other = PAPER as unknown as SpriteMeta;
+        SPR.hero.hum = true; // el muñeco por capas del jugador también entra en la escala de humanoides (ver HS)
         Object.assign(SPR, meta);
         const names = ['world', 'goblin', 'zombie', 'skeleton', 'barbaro', 'goblin_elite', 'antlion', 'skeleton_mage', 'fire_ant', 'wyvern', 'minotaur', 'arana', 'golem', 'demonio', 'hobgoblin', 'hobgoblin_archer', 'skeleton_archer', 'zombie_dark', 'cursed_grave', 'ice_ant', 'antlion_small', 'wyvern_fire', 'wyvern_ice'];
         ldTotal = 2 + atlases.length + names.length + 1;

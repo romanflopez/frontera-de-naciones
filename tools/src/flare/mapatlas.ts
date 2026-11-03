@@ -16,7 +16,15 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const flare = process.env.FLARE_DIR ?? join(root, 'reference', 'flare-game');
 const dataDir = join(root, 'packages', 'world', 'src', 'flare');
 const out = join(root, 'apps', 'client', 'public', 'assets');
-const S = 0.5, GAP = 2, W = 2048;
+/**
+ * Escala del arte en el atlas. 0,5 (por defecto) = media escala, como siempre: el tile de 192x96 de Flare entra como 96x48 y se dibuja
+ * ampliado, que es de donde viene el aspecto pixelado. Con FLARE_SCALE=1 entra a tamaño nativo y el cliente lo reduce al dibujar
+ * (ver `s` más abajo y docs: plan-hd.md). La geometría del mundo no cambia: la celda sigue midiendo 96x48 en el cliente.
+ */
+const S = Number(process.env.FLARE_SCALE ?? 0.5);
+/** Cuántos píxeles de atlas hay por píxel de geometría: 1 a media escala, 2 a escala nativa. Va al meta y los que dibujan dividen por él. */
+const RES = S / 0.5;
+const GAP = 2, W = RES > 1 ? 4096 : 2048;
 /** Agua de cada hoja: [color profundo, color claro] (ver el teñido más abajo). */
 const WATER_TINT: Record<string, [number[], number[]]> = { grassland: [[18, 44, 52], [58, 104, 104]], snowplains: [[30, 56, 74], [96, 140, 156]] };
 const MODS = ['fantasycore', 'empyrean_campaign'].map((m) => join(flare, 'mods', m));
@@ -113,7 +121,7 @@ for (const [tileset, ids] of used) {
         }
     }
     writeFileSync(join(out, `flare_${tileset}.webp`), canvas.toBuffer('image/webp', 86));
-    meta[`flare_${tileset}`] = { pos };
-    console.log(`flare_${tileset}.webp: ${items.length} piezas (${W}x${Y + rowH})`);
+    meta[`flare_${tileset}`] = RES > 1 ? { pos, s: RES } : { pos };
+    console.log(`flare_${tileset}.webp: ${items.length} piezas (${W}x${Y + rowH}), ${RES}px de atlas por px de geometría`);
 }
 writeFileSync(metaPath, JSON.stringify(meta));

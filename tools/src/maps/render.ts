@@ -19,11 +19,14 @@ mkdirSync(out, { recursive: true });
 const TW = 96, TH = 48;
 
 const meta = JSON.parse(readFileSync(join(A, 'meta.json'), 'utf8'));
+// `p` = [sx, sy, sw, sh, ox, oy, dw, dh]: recorte en el atlas y destino en geometría. Difieren cuando el atlas está a escala nativa
+// (meta `s`, ver tools/src/flare/mapatlas.ts): el arte tiene más píxeles pero ocupa la misma celda.
 const EXT: Record<number, { im: Image; p: number[] }> = {};
 for (const k of ['dungeon', 'terrain', 'town', ...Object.keys(meta).filter((g) => g.startsWith('flare_'))]) {
     const m = meta[k]; if (!m) continue;
     const im = await loadImage(join(A, `${k}.webp`));
-    for (const [id, p] of Object.entries(m.pos as Record<string, number[]>)) EXT[Number(id)] = { im, p };
+    const s = (m.s as number) || 1;
+    for (const [id, p] of Object.entries(m.pos as Record<string, number[]>)) EXT[Number(id)] = { im, p: s === 1 ? [...p, p[2], p[3]] : [p[0], p[1], p[2], p[3], p[4] / s, p[5] / s, p[2] / s, p[3] / s] };
 }
 const worldIm = await loadImage(join(A, 'world.webp'));
 const WORLD = meta.world as Record<string, number[]>;
@@ -40,7 +43,7 @@ for (const id of ids) {
     ctx.scale(scale, scale); ctx.translate(W / 2, 200);
     const iso = (x: number, y: number) => ({ x: ((x - y) * TW) / 2, y: ((x + y) * TH) / 2 });
     const draw = (tid: number, x: number, y: number) => {
-        const e = EXT[tid]; if (e) { const q = e.p; ctx.drawImage(e.im, q[0], q[1], q[2], q[3], Math.round(x - q[4]), Math.round(y - q[5]), q[2], q[3]); return true; }
+        const e = EXT[tid]; if (e) { const q = e.p; ctx.drawImage(e.im, q[0], q[1], q[2], q[3], Math.round(x - q[4]), Math.round(y - q[5]), q[6], q[7]); return true; }
         const w = WORLD[tid]; if (!w) return false; ctx.drawImage(worldIm, w[0], w[1], w[2], w[3], x - w[4], y - w[5], w[2], w[3]); return true;
     };
     let missing = 0;
