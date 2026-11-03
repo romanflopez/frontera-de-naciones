@@ -72,10 +72,14 @@
 }
 #hudroot .orb .otxt{z-index:3}
 #hudroot .orb .liq .wv,#hudroot .orb .liq .bb{display:none}
-#hudroot .orb .liq .body{background:linear-gradient(180deg,#f2563a 0%,#c42a18 45%,#6e1208 100%) !important}
-#hudroot .orb.mp .liq .body{background:linear-gradient(180deg,#4fc4f0 0%,#1d84c8 45%,#0b3f72 100%) !important}
-#hudroot .orb .hl{left:16%;top:9%;width:46%;height:26%;background:linear-gradient(180deg,#ffffff8c,#fff0)}
-#hudroot .orb .shade{box-shadow:inset 0 -8px 16px #00000055,inset 0 8px 18px #ffffff14 !important}
+/* los stops salen de muestrear ab-globe-red/blue.png del pack, no de ojo */
+#hudroot .orb .liq .body{background:linear-gradient(180deg,#d2634a 0%,#d24830 30%,#be2e1e 62%,#a3220f 100%) !important}
+#hudroot .orb.mp .liq .body{background:linear-gradient(180deg,#41b0c9 0%,#28a5c7 30%,#1981ad 62%,#115f8c 100%) !important}
+/* el volumen sale de la propia esfera del pack: en 'screen' solo suma su brillo y deja el color del líquido */
+#hudroot .orb .hl{left:0;top:0;width:100%;height:100%;border-radius:50%;transform:none;z-index:2;
+  background:url(/assets/ui/craftpix/ab-globe-empty.png) center/100% 100% no-repeat;
+  mix-blend-mode:screen;opacity:.92}
+#hudroot .orb .shade{display:none}
 #hudroot .orb .otxt{text-shadow:0 1px 3px #000,0 0 10px #000}
 #hudroot .orb .ol{color:#dfe7ef;opacity:.85;letter-spacing:.18em}
 #hudroot .orb .om{color:#cfdae5}
