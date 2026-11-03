@@ -127,6 +127,7 @@ const CSS = `
 .mm-disc::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),inset 0 -14px 26px rgba(20,4,44,.45)}
 .mm-foot{display:flex;align-items:center;gap:4px}
 .mm-xy{min-width:66px;padding:2px 8px;border-radius:999px;font:600 11px/1.3 var(--f-inter,system-ui,sans-serif);font-variant-numeric:tabular-nums;text-align:center;background:rgba(14,6,34,.82);border:1px solid rgba(206,150,255,.3);color:#d8c8ef}
+.mm button.mm-clock{width:auto;height:auto;min-width:66px;padding:2px 8px;display:block;border-radius:999px;font:600 11px/1.3 var(--f-inter,system-ui,sans-serif);font-variant-numeric:tabular-nums;text-align:center;background:rgba(14,6,34,.82);border:1px solid rgba(206,150,255,.3);color:#d8c8ef;box-shadow:none}
 .mm button{width:22px;height:22px;padding:0;display:grid;place-items:center;border-radius:6px;font:700 14px/1 var(--f-inter,system-ui,sans-serif);color:#f0e4ff;background:linear-gradient(180deg,rgba(70,34,130,.9),rgba(30,12,64,.95));border:1px solid rgba(206,150,255,.45);box-shadow:0 2px 6px rgba(0,0,0,.45);cursor:pointer}
 .mm button:hover{border-color:#e2b8ff;box-shadow:0 0 10px rgba(194,91,255,.45)}
 .mm button:disabled{opacity:.4;cursor:default;box-shadow:none}
@@ -167,7 +168,8 @@ export function createMinimap(host: HTMLElement, opts: MinimapOptions = {}): Min
     // ----- DOM -----
     const el = document.createElement('div'); el.className = 'mm'; el.setAttribute('role', 'region'); el.setAttribute('aria-label', 'Minimapa');
     el.innerHTML = `<div class="mm-name"></div><div class="mm-disc" title="Abrir el mapa (M)"><canvas></canvas></div>
-        <div class="mm-foot"><button type="button" data-z="-1" aria-label="Alejar">−</button><span class="mm-xy" aria-live="off"></span><button type="button" data-z="1" aria-label="Acercar">+</button><button type="button" data-big aria-label="Abrir el mapa grande (M)" title="Mapa (M)">⤢</button></div>`;
+        <div class="mm-foot"><button type="button" data-z="-1" aria-label="Alejar">−</button><span class="mm-xy" aria-live="off"></span><button type="button" data-z="1" aria-label="Acercar">+</button><button type="button" data-big aria-label="Abrir el mapa grande (M)" title="Mapa (M)">⤢</button></div>
+        <button type="button" class="mm-clock" data-clock title="Hora local · clic para cambiar entre 12 y 24 h"></button>`;
     const big = document.createElement('div'); big.className = 'mm-big'; big.hidden = true; big.setAttribute('role', 'dialog'); big.setAttribute('aria-modal', 'true'); big.setAttribute('aria-label', 'Mapa');
     big.innerHTML = `<div class="mm-panel"><div class="mm-head"><h2></h2><span></span></div><button type="button" class="mm-close" aria-label="Cerrar el mapa">✕</button><canvas class="mm-bigcv"></canvas>
         <div class="mm-leg"><span><i style="background:#fff3c4"></i>Vos</span><span><i style="background:#5fdc6a"></i>Grupo</span><span><i style="background:${facCol.solmar}"></i>Solmar</span><span><i style="background:${facCol.vhar}"></i>Vhar</span><span><i style="background:#e8453a"></i>Mob</span><span><i style="background:#ffb02e;width:12px;height:12px"></i>Boss</span><span><i style="background:#e9dfc0;border-radius:2px"></i>NPC</span><span><i style="background:#b46cff;box-shadow:0 0 0 2px #6ff0ff inset"></i>Portal / escalera</span><span><i style="background:rgba(150,200,230,.6)"></i>Zona segura</span><span><kbd>M</kbd> / <kbd>Esc</kbd> cerrar</span></div></div>`;
@@ -177,6 +179,17 @@ export function createMinimap(host: HTMLElement, opts: MinimapOptions = {}): Min
     const nameEl = el.querySelector('.mm-name')!, xyEl = el.querySelector('.mm-xy')!;
     const zBtns = [...el.querySelectorAll<HTMLButtonElement>('button[data-z]')];
     const terrain = document.createElement('canvas'); // se reutiliza en cada setMap
+
+    // reloj local; el clic alterna 12/24 h y se recuerda
+    const clockEl = el.querySelector<HTMLButtonElement>('.mm-clock')!;
+    let h12 = false, clockTxt = '';
+    try { h12 = localStorage.getItem('fdn:clock12') === '1'; } catch { /* sin almacenamiento */ }
+    const paintClock = () => {
+        const d = new Date(), t = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: h12 });
+        if (t !== clockTxt) { clockTxt = t; clockEl.textContent = t; clockEl.setAttribute('aria-label', `Hora ${t}. Clic para cambiar entre 12 y 24 horas`); }
+    };
+    paintClock();
+    const clockTimer = window.setInterval(paintClock, 1000);
 
     let map: WorldMap | null = null;
     let labels: Label[] = [], mapPortals: MinimapPortal[] = [];
@@ -381,7 +394,8 @@ export function createMinimap(host: HTMLElement, opts: MinimapOptions = {}): Min
     };
     const onClick = (e: MouseEvent) => {
         const b = (e.target as HTMLElement).closest('button');
-        if (b?.dataset.z) setZoom(Number(b.dataset.z)); else if (b?.hasAttribute('data-big') || (e.target as HTMLElement).closest('.mm-disc')) toggleBig(true);
+        if (b?.hasAttribute('data-clock')) { h12 = !h12; clockTxt = ''; paintClock(); try { localStorage.setItem('fdn:clock12', h12 ? '1' : '0'); } catch { /* sin almacenamiento */ } }
+        else if (b?.dataset.z) setZoom(Number(b.dataset.z)); else if (b?.hasAttribute('data-big') || (e.target as HTMLElement).closest('.mm-disc')) toggleBig(true);
         if (b) b.blur(); // que el foco vuelva al juego y no se coma las teclas
     };
     const onBigClick = (e: MouseEvent) => { if (e.target === big || (e.target as HTMLElement).closest('.mm-close')) toggleBig(false); };
@@ -399,7 +413,7 @@ export function createMinimap(host: HTMLElement, opts: MinimapOptions = {}): Min
         el, setMap, update, tick, toggleBig,
         get bigOpen() { return !big.hidden; },
         destroy() {
-            window.removeEventListener('keydown', onKey, true); window.removeEventListener('resize', onResize);
+            window.removeEventListener('keydown', onKey, true); window.removeEventListener('resize', onResize); clearInterval(clockTimer);
             el.remove(); big.remove(); terrain.width = terrain.height = 0; map = null; last = null; labels = []; mapPortals = []; releaseCss();
         },
     };

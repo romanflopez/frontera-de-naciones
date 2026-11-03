@@ -4,8 +4,8 @@
  */
 import { create } from 'zustand';
 
-export type ChatChannel = 'all' | 'global' | 'area' | 'private' | 'party' | 'guild' | 'nacion' | 'system' | 'combat';
-export type ChatTab = 'all' | 'global' | 'area' | 'private' | 'party' | 'guild' | 'system';
+export type ChatChannel = 'all' | 'global' | 'comercio' | 'area' | 'private' | 'party' | 'guild' | 'nacion' | 'system' | 'combat';
+export type ChatTab = 'all' | 'global' | 'nacion' | 'comercio' | 'area' | 'private' | 'party' | 'guild' | 'system';
 
 export interface ChatMessage {
     id: string;
@@ -21,24 +21,43 @@ export interface ChatMessage {
 }
 
 export const CHAT_TABS: { id: ChatTab; label: string }[] = [
-    { id: 'all', label: 'All' }, { id: 'global', label: 'Global' }, { id: 'area', label: 'Area' }, { id: 'private', label: 'Private' },
-    { id: 'party', label: 'Party' }, { id: 'guild', label: 'Guild' }, { id: 'system', label: 'System' },
+    { id: 'all', label: 'All' }, { id: 'global', label: 'Global' }, { id: 'nacion', label: 'Nación' }, { id: 'area', label: 'Area' },
+    { id: 'comercio', label: 'Comercio' }, { id: 'party', label: 'Party' }, { id: 'guild', label: 'Guild' }, { id: 'system', label: 'System' },
 ];
+// 'private' (susurros) sigue en los tipos pero sin pestaña hasta que el server tenga mensajes privados.
+
+const TAB_KEY = 'fdn:chattab';
+/** Pestaña con la que se cerró la vez anterior (si sigue existiendo). */
+function loadTab(): ChatTab {
+    try { const v = localStorage.getItem(TAB_KEY); if (v && CHAT_TABS.some((t) => t.id === v)) return v as ChatTab; } catch { /* sin almacenamiento */ }
+    return 'all';
+}
+function saveTab(t: ChatTab): void { try { localStorage.setItem(TAB_KEY, t); } catch { /* sin almacenamiento */ } }
 
 const MAX = 100;
 
 interface ChatState {
     messages: ChatMessage[];
     activeTab: ChatTab;
+    /** Mensajes sin leer por pestaña (solo chat de jugadores; el log de combate y del sistema no cuenta). */
+    unread: Partial<Record<ChatTab, number>>;
     addMessage: (msg: ChatMessage) => void;
     setActiveTab: (tab: ChatTab) => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
     messages: [],
-    activeTab: 'all',
-    addMessage: (msg) => set((s) => ({ messages: s.messages.length >= MAX ? [...s.messages.slice(s.messages.length - MAX + 1), msg] : [...s.messages, msg] })),
-    setActiveTab: (tab) => set({ activeTab: tab }),
+    activeTab: loadTab(),
+    unread: {},
+    addMessage: (msg) => set((s) => {
+        const messages = s.messages.length >= MAX ? [...s.messages.slice(s.messages.length - MAX + 1), msg] : [...s.messages, msg];
+        if (msg.channel === 'system' || msg.channel === 'combat' || tabShows(s.activeTab, msg.channel)) return { messages }; // ya lo estás viendo
+        // cuenta en cada pestaña que mostraría el mensaje (las demás)
+        const unread = { ...s.unread };
+        for (const t of CHAT_TABS) if (tabShows(t.id, msg.channel)) unread[t.id] = (unread[t.id] ?? 0) + 1;
+        return { messages, unread };
+    }),
+    setActiveTab: (tab) => { saveTab(tab); set((s) => ({ activeTab: tab, unread: { ...s.unread, [tab]: 0 } })); },
 }));
 
 /** Qué canales muestra cada pestaña. */
