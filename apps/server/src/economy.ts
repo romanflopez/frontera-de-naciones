@@ -10,7 +10,7 @@
  */
 import {
     ATTR_RANGES, traitExpMult, traitDropMult, BAG_MAX, BASE_BY_NAME, BASES, KEY_IDS, KEYDEFS, POT_MAX, POTS, QUESTS, roleOf, SHARDS_PER_KEY, SHOP_SERVER_RANGE,
-    SHOPS, SLOTS, TRAINING, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, sellPrice, trainingUnlocked,
+    SHOPS, SLOTS, slotsFor, fitsSlot, TRAINING, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, sellPrice, trainingUnlocked,
     BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BASES, UP_MAX, UP_MAX_BY_QUALITY, QUALITY_NAMES, EXTRAS_BY_QUALITY, rollExtra, rollExtras, uniqueIlvl, EXTRA_POOL, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, tierOfLvl, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
     DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, junkValue, MAT_REFORJA, reforgeGold, reforgeStones, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
@@ -23,7 +23,7 @@ import type { Player } from './player.ts';
 import type { AccountRecord, Storage } from './storage.ts';
 
 /** v3: nivel máximo 40 y curva de exp nueva (migra la exp guardada conservando la fracción del nivel). v4: puntos de stats. */
-export const ECON_VERSION = 5;
+export const ECON_VERSION = 6;
 export const MAX_LVL = MAX_LEVEL;
 /** Sin límite de oro de juego: el único techo es el técnico (entero exacto en JS / double del protocolo). */
 export const MAX_GOLD = Number.MAX_SAFE_INTEGER;
@@ -66,7 +66,7 @@ const FACTIONS = ['solmar', 'vhar'];
 
 const clampInt = (v: unknown, lo: number, hi: number, def = lo): number => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.floor(v))) : def);
 const rint = (a: number, b: number) => a + Math.floor(Math.random() * (b - a + 1));
-const emptyEq = (): Record<Slot, SItem | null> => ({ arma: null, armadura: null, cabeza: null, anillo: null });
+const emptyEq = (): Record<Slot, SItem | null> => ({ arma: null, armadura: null, cabeza: null, guantes: null, botas: null, amuleto: null, anillo: null, anillo2: null });
 
 // ---------- items ----------
 function newItem(st: Econ, base: string, r: number, a: SItem['a']): SItem { return { u: st.nextUid++, n: base, r, a }; }
@@ -169,7 +169,7 @@ export function importLegacy(json: string, trusted = false): Econ | null {
     for (const x of (Array.isArray(o.bag) ? o.bag : []).slice(0, BAG_MAX)) { const it = cleanImportItem(st, x, clipped, trusted); if (it) st.bag.push(it); }
     for (const s of SLOTS) {
         const it = cleanImportItem(st, o.eq?.[s], clipped, trusted);
-        if (it && BASE_BY_NAME.get(it.n)!.slot === s) st.eq[s] = it;
+        if (it && fitsSlot(BASE_BY_NAME.get(it.n)!.slot, s)) st.eq[s] = it;
     }
     // sin arma ni armadura (cuenta rota): kit de la clase
     const kit = CLASS_KIT[st.cls];
@@ -217,6 +217,17 @@ export function migrateEcon(st: Econ): boolean {
         };
         for (const i of st.bag) fix(i);
         for (const sl of SLOTS) fix(st.eq[sl]);
+    }
+    // v6: 8 slots. Las cuentas viejas no tienen las claves nuevas; el Amuleto del cazador pasó de 'anillo' a 'amuleto' (si estaba
+    // puesto en el anillo, se mueve a su lugar o vuelve a la bolsa); y `exp` salió de los ítems (el bonus de exp de caza ya no existe).
+    if (st.v < 6) {
+        const full = emptyEq(); for (const sl of SLOTS) st.eq[sl] ??= full[sl];
+        for (const sl of SLOTS) {
+            const it = st.eq[sl]; if (!it) continue;
+            const bs = BASE_BY_NAME.get(it.n)?.slot;
+            if (bs && !fitsSlot(bs, sl)) { st.eq[sl] = null; if (!st.eq[bs]) st.eq[bs] = it; else st.bag.push(it); }
+        }
+        for (const i of [...st.bag, ...SLOTS.map((sl) => st.eq[sl])]) if (i) i.a = i.a.filter((x) => (x.id as string) !== 'exp');
     }
     st.v = ECON_VERSION;
     refreshUnlocks(st);
@@ -342,10 +353,10 @@ export class Economy {
         };
         const ring = newItem(st, 'Anillo opaco', 4, [{ id: 'mag', v: ATTR_RANGES.mag[1] }, { id: 'mp', v: ATTR_RANGES.mp[1] }, { id: 'hp', v: ATTR_RANGES.hp[1] }]);
         ring.up = UP_MAX;
-        const set: Record<Slot, SItem> = { arma: top('Báculo del camposanto'), armadura: top('Mortaja bordada'), cabeza: top('Capuchón de duelo'), anillo: ring };
-        for (const slot of SLOTS) { const prev = st.eq[slot]; if (prev && st.bag.length < BAG_MAX) st.bag.push(prev); st.eq[slot] = set[slot]; }
+        const set: Partial<Record<Slot, SItem>> = { arma: top('Báculo del camposanto'), armadura: top('Mortaja bordada'), cabeza: top('Capuchón de duelo'), anillo: ring };
+        for (const slot of Object.keys(set) as Slot[]) { const prev = st.eq[slot]; if (prev && st.bag.length < BAG_MAX) st.bag.push(prev); st.eq[slot] = set[slot]!; }
         this.touch(p);
-        return SLOTS.map((sl) => set[sl].n);
+        return (Object.keys(set) as Slot[]).map((sl) => set[sl]!.n);
     }
 
     /** Solo GM: equipa una Espada larga con `crit` % de crítico (sirve para probar el sonido y la animación de crítico). */
@@ -538,7 +549,9 @@ export class Economy {
         this.run(p, ctx, (st) => {
             if (p.isDead) return fail('dead', 'Estás muerto.');
             const i = st.bag.findIndex((x) => x.u === uid); if (i < 0) return fail('no_item', 'No tenés ese item.');
-            const it = st.bag[i], slot = BASE_BY_NAME.get(it.n)?.slot; if (!slot) return fail('bad_item', 'Item inválido.');
+            const it = st.bag[i], baseSlot = BASE_BY_NAME.get(it.n)?.slot; if (!baseSlot) return fail('bad_item', 'Item inválido.');
+            // los anillos entran en el primer lugar libre (anillo, anillo2); con los dos llenos reemplazan al primero
+            const cands = slotsFor(baseSlot), slot = cands.find((sl) => !st.eq[sl]) ?? cands[0];
             st.bag.splice(i, 1);
             const prev = st.eq[slot]; if (prev) st.bag.push(prev);
             st.eq[slot] = it;

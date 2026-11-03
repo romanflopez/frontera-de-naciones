@@ -138,7 +138,7 @@ const EXTRA_SCALE: Record<AttrId, [number, number]> = {
     crit: [2, 0.05], aspd: [4, 0.1], leech: [2, 0.05], poison: [6, 0.15], rpar: [5, 0.12], exp: [0, 0],
 };
 /** Multiplicador por ranura (Dreadmyst: pecho/arma 1×, cabeza y futuros guantes/botas 0,65×, anillos/amuleto 0,5×). */
-export const SLOT_EXTRA_MULT: Record<Slot, number> = { arma: 1, armadura: 1, cabeza: 0.65, anillo: 0.5 };
+export const SLOT_EXTRA_MULT: Record<Slot, number> = { arma: 1, armadura: 1, cabeza: 0.65, guantes: 0.65, botas: 0.65, amuleto: 0.5, anillo: 0.5, anillo2: 0.5 };
 /** Un valor de extra ya tirado. */
 export function rollExtra(id: AttrId, ilvl: number, slot: Slot, quality: number, rnd: () => number = Math.random): number {
     const [a, b] = EXTRA_SCALE[id], q = quality >= QUALITY_HI_ROLL ? 1.15 + rnd() * 0.2 : 0.85 + rnd() * 0.3;

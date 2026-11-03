@@ -27,6 +27,7 @@ const LOOK_RAMP: Record<string, string> = {
     shortsword: 'steel', longsword: 'steel', zweihander: 'steel', hand_axe: 'iron', battle_axe: 'steel', mace: 'iron', maul: 'iron', staff: 'wood', wand: 'mage',
     leather: 'leather', chain: 'chain', plate: 'plate', mage: 'mage', cloth: 'cloth', leather_hood: 'leather', chain_coif: 'chain', plate_helm: 'plate', mage_hood: 'mage',
     buckler: 'wood', iron_buckler: 'iron', kite_shield: 'steel',
+    glove_leather: 'leather', glove_plate: 'plate', glove_mage: 'mage', boot_leather: 'leather', boot_plate: 'plate', boot_mage: 'mage',
 };
 
 // ---------- utilidades ----------
@@ -289,6 +290,30 @@ function amulet(c: Ctx) {
     c.restore();
 }
 
+// ---------- guantes y botas ----------
+function gloves(c: Ctx, look: string) {
+    const m = RAMP[LOOK_RAMP[look] ?? 'leather'], plate = look === 'glove_plate', mage = look === 'glove_mage';
+    const draw = () => { c.beginPath(); c.moveTo(34, 112); c.lineTo(30, 64); c.lineTo(22, 52); c.quadraticCurveTo(24, 44, 32, 48); c.lineTo(38, 56); c.lineTo(38, 26); c.quadraticCurveTo(44, 20, 50, 26); c.lineTo(52, 50); c.lineTo(54, 18); c.quadraticCurveTo(60, 12, 66, 18); c.lineTo(68, 50); c.lineTo(72, 22); c.quadraticCurveTo(78, 16, 84, 22); c.lineTo(84, 52); c.lineTo(90, 32); c.quadraticCurveTo(96, 28, 100, 34); c.lineTo(98, 78); c.lineTo(94, 112); c.closePath(); };
+    draw(); c.fillStyle = metal(c, m, 22, 0, 106, 0); c.fill(); volume(c, draw, 0.32); draw(); ink(c, 3.4);
+    // puño con ribete
+    c.beginPath(); c.roundRect(30, 92, 68, 20, 4); c.fillStyle = metal(c, plate ? RAMP.gold : mage ? RAMP.gold : RAMP.cloth, 30, 0, 98, 0); c.fill(); ink(c, 2.6);
+    if (plate) for (const x of [44, 60, 76]) line(c, 'rgba(10,4,20,.55)', 1.6, [x, 52], [x, 80]);
+    else if (mage) dot(c, 64, 70, 5, rad(c, 62, 68, 1, 7, [[0, '#ffffff'], [0.5, RAMP.mage[1]], [1, RAMP.mage[3]]]));
+    else line(c, 'rgba(30,12,4,.5)', 1.6, [44, 56], [46, 84]);
+    line(c, 'rgba(255,255,255,.7)', 2, [42, 30], [44, 46]);
+}
+function boots(c: Ctx, look: string) {
+    const m = RAMP[LOOK_RAMP[look] ?? 'leather'], plate = look === 'boot_plate', mage = look === 'boot_mage';
+    const draw = () => { c.beginPath(); c.moveTo(40, 10); c.lineTo(78, 10); c.lineTo(78, 64); c.quadraticCurveTo(100, 70, 108, 84); c.lineTo(112, 106); c.lineTo(24, 106); c.lineTo(24, 70); c.lineTo(40, 66); c.closePath(); };
+    draw(); c.fillStyle = metal(c, m, 24, 0, 112, 0); c.fill(); volume(c, draw, 0.32); draw(); ink(c, 3.4);
+    c.beginPath(); c.roundRect(22, 98, 94, 14, 4); c.fillStyle = metal(c, RAMP.wood, 22, 0, 116, 0); c.fill(); ink(c, 2.6); // suela
+    c.beginPath(); c.roundRect(36, 8, 46, 14, 4); c.fillStyle = metal(c, plate ? RAMP.gold : mage ? RAMP.gold : RAMP.cloth, 36, 0, 82, 0); c.fill(); ink(c, 2.6); // ribete
+    if (plate) { line(c, 'rgba(10,4,20,.5)', 1.6, [40, 40], [78, 40]); line(c, 'rgba(10,4,20,.5)', 1.6, [40, 54], [78, 54]); }
+    else if (mage) dot(c, 60, 44, 5, rad(c, 58, 42, 1, 7, [[0, '#ffffff'], [0.5, RAMP.mage[1]], [1, RAMP.mage[3]]]));
+    else for (const y of [36, 48, 60]) line(c, 'rgba(30,12,4,.5)', 1.6, [50, y], [68, y]);
+    line(c, 'rgba(255,255,255,.7)', 2, [44, 26], [46, 52]);
+}
+
 // ---------- escudos ----------
 function shield(c: Ctx, look: string) {
     const m = RAMP[LOOK_RAMP[look] ?? 'iron'];
@@ -410,7 +435,10 @@ export function itemIcon(look: string | undefined, slot: string, rarCol: string,
             else if (l === 'staff' || l === 'wand') staff(c, l === 'wand'); else sword(c, m, 'long');
         } else if (slot === 'armadura') armor(c, l);
         else if (slot === 'cabeza') helm(c, l);
-        else if (slot === 'anillo') { if (l.startsWith('amulet')) amulet(c); else ring(c, l); }
+        else if (slot === 'anillo' || slot === 'anillo2') ring(c, l);
+        else if (slot === 'amuleto') amulet(c);
+        else if (slot === 'guantes') gloves(c, l);
+        else if (slot === 'botas') boots(c, l);
         else shield(c, l || 'buckler');
     });
 }

@@ -14,7 +14,7 @@ import { chatBus, logToChat, type ChatChannel } from './ui/chatStore';
 import { drawPortalFloor, drawPortalFx, PORTAL_CITY, PORTAL_ZONE } from './portal';
 import { checkSkill, skillDeniedText, canUseSkill, skillLevel } from '@fdn/world';
 import { DEFAULT_MAP, RECALL, STAT_CAP, classBaseHp, STAT_DESC, STAT_IDS, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, traitLabel, traitHpMult, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
-import { UNIQUE_BY_NAME, UP_MAX, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Slot, type Stock } from '@fdn/world';
+import { UNIQUE_BY_NAME, UP_MAX, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, fitsSlot, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
 import { DAILY_BY_ID, DAILY_LIMIT, MAIN_QUESTS, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, dailyGold, rewardUniques, type QuestBookView, type QuestGoal, KEY_RECIPES, KEY_MAT_NAMES, keyMissing, TRAIT_ELITE } from '@fdn/world';
@@ -141,7 +141,7 @@ const P = {
     name: '', cell: { x: MAP.spawn.x, y: MAP.spawn.y }, path: [] as Cell[], step: null as Step | null, stepMs: 270, frozenUntil: 0, foe: null as Other | null, ally: null as Other | null, med: false, medHp: 0,
     target: null as Mob | null, engage: false, pickup: null as Drop | null, repath: 0, queued: null as number | null,
     lvl: 1, exp: 0, hp: 100, mp: 60, fury: 0, shield: 0, shieldEnd: 0, slowEnd: 0, blessEnd: 0, poisonEnd: 0, inv: false, det: false, invEnd: 0, detEnd: 0, immEnd: 0, gold: 0, nextAtk: 0, dead: false, deadT: 0,
-    bag: [] as Item[], eq: { arma: null, armadura: null, cabeza: null, anillo: null } as Record<Slot, Item | null>,
+    bag: [] as Item[], eq: { arma: null, armadura: null, cabeza: null, guantes: null, botas: null, amuleto: null, anillo: null, anillo2: null } as Record<Slot, Item | null>,
     running: false, casting: null as Casting | null, ready: null as { i: number; t: number } | null, sentDir: -1,
 };
 
@@ -1821,7 +1821,7 @@ function setClass(id: string) {
     pots.hp = 3; pots.mp = 3; pots.cd = 0; potEpoch++; renderPots();
     cds.fill(0); P.fury = 0; P.ready = null; P.casting = null;
     const mk = (n: string): Item => ({ id: uid++, ...BASES.find((b) => b.name === n)!, rar: RAR[0], attrs: [] });
-    P.eq.arma = mk(CLS.weapon); P.eq.armadura = CLS.armor ? mk(CLS.armor) : null; P.eq.cabeza = null; P.bag = [];
+    for (const sl of SLOTS) P.eq[sl] = null; P.eq.arma = mk(CLS.weapon); P.eq.armadura = CLS.armor ? mk(CLS.armor) : null; P.bag = [];
     refreshLook();
     P.lvl = 1; P.exp = 0; P.hp = maxHp(); P.mp = maxMp();
     // 10 slots grandes (teclas 1..0) + los que sobran en los chicos (teclas reales: -, =, R, F, G...)
@@ -1922,8 +1922,8 @@ $('dropBtn').addEventListener('click', () => {
 /** Borde de rareza (los comunes en bronce para que no destaquen). */
 const rarCol = (it: Item) => (it.rar.k ? it.rar.c : '#6b5a3c');
 const GLY: Record<string, string> = { cabeza: 'g-cabeza', armadura: 'g-armadura', arma: 'g-arma', botas: 'g-botas', amuleto: 'g-amuleto', escudo: 'g-escudo', anillo: 'g-anillo', guantes: 'g-guantes' };
-const EQ_L: [string, string, Slot | null][] = [['cabeza', 'Casco', 'cabeza'], ['armadura', 'Armadura', 'armadura'], ['arma', 'Arma', 'arma'], ['botas', 'Botas', null]];
-const EQ_R: [string, string, Slot | null][] = [['amuleto', 'Amuleto', null], ['escudo', 'Escudo', null], ['anillo', 'Anillo', 'anillo'], ['guantes', 'Guantes', null]];
+const EQ_L: [string, string, Slot | null][] = [['cabeza', 'Casco', 'cabeza'], ['armadura', 'Armadura', 'armadura'], ['arma', 'Arma', 'arma'], ['botas', 'Botas', 'botas']];
+const EQ_R: [string, string, Slot | null][] = [['amuleto', 'Amuleto', 'amuleto'], ['escudo', 'Escudo', null], ['anillo', 'Anillo', 'anillo'], ['guantes', 'Guantes', 'guantes']];
 function slotBtn([g, label, slot]: [string, string, Slot | null]) {
     const gl = `<svg class="gl" aria-hidden="true"><use href="#${GLY[g]}"/></svg>`;
     if (!slot) return `<button type="button" class="sl dis" disabled aria-label="${label} (no disponible todavía)" title="${label}: no disponible todavía">${gl}</button>`;
@@ -1975,7 +1975,7 @@ function renderBag() {
     if (!bagOpen() && !charOpen()) { $('itip').hidden = true; return; }
     $('gold').textContent = fmtNum(P.gold);
     $('eqL').innerHTML = EQ_L.map(slotBtn).join(''); $('eqR').innerHTML = EQ_R.map(slotBtn).join('');
-    $('eqRings').innerHTML = ['Anillo 2', 'Anillo 3'].map((l) => `<button type="button" class="sl dis" disabled aria-label="${l} (no disponible todavía)" title="${l}: no disponible todavía"><svg class="gl" aria-hidden="true"><use href="#g-anillo"/></svg></button>`).join('');
+    $('eqRings').innerHTML = slotBtn(['anillo', 'Anillo 2', 'anillo2']) + `<button type="button" class="sl dis" disabled aria-label="Anillo 3 (no disponible todavía)" title="Anillo 3: no disponible todavía"><svg class="gl" aria-hidden="true"><use href="#g-anillo"/></svg></button>`;
     renderChar();
     document.querySelectorAll<HTMLElement>('#char [data-eq]').forEach((b) => (b.onclick = () => { const it = P.eq[b.dataset.eq as Slot]; sel = it ? { it, from: 'eq' } : null; selX = null; renderBag(); }));
     // celdas del inventario según la pestaña
@@ -2013,7 +2013,7 @@ function renderBag() {
 /** Tooltip flotante a la izquierda de las ventanas abiertas. */
 function renderTip() {
     const d = $('itip');
-    if (sel && !(sel.from === 'eq' ? P.eq[sel.it.slot] === sel.it : P.bag.includes(sel.it))) sel = null;
+    if (sel && !(sel.from === 'eq' ? SLOTS.some((sl) => P.eq[sl] === sel!.it) : P.bag.includes(sel.it))) sel = null;
     if (!sel && !selX) { d.hidden = true; return; }
     const wsc = parseFloat(document.documentElement.style.getPropertyValue('--win-scale')) || 1, n = (bagOpen() ? 1 : 0) + (charOpen() ? 1 : 0);
     d.style.right = `calc(max(12px, env(safe-area-inset-right, 0px)) + ${(n * 356 * wsc).toFixed(1)}px)`; d.hidden = false;
@@ -2041,7 +2041,7 @@ function renderTip() {
         if (!smith) { log('Acercate a un herrero (armero o armadurero) para mejorar el equipo.'); return; }
         net.send({ $case: 'econUpgradeRequest', value: { npcId: smith.id, uid: it.id } });
     };
-    if (uneqBtn) uneqBtn.onclick = () => net.send({ $case: 'econUnequipRequest', value: { slot: it.slot } });
+    if (uneqBtn) uneqBtn.onclick = () => net.send({ $case: 'econUnequipRequest', value: { slot: SLOTS.find((sl) => P.eq[sl] === it) ?? it.slot } });
 }
 /** Salir: en zona segura es inmediato; en zona insegura hay que aguantar quieto unos segundos (se cancela si te movés o te pegan). */
 let logout: { at: number; cell: Cell; hp: number; asked: boolean } | null = null;
@@ -2616,14 +2616,14 @@ function loadItem(v: SavedItem | null | undefined): Item | null {
 function buildSave(): CharSave {
     return {
         v: 1, faction: selectedFaction, cls: CLS.id, lvl: P.lvl, exp: Math.floor(P.exp), gold: P.gold, hp: Math.max(1, Math.round(P.hp)), mp: Math.round(P.mp),
-        bag: P.bag.map(saveItem), eq: Object.fromEntries((['arma', 'armadura', 'cabeza', 'anillo'] as const).map((sl) => [sl, P.eq[sl] ? saveItem(P.eq[sl]!) : null])),
+        bag: P.bag.map(saveItem), eq: Object.fromEntries(SLOTS.map((sl) => [sl, P.eq[sl] ? saveItem(P.eq[sl]!) : null])),
         q: { i: Q.i, st: Q.st, prog: Q.prog, keys: { ...Q.keys }, shards: { ...Q.shards } }, pots: { hp: pots.hp, mp: pots.mp }, u: [...UNLOCKED],
     };
 }
 function applySave(sv: CharSave) {
     P.lvl = sv.lvl; P.exp = sv.exp; P.gold = sv.gold;
     P.bag = sv.bag.map(loadItem).filter((x): x is Item => !!x).slice(0, 18);
-    for (const sl of ['arma', 'armadura', 'cabeza', 'anillo'] as const) { const it = loadItem(sv.eq?.[sl]); if (it && it.slot === sl) P.eq[sl] = it; }
+    for (const sl of SLOTS) { const it = loadItem(sv.eq?.[sl]); if (it && fitsSlot(it.slot, sl)) P.eq[sl] = it; }
     Q.i = sv.q.i; Q.st = sv.q.st; Q.prog = sv.q.prog;
     for (const k of KEY_IDS) { Q.keys[k] = sv.q.keys?.[k] ?? 0; Q.shards[k] = sv.q.shards?.[k] ?? 0; }
     pots.hp = sv.pots.hp; pots.mp = sv.pots.mp;

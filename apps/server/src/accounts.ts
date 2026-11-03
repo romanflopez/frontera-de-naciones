@@ -50,14 +50,14 @@ const num = (v: unknown, lo: number, hi: number, def = lo): number => (typeof v 
 const word = (v: unknown, max: number): string | null => (typeof v === 'string' && v.length > 0 && v.length <= max && /^[\p{L}\p{N}_\- ().']+$/u.test(v) ? v : null);
 const KEYS = ['cripta', 'foso'] as const;
 const CLASSES = ['guerrero', 'mago', 'healer'];
-const SLOTS = ['arma', 'armadura', 'cabeza', 'anillo'] as const;
+const SLOTS = ['arma', 'armadura', 'cabeza', 'guantes', 'botas', 'amuleto', 'anillo', 'anillo2'] as const;
 
 interface SavedItem { n: string; r: number; a: { id: string; v: number }[] }
 function cleanItem(v: unknown): SavedItem | null {
     if (!v || typeof v !== 'object') return null;
     const o = v as Record<string, unknown>, n = word(o.n, 40); if (!n) return null;
-    const a = (Array.isArray(o.a) ? o.a : []).slice(0, 3).flatMap((x) => { const e = (x ?? {}) as Record<string, unknown>; const id = word(e.id, 10); return id ? [{ id, v: num(e.v, 0, 200) }] : []; });
-    return { n, r: num(o.r, 0, 3), a };
+    const a = (Array.isArray(o.a) ? o.a : []).slice(0, 5).flatMap((x) => { const e = (x ?? {}) as Record<string, unknown>; const id = word(e.id, 10); return id ? [{ id, v: num(e.v, 0, 200) }] : []; });
+    return { n, r: num(o.r, 0, 4), a };
 }
 
 /** Valida y reconstruye el JSON del cliente: nada de lo que llegue se guarda tal cual. Devuelve null si no sirve. */

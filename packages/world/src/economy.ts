@@ -6,8 +6,16 @@
 import type { MobType } from './mobs';
 import { UNIQUE_BASES, uniqueValue } from './uniques';
 
-export type Slot = 'arma' | 'armadura' | 'cabeza' | 'anillo';
-export const SLOTS: Slot[] = ['arma', 'armadura', 'cabeza', 'anillo'];
+/**
+ * 8 slots de equipo (docs/ITEMS.md): arma, armadura, cabeza, guantes, botas, amuleto y dos anillos. `anillo2` es solo un lugar de
+ * equipo: ninguna Base lo usa, los anillos son todos de slot `anillo` y entran en cualquiera de los dos (ver `slotsFor`).
+ */
+export type Slot = 'arma' | 'armadura' | 'cabeza' | 'guantes' | 'botas' | 'amuleto' | 'anillo' | 'anillo2';
+export const SLOTS: Slot[] = ['arma', 'armadura', 'cabeza', 'guantes', 'botas', 'amuleto', 'anillo', 'anillo2'];
+/** Lugares de equipo donde puede ir una base del slot `slot`. */
+export const slotsFor = (slot: Slot): Slot[] => (slot === 'anillo' ? ['anillo', 'anillo2'] : [slot]);
+/** ¿Un ítem de la base `baseSlot` puede estar puesto en el lugar de equipo `eqSlot`? */
+export const fitsSlot = (baseSlot: Slot, eqSlot: string): boolean => slotsFor(baseSlot).includes(eqSlot as Slot);
 /** Capacidad de la bolsa de equipo. */
 export const BAG_MAX = 18;
 /** Tope de pociones de cada tipo. */
@@ -50,7 +58,7 @@ export const BASES: Base[] = [
 export const SHOP_BASES: Base[] = [
     { name: 'Anillo de cobre', slot: 'anillo', look: 'ring_copper' }, { name: 'Anillo de plata', slot: 'anillo', look: 'ring_silver' }, { name: 'Anillo de jade', slot: 'anillo', look: 'ring_jade' },
     { name: 'Anillo del filo', slot: 'anillo', look: 'ring_ruby' }, { name: 'Sello del veloz', slot: 'anillo', look: 'ring_gold' },
-    { name: 'Amuleto del cazador', slot: 'anillo', look: 'amulet_bone' },
+    { name: 'Amuleto del cazador', slot: 'amuleto', look: 'amulet_bone' },
     // sets de armadura Solmar y Vhar (tools/src/sets/build_sets.py): armadura de 4 piezas + cabeza, con su propio aspecto al equiparlos
     { name: 'Malla alada del Alba', slot: 'armadura', def: 24, rm: 9, look: 'sol_malla' }, { name: 'Yelmo alado del Alba', slot: 'cabeza', def: 9, rm: 3, look: 'sol_malla_helm' },
     { name: 'Placas del Sol', slot: 'armadura', def: 36, rm: 13, look: 'sol_placas' }, { name: 'Yelmo del Sol', slot: 'cabeza', def: 13, rm: 5, look: 'sol_placas_helm' },
@@ -98,7 +106,7 @@ export const SHOPS: Record<string, ShopDef> = {
         stock: [
             { base: 'Anillo opaco', price: 15, lvl: 1 },
             { base: 'Anillo de cobre', attrs: [['hp', 12]], price: 85, lvl: 2 }, { base: 'Anillo de plata', attrs: [['mp', 10]], price: 95, lvl: 2 },
-            { base: 'Anillo de jade', attrs: [['rm', 8]], price: 120, lvl: 3 }, { base: 'Amuleto del cazador', attrs: [['exp', 5]], price: 150, lvl: 3 },
+            { base: 'Anillo de jade', attrs: [['rm', 8]], price: 120, lvl: 3 }, { base: 'Amuleto del cazador', attrs: [['hp', 16]], price: 150, lvl: 3 },
             { base: 'Anillo del filo', attrs: [['crit', 3]], price: 210, lvl: 5 }, { base: 'Sello del veloz', attrs: [['aspd', 6]], price: 240, lvl: 6 },
         ],
     },

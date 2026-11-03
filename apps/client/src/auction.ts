@@ -189,7 +189,7 @@ const CSS = `
 @media (prefers-reduced-motion:reduce){#ah *{transition:none!important}}
 `;
 
-const SLOT_OPTS: [string, string][] = [['', 'Todo'], ['arma', 'Arma'], ['armadura', 'Armadura'], ['cabeza', 'Cabeza'], ['anillo', 'Anillo']];
+const SLOT_OPTS: [string, string][] = [['', 'Todo'], ['arma', 'Arma'], ['armadura', 'Armadura'], ['cabeza', 'Cabeza'], ['guantes', 'Guantes'], ['botas', 'Botas'], ['amuleto', 'Amuleto'], ['anillo', 'Anillo']];
 const SORT_OPTS: [string, string][] = [['price_asc', 'Precio: menor'], ['price_desc', 'Precio: mayor'], ['time_asc', 'Termina antes'], ['time_desc', 'Termina después']];
 const RANGE_OPTS: [string, string][] = [['all', 'Todo'], ['today', 'Hoy'], ['7', 'Últimos 7 días'], ['30', 'Últimos 30 días']];
 const SLOT_NAME: Record<string, string> = { arma: 'Arma', armadura: 'Armadura', cabeza: 'Cabeza', anillo: 'Anillo' };
