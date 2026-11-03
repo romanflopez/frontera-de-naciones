@@ -2344,6 +2344,7 @@ function loadMap(def: MapDef): string {
     ({ tiles, blocked, safe, props, decals } = MAP);
     ZONES = MAP.zones; WAYPOINTS = MAP.waypoints ?? []; LINKS = def.links; LINK_WPS = linkWps(LINKS);
     // lo que era del mapa anterior: mobs, otros jugadores, suelo, efectos, estado de portales y diálogos
+    P.target = null; P.engage = false; P.pickup = null; P.queued = null; // checklist de instancia: al cambiar de mapa no queda nada apuntando al mapa viejo
     mobs.length = 0; mobMap.clear(); others.clear(); drops.length = 0; corpses.length = 0; projs.length = 0; scorch.length = 0; floats.length = 0; fx.length = 0; bossCasts.clear(); bossMarks.length = 0; bossZones.clear(); bossRage.clear();
     portalAct.clear(); wpInside = ''; closeWp(); closeShop(); talkNpc = null; talkWpTarget = null;
     P.target = null; P.engage = false; P.pickup = null; P.queued = null; P.foe = null; P.path = []; P.step = null; hover = null; hoverDrop = null;

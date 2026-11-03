@@ -58,6 +58,8 @@ interface SimMob {
     gm?: boolean;
     /** Add de un jefe: no reaparece al morir. */
     add?: boolean;
+    /** Correa de mazmorra: desde cuándo y dónde no avanza. */
+    stuckAt?: number; stuckX?: number; stuckY?: number;
     /** Motor de jefes (bosses.ts): jefes con kit y adds lanzadores. */
     bs?: BossState;
     /** Amenaza por jugador (K4): el mob persigue al que más amenaza le generó, salvo que esté provocado. */
@@ -203,6 +205,33 @@ export class MobSim {
         if (this.budget.get(p)?.dead || p.isDead || p.status.isInvisible) return false;
         return !this.isSafe(p.posX + 0.5, p.posY + 0.5);
     }
+    /**
+     * ¿Puede `m` seguir peleando con `p`? Igual que `eligible`, salvo en una corrida de mazmorra (docs/MAZMORRAS.md): un mob que ya tiene
+     * amenaza sobre `p` no lo pierde por la invisibilidad (la invisibilidad es para escapar del mundo, no para saltearse una mazmorra).
+     */
+    private canFight(m: SimMob, p: Player | undefined): p is Player {
+        if (!p || p.disconnected || p.isDead || this.budget.get(p)?.dead) return false;
+        if (p.status.isInvisible && !(this.opts.noRespawn && m.threat.has(p.playerId))) return false;
+        return !this.isSafe(p.posX + 0.5, p.posY + 0.5);
+    }
+    /**
+     * Correa de mazmorra (checklist de Dreadmyst): si un mob que persigue no avanza en 3 s y sigue lejos de su objetivo (se trabó en una
+     * pared o el jugador se subió a donde no llega), aparece al lado del objetivo en vez de volver a su lugar curado.
+     */
+    private unstick(m: SimMob, px: number, py: number, dp: number, T: number) {
+        const reach = m.def.ranged ? m.def.ranged.range : 1.6;
+        if (dp <= reach) { m.stuckAt = 0; return; }
+        const moved = Math.hypot(m.x - (m.stuckX ?? m.x), m.y - (m.stuckY ?? m.y));
+        if (!m.stuckAt || moved > 0.6) { m.stuckAt = T; m.stuckX = m.x; m.stuckY = m.y; return; }
+        if (T - m.stuckAt < 3) return;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+            const nx = px + dx, ny = py + dy;
+            if (this.walk(Math.floor(nx), Math.floor(ny)) && !this.isSafe(nx, ny)) { m.x = nx; m.y = ny; break; }
+        }
+        m.stuckAt = 0;
+    }
+    /** ¿Algún mob está peleando? (no se entra a una corrida en combate). */
+    inCombat(): boolean { for (const m of this.mobs.values()) if (!m.dead && m.state === 'chase' && m.target != null) return true; return false; }
 
     private step(m: SimMob, tx: number, ty: number, spd: number, dt: number): boolean {
         const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy); if (d < 0.02) return true;
@@ -238,9 +267,9 @@ export class MobSim {
     }
     /** A quién persigue: el que lo provocó (si sigue elegible) o el de más amenaza; si no hay, el de antes. */
     private pickTarget(m: SimMob, T: number): Player | undefined {
-        if (m.tauntBy != null && m.tauntUntil > T) { const t = this.host.playerById(m.tauntBy); if (this.eligible(t)) return t; }
+        if (m.tauntBy != null && m.tauntUntil > T) { const t = this.host.playerById(m.tauntBy); if (this.canFight(m, t)) return t; }
         let best: Player | undefined, bt = -1;
-        for (const [id, v] of m.threat) { const p = this.host.playerById(id); if (!this.eligible(p)) continue; if (v > bt) { bt = v; best = p; } }
+        for (const [id, v] of m.threat) { const p = this.host.playerById(id); if (!this.canFight(m, p)) continue; if (v > bt) { bt = v; best = p; } }
         return best ?? (m.target != null ? this.host.playerById(m.target) : undefined);
     }
     private clearThreat(m: SimMob) { m.threat.clear(); m.tauntBy = null; m.tauntUntil = 0; }
@@ -326,9 +355,10 @@ export class MobSim {
                 }
             } else if (m.state === 'chase') {
                 let tgt = this.pickTarget(m, T);
-                if (!this.eligible(tgt)) { tgt = this.nearestPlayer(m, 6) ?? undefined; }
+                if (!this.canFight(m, tgt)) { tgt = this.nearestPlayer(m, 6) ?? undefined; }
                 m.target = tgt ? tgt.playerId : null;
-                if (!tgt || Math.hypot(m.x - home.x, m.y - home.y) > 17) { m.state = 'return'; m.target = null; this.clearThreat(m); if (m.bs) bossReset(this.bh, m); continue; }
+                // en una corrida no hay correa: el mob no vuelve a su lugar curado por alejarse (si se traba, se acerca solo: ver `unstick`)
+                if (!tgt || (!this.opts.noRespawn && Math.hypot(m.x - home.x, m.y - home.y) > 17)) { m.state = 'return'; m.target = null; this.clearThreat(m); if (m.bs) bossReset(this.bh, m); continue; }
                 const px = tgt.posX + 0.5, py = tgt.posY + 0.5, dp = Math.hypot(m.x - px, m.y - py);
                 if (m.bs) { if (bossTick(this.bh, m, tgt)) { m.moving = false; continue; } } // motor de jefes: casteando o cargando, se queda quieto
                 else {
@@ -343,6 +373,7 @@ export class MobSim {
                     if (dp > rg.range * 0.95 || !los) this.step(m, px, py, d.spd, dt);
                     else if (dp < rg.keep * 0.6) this.step(m, m.x + (m.x - px), m.y + (m.y - py), d.spd * 0.8, dt);
                 } else if (dp > 1.1) this.step(m, px, py, d.spd, dt);
+                if (this.opts.noRespawn) this.unstick(m, px, py, dp, T);
                 for (const o of chasing) {
                     if (o === m || o.state !== 'chase') continue;
                     const sx = m.x - o.x, sy = m.y - o.y, sd = Math.hypot(sx, sy);
@@ -359,7 +390,7 @@ export class MobSim {
                     const dmg = Math.round(rint(d.dmg[0], d.dmg[1]) * this.dmgMult(m)), tid = tgt.playerId;
                     this.host.after(200, () => {
                         const p = this.host.playerById(tid);
-                        if (!this.mobs.has(m.id) || m.par > this.now() || !this.eligible(p)) return;
+                        if (!this.mobs.has(m.id) || m.par > this.now() || !this.canFight(m, p)) return;
                         if (Math.hypot(m.x - (p.posX + 0.5), m.y - (p.posY + 0.5)) < 1.8) { p.send(M.mobHitPlayer(m.id, dmg, 0)); this.host.hurt(p, dmg, d.name, M.mid(m.id), m.id); this.toxic(m, p, dmg); }
                     });
                 }
@@ -397,7 +428,7 @@ export class MobSim {
         const dmg = Math.round(rint(d.dmg[0], d.dmg[1]) * this.dmgMult(m)), tid = tgt.playerId;
         this.host.after(travel, () => {
             const p = this.host.playerById(tid);
-            if (!this.mobs.has(m.id) || !this.eligible(p)) return;
+            if (!this.mobs.has(m.id) || !this.canFight(m, p)) return;
             if (Math.hypot(px - (p.posX + 0.5), py - (p.posY + 0.5)) < 1.0) { p.send(M.mobHitPlayer(m.id, dmg, 0)); this.host.hurt(p, dmg, d.name, M.mid(m.id), m.id); this.toxic(m, p, dmg); }
         });
     }

@@ -147,6 +147,8 @@ export class WorldRegistry {
         for (const p of this.pending.values()) if (instanceOf(p.key) === iid) return true;
         return false;
     }
+    /** ¿Algún piso de la corrida tiene mobs peleando? */
+    runInCombat(iid: string): boolean { for (const [k, w] of this.worlds) if (instanceOf(k) === iid && w.mobs?.inCombat()) return true; return false; }
     /** Datos de una corrida (tests y depuración). */
     runOf(iid: string): { size: number; dead: string[] } | undefined { const r = this.runs.get(iid); return r && { size: r.size, dead: [...r.dead] }; }
 
@@ -251,6 +253,7 @@ export class WorldRegistry {
         // la corrida de la party sigue viva: se suma (salvo que ya haya caído en ella)
         if (seq > 0 && this.runs.has(cur) && this.runLive(cur)) {
             if (who && this.runs.get(cur)!.dead.has(who)) return { deny: 'Caíste en esta corrida: esperá a que tu party salga para entrar a una nueva.' };
+            if (this.runInCombat(cur)) return { deny: 'Tu party está peleando adentro: esperá a que termine el combate para entrar.' };
             return { id: cur };
         }
         const id = `${base}-${seq + 1}`;

@@ -180,3 +180,28 @@ test('densidad de D1 y D2: ~25 y ~40 mobs, con el jefe intacto y élites reparti
     const elites = getMapDef('cueva_goblin')!.build().zones.filter((z, i) => z.tier === 'dungeon' && isEliteSlot(i, 0, z.n)).length;
     assert.equal(elites, 4, 'un élite cada dos packs');
 });
+
+test('checklist de instancia: en una corrida el mob con aggro no pierde al invisible; afuera sí', () => {
+    for (const noRespawn of [true, false]) {
+        const { s, p } = sim([zone('skeleton', 1, { name: 'Merodeadores' })], { noRespawn });
+        const m = s.detail()[0];
+        s.skillHit(p, m.id, 1);
+        (p.status as { isInvisible: boolean }).isInvisible = true;
+        const raw = (s as unknown as { mobs: Map<number, unknown>; canFight(m: unknown, p: unknown): boolean });
+        assert.equal(raw.canFight(raw.mobs.get(m.id), p), noRespawn);
+        assert.equal(s.inCombat(), true);
+    }
+});
+
+test('checklist de instancia: no se entra a una corrida mientras los de adentro pelean', () => {
+    const { reg, A, B, arrive, world, enter } = setup();
+    try {
+        reg.get('prueba_caza')!.playerOf(B.session.sessionId)!.setPosition(10, 10); // lejos de la puerta: no entra con Ana
+        assert.equal(reg.handlePortal(A.session, 'caza_a_mazmorra', save), null); arrive(A);
+        assert.equal(B.session.worldId, 'prueba_caza');
+        const w = world(A), m = w.mobs!.detail()[0];
+        w.mobs!.skillHit(w.playerOf(A.session.sessionId)!, m.id, 1);
+        assert.match(enter(B) ?? '', /peleando/);
+        assert.equal(B.session.worldId, 'prueba_caza');
+    } finally { setParties(undefined); }
+});
