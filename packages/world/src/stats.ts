@@ -45,6 +45,65 @@ export function statBonus(s: Stats | undefined, baseHp = 0): StatBonus {
         meleeMult: 1 + 0.002 * d('str'), magicMult: 1 + 0.003 * d('mag'),
     };
 }
+/** Qué tan útil es un stat para una clase: 'clave' (escala sus habilidades), 'util' (ayuda pero no es lo central), 'bajo' (casi no le sirve). */
+export type StatFit = 'clave' | 'util' | 'bajo';
+export interface StatTip {
+    /** Qué hace un punto, con los números de TU clase y TU nivel. */
+    perPoint: string;
+    /** Lo que ya te dan los puntos repartidos (vacío si todavía no pusiste ninguno). */
+    now: string;
+    fit: StatFit;
+    /** Consejo para esa clase, en una frase. */
+    advice: string;
+}
+/** Qué stat escala cada clase: el Paladín pega con Fuerza (todas sus habilidades de daño), el Mago y el Healer con Magia (hechizos y curas). Salen de `stat` en pvpCombat.ts. */
+const STAT_FIT: Record<string, Record<StatId, [StatFit, string]>> = {
+    guerrero: {
+        str: ['clave', 'Clave para el Paladín: todas sus habilidades de daño escalan con Fuerza.'],
+        vit: ['clave', 'Más vida para aguantar al frente. Cada punto rinde más a medida que subís de nivel, porque se calcula sobre tu vida base.'],
+        dex: ['util', 'Sirve para tankear, pero cada punto rinde poco: a más defensa, menos mejora cada punto nuevo.'],
+        mag: ['bajo', 'Tus habilidades no escalan con Magia: solo te da maná. Tenés poco maná, así que algún punto ayuda, pero no es tu stat.'],
+    },
+    mago: {
+        str: ['bajo', 'Tus hechizos no escalan con Fuerza: solo te da un poco de vida. No pongas puntos acá.'],
+        vit: ['util', 'El Mago es frágil: algunos puntos ayudan a sobrevivir, pero tu daño sale de Magia.'],
+        dex: ['bajo', 'Poca defensa por punto: casi siempre conviene Magia o Vitalidad.'],
+        mag: ['clave', 'Clave para el Mago: sube el daño de todos tus hechizos y te da el maná para lanzarlos.'],
+    },
+    healer: {
+        str: ['bajo', 'Tus hechizos y curas no escalan con Fuerza: solo te da un poco de vida. No pongas puntos acá.'],
+        vit: ['util', 'Más vida para aguantar un golpe mientras curás.'],
+        dex: ['bajo', 'Poca defensa por punto: casi siempre conviene Magia o Vitalidad.'],
+        mag: ['clave', 'Clave para el Healer: sube lo que curás y lo que dañás, y te da el maná para seguir casteando.'],
+    },
+};
+const pct = (x: number): string => (Math.round(x * 10) / 10).toString().replace('.', ',');
+/**
+ * Números del tooltip de cada stat, para la clase y el nivel del jugador (el cliente solo muestra: el server calcula con `statBonus`).
+ * `stats` son los puntos ya repartidos (con el 10 de base).
+ */
+export function statTip(id: StatId, cls: string, lvl: number, stats: Stats): StatTip {
+    const spent = Math.max(0, stats[id] - STAT_BASE), baseHp = classBaseHp(cls, lvl);
+    const [fit, advice] = (STAT_FIT[cls] ?? STAT_FIT.guerrero)[id];
+    const hpPerVit = 0.002 * baseHp;
+    let perPoint: string, now: string;
+    if (id === 'str') {
+        perPoint = `Por punto: +0,2 % de daño cuerpo a cuerpo y +0,7 de vida.`;
+        now = `+${pct(0.2 * spent)} % de daño, +${Math.round((spent * 2) / 3)} de vida`;
+    } else if (id === 'vit') {
+        perPoint = `Por punto: +${pct(hpPerVit)} de vida (0,2 % de tu vida base de ${baseHp} a nivel ${lvl}).`;
+        now = `+${Math.round(hpPerVit * spent)} de vida`;
+    } else if (id === 'dex') {
+        perPoint = `Por punto: +0,5 de defensa.`;
+        const def = Math.round(0.5 * spent), mit = Math.round((def / (100 + def)) * 100);
+        now = `+${def} de defensa (${mit} % menos de daño físico, sin contar el equipo)`;
+    } else {
+        perPoint = `Por punto: +2 de maná y +0,3 % de daño de hechizos y curas.`;
+        now = `+${2 * spent} de maná, +${pct(0.3 * spent)} % de daño y curas`;
+    }
+    return { perPoint, now: spent > 0 ? now : '', fit, advice };
+}
+
 /** Stats válidos: enteros entre 10 y el tope. Si algo no cuadra, devuelve los de arranque. */
 export function cleanStats(raw: unknown): Stats {
     const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>, out = defaultStats();

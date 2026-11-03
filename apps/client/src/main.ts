@@ -13,7 +13,7 @@ import { spellTypeOf, type SpellType } from './ui/colors';
 import { chatBus, logToChat, type ChatChannel } from './ui/chatStore';
 import { drawPortalFloor, drawPortalFx, PORTAL_CITY, PORTAL_ZONE } from './portal';
 import { checkSkill, skillDeniedText, canUseSkill, skillLevel } from '@fdn/world';
-import { DEFAULT_MAP, RECALL, STAT_CAP, classBaseHp, itemDfTotal, itemRmTotal, STAT_DESC, STAT_IDS, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, traitLabel, traitHpMult, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
+import { DEFAULT_MAP, RECALL, STAT_CAP, classBaseHp, itemDfTotal, itemRmTotal, STAT_DESC, STAT_IDS, STAT_BASE, STAT_RESET_FREE_LVL, statTip, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, traitLabel, traitHpMult, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
 import { UNIQUE_BY_NAME, UP_MAX, UP_MAX_BY_QUALITY, EXTRAS_BY_QUALITY, FX_INFO, JUNK_MATS, MAT_REFORJA, junkValue, reforgeGold, reforgeStones, activeSets, setOfPiece, slotsFor, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, fitsSlot, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
@@ -1950,16 +1950,33 @@ function renderChar() {
     if ($('stats').dataset.h !== st) { $('stats').dataset.h = st; $('stats').innerHTML = st; }
     renderAttrs();
 }
+let tipStat: StatId | null = null, tipEl: HTMLElement | null = null;
 /** Puntos de stats: una fila por stat con su botón "+" (el server valida; acá solo se pide). */
 function renderAttrs() {
     const rows = STAT_IDS.map((id) => {
         const can = statFree > 0 && stats[id] < STAT_CAP && !P.dead;
-        return `<div class="atr" title="${esc(STAT_DESC[id])}"><span>${STAT_NAMES[id]}</span><b>${stats[id]}</b><button type="button" class="atrb" data-stat="${id}" ${can ? '' : 'disabled'} aria-label="Sumar un punto a ${STAT_NAMES[id]}">+</button></div>`;
+        return `<div class="atr" tabindex="0" data-tip="${id}" aria-label="${esc(STAT_NAMES[id] + ': ' + STAT_DESC[id])}"><span>${STAT_NAMES[id]}</span><b>${stats[id]}</b><button type="button" class="atrb" data-stat="${id}" ${can ? '' : 'disabled'} aria-label="Sumar un punto a ${STAT_NAMES[id]}">+</button></div>`;
     }).join('');
     const cost = statResetCost(P.lvl);
     const h = `<div class="atrh"><span>Puntos libres: <b>${statFree}</b></span><button type="button" class="atrr" id="statReset" title="${cost ? `Cuesta ${cost} de oro` : 'Gratis hasta el nivel 10'}">Reasignar${cost ? ` (${cost} oro)` : ''}</button></div><div class="atrg">${rows}</div>`;
-    if ($('attrs').dataset.h !== h) { $('attrs').dataset.h = h; $('attrs').innerHTML = h; }
+    if ($('attrs').dataset.h !== h) { $('attrs').dataset.h = h; $('attrs').innerHTML = h; if (tipStat) { tipEl = $('attrs').querySelector<HTMLElement>(`[data-tip="${tipStat}"]`); renderStatTip(); } }
 }
+/** Tooltip de cada stat: lo que da un punto con los números de tu clase y nivel, y si te sirve (para no gastar puntos a ciegas). */
+const FIT_LABEL = { clave: 'Recomendado para tu clase', util: 'Útil, pero no es lo central', bajo: 'Casi no le sirve a tu clase' } as const;
+function renderStatTip() {
+    const d = $('atip');
+    if (!tipStat || !tipEl?.isConnected) { d.hidden = true; return; }
+    const t = statTip(tipStat, CLS.id, P.lvl, stats), free = P.lvl <= STAT_RESET_FREE_LVL;
+    d.innerHTML = `<div class="atfit ${t.fit}"><b>${STAT_NAMES[tipStat]}</b><span>${FIT_LABEL[t.fit]}</span></div><p>${esc(t.perPoint)}</p>${t.now ? `<p class="now">Con tus ${stats[tipStat] - STAT_BASE} puntos: ${esc(t.now)}.</p>` : ''}<p class="adv">${esc(t.advice)}</p><p class="rst">${free ? 'Reasignar es gratis hasta el nivel 10: probá sin miedo.' : `Reasignar cuesta ${statResetCost(P.lvl)} de oro.`}</p>`;
+    d.hidden = false;
+    const r = tipEl.getBoundingClientRect(), w = d.offsetWidth, h = d.offsetHeight;
+    d.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2))}px`;
+    d.style.top = `${r.top - h - 8 < 8 ? r.bottom + 8 : r.top - h - 8}px`;
+}
+const showStatTip = (e: Event) => { const el = (e.target as HTMLElement).closest<HTMLElement>('[data-tip]'); if (!el) return; tipStat = el.dataset.tip as StatId; tipEl = el; renderStatTip(); };
+const hideStatTip = () => { tipStat = null; tipEl = null; $('atip').hidden = true; };
+$('attrs').addEventListener('mouseover', showStatTip); $('attrs').addEventListener('focusin', showStatTip);
+$('attrs').addEventListener('mouseleave', hideStatTip); $('attrs').addEventListener('focusout', hideStatTip);
 $('attrs').addEventListener('click', (e) => {
     const t = e.target as HTMLElement, b = t.closest('button[data-stat]') as HTMLButtonElement | null;
     if (b && !b.disabled) { net.send({ $case: 'statAllocRequest', value: { action: 'add', stat: b.dataset.stat as StatId, points: e.shiftKey ? Math.min(5, statFree) : 1 } }); return; }

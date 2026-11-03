@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { STAT_CAP, cleanStats, defaultStats, mobDef, statBonus, statPointsFree, statPointsTotal, statResetCost } from '@fdn/world';
+import { STAT_CAP, classBaseHp, cleanStats, defaultStats, mobDef, statBonus, statTip, statPointsFree, statPointsTotal, statResetCost } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { ECON_VERSION, Economy, migrateEcon, newEcon, type EconCtx, type KillInfo } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
@@ -180,4 +180,20 @@ test('migración v2 -> v4 en un solo paso: arregla la exp y agrega los stats', (
     const st = newEcon('mago', 'vhar'); st.v = 2; st.lvl = 6; st.exp = 100; delete (st as { stats?: unknown }).stats;
     assert.equal(migrateEcon(st), true);
     assert.equal(st.v, ECON_VERSION); assert.deepEqual(st.stats, defaultStats()); assert.equal(st.lvl, 6);
+});
+
+// ---------- tooltip de stats por clase ----------
+test('stats: el tooltip usa los números de la clase y del nivel, y avisa qué stat no le sirve', () => {
+    const base = defaultStats();
+    const vit = statTip('vit', 'guerrero', 11, base); // vida base del paladín a nivel 11 = 593 + 10 × 76 = 1353
+    assert.match(vit.perPoint, /\+2,7 de vida/); assert.match(vit.perPoint, /1353/); assert.equal(vit.now, '', 'sin puntos no hay "con tus puntos"');
+    const s = { ...base, str: 30, dex: 30, mag: 20 };
+    assert.equal(statTip('str', 'guerrero', 5, s).fit, 'clave'); assert.equal(statTip('str', 'mago', 5, s).fit, 'bajo'); assert.equal(statTip('str', 'healer', 5, s).fit, 'bajo');
+    assert.equal(statTip('mag', 'mago', 5, s).fit, 'clave'); assert.equal(statTip('mag', 'healer', 5, s).fit, 'clave'); assert.equal(statTip('mag', 'guerrero', 5, s).fit, 'bajo');
+    // los números del tooltip son los de statBonus (los que aplica el server)
+    const b = statBonus(s, classBaseHp('guerrero', 5));
+    assert.equal(statTip('str', 'guerrero', 5, s).now, `+${(b.meleeMult - 1) * 100 | 0} % de daño, +${b.hp} de vida`);
+    assert.match(statTip('dex', 'guerrero', 5, s).now, new RegExp(`\\+${b.def} de defensa`));
+    assert.match(statTip('mag', 'mago', 5, s).now, new RegExp(`\\+${b.mp} de maná`));
+    assert.equal(statTip('vit', 'clase_rara', 1, base).fit, 'clave', 'clase desconocida cae al paladín, como classBaseHp');
 });

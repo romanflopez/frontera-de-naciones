@@ -185,6 +185,16 @@ button.sl:not(.dis):hover,.cl:hover{border-color:#e0b765;filter:brightness(1.15)
 .atr b{min-width:26px;text-align:right}
 .atrb{width:20px;height:20px;line-height:16px;padding:0;font-size:15px;background:#3a2b16;color:#ffd24a;border:1px solid #8a6a34;border-radius:3px;cursor:pointer}
 .atrb:disabled{opacity:.3;cursor:default}
+.atr:focus-visible{outline:1px solid #c9a227;outline-offset:1px}
+#atip{position:fixed;z-index:9;width:250px;padding:9px 11px;font-size:12.5px;line-height:1.35;color:#d9ccaa;background:linear-gradient(#1b1510,#0c0a08);border:2px solid #6a5028;border-radius:4px;box-shadow:0 0 0 1px #000,0 8px 24px #000c;pointer-events:none}
+#atip p{margin:5px 0 0}
+#atip .atfit{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+#atip .atfit b{font:700 14px/1.2 var(--f-cinzel);color:#e8d9b5}
+#atip .atfit span{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+#atip .clave span{color:#7fd27f}#atip .util span{color:#e0c060}#atip .bajo span{color:#e07a6a}
+#atip .now{color:#ffd24a}
+#atip .adv{color:#bfb393}
+#atip .rst{font-size:11px;color:#8d8366;border-top:1px solid #2d2418;padding-top:5px}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:0 14px;padding:6px 12px;background:linear-gradient(#14100c,#0a0807);border:1px solid #4d3b20;border-radius:3px;box-shadow:inset 0 0 14px #000;flex:1;align-content:space-evenly}
 .stat{display:flex;align-items:center;gap:7px;height:24px;border-bottom:1px solid #2d2418;font-size:12.5px}
 .stat svg{width:15px;height:15px;color:#c9a35a;flex:none}
@@ -386,6 +396,7 @@ canvas:focus{outline:none}
     <svg class="fw-gem" aria-hidden="true"><use href="#fwgem"/></svg>
   </div>
   <div id="itip" class="hud" hidden></div>
+  <div id="atip" role="tooltip" hidden></div>
 
   <div id="shop" class="hud box" hidden>
     <h2><span id="shopName">Mercader</span> <small id="shopRole" class="role"></small> <small id="shopGold"></small><button id="shopClose" type="button" aria-label="Cerrar">×</button></h2>
