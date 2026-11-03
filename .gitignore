@@ -24,4 +24,5 @@ __pycache__/
 
 
 # Efectos con licencia que prohíbe publicarlos (Frostwindz). Se generan con tools/src/fx/private_atlas.py.
-apps/client/public/assets/fx_priv.*
+# TEMPORAL: subidos a git para verlos en prod; volver a ignorarlos.
+# apps/client/public/assets/fx_priv.*
