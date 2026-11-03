@@ -67,26 +67,53 @@ Reglas:
 - Ningún CC encadena sin DR.
 - Todo burst grande requiere setup visible (cast time o combo).
 - Un combo completo saca 40–55% de la barra, no 100%.
-- Duración objetivo de pelea PvP: 20–30s. Si dura <12s o >45s, el balance está roto.
+- Duración objetivo de pelea PvP: 1v1 de 20-40 s y 2v2 de hasta ~60 s (kits-de-clase §3). Se mide con `sim:pvp` (K7).
 
 ## Reglas de PvP (K6, solo jugador contra jugador)
 
-El PvE no cambia. Todo esto vive en `apps/server/src/systems/pvpCombat.ts` (constantes) y `world.ts` (dónde se aplica). Son puntos de partida: se calibran con `sim:pvp` (K7) hasta 1v1 de 20-40 s y 2v2 de hasta ~60 s.
+El PvE no cambia. Todo esto vive en `apps/server/src/systems/pvpCombat.ts` (constantes) y `world.ts` (dónde se aplica). Los valores de daño, pociones y maná salen de la calibración con `sim:pvp` (K7, sección siguiente).
 
 | Regla | Valor | Dónde |
 |---|---|---|
 | "En combate PvP" | pegaste o recibiste daño de otro jugador en los últimos 10 s (`PVP_COMBAT_MS`) | `markPvp` |
-| Multiplicador PvP | ×0,6 sobre el daño crudo, antes de DF/RM (`PVP_DMG_MULT`) | `damagePlayer` |
+| Multiplicador PvP | ×1 sobre el daño crudo, antes de DF/RM (`PVP_DMG_MULT`; era ×0,6, K7) | `damagePlayer` |
 | Tope por golpe | ningún golpe saca más del 25 % de la vida máxima (`PVP_HIT_CAP`); vale también para quemaduras, Barrido, Aura, Nova | `damagePlayer` |
 | Sin abridor | el primer golpe a alguien que no estaba en combate PvP no usa Furia ni bonus sobre controlado o quemado (no hay críticos en PvP) | `pvpHitRequest`, `handleSkill` |
 | Sobre controlado | tope 1,2× contra jugadores (Juicio y Escudo 1,5×, Esquirla 2×) (`PVP_VS_CTRL_MAX`) | `pvpHitRequest` |
 | Recall | bloqueado 10 s después de recibir daño de un jugador; el canal de 8 s quieto sigue igual | `startRecall` |
-| Pociones | bloqueo compartido: 60 s en PvE, 10 s en PvP con pociones de la mitad; al entrar en PvP el bloqueo se acorta a 10 s desde la última; al morir se libera | `usePotion`, `markPvp` |
+| Pociones | bloqueo compartido: 60 s en PvE, 30 s en PvP con pociones de un cuarto (vida 10 %, maná 12,5 %; eran 10 s y la mitad, K7); al entrar en PvP el bloqueo se acorta a 30 s desde la última; al morir se libera | `usePotion`, `markPvp` |
+| Maná en PvP | en combate PvP el maná regenera 1 % por segundo con piso de 5/s (`PVP_MP_REGEN_MIN`, K7); afuera sigue 1 % con piso de 2 | `regenMana` |
 | Segundo aliento (`aliento`, todas las clases, tecla Y) | 3 s quieto, recarga 3,5 min, cura 50 % de vida y maná (−30 % envenenado, cuando exista el veneno en jugadores). Lo cortan un golpe directo (la quemadura no), un control, moverse o cualquier otra acción; cortado no gasta la recarga | `startWind` / `finishWind` |
 | Invisibilidad | recarga 60 s; se corta al atacar, castear, usar una habilidad o recibir daño | `invisibilityRequest`, `startCast`, `damagePlayer` |
 | Detectar | recarga 20 s | `detectInvisibleRequest` |
 
 El cliente recibe el bloqueo de pociones y el Segundo aliento en `AbilityState` (proto, tag 1000).
+
+## Simulación PvP y calibración (K7)
+
+`pnpm --filter @fdn/tools sim:pvp [--lvl 12,40] [--n 60]` corre 1v1 y 2v2 con las 3 clases (bots en `tools/src/sim/pvp/bots.ts`) con los números del server y sale con código 1 si algún enfrentamiento queda fuera del objetivo. `sim:pvp:calibrar` barre combinaciones de reglas; `--log "paladín vs mago"` imprime una pelea entera. Personajes de referencia: equipo común con mejoras moderadas (`pvp/builds.ts`), sin únicos. `apps/server/test/sim-pvp.test.ts` verifica que la sim use las mismas fórmulas que el server.
+
+Objetivo: 1v1 con mediana de 20-40 s, 2v2 de hasta ~60 s, el ganador no termina con más del 65 % de vida y un solo atacante no saca más del 55 % en 3 s.
+
+**Antes (×0,6, pociones cada 10 s a la mitad, maná con piso de 2):** a nivel 12 los 12 enfrentamientos llegaban al tope de 180 s; 11 sin ganador. El paladín pasaba 100-140 s de 180 sin maná y la poción de vida curaba más por segundo de lo que pegaba el rival.
+
+**Después (×1, tope 25 %, pociones cada 30 s a un cuarto, maná con piso de 5 en PvP), nivel 12 / 40, mediana de duración:**
+
+| Enfrentamiento | Nivel 12 | Nivel 40 | |
+|---|---|---|---|
+| Paladín vs mago | 32,7 s (gana el paladín con 61 %) | 23 s (59 %) | ✓ |
+| Paladín vs paladín | 39,6 s | 40,8 s | ✓ / justo |
+| Paladín+mago vs paladín+mago | 48 s | 25 s | ✓ |
+| Mago vs mago | 11,9 s | 11,9 s | ✗ muy corta |
+| Cualquiera con healer | 26-180 s, el bando del healer gana con 80-97 % o no termina | igual | ✗ |
+
+El tope del 25 % casi nunca actúa: ningún golpe solo llega a esa cifra con el equipo de referencia hasta el 40. Se mantiene como seguro.
+
+**Lo que no arreglan estas tres reglas (pendiente de decisión):**
+- **Healer.** Gana o no muere en todos los enfrentamientos. La causa principal es Renovar: hoy cura 6,25 % *por pulso* (37,5 % en 6 s, recarga 3 s, 26 de maná). Con 6,25 % en total, el paladín le gana al healer y los 2v2 con healer bajan a 60-130 s (siguen largos). El veneno, que es la herramienta contra los healers, hoy solo lo pone un atributo de ítem: ninguna de las 3 clases lo tiene en el kit. La sim tiene estas propuestas como opciones (`--renovar-total`, `--veneno juicio,golpe,escudo,quemadura`, `--castigo 0.75`, `--curacd 8`).
+- **Mago contra mago** dura ~12 s: la sim supone que todo proyectil pega (no modela esquivar) y el mago tiene la menor vida y el mayor daño sostenido.
+- **El paladín le gana siempre al mago** (100 % de las peleas, terminando con ~60 % de vida): cumple el criterio de vida pero no el espíritu de "gana el que maneja la distancia". A nivel 40, ya con Parpadeo y Carga sagrada, sigue igual.
+- Todos corren a la misma velocidad: sin maná para un control, nadie alcanza a quien se aleja.
 
 ## Habilidades de nivel 15 a 35 (K8)
 

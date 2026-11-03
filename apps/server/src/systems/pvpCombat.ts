@@ -238,11 +238,14 @@ export function paralysisSecs(base: number, s: CombatStats): number {
 // ---------- pociones ----------
 /**
  * Bloqueo compartido entre pociones (vida o maná), independiente de los hechizos (K6, kits-de-clase.md §3):
- * en PvE es el minuto de Valdrys; en una pelea contra jugadores, 10 s y pociones más chicas (se calibra con sim:pvp).
+ * en PvE es el minuto de Valdrys; en una pelea contra jugadores, 30 s y pociones de un cuarto (calibrado con sim:pvp, K7).
  */
-export const POTION_LOCK_PVE_MS = 60000, POTION_LOCK_PVP_MS = 10000;
-/** En PvP la poción cura esta fracción de la normal ("pociones chicas", punto de partida). */
-export const POTION_PVP_MULT = 0.5;
+export const POTION_LOCK_PVE_MS = 60000, POTION_LOCK_PVP_MS = 30000;
+/**
+ * En PvP la poción cura esta fracción de la normal. Calibrado con `sim:pvp` (K7): con 10 s y la mitad, las pociones
+ * curaban más por segundo de lo que pega cualquier clase y ninguna pelea terminaba. 30 s y un cuarto (vida 10 %, maná 12,5 %).
+ */
+export const POTION_PVP_MULT = 0.25;
 /** Tolerancia por jitter de red: el server acepta una poción si pasó el bloqueo menos esto. */
 export const POTION_GCD_SLACK_MS = 100;
 /** Vida: parte instantánea y el resto en `POTION_HOT_TICKS` ticks cada `POTION_HOT_EVERY_MS` (2 s en total). */
@@ -258,10 +261,20 @@ export function potionHpSplit(total: number): number[] {
 // ---------- K6: reglas de PvP (solo jugador contra jugador; el PvE queda igual a Dreadmyst y Valdrys) ----------
 /** Estar "en combate PvP": haber pegado o recibido daño de otro jugador en estos últimos ms. */
 export const PVP_COMBAT_MS = 10000;
-/** Multiplicador global del daño contra jugadores (punto de partida; se calibra con sim:pvp hasta 1v1 de 20-40 s). */
-export const PVP_DMG_MULT = 0.6;
-/** Ningún golpe solo saca más que esta fracción de la vida máxima de un jugador. */
+/**
+ * Multiplicador global del daño contra jugadores. Calibrado con `sim:pvp` (K7): con ×0,6 ninguna pelea terminaba (la vida
+ * de los jugadores ya se había multiplicado ×4,24 para peleas largas). Con ×1 paladín contra mago y los espejos de paladín
+ * duran 25-40 s. Queda como palanca: si la vida o el daño cambian, se vuelve a correr la simulación.
+ */
+export const PVP_DMG_MULT = 1;
+/** Ningún golpe solo saca más que esta fracción de la vida máxima de un jugador (K7: se mantiene; casi nunca llega a actuar hasta el 40). */
 export const PVP_HIT_CAP = 0.25;
+/**
+ * Piso de la regeneración de maná en combate PvP (por segundo). Con el 1 % (mínimo 2) el paladín, con 84 de maná a nivel 12,
+ * pasaba más de la mitad de la pelea sin poder usar nada (K7). Solo vale mientras estás en combate contra jugadores.
+ */
+export const PVP_MP_REGEN_MIN = 5;
+export const pvpMpRegen = (maxMp: number): number => Math.max(PVP_MP_REGEN_MIN, combatMpRegen(maxMp));
 /** Tope de los multiplicadores "sobre controlado" contra jugadores (Juicio y Escudo 1,5× → 1,2×; Esquirla 2× → 1,2×). */
 export const PVP_VS_CTRL_MAX = 1.2;
 /** Daño que llega a un jugador desde otro: primero el multiplicador PvP (antes de la defensa) y después el tope por golpe. */
