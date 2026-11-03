@@ -1,8 +1,8 @@
 # Ítems, runas y mejoras (borrador de diseño)
 
-Estado 3/11: **modelo de calidad implementado** (ver `claude/modelo-de-items-y-stats.md` en el proyecto). Únicos de T1 a T6 + jefes D1-D7; el botín viejo con rareza al azar se eliminó. Mejoras +1 a +11 con tope por calidad; reforja de extras; oferta del día; las runas siguen en diseño.
+Estado 3/11: **modelo de calidad implementado** (ver `claude/modelo-de-items-y-stats.md` en el proyecto). Únicos de T1 a T7 en 8 slots + jefes D1-D7; el botín viejo con rareza al azar se eliminó. Poder por nivel de ítem (ilvl), mejoras +1 a +11 con tope por calidad, reforja de extras, 4 sets con bonos, efectos de jefe y oferta del día; las runas siguen en diseño.
 
-Implementación: `packages/world/src/uniques.ts` (catálogo + calidad + extras), `apps/server/src/economy.ts` (`reward`, `uniqueItem`, `rollQuality`, `bossQuality`, `reforge`), `apps/server/src/dailyShop.ts` (oferta del día).
+Implementación: `packages/world/src/uniques.ts` (catálogo, ilvl, calidad, extras, sets y efectos), `apps/server/src/economy.ts` (`reward`, `uniqueItem`, `rollQuality`, `bossQuality`, `reforge`), `apps/server/src/dailyShop.ts` (oferta del día), `apps/server/src/mobs.ts` (efectos de jefe en PvE).
 
 ## 0. Calidad (el campo `r` del ítem)
 
@@ -166,3 +166,8 @@ Probabilidades iniciales (a ajustar):
 - Piedras de forja: 5 % mob suelto, 8 % pit, 18 % mob de mazmorra (1 piedra); los jefes con ítems propios sueltan 3 a 5. Se guardan en la cuenta (`Econ.forge`).
 - El nivel de mejora se conserva al guardar en el depósito, subastar y comprar en la subasta.
 - Pendiente: +6 a +11 con bajada de nivel al fallar, piedra pura y pergamino de protección (cuando se vean los números reales).
+- **Slots (8)**: arma, armadura, cabeza, guantes, botas, amuleto y dos anillos (`anillo`, `anillo2`; los anillos son todos de slot `anillo` y entran en el primer lugar libre). Capa y alas: a futuro.
+- **Poder por ilvl**: `stats(arch, ilvl, m)` lineal. Banda T1-T7 = ilvl 5-35; los ítems de jefe, ilvl de su banda +5 con un multiplicador chico (1,06-1,39); el Gran Verdugo (D7) es ilvl 40, lo máximo. Las 7 bandas tienen 16 únicos comunes (8 slots × variantes ofensiva/defensiva o física/mágica) y cada arquetipo toma uno de 4 pares de atributos fijos según su banda (identidad por ítem).
+- **Tienda**: armas, armaduras y yelmos al ≤ 75 % del único de su banda; stock común de guantes y botas; los sets de nación no se venden.
+- **Sets** (`SETS`): Alba de Solmar (T4, malla), Cenit de Solmar (T5, placas), Ceniza de Vhar (T6, malla), Brasa de Vhar (T7, placas); 6 piezas cada uno (armadura, cabeza, guantes, botas, amuleto, anillo) con bonos a 2/4/6 piezas distintas, aplicados en `statsFromChar` por los mismos topes. Las piezas caen solo en mazmorras: 45 % de los únicos de los mobs de la mazmorra del tramo y 35 % extra del jefe de cada mazmorra.
+- **Efectos de jefe** (solo calidad Violeta): Quemadura (15 % de prender fuego en golpes básicos), Estocada aturdidora (10 %, 0,8 s) y Vampirismo (3 % de la vida máxima al matar); PvE.

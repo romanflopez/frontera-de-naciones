@@ -71,3 +71,39 @@ test('bonos de set: 2, 4 y 6 piezas distintas (un anillo repetido cuenta una vez
 test('los nombres de los ítems son únicos (son la clave del guardado)', () => {
     const names = ALL_BASES.map((b) => b.name); assert.equal(new Set(names).size, names.length);
 });
+
+// ---------- drops de piezas de set ----------
+test('piezas de set: caen solo en mazmorras del tramo (mobs y jefe de su dungeon), nunca en pits', async () => {
+    const { Economy, newEcon } = await import('../src/economy.ts');
+    const { mobDef, MOBS, DUNGEON_MAP, SET_PIECES_BY_TIER } = await import('@fdn/world');
+    const { DUNGEON_BOSS } = await import('@fdn/world');
+    const eco = new Economy({ get: () => undefined, put: () => {}, flush: () => {} } as never);
+    const sent: { code?: string; text?: string }[] = [];
+    const p = { econ: newEcon('guerrero', 'solmar'), accountKey: 'a', posX: 5, posY: 5, send: (m: { payload?: { $case?: string; value?: { code?: string; text?: string } } }) => { if (m.payload?.$case === 'econResult') sent.push(m.payload.value ?? {}); }, isDead: false, touch: () => {} } as never;
+    const ctx = { npcs: [], restat: () => {}, ground: { add: () => {} } } as never;
+    const st = (p as { econ: ReturnType<typeof newEcon> }).econ; st.lvl = 18;
+    const isSet = (n: string) => !!UNIQUE_BY_NAME.get(n)?.uniq.set;
+    const run = (kill: Parameters<typeof eco.reward>[2], n: number): { sets: number; uniques: number } => {
+        let sets = 0, uniques = 0;
+        for (let i = 0; i < n; i++) {
+            st.bag = []; eco.reward(p, ctx, kill);
+            for (const it of st.bag) if (UNIQUE_BY_NAME.has(it.n)) { uniques++; if (isSet(it.n)) sets++; }
+        }
+        return { sets, uniques };
+    };
+    // mobs de mazmorra de la banda 4: una buena parte de los únicos son piezas del set de esa banda
+    const dun = run({ mobId: 1, type: 'goblin', def: mobDef('goblin', { lvl: 18 }), zoneName: 'm', origin: 'dungeon', x: 0, y: 0, traits: 0 }, 6000);
+    assert.ok(dun.uniques > 100 && dun.sets / dun.uniques > 0.3 && dun.sets / dun.uniques < 0.6, `sets ${dun.sets}/${dun.uniques}`);
+    // en pits y sueltos nunca
+    const pit = run({ mobId: 1, type: 'goblin', def: mobDef('goblin', { lvl: 18 }), zoneName: 'p', origin: 'pit', x: 0, y: 0, traits: 0 }, 6000);
+    assert.ok(pit.uniques > 20 && pit.sets === 0, `pit: ${pit.sets} piezas de set`);
+    // el jefe de D4 suelta además (35 %) una pieza del set de su mazmorra (banda 4), y avisa
+    sent.length = 0;
+    let extra = 0;
+    for (let i = 0; i < 300; i++) {
+        st.bag = []; eco.reward(p, ctx, { mobId: 1, type: DUNGEON_BOSS.d4, def: MOBS[DUNGEON_BOSS.d4], zoneName: 'Torre', origin: 'dungeon', x: 0, y: 0, traits: 0, map: DUNGEON_MAP.d4 });
+        const piece = st.bag.find((it) => isSet(it.n)); if (piece) { extra++; assert.ok(SET_PIECES_BY_TIER[4].some((u) => u.name === piece.n), `${piece.n} es de la banda 4`); }
+    }
+    assert.ok(extra > 60 && extra < 160, `piezas extra del jefe: ${extra}/300`);
+    assert.ok(sent.some((m) => m.code === 'set_piece'), 'avisa que cayó una pieza de set');
+});

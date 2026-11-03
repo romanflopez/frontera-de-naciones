@@ -412,6 +412,8 @@ export class Economy {
     }
 
     // ---------- tiendas ----------
+    /** Aviso global (chat de todos los mundos): lo conecta index.ts; sin conectar (tests) no hace nada. */
+    announce: ((text: string) => void) | null = null;
     /** Día UTC en el que ya se vendió la estrella de la oferta (stock 1 global; en memoria: pre-beta alcanza). */
     private starSoldDay = -1;
     starSoldToday(): boolean { return this.starSoldDay === dayKey(); }
@@ -428,7 +430,10 @@ export class Economy {
                 if (st.bag.length >= BAG_MAX) return fail('bag_full', 'La bolsa está llena.');
                 addGold(st, -o.price);
                 st.bag.push(newItem(st, o.base, o.quality, o.attrs.map((a) => ({ ...a }))));
-                if (o.star) this.starSoldDay = dayKey(); // el primero se la lleva; el resto ve 'sold'
+                if (o.star) { // el primero se la lleva; el resto ve 'sold', y se avisa a todo el server (parte del diseño: es un evento)
+                    this.starSoldDay = dayKey();
+                    this.announce?.(`¡${p.characterName} se llevó ${o.base} (${QUALITY_NAMES[o.quality] ?? ''}), la oferta estrella del día!`);
+                }
                 return done(`Compraste ${o.base} por ${o.price} de oro.${o.star ? ' ¡Era la oferta estrella de hoy!' : ''}`);
             }
             const line = SHOPS[roleOf(npc)]?.stock[index]; if (!line) return fail('no_stock', 'Ese vendedor no vende eso.');

@@ -368,6 +368,8 @@ const chat = new ChatManager({
     factionOf: (sid) => { const s = sessionsById.get(sid); return s ? factionOfSession(s) : undefined; },
     send: (sid, m) => { const s = sessionsById.get(sid); if (s?.socket && s.socket.readyState === s.socket.OPEN) s.socket.send(encode(m)); },
 });
+// la oferta estrella de la tienda avisa en el chat global a todo el server (la sirve el mismo Economy de todos los mundos)
+economy.announce = (text) => { const m = M.serverChat('global', 'Tienda', text, ''); for (const s of sessionsById.values()) if (s.socket && s.socket.readyState === s.socket.OPEN) s.socket.send(encode(m)); };
 const factionOfSession = (s: Session): string | undefined => worldOf(s)?.playerOf(s.sessionId)?.profile.split(';')[0] || undefined;
 
 async function shutdown(): Promise<void> {

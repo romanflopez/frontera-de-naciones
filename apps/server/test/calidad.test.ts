@@ -219,3 +219,22 @@ test('oferta del día: determinística por día UTC, estrella con roll visible y
         assert.equal(lastResult(B.log)?.ok, true);
     } finally { Date.now = realNow; }
 });
+
+test('oferta del día: la compra de la estrella se anuncia a todo el server (una sola vez)', async () => {
+    const { dailyOffers, dailyStar, DAILY_INDEX_BASE } = await import('../src/dailyShop.ts');
+    const { eco, reg, join } = setup();
+    const world = reg.ensure('solmar_legacy');
+    const A = join(world, 'Comprador'), B = join(world, 'Tarde');
+    const cx = ctx([{ id: 'mercader_s', x: 11, y: 11 }]);
+    const said: string[] = []; eco.announce = (t) => said.push(t);
+    let now = Date.now(); while (!dailyStar(now)) now += 86_400_000;
+    const realNow = Date.now; Date.now = () => now;
+    try {
+        const idx = dailyOffers(now).findIndex((o) => o.star);
+        A.p.econ!.gold = 10 ** 9; B.p.econ!.gold = 10 ** 9;
+        eco.buy(A.p, cx, 'mercader_s', DAILY_INDEX_BASE + idx);
+        eco.buy(B.p, cx, 'mercader_s', DAILY_INDEX_BASE + idx);
+        assert.equal(said.length, 1, 'solo el que se la lleva dispara el aviso');
+        assert.match(said[0], /oferta estrella/);
+    } finally { Date.now = realNow; }
+});
