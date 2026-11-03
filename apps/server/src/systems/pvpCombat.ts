@@ -5,7 +5,7 @@
  */
 import { KEY_RECIPES } from '@fdn/world';
 import { hasBuff, type BuffId, type CharacterStatus } from './statusSystem.ts';
-import { isClass, type ClassId, BASE_BY_NAME, CRIT_BASE, MAX_LEVEL, aspdTotal, critTotal, itemDfTotal, itemRmTotal, leechTotal, meleeIntervalSecs, statBonus, upMult, type Stats } from '@fdn/world';
+import { isClass, type ClassId, BASE_BY_NAME, CLASS_HP, CLASS_MP, CRIT_BASE, MAX_LEVEL, aspdTotal, critTotal, itemDfTotal, itemRmTotal, leechTotal, meleeIntervalSecs, statBonus, upMult, type Stats } from '@fdn/world';
 export type Stat = 'mag' | 'wdmg' | 'melee';
 export interface PvpSpell {
     dmg?: [number, number]; lvlK?: number; stat?: Stat;
@@ -192,11 +192,11 @@ export const UTIL_MP = { furia: 15, invisibilidad: 40, detectar: 30, remover: 30
 /** Regen de maná fuera de ciudad (incluye combate): 1 % del pool por segundo, mínimo 2/s (el piso viejo). */
 export const COMBAT_MP_REGEN_PCT = 0.01;
 export const combatMpRegen = (maxMp: number): number => Math.max(2, Math.round(maxMp * COMBAT_MP_REGEN_PCT));
-const CLASS_MP: Record<string, [number, number]> = { guerrero: [40, 4], mago: [90, 12], healer: [110, 13] };
+
 export const potionMp = (maxMp: number, pvp = false) => Math.max(pvp ? 20 : 40, Math.round(maxMp * 0.5 * (pvp ? POTION_PVP_MULT : 1)));
 
 export interface CombatStats { lvl: number; cls: string; /** multiplicadores de daño por Fuerza (físico) y Magia (hechizos) */ meleeMult: number; magicMult: number; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; /** crítico total %, velocidad de ataque %, robo de vida % y chance de veneno % (ya con topes) */ crit: number; aspd: number; leech: number; poison: number; savedHp: number; maxMp: number; savedMp: number; /** K8: Daño base extra (Bendición de poder) */ dmgBonus: number }
-const CLASS_HP: Record<string, [number, number]> = { guerrero: [593, 76], mago: [381, 42], healer: [470, 54] };
+
 export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 140, maxMp: 40, savedMp: 40, dmgBonus: 0 };
 
 /** Las bases de items son las compartidas de @fdn/world (el cliente usa las mismas). */
@@ -219,9 +219,9 @@ export function statsFromChar(o: StatSource | undefined, uncapCrit = false): Com
     }
     s.def += itemDfTotal(itemDf); s.rm += itemRmTotal(itemRm); // la DF/RM de ATRIBUTOS se topea; la base de las armaduras no
     s.crit = uncapCrit ? Math.min(100, CRIT_BASE + itemCrit) : critTotal(itemCrit); s.aspd = aspdTotal(itemAspd); s.leech = leechTotal(itemLeech); s.poison = Math.min(100, s.poison); // topes del paso 1.3
-    const sb = statBonus(o.stats); // puntos de Fuerza, Vitalidad, Destreza y Magia
-    bonusHp += sb.hp; bonusMp += sb.mp; s.def += sb.def; s.meleeMult = sb.meleeMult; s.magicMult = sb.magicMult;
     const [hp0, hpL] = CLASS_HP[cls];
+    const sb = statBonus(o.stats, hp0 + (lvl - 1) * hpL); // puntos de Fuerza, Vitalidad, Destreza y Magia (Vitalidad en % de la vida base)
+    bonusHp += sb.hp; bonusMp += sb.mp; s.def += sb.def; s.meleeMult = sb.meleeMult; s.magicMult = sb.magicMult;
     s.maxHp = hp0 + (lvl - 1) * hpL + bonusHp;
     const [mp0, mpL] = CLASS_MP[cls];
     s.maxMp = mp0 + (lvl - 1) * mpL + bonusMp;

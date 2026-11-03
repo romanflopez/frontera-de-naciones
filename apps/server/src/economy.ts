@@ -10,7 +10,7 @@
  */
 import {
     ATTR_RANGES, traitExpMult, traitDropMult, BAG_MAX, BASE_BY_NAME, BASES, KEY_IDS, KEYDEFS, POT_MAX, POTS, QUESTS, roleOf, SHARDS_PER_KEY, SHOP_SERVER_RANGE,
-    SHOPS, SLOTS, TRAINING, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statBonus, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, sellPrice, trainingUnlocked,
+    SHOPS, SLOTS, TRAINING, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, sellPrice, trainingUnlocked,
     BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BASES, UP_MAX, UP_MAX_BY_QUALITY, QUALITY_NAMES, rollExtras, uniqueIlvl, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, tierOfLvl, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
     DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, junkValue, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
@@ -704,7 +704,7 @@ export class Economy {
         const gain = lm > 0 ? Math.max(1, Math.round(def.exp * (1 + bonus(st, 'exp') / 100) * expMult * traitExpMult(k.traits ?? 0) * lm)) : 0;
         st.exp += gain;
         let gold = 0, item: SItem | undefined, bagFull = false, potion = '', shard = '';
-        const bossU = boss ? BOSS_UNIQUES[k.type] : undefined, tier = tierOfLevel(def.lvl), dm = statBonus(st.stats).dropMult * traitDropMult(k.traits ?? 0); // Suerte y mutante
+        const bossU = boss ? BOSS_UNIQUES[k.type] : undefined, tier = tierOfLevel(def.lvl), dm = traitDropMult(k.traits ?? 0); // mutante (la Suerte se eliminó)
         if (boss) {
             // los jefes de mazmorra con ítems propios sueltan uno de ellos (siempre); los jefes de mundo, un único de su banda
             // (si la banda todavía no tiene únicos, el doble de oro hasta que exista el catálogo T4+)
@@ -713,7 +713,6 @@ export class Economy {
         } else {
             // El ítem solo cae como único de la banda, con poca chance (más en pits y mazmorras); el resto del tiempo, oro.
             // El botín viejo con rareza al azar se eliminó (docs/ITEMS.md): los "comunes" son la basura vendible del suelo (systems/loot.ts).
-            // La Suerte sube la chance de cada botín (+0,1 % por punto sobre 10).
             const r = Math.random(), uc = tier <= UNIQUE_TIERS_READY ? UNIQUE_CHANCE[k.origin ?? 'pit'] * dm : 0, gc = GOLD_CHANCE * dm;
             if (r < uc) item = uniqueItem(st, pick(UNIQUES_BY_TIER[tier]), rollQuality(k.origin ?? 'pit'));
             else if (r < uc + gc) gold = rint(3, 8) * def.lvl;

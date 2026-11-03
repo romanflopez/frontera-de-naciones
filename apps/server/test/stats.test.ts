@@ -37,26 +37,26 @@ const lastResult = (log: ServerMessage[]) => { const r = log.filter((m) => m.pay
 
 // ---------- A. fórmulas ----------
 test('stats: sin repartir no cambian nada, y cada punto da lo que dice el diseño', () => {
-    const b0 = statBonus(defaultStats());
-    assert.deepEqual(b0, { hp: 0, mp: 0, def: 0, meleeMult: 1, magicMult: 1, dropMult: 1 });
+    const b0 = statBonus(defaultStats(), 1250);
+    assert.deepEqual(b0, { hp: 0, mp: 0, def: 0, meleeMult: 1, magicMult: 1 });
     assert.equal(statBonus(undefined).hp, 0, 'cuenta sin stats = sin bonus');
-    const s = defaultStats(); s.vit += 10; s.str += 30; s.mag += 20; s.dex += 20; s.luk += 50;
-    const b = statBonus(s);
-    assert.equal(b.hp, 25 + 20, '10 de Vitalidad = 25 y 30 de Fuerza = 20 de vida');
+    const s = defaultStats(); s.vit += 10; s.str += 30; s.mag += 20; s.dex += 20;
+    const b = statBonus(s, 1250); // la Vitalidad vale +0,2 % de la vida base de la clase por punto
+    assert.equal(b.hp, 25 + 20, '10 de Vitalidad sobre 1250 de base = 25, y 30 de Fuerza = 20 de vida');
     assert.equal(b.mp, 40); assert.equal(b.def, 10);
-    assert.ok(Math.abs(b.meleeMult - 1.06) < 1e-9 && Math.abs(b.magicMult - 1.06) < 1e-9 && Math.abs(b.dropMult - 1.05) < 1e-9);
+    assert.ok(Math.abs(b.meleeMult - 1.06) < 1e-9 && Math.abs(b.magicMult - 1.06) < 1e-9);
 });
 
 test('stats: los puntos salen del nivel (10 al crear + 3 por nivel) y los libres son lo que falta repartir', () => {
     assert.equal(statPointsTotal(1), 10); assert.equal(statPointsTotal(2), 13); assert.equal(statPointsTotal(40), 127);
-    const s = defaultStats(); s.str += 4; s.luk += 6;
+    const s = defaultStats(); s.str += 4; s.mag += 6;
     assert.equal(statPointsFree(1, s), 0); assert.equal(statPointsFree(5, s), 12);
     assert.equal(statResetCost(10), 0); assert.equal(statResetCost(11), 2200); assert.equal(statResetCost(40), 8000);
 });
 
 test('stats: cleanStats recorta lo inválido a enteros entre 10 y el tope', () => {
-    const c = cleanStats({ str: 500, vit: -3, dex: 12.9, mag: 'x', luk: NaN });
-    assert.deepEqual(c, { str: STAT_CAP, vit: 10, dex: 12, mag: 10, luk: 10 });
+    const c = cleanStats({ str: 500, vit: -3, dex: 12.9, mag: 'x', luk: 90 }); // luk ya no existe: se descarta y los puntos vuelven solos
+    assert.deepEqual(c, { str: STAT_CAP, vit: 10, dex: 12, mag: 10 });
     assert.deepEqual(cleanStats(null), defaultStats());
 });
 
@@ -64,7 +64,8 @@ test('stats: la vida, el maná, la defensa y el daño del combate salen de los p
     const base = newEcon('guerrero', 'solmar'), con = newEcon('guerrero', 'solmar');
     con.stats = { ...defaultStats(), vit: 30, mag: 25, dex: 20, str: 40 };
     const a = statsFromChar(base), b = statsFromChar(con);
-    assert.equal(b.maxHp - a.maxHp, 50 + 20, '20 de Vitalidad (50) + 30 de Fuerza (20)');
+    const vitHp = Math.round(0.002 * 593 * 20); // nivel 1: vida base 593
+    assert.equal(b.maxHp - a.maxHp, vitHp + 20, `20 de Vitalidad (${vitHp}) + 30 de Fuerza (20)`);
     assert.equal(b.maxMp - a.maxMp, 30); assert.equal(b.def - a.def, 5);
     assert.ok(b.meleeMult > 1.05 && b.magicMult > 1.04 && a.meleeMult === 1);
     const rnd = Math.random; Math.random = () => 0.5;
@@ -106,10 +107,12 @@ test('repartir: dos pedidos seguidos no pueden gastar el mismo punto dos veces',
 test('repartir: el tope por stat y los muertos', () => {
     const { eco, reg, join } = setup(), w = reg.ensure('solmar_legacy');
     const J = join(w, 'carla'), st = J.p.econ!;
-    st.lvl = 40; st.stats.luk = STAT_CAP - 2;
-    J.log.length = 0; eco.statAlloc(J.p, ctx(), 'add', 'luk', 3);
-    assert.equal(lastResult(J.log)!.code, 'cap'); assert.equal(st.stats.luk, STAT_CAP - 2);
-    eco.statAlloc(J.p, ctx(), 'add', 'luk', 2); assert.equal(st.stats.luk, STAT_CAP);
+    st.lvl = 40; st.stats.dex = STAT_CAP - 2;
+    J.log.length = 0; eco.statAlloc(J.p, ctx(), 'add', 'dex', 3);
+    assert.equal(lastResult(J.log)!.code, 'cap'); assert.equal(st.stats.dex, STAT_CAP - 2);
+    eco.statAlloc(J.p, ctx(), 'add', 'dex', 2); assert.equal(st.stats.dex, STAT_CAP);
+    J.log.length = 0; eco.statAlloc(J.p, ctx(), 'add', 'luk', 2);
+    assert.equal(lastResult(J.log)!.ok, false, 'la Suerte ya no existe');
     J.p.hp = 0; J.log.length = 0; eco.statAlloc(J.p, ctx(), 'add', 'str', 1);
     assert.equal(lastResult(J.log)!.code, 'dead'); assert.equal(st.stats.str, 10);
 });
@@ -120,7 +123,8 @@ test('repartir por el protocolo: llega el pedido, sube la vida máxima del serve
     st.lvl = 3; const hp0 = statsFromChar(st).maxHp; // vida del nivel 3 sin repartir
     J.log.length = 0;
     w.handleClientPacket(J.session.sessionId, { payload: { $case: 'statAllocRequest', value: { action: 'add', stat: 'vit', points: 4 } } } as never);
-    assert.equal(st.stats.vit, 14); assert.equal(J.p.combat.maxHp - hp0, 10, '4 puntos de Vitalidad = 10 de vida');
+    const baseHp3 = 593 + 2 * 76; // vida base del guerrero a nivel 3
+    assert.equal(st.stats.vit, 14); assert.equal(J.p.combat.maxHp - hp0, Math.round(0.002 * baseHp3 * 4), '4 puntos de Vitalidad = +0,8 % de la vida base');
     const inv = J.log.filter((m) => m.payload?.$case === 'inventoryState').at(-1)!.payload as { value: { statVit: number; statStr: number; statFree: number } };
     assert.equal(inv.value.statVit, 14); assert.equal(inv.value.statStr, 10); assert.equal(inv.value.statFree, statPointsFree(3, st.stats));
 });
@@ -128,7 +132,7 @@ test('repartir por el protocolo: llega el pedido, sube la vida máxima del serve
 test('reasignar: gratis hasta el nivel 10; después cuesta oro y sin oro no se hace', () => {
     const { eco, reg, join } = setup(), w = reg.ensure('solmar_legacy');
     const J = join(w, 'eli'), st = J.p.econ!;
-    st.lvl = 8; st.stats = { ...defaultStats(), str: 20, luk: 15 };
+    st.lvl = 8; st.stats = { ...defaultStats(), str: 20, dex: 15 };
     J.log.length = 0; eco.statAlloc(J.p, ctx(), 'reset', '', 0);
     assert.equal(lastResult(J.log)!.ok, true); assert.deepEqual(st.stats, defaultStats());
     st.lvl = 20; st.stats = { ...defaultStats(), str: 30 }; st.gold = 100;
@@ -138,19 +142,15 @@ test('reasignar: gratis hasta el nivel 10; después cuesta oro y sin oro no se h
     assert.deepEqual(st.stats, defaultStats()); assert.equal(st.gold, 5000 - statResetCost(20));
 });
 
-test('suerte: más puntos de Suerte, más chance de botín (oro por kill, ±)', () => {
+test('botín: la chance de oro por kill es la de diseño y no depende de los stats', () => {
     const { eco, reg, join } = setup(), w = reg.ensure('solmar_legacy');
     const J = join(w, 'fede'), st = J.p.econ!;
     const kill: KillInfo = { mobId: 1, type: 'goblin', def: mobDef('goblin', { lvl: 1 }), zoneName: 'prueba', origin: 'pit', x: 0, y: 0 };
-    const rate = (luk: number) => {
-        st.stats = { ...defaultStats(), luk }; st.lvl = 1; st.exp = 0;
-        let hits = 0; const N = 30_000;
-        for (let i = 0; i < N; i++) { const g = st.gold; eco.reward(J.p, ctx(), kill); if (st.gold > g) hits++; st.exp = 0; st.bag = []; }
-        return hits / N;
-    };
-    const base = rate(10), alta = rate(STAT_CAP);
-    assert.ok(Math.abs(base - 0.45) < 0.02, `base ${base}`);
-    assert.ok(alta > base + 0.025, `suerte 100: ${alta} vs ${base}`);
+    st.stats = { ...defaultStats(), str: STAT_CAP }; st.lvl = 1;
+    let hits = 0; const N = 30_000;
+    for (let i = 0; i < N; i++) { const g = st.gold; eco.reward(J.p, ctx(), kill); if (st.gold > g) hits++; st.exp = 0; st.bag = []; }
+    const rate = hits / N;
+    assert.ok(Math.abs(rate - 0.45) < 0.02, `oro por kill ${rate} (diseño: 45 %)`);
 });
 
 // ---------- H. antitrampa ----------
@@ -160,7 +160,7 @@ test('antitrampa: el guardado del cliente no puede fijar stats, ni al crear ni d
     w.playerConnected(session.sessionId, 'gus', (m) => log.push(m), () => {}, { mapId: w.mapId, worldId: w.mapId, x: 11, y: 11, direction: 4, gender: 0, skinColor: 0, hairStyleIndex: 0, underwearColorIndex: 0, movementSpeedMs: 270, runningMode: true, attackMode: true });
     mem.put('acc-gus', { name: 'gus', salt: '', hash: '', created: 0, lastLogin: 0 });
     w.bindAccount(session.sessionId, 'acc-gus');
-    w.onClientSave(session.sessionId, JSON.stringify({ cls: 'mago', faction: 'solmar', stats: { str: 100, vit: 100, dex: 100, mag: 100, luk: 100 }, lvl: 40 }));
+    w.onClientSave(session.sessionId, JSON.stringify({ cls: 'mago', faction: 'solmar', stats: { str: 100, vit: 100, dex: 100, mag: 100 }, lvl: 40 }));
     const st = w.playerOf(session.sessionId)!.econ!;
     assert.deepEqual(st.stats, defaultStats()); assert.equal(st.lvl, 1);
     w.onClientSave(session.sessionId, JSON.stringify({ cls: 'mago', faction: 'solmar', stats: { str: 100 } }));
