@@ -24,6 +24,7 @@ import { Player, type PersistedPlayer, type Send } from './player.ts';
 import type { Economy, EconCtx } from './economy.ts';
 import { auctionHouse } from './auction.ts';
 import { depotService } from './deposit.ts';
+import { tradeService } from './trade.ts';
 import { canPickup, GroundLoot, type GroundApi } from './ground.ts';
 import { LootManager, rollLoot } from './systems/loot.ts';
 
@@ -162,6 +163,11 @@ export class GameWorld {
     /** El simulador de mobs (tests y mediciones); undefined si el mundo duerme o no tiene mapa. */
     get mobs(): MobSim | undefined { return this.mobSim; }
     playerOf(sessionId: string): Player | undefined { return this.players.get(sessionId); }
+    /** El jugador `id` de este mundo, si `p` lo ve (conectado y no oculto para él). Para Dar e Intercambiar: el rango lo valida `TradeService`. */
+    tradePeer(p: Player, id: bigint): Player | undefined {
+        const o = this.playersById.get(id);
+        return o && o !== p && !o.disconnected && !this.hiddenFrom(p, o) ? o : undefined;
+    }
     /** Sesiones que ven a este jugador (radio de visión, mismo mapa), incluida la suya. Para el chat de área. */
     viewersOf(sessionId: string): string[] {
         const p = this.players.get(sessionId); if (!p) return [];
@@ -612,6 +618,7 @@ export class GameWorld {
                 case 'econQuestRequest': this.econ?.quest(p, this.ctx, payload.value.npcId, payload.value.action, payload.value.key); break;
                 case 'auctionRequest': auctionHouse()?.handle(p, this.ctx, payload.value); break; // casa de subastas (docs/SUBASTAS.md)
                 case 'depositRequest': depotService()?.handle(p, this.ctx, payload.value); break; // depósito por cuenta (docs/DEPOSITO.md)
+                case 'tradeRequest': tradeService()?.handle(p, payload.value, (id) => this.tradePeer(p, id)); break; // Dar e Intercambiar (docs/INTERCAMBIO.md)
                 case 'respawnRequest': this.respawn(p); break;
                 case 'invisibilityRequest': { // K6: para escapar, no para emboscar. Recarga larga y se corta al atacar, castear o recibir daño.
                     const now = Date.now();

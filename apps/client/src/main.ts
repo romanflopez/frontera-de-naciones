@@ -25,6 +25,7 @@ import { initLoginUI } from './loginui.ts';
 import { createMinimap, type Minimap } from './minimap.ts';
 import { createAuctionUI } from './auction.ts';
 import { createDepositUI } from './deposit.ts';
+import { createTradeUI } from './trade.ts';
 import { createCursor } from './cursor.ts';
 const ico = (it: { look?: string; slot: string; rar: { c: string; k: number } }) => `<img class="iico" alt="" src="${itemIcon(it.look, it.slot, it.rar.c, it.rar.k)}">`;
 
@@ -326,6 +327,7 @@ function onServer(m: ServerPayload) {
         case 'groundItemRemoved': { const i = drops.findIndex((d) => d.gid === m.value.id); if (i >= 0) { if (P.pickup === drops[i]) P.pickup = null; drops.splice(i, 1); } break; }
         case 'auctionSearchResult': case 'auctionMyState': case 'auctionHistory': auction.onMessage(m); break;
         case 'depositState': deposit.onMessage(m); break;
+        case 'tradeState': case 'tradeInvite': trade.onMessage(m); break; // Dar e Intercambiar (docs/INTERCAMBIO.md)
         case 'recallState': onRecallState(m.value); break;
         case 'abilityState': onAbilityState(m.value); break;
         case 'partyState': renderParty(m.value.members); break;
@@ -1321,7 +1323,12 @@ cv.addEventListener('pointerdown', (e) => {
     holding = true; holdT = 0.18; mouse = { x: sx, y: sy };
     P.engage = false; P.target = null; P.pickup = null; P.queued = null; const g = toGrid(sx, sy); if (moveTo(g.x, g.y)) fx.push({ k: 'click', x: Math.floor(g.x) + 0.5, y: Math.floor(g.y) + 0.5, t: 0 });
 });
-cv.addEventListener('contextmenu', (e) => { e.preventDefault(); cancelCast('Hechizo cancelado.'); });
+cv.addEventListener('contextmenu', (e) => {
+    e.preventDefault(); cancelCast('Hechizo cancelado.');
+    if (!connected || P.dead) return; // clic derecho sobre un aliado: menú Dar / Intercambiar
+    const r = cv.getBoundingClientRect(), al = pickAlly(e.clientX - r.left, e.clientY - r.top);
+    if (al) trade.menuFor({ id: al.id, name: al.name }, e.clientX, e.clientY);
+});
 cv.addEventListener('pointerup', () => { holding = false; });
 cv.addEventListener('pointercancel', () => { holding = false; });
 cv.addEventListener('pointermove', (e) => { const r = cv.getBoundingClientRect(); mouse = { x: e.clientX - r.left, y: e.clientY - r.top }; });
@@ -1373,6 +1380,12 @@ function renderParty(members: PartyRow[]): void {
         let r = partyRows.get(m.name);
         if (!r) {
             const row = document.createElement('div'); row.className = 'pm';
+            row.addEventListener('click', (e) => { // clic en un compañero: menú Dar / Intercambiar (solo si lo ves)
+                const name = r?.m.name; if (!name || name === P.name) return;
+                const o = [...others.values()].find((x) => x.name === name && !x.gone);
+                if (!o || !isAlly(o)) { toast(`No ves a ${name}: tiene que estar cerca.`); return; }
+                trade.menuFor({ id: o.id, name: o.name }, e.clientX, e.clientY);
+            });
             row.innerHTML = `<span class="pav">${esc(m.name.replace(/^\[[^\]]*\]\s*/, '').charAt(0).toUpperCase())}</span><div class="pbody"><div class="phd"><span class="pn"></span><span class="pl"></span></div><div class="pb ph"><i></i><em></em></div><div class="pb pp"><i></i><em></em></div></div>`;
             r = { m, el: row }; partyRows.set(m.name, r);
         }
@@ -2410,6 +2423,8 @@ function stockInfo(st: Stock): string {
 /** Casa de subastas (ventana propia en auction.ts; el server valida todo). */
 const auction = createAuctionUI({ send: (p) => net.send(p), bag: () => P.bag, gold: () => P.gold, fromInv: itemFromInv, icon: ico, attrText, esc, fmt: fmtNum, toast });
 /** Depósito por cuenta (ventana propia en deposit.ts; el server valida todo, ver docs/DEPOSITO.md). */
+/** Dar e Intercambiar entre jugadores (ventana propia en trade.ts; el server valida todo, ver docs/INTERCAMBIO.md). */
+const trade = createTradeUI({ send: (p) => net.send(p), bag: () => P.bag, gold: () => P.gold, fromInv: itemFromInv, icon: ico, attrText, esc, fmt: fmtNum, toast });
 const deposit = createDepositUI({ send: (p) => net.send(p), bag: () => P.bag, gold: () => P.gold, pots: () => pots, keys: () => Q.keys, shards: () => Q.shards, fromInv: itemFromInv, icon: ico, attrText, esc, fmt: fmtNum, requestClose: () => closeShop() });
 function openShop(n: Npc = MAP.npcs[0]) {
     const role = roleOf(n); bookTalk(n);
@@ -2801,7 +2816,7 @@ function applyInventory(v: InventoryState) {
     if (prevSel >= 0) { const inBag = P.bag.find((x) => x.id === prevSel); const inEq = SLOTS.map((sl) => P.eq[sl]).find((x) => x && x.id === prevSel); sel = inBag ? { it: inBag, from: 'bag' } : inEq ? { it: inEq!, from: 'eq' } : null; }
     if (invApplied && v.lvl > lvlBefore) onLevelUp(); else { P.hp = Math.min(P.hp, maxHp()); P.mp = Math.min(P.mp, maxMp()); }
     invApplied = true;
-    refreshLook(); renderBag(); renderQuest(); renderPots(); renderShop(); auction.refresh(); deposit.refresh(); sendProfile();
+    refreshLook(); renderBag(); renderQuest(); renderPots(); renderShop(); auction.refresh(); deposit.refresh(); trade.refresh(); sendProfile();
     if (!$('qdlg').hidden && shopNpc && roleOf(shopNpc) === 'capitan') openQuestDlg(shopNpc);
 }
 const saver = new Saver(buildSave, (data) => net.send({ $case: 'saveCharacterRequest', value: { data } }));

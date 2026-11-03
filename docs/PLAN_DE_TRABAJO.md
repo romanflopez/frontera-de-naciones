@@ -36,6 +36,7 @@ Estado de partida (`main`, 1/11): 140 de 141 tests del server en verde (1 saltea
 | **Tope de bichos que se juntan** (Román: en Helbreath se junta una banda) | 1.4 | Sin tope duro de bichos en aggro; tope de **objetivos por golpe de área** (5 para Bola y Lluvia, 4 para Giro) + el riesgo natural de recibir el daño de toda la banda (ver 1.4) |
 | **Qué se vende con monedas y si pueden usarse en la subasta** (Román quiere ítems exclusivos que incentiven donar) | 3.7 / 0.3 | Monedas solo para **cosmética y conveniencia** (auras, títulos, espacios, tickets). Si se aceptan en la subasta, que sea como mercado entre jugadores y no como tienda de poder. Ver la nota de monetización abajo |
 | Ítems de jefe: ¿se subastan? | 3.7 | Sí, con las llaves como límite del suministro |
+| **Dar y Intercambiar como dos acciones separadas** (Román, 3/11, como Helbreath) | 3.7 | **Decidido que sí**: "Dar" (regalo directo) e "Intercambiar" (ventana con ambos lados). Mismo núcleo atómico en el server; ver 3.7 |
 | Tope de +N por banda o % menor por nivel | 3.4 | Tope por banda (con 6 bandas): **T1-T3 hasta +3, T4-T5 hasta +5, T6 y legendarios hasta +11**; cada nivel sigue sumando +4 %. Así un ítem viejo mejorado nunca supera a uno de una banda más alta |
 | ¿Afijos en ítems comunes? | 3.3 | **Decidido (Román, 1/11): desde la banda T4** (niveles 16 en adelante); antes, ítems sin afijos |
 | ¿Puntos Majestic y ángel en la beta? | 3.9 | **Puntos Majestic: decidido que sí.** Ángel: si hay tiempo |
@@ -211,13 +212,27 @@ Estado de partida (`main`, 1/11): 140 de 141 tests del server en verde (1 saltea
 ### 3.6 Runas (L)
 **Pruebas:** A de la probabilidad de inserción y de la fusión de tres runas; B de que el fallo pierde la runa y no el ítem, de que sacar una runa la destruye y de que la runa de experiencia está topeada.
 
-### 3.7 Intercambio directo y subasta extendida (M-L)
-**Hacer:** ventana de intercambio (hasta 8 ítems por lado, ambos confirman, cualquier cambio quita las confirmaciones); ítems frágiles y ligados; correo; subasta de 1 a 3 días.
+### 3.7 Dar, intercambiar y subasta extendida (M-L)
+Decidido por Román (3/11): como en Helbreath, **dos acciones separadas** entre jugadores, "Dar" e "Intercambiar". Referencia: Dreadmyst tiene el trade directo solo con jugadores que ves y desde el menú de la party. **Estado: Dar e Intercambiar implementados (3/11), ver `INTERCAMBIO.md`. Faltan correo, ítems frágiles/ligados y subasta de 1 a 3 días.**
+
+**Hacer:**
+- **Núcleo común en el server:** una sola función de transferencia atómica (saca de una bolsa y pone en la otra, o no hace nada). Dar e Intercambiar la usan; no hay dos caminos con reglas distintas. Cada movimiento deja registro (quién, qué, cuándo).
+- **Dar:** acción de un solo lado. Se elige un ítem (o una cantidad de oro) y un jugador; el receptor ve un aviso y **tiene que aceptar** (así nadie le llena la bolsa a otro).
+- **Intercambiar:** ventana con las dos ofertas (hasta 8 ítems y oro por lado), ambos confirman, cualquier cambio quita las confirmaciones y lo agregado después aparece como "Nuevo".
+- **Reglas comunes:** solo con jugadores que ves (mismo mapa o instancia y a rango); se inicia con clic derecho sobre el jugador o desde su fila en la party; no valen los ítems ligados ni los frágiles (cuando existan); la bolsa del receptor tiene que tener lugar; si alguien se aleja, se desconecta o cruza de mapa, se cancela. Solo la misma nación (valor por defecto, a decidir).
+- **Contra el RMT:** Dar lleva nivel mínimo y topes diarios por cuenta (ítems y oro); Intercambiar no, porque es de dos lados. Los límites van por antigüedad o volumen de la cuenta, no por requisitos de contenido (lección de Dreadmyst en `FEEDBACK_COMUNIDAD_DREADMYST.md`).
+- Después: correo, ítems frágiles y subasta de 1 a 3 días.
+
 **Pruebas (las más delicadas):**
-- B: el intercambio es atómico: o pasa todo o no pasa nada; **un ítem nunca está en dos lugares**.
-- B: desconectar a mitad, bolsa llena de uno de los dos, cambiar una oferta después de confirmar, intentar intercambiar un ítem ligado o frágil.
-- F: caída del server entre dos pasos del intercambio no duplica ni pierde ítems.
-- H: pedidos con ítems ajenos, repetidos o con cantidad negativa.
+- B: Dar e Intercambiar son atómicos: o pasa todo o no pasa nada; **un ítem nunca está en dos lugares**.
+- B: Dar sin que el receptor acepte no mueve nada; rechazar o vencer el aviso lo deja todo como estaba.
+- B: Dar y Intercambiar fallan con un jugador fuera de rango, desconectado o que no se ve; se cancelan si alguien se aleja o muere a mitad.
+- B: desconectar a mitad, bolsa llena de uno de los dos, cambiar una oferta después de confirmar, intentar intercambiar o dar un ítem ligado o frágil.
+- B: ofrecer el mismo ítem en un Dar y en un Intercambio a la vez no lo mueve dos veces.
+- B: los topes diarios de Dar se respetan y el registro anota cada movimiento.
+- F: caída del server entre dos pasos de un Dar o un Intercambio no duplica ni pierde ítems.
+- H: pedidos con ítems ajenos, repetidos o con cantidad negativa; oro mayor al que se tiene.
+- E (2 jugadores reales): dar un ítem desde clic derecho y desde el menú de la party, hacer un intercambio de ida y vuelta, cancelar a mitad.
 
 ### 3.8 Crafteo mínimo (M)
 **Pruebas:** B de validación atómica (se consumen los materiales y se entrega el resultado, o nada); A de las recetas.
