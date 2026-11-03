@@ -33,7 +33,7 @@ test('cada set tiene 4 piezas de cuerpo + cabeza, del tamaño de la hoja base y 
 
 test('cada set de nación tiene 8 piezas (todos los slots, con aspecto e ícono), que se farmean (nunca en la tienda), y sus bonos suman por cantidad', () => {
     const stock = new Set(Object.values(SHOPS).flatMap((sh) => sh.stock.map((x) => x.base)));
-    assert.equal(SETS.length, 7);
+    assert.equal(SETS.length, 21);
     for (const set of SETS) {
         assert.equal(set.pieces.length, 8, `${set.id}: 8 piezas`);
         const slots = set.pieces.map((n) => ALL_BASES.find((b) => b.name === n)!.slot).sort();

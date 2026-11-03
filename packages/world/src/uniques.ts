@@ -202,6 +202,34 @@ const DEFS: Def[] = [
     { tier: 7, arch: 'amuO', name: 'Amuleto de brasa eterna', set: 'brasa' }, { tier: 7, arch: 'anilloO', name: 'Sello de brasa eterna', set: 'brasa' }, { tier: 7, arch: 'anilloD', name: 'Aro de brasa eterna', set: 'brasa' },
 ];
 
+// ---------- sets por clase: cada banda tiene uno de guerrero, uno de mago y uno de healer (los ítems no se comparten entre clases) ----------
+type SetClass = 'guerrero' | 'mago' | 'healer';
+const CLASS_SET_PIECES: Record<SetClass, { arch: Arch; n: string }[]> = {
+    guerrero: [{ arch: 'arma1', n: 'Espada' }, { arch: 'armPes', n: 'Coraza' }, { arch: 'cabF', n: 'Yelmo' }, { arch: 'guanF', n: 'Guanteletes' }, { arch: 'botaF', n: 'Grebas' }, { arch: 'amuD', n: 'Colgante' }, { arch: 'anilloD', n: 'Sello' }, { arch: 'anilloO', n: 'Aro' }],
+    mago: [{ arch: 'armaM', n: 'Vara' }, { arch: 'armMag', n: 'Túnica' }, { arch: 'cabM', n: 'Capucha' }, { arch: 'guanM', n: 'Guantes' }, { arch: 'botaM', n: 'Sandalias' }, { arch: 'amuO', n: 'Talismán' }, { arch: 'anilloO', n: 'Sello' }, { arch: 'anilloD', n: 'Aro' }],
+    healer: [{ arch: 'armaM', n: 'Cayado' }, { arch: 'armMag', n: 'Manto' }, { arch: 'cabM', n: 'Cofia' }, { arch: 'guanM', n: 'Mitones' }, { arch: 'botaM', n: 'Zapatos' }, { arch: 'amuO', n: 'Relicario' }, { arch: 'anilloO', n: 'Sello' }, { arch: 'anilloD', n: 'Aro' }],
+};
+/** Sets generados (los 7 escritos a mano de arriba cubren: guerrero T1, T3, T4, T5, T7 y mago T2, T6). */
+export const CLASS_SETS: { id: string; name: string; tier: number; cls: SetClass; suffix: string; faction: 'solmar' | 'vhar'; bonus: AttrId[][] }[] = [];
+const BONUS_BY_CLASS: Record<SetClass, AttrId[][]> = {
+    guerrero: [['hp', 'aspd'], ['crit', 'leech'], ['hp', 'crit'], ['aspd', 'crit', 'leech']],
+    mago: [['mp', 'mag'], ['mag', 'crit'], ['mp', 'hp'], ['mag', 'mp', 'leech']],
+    healer: [['mp', 'hp'], ['rm', 'rpar'], ['mp', 'mag'], ['rpar', 'hp', 'rm']],
+};
+const EXTRA_CLASS_SETS: [number, SetClass, string, string][] = [
+    [1, 'mago', 'savia', 'de savia'], [1, 'healer', 'lino', 'de lino'],
+    [2, 'guerrero', 'hierroviejo', 'de hierro viejo'], [2, 'healer', 'musgo', 'de musgo'],
+    [3, 'mago', 'escarcha', 'de escarcha'], [3, 'healer', 'rocio', 'de rocío'],
+    [4, 'mago', 'ocaso', 'del Ocaso'], [4, 'healer', 'aurora', 'de la Aurora'],
+    [5, 'mago', 'zafiro', 'del Zafiro'], [5, 'healer', 'santuario', 'del Santuario'],
+    [6, 'guerrero', 'hierronegro', 'de Hierro Negro'], [6, 'healer', 'vela', 'de la Vela'],
+    [7, 'mago', 'ascuaazul', 'de Ascua Azul'], [7, 'healer', 'pira', 'de la Pira Santa'],
+];
+for (const [tier, cls, id, suffix] of EXTRA_CLASS_SETS) {
+    CLASS_SETS.push({ id, name: `${CLASS_SET_PIECES[cls][1].n} ${suffix}`.replace(/^\S+ /, '').replace(/^/, cls === 'guerrero' ? 'Armadura ' : cls === 'mago' ? 'Atuendo ' : 'Vestimenta '), tier, cls, suffix, faction: tier >= 6 ? 'vhar' : 'solmar', bonus: BONUS_BY_CLASS[cls] });
+    for (const pc of CLASS_SET_PIECES[cls]) DEFS.push({ tier, arch: pc.arch === 'arma1' && tier % 2 === 0 ? 'arma2' : pc.arch, name: `${pc.n} ${suffix}`, set: id });
+}
+
 export interface UniqueInfo { tier: number; attrs: [AttrId, number][]; boss?: MobType; /** nivel de ítem: de él salen el poder base y la escala de los extras */ ilvl: number; fx?: FxId; set?: string }
 export type UniqueBase = Base & { uniq: UniqueInfo };
 
@@ -272,6 +300,7 @@ export const SETS: SetDef[] = [
     mkSet('cenit', 'Cenit de Solmar', 5, 'solmar', ['hp', 'df'], ['df', 'rm'], ['hp', 'rpar'], ['df', 'rm', 'hp']),
     mkSet('ceniza', 'Ceniza de Vhar', 6, 'vhar', ['mp', 'mag'], ['mag', 'crit'], ['mp', 'hp'], ['mag', 'mp', 'leech']),
     mkSet('brasa', 'Brasa de Vhar', 7, 'vhar', ['hp', 'crit'], ['crit', 'aspd'], ['leech', 'hp'], ['crit', 'aspd', 'leech']),
+    ...CLASS_SETS.map((c) => mkSet(c.id, c.name, c.tier, c.faction, ...c.bonus)),
 ];
 export const SET_BY_ID = new Map(SETS.map((s) => [s.id, s]));
 /** Set al que pertenece una pieza (por nombre de base). */
