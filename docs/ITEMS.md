@@ -1,8 +1,27 @@
 # Ítems, runas y mejoras (borrador de diseño)
 
-Estado: **paso 1 del MVP implementado** (ítems únicos de mobs comunes de T1 a T6 + ítems de los jefes D1-D7 + tabla de drops). Mejoras +1 a +5 implementadas (§7); las runas siguen en diseño. Los números son puntos de partida para probar, no valores finales.
+Estado 3/11: **modelo de calidad implementado** (ver `claude/modelo-de-items-y-stats.md` en el proyecto). Únicos de T1 a T6 + jefes D1-D7; el botín viejo con rareza al azar se eliminó. Mejoras +1 a +11 con tope por calidad; reforja de extras; oferta del día; las runas siguen en diseño.
 
-Implementación: `packages/world/src/uniques.ts` (catálogo; cada único es una `Base` más y entra en `ALL_BASES`), `apps/server/src/economy.ts` (`reward`, `uniqueItem`, `UNIQUE_CHANCE`, `COMMON_CHANCE`, `GOLD_CHANCE`). Rareza en el juego: los únicos de banda son rareza 2 (se muestra "Raro") y los de jefe rareza 3 ("Épico"); no se cambiaron los nombres de la interfaz.
+Implementación: `packages/world/src/uniques.ts` (catálogo + calidad + extras), `apps/server/src/economy.ts` (`reward`, `uniqueItem`, `rollQuality`, `bossQuality`, `reforge`), `apps/server/src/dailyShop.ts` (oferta del día).
+
+## 0. Calidad (el campo `r` del ítem)
+
+La calidad se SORTEA al caer y define cuántos stats extra trae el ítem y hasta dónde se mejora. El poder base sale del catálogo (banda); la calidad no lo toca.
+
+| Calidad | `r` | Extras al azar | Mejora hasta | De dónde cae |
+|---|---|---|---|---|
+| Común (blanco) | 0 | 0 | +1 | tienda, arranque |
+| Verde | 1 | 1 | +3 | lo normal de pits (85 %) y mazmorras (60 %) |
+| Azul | 2 | 2 | +5 | raro en pits (15 %), mazmorras (40 %); garantizado en D1-D2 y jefes de mundo |
+| Dorado | 3 | 2 (rango alto) | +8 | jefes D3-D5 garantizado; D1-D2 y jefes de mundo 25 % |
+| Violeta | 4 | 2 + efecto especial (pendiente) | +11 | solo jefes: D6-D7 garantizado, D3-D5 15 % |
+
+- **Extras**: al final de `a`, después de los fijos del catálogo (`uniq.attrs.length`). Pool sin `exp`; valor lineal con el ilvl del ítem × ranura (arma/armadura 1×, cabeza 0,65×, anillo 0,5×) × tirada. Pueden salir de otra clase: esa copia es mercadería para la subasta.
+- **Topes del server**: crítico 35 % total, vel. ataque 40 %, robo de vida 15 %, y DF ≤ 60 / RM ≤ 75 sumadas de atributos (la base de las armaduras no entra).
+- **Mejora**: +4 % por nivel sobre los stats de base (no toca los atributos). De +6 en adelante el fallo BAJA un nivel.
+- **Reforja**: re-tira UN extra elegido en el herrero; piedras de reforja (solo de jefes de mazmorra, 1-2 por corrida) + oro, costo que se duplica con cada reforja del mismo ítem (`rf`). La calidad y los fijos no se tocan.
+- **Botín personal**: cada drop lo sortea el server por jugador; élites y jefes de mundo dan una tirada a cada participante (amenaza, ≤ 30 celdas). Los comunes del botín viejo son ahora basura vendible por tipo de mob (`JUNK_MATS`, uid 0 en EconSellRequest = "vender basura").
+- **Oferta del día** (`dailyShop.ts`): global por día UTC; 3 líneas comunes con descuento + estrella (35 % de los días) con roll visible y stock 1 del server, a 30-60× el valor de lista: el sumidero de oro grande.
 Depende de: `docs/MAPAS_FLARE.md` (mapas, mazmorras y jefes), `docs/ECONOMIA_SERVER.md` (el server valida precios, stock y atributos) y `docs/ZONAS.md` (curvas de vida/exp por nivel).
 
 ## 1. Idea general
