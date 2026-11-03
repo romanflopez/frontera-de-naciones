@@ -1,0 +1,49 @@
+/* Libro de hechizos (#book, tecla P) con el diseño del pack Craftpix "RPG MMO Game User Interface" (screen SPELL BOOK):
+   dos pestañas subrayadas en celeste (Habilidades y Progresión; Talentos llega con el rebirth), lista de hechizos con ícono, nombre y texto, y el árbol
+   de desbloqueo por nivel con nodos unidos por líneas. Usa el marco .cw de char-craftpix.css. */
+#book.cw{--W:380px;--H:560px;z-index:4;top:calc(80px + env(safe-area-inset-top,0px));left:50%;width:var(--W);height:var(--H);transform-origin:top center;transform:translateX(-50%) scale(var(--win-scale))}
+#book .cw-body{flex:1;min-height:0;display:flex;flex-direction:column;padding:10px 4px 6px}
+/* pestañas: texto en versalitas con la línea celeste debajo de la activa, como el PSD */
+.bk-tabs{display:flex;justify-content:center;gap:0;margin:0 6px 8px;border-bottom:1px solid #22262b}
+.bk-tabs button{position:relative;height:30px;padding:0 22px;font:400 12px/1 "Alegreya SC",Georgia,serif;letter-spacing:.1em;text-transform:uppercase;color:#7f796a;background:none;border:0;cursor:pointer}
+.bk-tabs button:hover{color:#d9ccaa}
+.bk-tabs button[aria-selected=true]{color:#f0e6cf}
+.bk-tabs button[aria-selected=true]::after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:2px;background:linear-gradient(90deg,transparent,#6cc3f2,transparent);box-shadow:0 0 8px #3c9fe0}
+.bk-pane{flex:1;min-height:0;overflow:auto;padding:4px 8px 6px;scrollbar-width:thin;scrollbar-color:#3a3f46 #101214}
+/* lista de habilidades */
+.bk-row{display:grid;grid-template-columns:44px 1fr auto;gap:0 12px;align-items:start;padding:9px 10px;margin-bottom:6px;background:#15181c;border:1px solid #23272c;border-radius:2px;box-shadow:inset 0 0 0 1px #0a0b0d}
+.bk-row:hover{border-color:#3a3f46;background:#191d22}
+.bk-row.locked{opacity:.55}
+.bk-row.locked .bk-ic img{filter:grayscale(.8) brightness(.7)}
+.bk-ic{width:44px;height:44px;display:block;border:1px solid #3a3f46;border-radius:2px;background:#0b0d10;box-shadow:0 0 0 1px #000}
+.bk-ic img{width:100%;height:100%;display:block;object-fit:contain}
+.bk-txt{min-width:0}
+.bk-txt b{display:block;font:600 14px/1.2 "Alegreya",Georgia,serif;color:#f0e6cf}
+.bk-txt i{display:block;margin:2px 0 3px;font:400 10.5px/1.2 "Alegreya SC",Georgia,serif;letter-spacing:.04em;color:#8fd4ff}
+.bk-txt p{margin:0;font-size:12px;line-height:1.4;color:#a9a08c}
+.bk-rk{font:400 11px/1 "Alegreya SC",Georgia,serif;letter-spacing:.04em;color:#c9bfae;white-space:nowrap;padding-top:3px}
+.bk-row.locked .bk-rk{color:#e0a030}
+/* árbol de talentos: una fila por nivel, nodos con el ícono y "1/1", líneas entre filas */
+.bk-sum{margin:0 0 10px;text-align:center;font:400 11.5px/1.2 "Alegreya SC",Georgia,serif;letter-spacing:.04em;color:#a9a08c}
+.bk-tree{display:flex;flex-direction:column;align-items:stretch;padding:0 6px}
+.bk-tier{position:relative;display:grid;grid-template-columns:46px 1fr;align-items:center;gap:10px;padding:12px 0 10px}
+.bk-tier + .bk-tier .bk-nodes::before{content:"";position:absolute;left:50%;top:-24px;width:2px;height:24px;background:#2b3036;transform:translateX(-50%)}
+.bk-tier.on + .bk-tier.on .bk-nodes::before{background:#3c9fe0;box-shadow:0 0 6px #3c9fe0aa}
+.bk-lvl{font:400 11px/1 "Alegreya SC",Georgia,serif;letter-spacing:.06em;color:#7f796a;text-align:right}
+.bk-tier.on .bk-lvl{color:#8fd4ff}
+.bk-nodes{position:relative;display:flex;flex-wrap:wrap;justify-content:center;gap:16px 14px;padding:0 4px}
+.bk-node{position:relative;width:46px;height:46px;padding:0;border:1px solid #3a3f46;border-radius:2px;background:#0b0d10;box-shadow:0 0 0 1px #000;cursor:default}
+.bk-node img{width:100%;height:100%;display:block;object-fit:contain;filter:grayscale(.9) brightness(.45)}
+.bk-node.on img{filter:none}
+.bk-node.on{border-color:#7a6a3e;box-shadow:0 0 0 1px #000,0 0 10px #e0a03055}
+.bk-node.next{border-color:#3c9fe0;box-shadow:0 0 0 1px #000,0 0 10px #3c9fe0aa}
+.bk-node u{position:absolute;left:50%;bottom:-9px;transform:translateX(-50%);padding:1px 4px;font:600 9px/1 "Alegreya Sans",system-ui,sans-serif;text-decoration:none;color:#c9bfae;background:#101214;border:1px solid #3a3f46;border-radius:2px}
+.bk-node.on u{color:#8fd4ff}
+.bk-node:hover{filter:brightness(1.2)}
+.bk-note{margin:14px 6px 2px;padding-top:10px;font-size:11.5px;line-height:1.4;color:#7f796a;text-align:center;background:url(/assets/ui/craftpix/sep-h.png) 50% 0/100% 3px no-repeat}
+/* tooltip del libro (al lado de la ventana, con el fondo del pack) */
+#btip{position:fixed;z-index:6;width:250px;padding:12px 14px;pointer-events:none;color:#c9bfae;font-family:"Alegreya Sans",system-ui,sans-serif;
+  border:10px solid transparent;border-image:url(/assets/ui/craftpix/tooltip-bg.png) 10 fill/10px stretch;background:#101214;box-shadow:0 8px 24px #000c}
+#btip b{display:block;font:600 14px/1.2 "Alegreya",Georgia,serif;color:#f0e6cf}
+#btip i{display:block;margin:3px 0 6px;font:400 10.5px/1.2 "Alegreya SC",Georgia,serif;letter-spacing:.04em;color:#8fd4ff}
+#btip p{margin:0;font-size:12px;line-height:1.4;color:#a9a08c}
