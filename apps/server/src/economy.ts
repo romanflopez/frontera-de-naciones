@@ -13,7 +13,7 @@ import {
     MAPS, SHOPS, SLOTS, SRV_ATTR, TRAINING, buildMap, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statBonus, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, mobDef, sellPrice, trainingUnlocked,
     BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BASES, UP_MAX, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
-    DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
+    DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
     mainComplete, newQuestBook, repeatGold, rewardUniques, rollDailies, type QuestBook, type QuestEvent, type QuestHave, type QuestReward,
 } from '@fdn/world';
 import { RARITY_INDEX, rollMobDrop, type GeneratedItem } from './loot/itemGenerator.ts';
@@ -530,6 +530,7 @@ export class Economy {
             if (this.questEvent(p, st, { k: 'talk', role: roleOf(npc) })) { this.touch(p); this.snapshot(p); }
             return;
         }
+        if (action === 'combine') return this.combineKey(p, ctx, key); // las llaves de las mazmorras se arman en cualquier lado
         this.run(p, ctx, (st) => {
             const npc = this.near(p, ctx, npcId); if (!npc || roleOf(npc) !== 'capitan') return fail('far', 'Estás muy lejos del Capitán.');
             if (action.startsWith('m_') || action.startsWith('d_') || action === 'r_turnin') return this.questBook(p, st, action, key);
@@ -626,9 +627,26 @@ export class Economy {
         return fail('bad_action', 'Acción inválida.');
     }
 
+    /**
+     * Armar una llave de mazmorra (docs/LLAVES.md): gasta los materiales y el oro de la receta y suma la llave a los materiales.
+     * Se hace en cualquier lado (clic derecho en la bolsa), no hace falta un NPC.
+     */
+    combineKey(p: Player, ctx: EconCtx, key: string): void {
+        this.run(p, ctx, (st) => {
+            const r = KEY_RECIPES[key]; if (!r) return fail('bad_key', 'Esa llave no se arma.');
+            const mats = (st.mats ??= {});
+            const why = keyMissing(key, mats, st.gold); if (why) return fail('missing', why);
+            for (const [id, n] of Object.entries(r.mats)) mats[id] = (mats[id] ?? 0) - n;
+            addGold(st, -r.gold); mats[key] = Math.min(99, (mats[key] ?? 0) + 1);
+            return done(`Armaste una ${r.name}: abre ${r.dungeon}.`, true); // restat: la llave cuenta para las puertas
+        });
+    }
+
     /** Un portal con llave se cruzó: gasta una (el server ya validó el paso). */
     consumeKey(p: Player, key: string): void {
-        const st = p.econ; if (!st || !(key in st.q.keys)) return;
+        const st = p.econ; if (!st) return;
+        if (KEY_RECIPES[key]) { const mats = (st.mats ??= {}); mats[key] = Math.max(0, (mats[key] ?? 0) - 1); this.touch(p); this.snapshot(p); return; }
+        if (!(key in st.q.keys)) return;
         const k = key as KeyId; st.q.keys[k] = Math.max(0, st.q.keys[k] - 1);
         this.touch(p); this.snapshot(p);
     }
@@ -693,6 +711,12 @@ export class Economy {
             if (mt.tier === tier && Math.random() < mt.chance * traitDropMult(k.traits ?? 0)) { const mats = (st.mats ??= {}); mats[id] = Math.min(9999, (mats[id] ?? 0) + 1); qmats.push(mt.name); }
         }
         for (const name of qmats) p.send(M.econResult(true, 'quest_mat', `Conseguiste un ${name}.`));
+        // llave que suelta el jefe (la gastada de D1): una para cada uno, solo si muere en su piso de la mazmorra
+        const keyDrop = boss ? BOSS_KEY_DROPS[k.type] : undefined;
+        if (keyDrop && DUNGEON_IDS.some((d) => DUNGEON_BOSS[d] === k.type && k.map === DUNGEON_MAP[d])) {
+            const mats = (st.mats ??= {}); mats[keyDrop] = Math.min(99, (mats[keyDrop] ?? 0) + 1);
+            p.send(M.econResult(true, 'quest_mat', `Conseguiste una ${keyMatName(keyDrop)}.`));
+        }
         this.questEvent(p, st, { k: 'kill', type: k.type, map: k.map ?? '', pit: k.origin === 'pit', tier, myTier: tierOfLevel(st.lvl), mutant: ((k.traits ?? 0) & TRAIT_MUTANT) !== 0 });
         // el dungeon cuenta solo si el jefe muere en su piso (la instancia de la party), no si aparece en otro mapa
         if (boss) for (const d of DUNGEON_IDS) if (DUNGEON_BOSS[d] === k.type && k.map === DUNGEON_MAP[d]) this.questEvent(p, st, { k: 'dungeon', d });

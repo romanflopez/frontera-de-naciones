@@ -10,6 +10,7 @@
 import type { Prop, WorldMap, Zone } from '../index';
 import type { MapDef, Link } from '../maps';
 import type { MobType } from '../mobs';
+import { DUNGEON_ENTRY_KEYS } from '../quests';
 import { flareTile, type FlareMapData } from './types';
 import { DATA as SALTED_FIELD } from './salted_field';
 import { DATA as STONEWOOD } from './stonewood';
@@ -130,6 +131,8 @@ export function flareMaps(hub: { map: string; to: Cell }): Record<string, MapDef
     const out: Record<string, MapDef> = {};
     for (const d of FLARE_DATA) {
         const links = flareLinks(d);
+        // puertas con llave (docs/LLAVES.md): la entrada desde la superficie al primer piso pide la llave de esa mazmorra
+        if (!d.dungeon) for (const l of links) { const k = DUNGEON_ENTRY_KEYS[l.to.map]; if (k) l.gate = { ...(l.gate ?? {}), key: k }; }
         if (d === FLARE_FIRST) links.push({ id: 'campos_a_ciudad', map: d.eris, ...FLARE_BACK, to: { map: hub.map, ...hub.to }, kind: 'portal', msg: 'Cruzás el portal de vuelta a la ciudad.' });
         const def: MapDef = {
             id: d.eris, name: d.name, region: d.region, size: d.size, lvl: d.lvl, tier: d.tier, pvp: d.pvp, safe: false,
