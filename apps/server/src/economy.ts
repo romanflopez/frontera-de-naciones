@@ -10,13 +10,12 @@
  */
 import {
     ATTR_RANGES, traitExpMult, traitDropMult, BAG_MAX, BASE_BY_NAME, BASES, KEY_IDS, KEYDEFS, POT_MAX, POTS, QUESTS, roleOf, SHARDS_PER_KEY, SHOP_SERVER_RANGE,
-    MAPS, SHOPS, SLOTS, SRV_ATTR, TRAINING, buildMap, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statBonus, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, mobDef, sellPrice, trainingUnlocked,
+    SHOPS, SLOTS, TRAINING, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statBonus, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, sellPrice, trainingUnlocked,
     BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BASES, UP_MAX, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, tierOfLvl, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
-    DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
+    DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, junkValue, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
     mainComplete, newQuestBook, repeatGold, rewardUniques, rollDailies, type QuestBook, type QuestEvent, type QuestHave, type QuestReward,
 } from '@fdn/world';
-import { RARITY_INDEX, rollMobDrop, type GeneratedItem } from './loot/itemGenerator.ts';
 import { canPickup, GROUND_MAX_PER_OWNER, PICKUP_RANGE, type GroundApi } from './ground.ts';
 import * as M from './messages.ts';
 import type { Player } from './player.ts';
@@ -68,27 +67,11 @@ const clampInt = (v: unknown, lo: number, hi: number, def = lo): number => (type
 const rint = (a: number, b: number) => a + Math.floor(Math.random() * (b - a + 1));
 const emptyEq = (): Record<Slot, SItem | null> => ({ arma: null, armadura: null, cabeza: null, anillo: null });
 
-// ---------- rangos válidos de atributos (los mismos que usa el generador de botín) ----------
-let lootLvl = 0;
-/** Nivel más alto de mob del juego, en todos los mapas (los bosses dan botín a nivel+2 en el cálculo viejo del cliente). */
-function maxLootLvl(): number {
-    if (lootLvl) return lootLvl;
-    let l = 1; for (const id of Object.keys(MAPS)) for (const z of buildMap(id).zones) l = Math.max(l, mobDef(z.type, z).lvl);
-    return (lootLvl = l);
-}
-/** Valor máximo que el generador puede dar a un atributo (cualquiera de las dos fórmulas: la del server y la vieja del cliente). */
-export function attrCap(id: AttrId): number {
-    const L = maxLootLvl(), client = ATTR_RANGES[id][1] * (1 + (L + 2 - 1) * 0.2);
-    const srv = 10 * (1 + L * 0.2) * 1.6, srvScaled = id === 'df' || id === 'rm' ? Math.min(30, srv * 0.6) : srv;
-    return Math.ceil(Math.max(client, srvScaled));
-}
-
 // ---------- items ----------
 function newItem(st: Econ, base: string, r: number, a: SItem['a']): SItem { return { u: st.nextUid++, n: base, r, a }; }
 
 /** Probabilidades de botín de los mobs de bandas con ítems únicos (docs/ITEMS.md §5). El resto del tiempo cae oro. */
 export const UNIQUE_CHANCE = { loose: 0.005, pit: 0.015, dungeon: 0.04 };
-export const COMMON_CHANCE = 0.06;
 /** Piedras de forja: chance por muerte según el origen del mob, y cantidad que suelta un jefe. */
 export const FORGE_CHANCE = { loose: 0.05, pit: 0.08, dungeon: 0.18 };
 export const FORGE_BOSS: [number, number] = [3, 5];
@@ -100,17 +83,6 @@ const pick = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
 export function uniqueItem(st: Econ, u: UniqueBase): SItem {
     const a = u.uniq.attrs.map(([id, v]) => ({ id, v: Math.max(1, Math.round(v * (1 + (Math.random() * 2 - 1) * UNIQUE_VARIATION))) }));
     return newItem(st, u.name, u.uniq.boss ? 3 : 2, a);
-}
-
-/** Item que sale del generador de botín del server (rareza + atributos + semilla de base). */
-export function itemFromRoll(st: Econ, gen: GeneratedItem): SItem {
-    const base = BASES[gen.baseSeed % BASES.length], attrs: SItem['a'] = [];
-    for (const a of gen.attributes) { // la defensa y la RM del generador vienen en la escala vieja (%): se bajan a la escala DF/RM
-        const id = SRV_ATTR[a.key]; if (!id) continue;
-        const v = id === 'df' || id === 'rm' ? Math.min(30, Math.max(1, Math.round(a.value * 0.6))) : Math.max(1, Math.round(a.value));
-        const dup = attrs.find((x) => x.id === id); if (dup) dup.v += v; else attrs.push({ id, v });
-    }
-    return newItem(st, base.name, RARITY_INDEX[gen.rarity], attrs);
 }
 
 /** Valida un item que dice tener el cliente (solo para la importación única). Devuelve null si la base no existe. */
@@ -131,14 +103,16 @@ function cleanImportItem(st: Econ, v: unknown, clipped: string[], trusted = fals
         if (r !== 0) clipped.push(`${base.name}: rareza ${r} -> 0`);
         return newItem(st, base.name, 0, a);
     }
-    for (const x of Array.isArray(o.a) ? o.a : []) {
-        if (!trusted && a.length >= r) { clipped.push(`${base.name}: atributo de más`); break; }
+    if (!trusted) { // bases comunes: el botín viejo con rareza y atributos al azar se eliminó → entran como ítem normal pelado
+        if (r !== 0 || (Array.isArray(o.a) && o.a.length)) clipped.push(`${base.name}: botín viejo -> normal sin atributos`);
+        return newItem(st, base.name, 0, []);
+    }
+    for (const x of Array.isArray(o.a) ? o.a : []) { // GM: se acepta lo que diga
         const e = (x ?? {}) as Record<string, unknown>;
         const id = (e.id === 'fres' || e.id === 'ires' ? 'rm' : e.id) as AttrId;
         if (typeof id !== 'string' || !(id in ATTR_RANGES)) continue;
-        const raw = clampInt(e.v, 1, 1e6), cap = trusted ? 1e6 : attrCap(id), val = Math.min(raw, cap);
-        if (raw > cap) clipped.push(`${base.name}: ${id} ${raw} -> ${cap}`);
-        const dup = a.find((y) => y.id === id); if (dup) dup.v = Math.min(cap, dup.v + val); else a.push({ id, v: val });
+        const val = clampInt(e.v, 1, 1e6);
+        const dup = a.find((y) => y.id === id); if (dup) dup.v += val; else a.push({ id, v: val });
     }
     return newItem(st, base.name, r, a);
 }
@@ -410,6 +384,16 @@ export class Economy {
             if (p.isDead) return fail('dead', 'Estás muerto.');
             const npc = this.near(p, ctx, npcId); if (!npc) return fail('far', 'Estás muy lejos del vendedor.');
             if (!SHOPS[roleOf(npc)]?.stock.length) return fail('no_shop', 'Ese NPC no compra.');
+            if (uid === 0) { // "vender basura": toda la basura de mobs (JUNK_MATS y trofeos) de una, a su valor de lista
+                let g = 0, n = 0;
+                for (const [id, q] of Object.entries(st.mats ?? {})) {
+                    const v = junkValue(id); if (!(v > 0) || !(q > 0)) continue;
+                    g += v * q; n += q; delete st.mats![id];
+                }
+                if (!n) return fail('no_junk', 'No tenés basura para vender.');
+                addGold(st, g);
+                return done(`Vendiste ${n} material${n > 1 ? 'es' : ''} por ${g} de oro.`);
+            }
             const i = st.bag.findIndex((x) => x.u === uid); if (i < 0) return fail('no_item', 'No tenés ese item.');
             const it = st.bag[i], g = sellPrice(it.n, it.r);
             st.bag.splice(i, 1); addGold(st, g); // se saca primero y recién ahí se cobra: un segundo pedido por el mismo uid ya no lo encuentra
@@ -685,17 +669,18 @@ export class Economy {
         let gold = 0, item: SItem | undefined, bagFull = false, potion = '', shard = '';
         const bossU = boss ? BOSS_UNIQUES[k.type] : undefined, tier = tierOfLevel(def.lvl), dm = statBonus(st.stats).dropMult * traitDropMult(k.traits ?? 0); // Suerte y mutante
         if (boss) {
-            // los jefes de mazmorra con ítems propios sueltan uno de ellos (siempre); los demás, el botín de siempre
-            item = bossU ? uniqueItem(st, pick(bossU)) : itemFromRoll(st, rollMobDrop(def.lvl, boss.minRar)); gold = rint(boss.gold[0], boss.gold[1]);
-        } else if (tier <= UNIQUE_TIERS_READY) {
-            // bandas con ítems únicos: casi siempre oro; a veces un ítem común y, con poca chance, un único de la banda (más en pits y mazmorras)
-            // la Suerte sube la chance de cada botín (+0,1 % por punto sobre 10)
-            const r = Math.random(), uc = UNIQUE_CHANCE[k.origin ?? 'pit'] * dm, cc = COMMON_CHANCE * dm, gc = GOLD_CHANCE * dm;
+            // los jefes de mazmorra con ítems propios sueltan uno de ellos (siempre); los jefes de mundo, un único de su banda
+            // (si la banda todavía no tiene únicos, el doble de oro hasta que exista el catálogo T4+)
+            item = bossU ? uniqueItem(st, pick(bossU)) : UNIQUES_BY_TIER[tier] ? uniqueItem(st, pick(UNIQUES_BY_TIER[tier])) : undefined;
+            gold = rint(boss.gold[0], boss.gold[1]) * (!item ? 2 : 1);
+        } else {
+            // El ítem solo cae como único de la banda, con poca chance (más en pits y mazmorras); el resto del tiempo, oro.
+            // El botín viejo con rareza al azar se eliminó (docs/ITEMS.md): los "comunes" son la basura vendible del suelo (systems/loot.ts).
+            // La Suerte sube la chance de cada botín (+0,1 % por punto sobre 10).
+            const r = Math.random(), uc = tier <= UNIQUE_TIERS_READY ? UNIQUE_CHANCE[k.origin ?? 'pit'] * dm : 0, gc = GOLD_CHANCE * dm;
             if (r < uc) item = uniqueItem(st, pick(UNIQUES_BY_TIER[tier]));
-            else if (r < uc + cc) item = itemFromRoll(st, { rarity: 'comun', attributes: [], baseSeed: Math.floor(Math.random() * 1_000_000) });
-            else if (r < uc + cc + gc) gold = rint(3, 8) * def.lvl;
-        } else if (Math.random() < Math.min(0.95, 0.62 * dm)) item = itemFromRoll(st, rollMobDrop(def.lvl, 0));
-        else gold = rint(3, 8) * def.lvl;
+            else if (r < uc + gc) gold = rint(3, 8) * def.lvl;
+        }
         if (gold) addGold(st, gold);
         if (item) {
             if (st.bag.length < BAG_MAX) st.bag.push(item);

@@ -4,7 +4,7 @@
  * El ClientPickupItem se valida (existe, a ≤ 1,5 celdas, vivo); si vale se borra, se suma a la cuenta y se avisa a todos con ServerItemPickedUp.
  * Aparte del botín de items de la economía (ground.ts / Economy.reward): esto son materiales apilables y montoncitos de oro.
  */
-import type { MobType } from '@fdn/world';
+import { JUNK_MATS, type MobType } from '@fdn/world';
 
 /** Distancia máxima (celdas) para levantar. */
 export const LOOT_PICKUP_RANGE = 1.5;
@@ -17,19 +17,21 @@ const GOLD_SHARE = 0.3;
 
 export interface LootEntry { lootId: string; x: number; y: number; itemId: string; itemName: string; amount: number; expiresAt: number }
 
-/** Material por tipo de mob; el resto cae como trofeo genérico. */
-const MATERIALS: Partial<Record<MobType, { id: string; name: string }>> = {
-    goblin: { id: 'goblin_ear', name: 'Oreja de goblin' }, goblin_elite: { id: 'goblin_ear', name: 'Oreja de goblin' },
-    hobgoblin: { id: 'goblin_ear', name: 'Oreja de goblin' }, hobgoblin_archer: { id: 'goblin_ear', name: 'Oreja de goblin' },
-    zombie: { id: 'rotten_flesh', name: 'Carne podrida' }, zombie_dark: { id: 'rotten_flesh', name: 'Carne podrida' },
-    skeleton: { id: 'old_bone', name: 'Hueso viejo' }, skeleton_mage: { id: 'old_bone', name: 'Hueso viejo' }, skeleton_archer: { id: 'old_bone', name: 'Hueso viejo' },
-    antlion: { id: 'chitin', name: 'Quitina' }, antlion_small: { id: 'chitin', name: 'Quitina' }, fire_ant: { id: 'chitin', name: 'Quitina' }, ice_ant: { id: 'chitin', name: 'Quitina' },
-    arana: { id: 'spider_silk', name: 'Seda de araña' },
-    wyvern: { id: 'viper_skin', name: 'Viper Skin' }, wyvern_fire: { id: 'viper_skin', name: 'Viper Skin' }, wyvern_ice: { id: 'viper_skin', name: 'Viper Skin' },
-    golem: { id: 'stone_core', name: 'Núcleo de piedra' }, minotaur: { id: 'minotaur_horn', name: 'Cuerno de minotauro' },
-    demonio: { id: 'demon_ash', name: 'Ceniza demoníaca' },
+/** Material (basura vendible) por tipo de mob; nombres y valores en JUNK_MATS (@fdn/world). El resto cae como trofeo genérico. */
+const MATERIALS: Partial<Record<MobType, string>> = {
+    goblin: 'goblin_ear', goblin_elite: 'goblin_ear', hobgoblin: 'goblin_ear', hobgoblin_archer: 'goblin_ear',
+    zombie: 'rotten_flesh', zombie_dark: 'rotten_flesh',
+    skeleton: 'old_bone', skeleton_mage: 'old_bone', skeleton_archer: 'old_bone',
+    antlion: 'chitin', antlion_small: 'chitin', fire_ant: 'chitin', ice_ant: 'chitin',
+    arana: 'spider_silk',
+    wyvern: 'viper_skin', wyvern_fire: 'viper_skin', wyvern_ice: 'viper_skin',
+    golem: 'stone_core', minotaur: 'minotaur_horn',
+    demonio: 'demon_ash',
 };
-export const materialOf = (type: MobType, name: string) => MATERIALS[type] ?? { id: `trophy_${type}`, name: `Trofeo de ${name}` };
+export const materialOf = (type: MobType, name: string): { id: string; name: string } => {
+    const id = MATERIALS[type];
+    return id ? { id, name: JUNK_MATS[id].name } : { id: `trophy_${type}`, name: `Trofeo de ${name}` };
+};
 
 export interface LootRoll { itemId: string; itemName: string; amount: number }
 /** Tirada al morir un mob: null = no cae nada. */

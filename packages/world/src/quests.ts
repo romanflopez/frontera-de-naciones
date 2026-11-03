@@ -64,8 +64,27 @@ export function keyMissing(key: string, mats: Record<string, number>, gold: numb
     if (gold < r.gold) falta.push(`${r.gold - gold} de oro`);
     return falta.length ? `Te falta: ${falta.join(', ')}.` : null;
 }
-/** Nombre de una llave o material de llave (para los avisos de las puertas). */
-export const keyMatName = (id: string): string => KEY_MAT_NAMES[id] ?? QUEST_MATS[id]?.name ?? id;
+/**
+ * Basura vendible por tipo de mob (el botín del suelo de systems/loot.ts, estilo junkloot de Dreadmyst): se vende
+ * al NPC con `uid: 0` en EconSellRequest ("vender basura"). Reemplaza a los ítems "comunes" del botín viejo (docs/ITEMS.md).
+ * La clave es el id del material; `value` es el oro que paga el vendedor por unidad.
+ */
+export const JUNK_MATS: Record<string, { name: string; value: number }> = {
+    goblin_ear: { name: 'Oreja de goblin', value: 4 },
+    rotten_flesh: { name: 'Carne podrida', value: 4 },
+    old_bone: { name: 'Hueso viejo', value: 5 },
+    chitin: { name: 'Quitina', value: 6 },
+    spider_silk: { name: 'Seda de araña', value: 8 },
+    viper_skin: { name: 'Piel de wyvern', value: 10 },
+    stone_core: { name: 'Núcleo de piedra', value: 10 },
+    minotaur_horn: { name: 'Cuerno de minotauro', value: 10 },
+    demon_ash: { name: 'Ceniza demoníaca', value: 12 },
+};
+/** Valor de venta de un material de basura (los trofeos genéricos `trophy_*` valen 3). */
+export const junkValue = (id: string): number => JUNK_MATS[id]?.value ?? (id.startsWith('trophy_') ? 3 : 0);
+
+/** Nombre de una llave, material de llave o basura (para los avisos y la bolsa). */
+export const keyMatName = (id: string): string => KEY_MAT_NAMES[id] ?? QUEST_MATS[id]?.name ?? JUNK_MATS[id]?.name ?? id;
 
 /** Materiales que no se aceptan en la repetible: son de las llaves. */
 export const RESERVED_MATS = new Set([...Object.keys(QUEST_MATS), ...Object.keys(KEY_RECIPES), MAT_LLAVE_GASTADA]);
