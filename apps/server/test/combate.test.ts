@@ -30,8 +30,8 @@ function setup(combat: CombatStats, at = { x: 14, y: 20 }, type: MobType = 'gobl
         heal: (_p, n) => { heals.push(n); },
     };
     const sim = new MobSim(map, host);
-    const raw = [...(sim as unknown as { mobs: Map<number, { hp: number; hpMax: number; par: number; imm: number; poison: number }> }).mobs.values()][0];
-    raw.hp = raw.hpMax = 1e9; // el mob no se muere en medio de la prueba
+    const raw = [...(sim as unknown as { mobs: Map<number, { hp: number; hpMax: number; par: number; imm: number; poison: number; traits: number }> }).mobs.values()][0];
+    raw.traits = 0; raw.hp = raw.hpMax = 1e9; // sin rasgos al azar (anti-magia partía el daño) y sin que se muera en medio de la prueba
     const id = sim.list()[0].id;
     const hit = (spell: string, extra: Record<string, unknown> = {}) => sim.hit(p, { mobId: id, dmg: 0, melee: spell === 'ataque', crit: false, parSecs: 0, poisonSecs: 0, spell, ...extra });
     const hits = () => sent.filter((m) => m.payload?.$case === 'mobDamaged').map((m) => (m.payload as { value: { dmg: number; crit: boolean } }).value);
