@@ -22,7 +22,7 @@ import type { Economy, EconCtx } from './economy.ts';
 import { auctionHouse } from './auction.ts';
 import { depotService } from './deposit.ts';
 import { canPickup, GroundLoot, type GroundApi } from './ground.ts';
-import { LootManager, rollLoot } from './systems/loot.ts';
+import { LootManager, rollLoot, splitLoot } from './systems/loot.ts';
 
 interface Timer { at: number; fn: () => void }
 
@@ -100,7 +100,7 @@ export class GameWorld {
                     if (f && (f.x !== p.posX || f.y !== p.posY)) { this.moveTo(p, p.posX, p.posY, f.x, f.y, false, true); p.send(M.playerTeleported(f.x, f.y)); }
                 },
                 dispel: (p) => { clearBuffs(p.status); if (p.status.statDirty) { p.status.statDirty = false; this.restat(p); } this.announceStatus(p); this.sendVitals(p, true); },
-                mobDied: (info) => { if (!info.gm) this.dropLoot(info.type, info.def.name, info.def.lvl, info.x, info.y); },
+                mobDied: (info) => { if (!info.gm) this.dropLoot(info.type, info.def.name, info.def.lvl, info.x, info.y, info.killer); },
                 reward: (p, info) => {
                     if (!this.econ) return;
                     // party: cada compañero cerca (mismo mundo, vivo) recibe su propio botín y una parte de la exp (docs/PARTY_Y_ARENAS.md §1)
@@ -1156,21 +1156,40 @@ export class GameWorld {
     }
     /** Le saca vida a un jugador: DF (físico) o RM (mágico) del server, daño × 100/(100+X); si llega a 0 muere. Devuelve el daño aplicado. */
     /** Tirada de botín de suelo al morir un mob: si cae algo, lo ven en el acto los jugadores cercanos. */
-    private dropLoot(type: MobType, name: string, lvl: number, x: number, y: number): void {
+    private dropLoot(type: MobType, name: string, lvl: number, x: number, y: number, killer?: Player): void {
         const r = rollLoot(type, name, lvl); if (!r) return;
-        const e = this.floorLoot.spawn(x, y, r), m = M.lootSpawn(e);
+        // [DM] sin "ninjas": durante LOOT_OWNED_MS solo lo levanta la party del que lo mató (los que estaban cerca)
+        const owners = killer && !killer.disconnected ? this.partyInRange(killer).map((m) => m.sessionId) : [];
+        const e = this.floorLoot.spawn(x, y, r, owners), m = M.lootSpawn(e);
         for (const o of this.nearbyPlayers(e.x, e.y)) { this.floorLoot.markSeen(o.sessionId, e.lootId); o.send(m); }
     }
-    /** ClientPickupItem: vivo, a ≤ 1,5 celdas y que siga ahí. Lo levanta, lo suma a la cuenta y avisa a los que lo ven y a la party. */
+    /**
+     * ClientPickupItem: vivo, a ≤ 1,5 celdas, que siga ahí y que no sea todavía de otra party. [DM] Lo que levanta alguien de una
+     * party se reparte solo entre los compañeros vivos cerca del que lo levantó: el oro en partes iguales y el material, a uno al azar.
+     */
     private pickupLoot(p: Player, lootId: string): void {
         if (p.isDead || !this.econ) return;
         const viewers = this.floorLoot.viewersOf(lootId);
-        const r = this.floorLoot.pickup(lootId, p.posX, p.posY);
-        if (!r.ok) { if (r.reason === 'far') p.send(M.sendMessage('Estás muy lejos para levantarlo.')); return; }
-        const e = r.loot;
-        const lvl0 = p.econ?.lvl; this.econ.addLoot(p, e.itemId, e.amount);
-        if (p.econ && p.econ.lvl !== lvl0) this.restat(p); // un encargo del día cobrado al levantar puede subir de nivel
-        const m = M.itemPickedUp(e.lootId, M.pid(p.playerId), e.itemName, e.amount, p.characterName), to = new Set([p.sessionId, ...viewers, ...this.nearbyPlayers(e.x, e.y).map((o) => o.sessionId), ...partyMates(p.sessionId)]);
+        const r = this.floorLoot.pickup(lootId, p.posX, p.posY, p.sessionId);
+        if (!r.ok) {
+            if (r.reason === 'far') p.send(M.sendMessage('Estás muy lejos para levantarlo.'));
+            else if (r.reason === 'locked') p.send(M.sendMessage('Ese botín es de la party que mató al monstruo. En unos segundos queda libre.'));
+            return;
+        }
+        const e = r.loot, mates = this.partyInRange(p).filter((m) => !m.isDead);
+        const shares = splitLoot(e.itemId, e.amount, mates.length);
+        for (const { i, amount } of shares) {
+            const m = mates[i], lvl0 = m.econ?.lvl; this.econ.addLoot(m, e.itemId, amount);
+            if (m.econ && m.econ.lvl !== lvl0) this.restat(m); // un encargo del día cobrado al levantar puede subir de nivel
+        }
+        if (mates.length > 1) { // el aviso del reparto, a cada compañero que entró
+            const text = e.itemId === 'gold'
+                ? `Reparto de la party: ${e.amount} de oro entre ${mates.length} (${shares.map((x) => `${mates[x.i].characterName} ${x.amount}`).join(', ')}).`
+                : `Reparto de la party: ${e.itemName} le tocó a ${mates[shares[0].i].characterName}.`;
+            for (const m of mates) m.send(M.sendMessage(text));
+        }
+        // avisos de botín: a los que lo veían, a los cercanos y a la party solo si está cerca (en Dreadmyst llegaban desde cualquier distancia)
+        const m = M.itemPickedUp(e.lootId, M.pid(p.playerId), e.itemName, e.amount, p.characterName), to = new Set([p.sessionId, ...viewers, ...this.nearbyPlayers(e.x, e.y).map((o) => o.sessionId), ...this.partyInRange(p).map((o) => o.sessionId)]);
         for (const sid of to) this.players.get(sid)?.send(m);
     }
     /** Número flotante (daño o cura) para el objetivo y todos los que lo ven. */
