@@ -161,6 +161,8 @@ export function farm(cls: Cls, lvl: number, secs: number, seed: number, travel: 
             const t0 = clock;
             while ((c.hp < s.maxHp * 0.9 || c.mp < s.maxMp * (needMp ? 0.8 : 0)) && clock - t0 < 600) {
                 if (c.hp < s.maxHp * 0.5 && -c.potAt >= POTION_LOCK_PVE_MS / 1000) { c.hp = Math.min(s.maxHp, c.hp + potionHp(s.maxHp)); c.potAt = 0; pots++; }
+                // Segundo aliento parado (como el Sleep de Dreadmyst: 40 % de vida y maná cada 3 min fuera de combate)
+                if (-c.windAt >= SECOND_WIND.cdMs / 1000) { pass(SECOND_WIND.castMs / 1000, true); c.hp = Math.min(s.maxHp, c.hp + s.maxHp * SECOND_WIND.hp); c.mp = Math.min(s.maxMp, c.mp + s.maxMp * SECOND_WIND.mp); c.windAt = 0; continue; }
                 pass(0.5, true);
             }
             rest += clock - t0;
