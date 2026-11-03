@@ -20,18 +20,18 @@ import { BOSS_UNIQUES, UNIQUES_BY_TIER, type UniqueBase } from './uniques';
 export const MAT_COLMILLO = 'colmillo';
 /** Esencia: 3 % en los pits T2 (nivel 6-10) o 1 por día con el primer encargo entregado. Va en la llave del nido (D2). */
 export const MAT_ESENCIA = 'esencia';
-/** Materiales de las llaves de D3 a D6: 4 % en los pits de su tramo (8 ≈ 200 kills; el encargo del día devuelve una llave, así las 2 primeras corridas salen ~100 cada una). */
+/** Materiales de las llaves de D3 a D6: 8 % en los pits de su tramo (8 ≈ 100 kills, parecido a lo que dura la corrida; el encargo del día devuelve una llave, así las 2 primeras salen ~50 cada una). */
 export const MAT_HUESO = 'hueso_antiguo', MAT_TINTA = 'tinta_arcana', MAT_PLUMA = 'pluma_tormenta', MAT_BRASA = 'brasa_infernal';
-/** Material de la llave de D7: 4 % en los pits del T7 (nivel 31-40). */
+/** Material de la llave de D7: 8 % en los pits del T7 (nivel 31-40). */
 export const MAT_ESLABON = 'eslabon_maldito';
 export const QUEST_MATS: Record<string, { name: string; tier: number; chance: number }> = {
     [MAT_COLMILLO]: { name: 'Colmillo', tier: 1, chance: 0.08 },
     [MAT_ESENCIA]: { name: 'Esencia', tier: 2, chance: 0.03 },
-    [MAT_HUESO]: { name: 'Hueso antiguo', tier: 3, chance: 0.04 },
-    [MAT_TINTA]: { name: 'Tinta arcana', tier: 4, chance: 0.04 },
-    [MAT_PLUMA]: { name: 'Pluma de tormenta', tier: 5, chance: 0.04 },
-    [MAT_BRASA]: { name: 'Brasa infernal', tier: 6, chance: 0.04 },
-    [MAT_ESLABON]: { name: 'Eslabón maldito', tier: 7, chance: 0.04 },
+    [MAT_HUESO]: { name: 'Hueso antiguo', tier: 3, chance: 0.08 },
+    [MAT_TINTA]: { name: 'Tinta arcana', tier: 4, chance: 0.08 },
+    [MAT_PLUMA]: { name: 'Pluma de tormenta', tier: 5, chance: 0.08 },
+    [MAT_BRASA]: { name: 'Brasa infernal', tier: 6, chance: 0.08 },
+    [MAT_ESLABON]: { name: 'Eslabón maldito', tier: 7, chance: 0.08 },
 };
 // ---------- llaves de las mazmorras (docs/LLAVES.md) ----------
 /** Llave de la cueva (D1), llave gastada (la suelta el jefe de D1, una por jugador) y llave del nido (D2). Viven en los materiales del personaje. */
