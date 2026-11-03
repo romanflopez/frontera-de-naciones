@@ -60,7 +60,7 @@ const PIT_RESPAWN = 10, LOOSE_RESPAWN = 22;
 /**
  * Densidad de las mazmorras del corte (docs/MAZMORRAS.md): sin reaparición, los pisos de Flare traían demasiados mobs (D1 75, D2 141).
  * Primera pasada automática: se queda uno de cada `every` packs (en orden), con `n` mobs cada uno, y se sacan los sueltos. El jefe no se toca.
- * Queda D1 ≈ 25 y D2 ≈ 40, como en `mecanicas-de-jefe.md` §2, y D3-D6 en 49, 49, 55 y 55. La ubicación fina de packs y élites se hace a mano sobre el mapa.
+ * Queda D1 ≈ 25 y D2 ≈ 40, como en `mecanicas-de-jefe.md` §2, D3-D6 en 49, 49, 55 y 55 y D7 en 58. La ubicación fina de packs y élites se hace a mano sobre el mapa.
  */
 export const DUNGEON_DENSITY: Record<string, { every: number; n: number }> = {
     cueva_goblin: { every: 2, n: 2 }, minas_goblin: { every: 2, n: 2 },
@@ -70,8 +70,8 @@ export const DUNGEON_DENSITY: Record<string, { every: number; n: number }> = {
     torre_del_hechicero: { every: 3, n: 3 }, camaras_de_investigacion: { every: 3, n: 3 },
     templo_de_mez: { every: 2, n: 3 }, salon_de_mez: { every: 2, n: 3 },
     fortaleza_infernal: { every: 2, n: 3 }, foso_del_demonio: { every: 2, n: 3 },
-    // D7 (el tope): la mazmorra más cargada
-    fuerte_amir: { every: 2, n: 3 }, camaras_de_tortura: { every: 2, n: 3 },
+    // D7 (el tope): la mazmorra más cargada, 58 con packs de 4 (con 3 quedaba en 52, debajo de D5 y D6)
+    fuerte_amir: { every: 2, n: 4 }, camaras_de_tortura: { every: 2, n: 4 },
 };
 function thinZones<T extends { kind: string; n: number }>(eris: string, zones: T[]): T[] {
     const k = DUNGEON_DENSITY[eris]; if (!k) return zones;

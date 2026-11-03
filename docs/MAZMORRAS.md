@@ -58,9 +58,8 @@ Rombo dorado sobre la cabeza, nombre "Élite …" en dorado y su barra de vida s
 
 ## Densidad
 
-Primera pasada automática (`DUNGEON_DENSITY` en `packages/world/src/flare/index.ts`): **D1 25, D2 40, D3 49, D4 49, D5 55 y D6 55** mobs, sin sueltos y con el jefe intacto. La ubicación fina de packs a mano sobre el mapa queda como ajuste.
+Primera pasada automática (`DUNGEON_DENSITY` en `packages/world/src/flare/index.ts`): **D1 25, D2 40, D3 49, D4 49, D5 55, D6 55 y D7 58** mobs (D7 con packs de 4), sin sueltos y con el jefe intacto. La ubicación fina de packs a mano sobre el mapa queda como ajuste.
 
 ## Pendiente
 
 - La exp y el botín de cada mob no se escalan por party: hoy un jugador solo gana más exp por minuto que un trío. Se mira en la prueba.
-- D7 (falta el mapa).
