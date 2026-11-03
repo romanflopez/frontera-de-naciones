@@ -3,6 +3,7 @@
  * con las mismas fórmulas del juego, el nivel y el equipo del último guardado validado, la Furia que lleva el server,
  * y límites de recarga, alcance y ritmo por hechizo.
  */
+import { KEY_RECIPES } from '@fdn/world';
 import { hasBuff, type BuffId, type CharacterStatus } from './statusSystem.ts';
 import { isClass, type ClassId, BASE_BY_NAME, CRIT_BASE, MAX_LEVEL, aspdTotal, critTotal, leechTotal, meleeIntervalSecs, statBonus, upMult, type Stats } from '@fdn/world';
 export type Stat = 'mag' | 'wdmg' | 'melee';
@@ -217,8 +218,12 @@ export function statsFromChar(o: StatSource | undefined, uncapCrit = false): Com
 }
 
 /** Progreso para los portales (del estado del server) */
-export function progressFromEcon(st: { lvl: number; q: { i: number; keys: Record<string, number> }; u: string[] } | undefined): { qi: number; lvl: number; keys: Record<string, number>; unlocked: string[] } {
-    return st ? { qi: st.q.i, lvl: st.lvl, keys: { ...st.q.keys }, unlocked: [...st.u] } : { qi: 0, lvl: 1, keys: {}, unlocked: [] };
+export function progressFromEcon(st: { lvl: number; q: { i: number; keys: Record<string, number> }; u: string[]; mats?: Record<string, number> } | undefined): { qi: number; lvl: number; keys: Record<string, number>; unlocked: string[] } {
+    if (!st) return { qi: 0, lvl: 1, keys: {}, unlocked: [] };
+    // las llaves de las mazmorras del corte viven en los materiales (docs/LLAVES.md)
+    const keys: Record<string, number> = { ...st.q.keys };
+    for (const k of Object.keys(KEY_RECIPES)) if (st.mats?.[k]) keys[k] = st.mats[k];
+    return { qi: st.q.i, lvl: st.lvl, keys, unlocked: [...st.u] };
 }
 
 /** Mitigación con rendimiento decreciente: daño × 100 / (100 + X), con X = DF (físico) o RM (mágico). Mínimo 1. */

@@ -24,8 +24,32 @@ export const QUEST_MATS: Record<string, { name: string; tier: number; chance: nu
     [MAT_COLMILLO]: { name: 'Colmillo', tier: 1, chance: 0.08 },
     [MAT_ESENCIA]: { name: 'Esencia', tier: 2, chance: 0.03 },
 };
+// ---------- llaves de las mazmorras (docs/LLAVES.md) ----------
+/** Llave de la cueva (D1), llave gastada (la suelta el jefe de D1, una por jugador) y llave del nido (D2). Viven en los materiales del personaje. */
+export const MAT_LLAVE_CUEVA = 'llave_cueva', MAT_LLAVE_GASTADA = 'llave_gastada', MAT_LLAVE_NIDO = 'llave_nido';
+/** Receta de cada llave: materiales + oro. Se arma en cualquier lado (clic derecho sobre la llave o el material en la bolsa). */
+export const KEY_RECIPES: Record<string, { name: string; dungeon: string; mats: Record<string, number>; gold: number }> = {
+    [MAT_LLAVE_CUEVA]: { name: 'Llave de la cueva', dungeon: 'la Cueva goblin', mats: { [MAT_COLMILLO]: 8 }, gold: 60 },
+    [MAT_LLAVE_NIDO]: { name: 'Llave del nido', dungeon: 'el Nido de hormiga león', mats: { [MAT_LLAVE_GASTADA]: 1, [MAT_ESENCIA]: 1 }, gold: 120 },
+};
+export const KEY_MAT_NAMES: Record<string, string> = { [MAT_LLAVE_CUEVA]: 'Llave de la cueva', [MAT_LLAVE_GASTADA]: 'Llave gastada', [MAT_LLAVE_NIDO]: 'Llave del nido' };
+/** Qué jefe suelta qué llave (al 100 %, una para cada jugador que lo mata o está cerca en la party). */
+export const BOSS_KEY_DROPS: Partial<Record<MobType, string>> = { goblin_jefe: MAT_LLAVE_GASTADA };
+/** Puerta de entrada (desde la superficie) de cada mazmorra con llave: el mapa del primer piso → la llave que pide. */
+export const DUNGEON_ENTRY_KEYS: Record<string, string> = { cueva_goblin: MAT_LLAVE_CUEVA, nido_hormiga_leon: MAT_LLAVE_NIDO };
+/** Lo que falta para armar `key` con `mats` y `gold`, o null si alcanza. */
+export function keyMissing(key: string, mats: Record<string, number>, gold: number): string | null {
+    const r = KEY_RECIPES[key]; if (!r) return 'Esa llave no se arma.';
+    const falta: string[] = [];
+    for (const [id, n] of Object.entries(r.mats)) { const have = mats[id] ?? 0; if (have < n) falta.push(`${n - have} ${(QUEST_MATS[id]?.name ?? KEY_MAT_NAMES[id] ?? id).toLowerCase()}${n - have > 1 ? 's' : ''}`); }
+    if (gold < r.gold) falta.push(`${r.gold - gold} de oro`);
+    return falta.length ? `Te falta: ${falta.join(', ')}.` : null;
+}
+/** Nombre de una llave o material de llave (para los avisos de las puertas). */
+export const keyMatName = (id: string): string => KEY_MAT_NAMES[id] ?? QUEST_MATS[id]?.name ?? id;
+
 /** Materiales que no se aceptan en la repetible: son de las llaves. */
-export const RESERVED_MATS = new Set([MAT_COLMILLO, MAT_ESENCIA]);
+export const RESERVED_MATS = new Set([MAT_COLMILLO, MAT_ESENCIA, MAT_LLAVE_CUEVA, MAT_LLAVE_GASTADA, MAT_LLAVE_NIDO]);
 
 /** Jefe que cierra cada dungeon del corte: matarlo (vos o tu party cerca) cuenta como completarlo. */
 export type DungeonId = 'd1' | 'd2' | 'd3' | 'd4' | 'd5' | 'd6';
@@ -91,8 +115,8 @@ export const MAIN_QUESTS: MainQuest[] = [
     },
     {
         id: 'colmillos', name: 'Colmillos', minLvl: 2,
-        say: 'La Cueva goblin no se abre con palabras. Los bichos de los pits de nivel 1 a 5 a veces sueltan colmillos: juntá 8, con eso y un poco de oro se arma la llave.',
-        done: 'Ocho colmillos. Guardalos: son tu entrada a la cueva.',
+        say: 'La Cueva goblin no se abre con palabras. Los bichos de los pits de nivel 1 a 5 a veces sueltan colmillos: juntá 8, con eso y 60 de oro armás la llave (clic derecho sobre los colmillos en la bolsa).',
+        done: 'Ocho colmillos. Armá la llave de la cueva desde la bolsa: cada uno de tu grupo necesita la suya.',
         goals: [{ k: 'collect', mat: MAT_COLMILLO, n: 8, what: 'Colmillos' }],
         reward: { expPct: 25, gold: 60 },
     },
@@ -106,7 +130,7 @@ export const MAIN_QUESTS: MainQuest[] = [
     {
         id: 'cueva_goblin', name: 'La cueva goblin', minLvl: 4,
         say: 'El Jefe goblin se esconde al fondo de las minas, debajo de la cueva. Bajá solo o con un compañero y no te quedes quieto cuando golpee el piso.',
-        done: 'Volviste entero. Elegí una pieza de la armería, te la ganaste. Y guardá la llave gastada que soltó el jefe.',
+        done: 'Volviste entero. Elegí una pieza de la armería, te la ganaste. Y guardá la llave gastada que soltó el jefe: con una esencia y 120 de oro abre el Nido.',
         goals: [{ k: 'dungeon', d: 'd1', n: 1, what: 'Completar la Cueva goblin' }],
         reward: { expPct: 40, gold: 200, unique: 'class_t1_choice' },
     },
@@ -126,7 +150,7 @@ export const MAIN_QUESTS: MainQuest[] = [
     },
     {
         id: 'llave_gastada', name: 'La llave gastada', minLvl: 8,
-        say: 'La Reina hormiga león manda en las ruinas debajo del nido. Sola no se va a dejar matar: juntá un grupo, y cuando empiece a llover ácido, cortala.',
+        say: 'La Reina hormiga león manda en las ruinas debajo del nido. Para entrar, cada uno arma su llave del nido (la llave gastada, una esencia y 120 de oro). Sola no se va a dejar matar: juntá un grupo, y cuando empiece a llover ácido, cortala.',
         done: 'La Reina cayó. Elegí uno de sus trofeos: pocos lo pueden contar.',
         goals: [{ k: 'dungeon', d: 'd2', n: 1, what: 'Completar el Nido de hormiga león' }],
         reward: { expPct: 50, gold: 400, unique: 'boss_d2_choice' },
