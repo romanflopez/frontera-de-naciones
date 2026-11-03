@@ -456,23 +456,29 @@ function onSkillEffect(v: { casterId: bigint; skill: string; fromX: number; from
     }
     if ((v.skill === 'blink' || v.skill === 'pasoluz') && v.casterId === myId) { const pt = iso(P.x, P.y); if (Math.hypot(pt.x - cam.x, pt.y - cam.y) > 500) { cam.x = pt.x; cam.y = pt.y; } }
 }
-/** Bendiciones y auras de K8: duración (s) y aviso al entrar. La duración exacta la lleva el server; acá es para la cuenta regresiva. */
-const BUFF_INFO: Record<string, { s: number; k: string; c: string; n: string }> = {
-    poder: { s: 60, k: 'P', c: '#ffcf5a', n: 'Bendición de poder: +16 de Daño' },
-    amparo: { s: 60, k: 'A', c: '#a8d8ff', n: 'Bendición de amparo: −6 % de daño recibido' },
-    intelecto: { s: 90, k: 'M', c: '#b9a3ff', n: 'Intelecto arcano: +8 de Magia' },
-    fortaleza: { s: 90, k: 'T', c: '#ffb07a', n: 'Fortaleza: +6 % de vida máxima' },
-    espiritu: { s: 90, k: 'E', c: '#a8ffe0', n: 'Espíritu divino: +50 % de regeneración de maná' },
+/**
+ * Bendiciones y auras de K8: duración (s) y aviso al entrar. La duración exacta la lleva el server; acá es para la cuenta regresiva.
+ * `l` = duración fuera de la arena (las bendiciones de grupo duran 15 min afuera); `s` = la de adentro de la arena.
+ */
+const BUFF_INFO: Record<string, { s: number; l?: number; k: string; c: string; n: string }> = {
+    poder: { s: 60, l: 900, k: 'P', c: '#ffcf5a', n: 'Bendición de poder: +16 de Daño' },
+    amparo: { s: 60, l: 900, k: 'A', c: '#a8d8ff', n: 'Bendición de amparo: −6 % de daño recibido' },
+    intelecto: { s: 90, l: 900, k: 'M', c: '#b9a3ff', n: 'Intelecto arcano: +8 de Magia' },
+    fortaleza: { s: 90, l: 900, k: 'T', c: '#ffb07a', n: 'Fortaleza: +6 % de vida máxima' },
+    espiritu: { s: 90, l: 900, k: 'E', c: '#a8ffe0', n: 'Espíritu divino: +50 % de regeneración de maná' },
     represalia: { s: 10, k: 'X', c: '#ff9a6a', n: 'Aura de represalia: −20 % de daño y devuelve ⅓ a los monstruos' },
     clarividencia: { s: 10, k: 'C', c: '#d0a8ff', n: 'Clarividencia: +25 % de crítico de hechizos' },
 };
+/** Cuánto dura ahora (s): adentro de la arena la corta, afuera la larga. */
+const buffSecs = (id: string): number => { const b = BUFF_INFO[id]; return b.l && !(MAP_DEF.pvp === 'ffa' || inArena(P.x, P.y)) ? b.l : b.s; };
+const fmtSecs = (n: number): string => (n >= 120 ? `${Math.round(n / 60)} min` : `${n} s`);
 const myBuffs: Record<string, number> = {};
 function onStatusUpdate(v: { playerId: bigint; invisible: boolean; detect: boolean; fury: boolean; warcry: boolean; slow: boolean; blessed: boolean; poisoned: boolean; buffs?: string[] }) {
     if (v.playerId === myId) {
         const on = new Set(v.buffs ?? []);
         for (const id of Object.keys(BUFF_INFO)) {
             const had = (myBuffs[id] ?? 0) > now();
-            if (on.has(id) && !had) { myBuffs[id] = now() + BUFF_INFO[id].s; log(`${BUFF_INFO[id].n} por ${BUFF_INFO[id].s} s.`, true); }
+            if (on.has(id) && !had) { const secs = buffSecs(id); myBuffs[id] = now() + secs; log(`${BUFF_INFO[id].n} por ${fmtSecs(secs)}.`, true); }
             else if (!on.has(id) && had) myBuffs[id] = 0;
         }
         if (v.poisoned !== P.poisonEnd > now()) { P.poisonEnd = v.poisoned ? now() + 4 : 0; if (v.poisoned) toast('¡Te envenenaron! Recibís 30 % menos de curación.'); }
@@ -747,9 +753,9 @@ const LIB: Record<string, SpellDef> = {
     giro: { name: 'Barrido', mp: 36, cd: 8, col: '#ffd0a0', range: 0, target: false, aoe: 2, instant: true,
         cast() { skillSend('giro'); } },
     // K8 (nivel 15 a 26): escudos, auras y bendiciones. El server aplica todo; acá solo se pide.
-    grito: { name: 'Bendición de poder', mp: 48, cd: 10, col: '#ffcf5a', range: 0, target: false, castT: 0.8, aoe: 14, // Blessing of Might (Valdrys): +16 de Daño 60 s a los aliados
+    grito: { name: 'Bendición de poder', mp: 48, cd: 10, col: '#ffcf5a', range: 0, target: false, castT: 0.8, aoe: 14, // Blessing of Might (Valdrys): +16 de Daño a la party y a los aliados cerca: 15 min afuera, 60 s en la arena
         cast() { skillSend('grito'); } },
-    amparo: { name: 'Bendición de amparo', mp: 48, cd: 10, col: '#a8d8ff', range: 0, target: false, castT: 0.8, aoe: 14, // Blessing of Sanctuary: −6 % de daño 60 s
+    amparo: { name: 'Bendición de amparo', mp: 48, cd: 10, col: '#a8d8ff', range: 0, target: false, castT: 0.8, aoe: 14, // Blessing of Sanctuary: −6 % de daño: 15 min afuera, 60 s en la arena
         cast() { skillSend('amparo'); } },
     represalia: { name: 'Aura de represalia', mp: 48, cd: 30, col: '#ff9a6a', range: 0, target: false, instant: true, // Retribution Aura: −20 % de daño y devuelve ⅓ a los monstruos, 10 s
         cast() { skillSend('represalia'); } },
@@ -759,7 +765,7 @@ const LIB: Record<string, SpellDef> = {
         cast() { skillSend('escudomana'); } },
     clarividencia: { name: 'Clarividencia', mp: 60, cd: 30, col: '#d0a8ff', range: 0, target: false, instant: true, // Vim of Wisdom: +25 % de crítico de hechizos 10 s (contra monstruos)
         cast() { skillSend('clarividencia'); } },
-    intelecto: { name: 'Intelecto arcano', mp: 60, cd: 10, col: '#b9a3ff', range: 0, target: false, castT: 0.8, aoe: 14, // Arcane Intellect: +8 de Magia 90 s a los aliados
+    intelecto: { name: 'Intelecto arcano', mp: 60, cd: 10, col: '#b9a3ff', range: 0, target: false, castT: 0.8, aoe: 14, // Arcane Intellect: +8 de Magia a la party y a los aliados cerca: 15 min afuera, 90 s en la arena
         cast() { skillSend('intelecto'); } },
     guardian: { name: 'Escudo guardián', mp: 28, cd: 12, col: '#bfe8ff', range: 12, target: false, instant: true, // Guardian Shield: escudo del 40 % de la vida del aliado
         cast() { return healCast('guardian', 12); } },
@@ -767,7 +773,7 @@ const LIB: Record<string, SpellDef> = {
         cast() { return healCast('esfera', 12); } },
     despertar: { name: 'Despertar', mp: 54, cd: 20, col: '#ffffff', range: 10, castT: 2.4, target: false, // Reawaken: revive con 50 % (en mazmorra o arena, dentro de los 10 s)
         cast() { return reviveCast(); } },
-    grupo: { name: 'Bendición de grupo', mp: 28, cd: 10, col: '#ffb07a', range: 0, target: false, castT: 0.8, aoe: 14, // Fortitude + Divine Spirit: +6 % de vida y +50 % de regen de maná 90 s
+    grupo: { name: 'Bendición de grupo', mp: 28, cd: 10, col: '#ffb07a', range: 0, target: false, castT: 0.8, aoe: 14, // Fortitude + Divine Spirit: +6 % de vida y +50 % de regen de maná: 15 min afuera, 90 s en la arena (a toda la party)
         cast() { skillSend('grupo'); } },
     pasoluz: { name: 'Paso de luz', mp: 0, cd: 15, col: '#fff2a8', range: 0, target: false, instant: true, // escape del healer (nivel 20): hasta 6 celdas y se saca el frenado
         cast() { const d = blinkDest(6); if (!d) { toast('No hay lugar para el Paso de luz hacia ahí.'); return false; } net.send({ $case: 'blinkRequest', value: { x: d.x, y: d.y, skill: 'pasoluz' } }); } },

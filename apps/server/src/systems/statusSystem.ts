@@ -137,6 +137,14 @@ export function absorbShield(status: CharacterStatus, now: number, dmg: number):
     status.vitalsDirty = true;
     return dmg - took;
 }
+/** Bendiciones de grupo (las que duran 15 min fuera de la arena): al entrar a la arena se sacan. No toca las auras de 10 s ni los escudos. */
+export const BLESSING_IDS: readonly BuffId[] = ['poder', 'amparo', 'intelecto', 'fortaleza', 'espiritu'];
+export function clearBlessings(status: CharacterStatus): void {
+    for (const id of BLESSING_IDS) {
+        if (status.buffs[id] === undefined) continue;
+        delete status.buffs[id]; status.dirty = true; if (STAT_BUFFS.has(id)) status.statDirty = true;
+    }
+}
 /** Al morir se pierden escudos y bendiciones. */
 export function clearBuffs(status: CharacterStatus): void {
     if (status.shield > 0) status.vitalsDirty = true;

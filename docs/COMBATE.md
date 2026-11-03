@@ -124,22 +124,23 @@ Desbloqueos de la versión 4 del kit (`packages/world/src/kits.ts`, PR #14): del
 | 15 | Paladín | Escudo divino (`escudodivino`) | — | 20 s | 45 | Escudo propio del 60 % de la vida, 10 s |
 | 20 | Paladín | Carga sagrada (`carga`) | — | 18 s | 60 | Ya estaba (K2) |
 | 25 | Paladín | Aura de represalia (`represalia`) | — | 30 s | 48 | 10 s: −20 % de daño recibido y devuelve ⅓ de cada golpe al monstruo que pegó |
-| 30 | Paladín | Bendición de poder (`grito`) | 0,8 s | 10 s | 48 | +16 al Daño base 60 s a los aliados a 14 celdas (reemplaza al Grito de guerra; el id queda por las barras guardadas) |
-| 35 | Paladín | Bendición de amparo (`amparo`) | 0,8 s | 10 s | 48 | −6 % de daño recibido 60 s a los aliados a 14 celdas |
+| 30 | Paladín | Bendición de poder (`grito`) | 0,8 s | 10 s | 48 | +16 al Daño base a la party y a los aliados a 14 celdas: 15 min afuera, 60 s en la arena (reemplaza al Grito de guerra; el id queda por las barras guardadas) |
+| 35 | Paladín | Bendición de amparo (`amparo`) | 0,8 s | 10 s | 48 | −6 % de daño recibido a la party y a los aliados a 14 celdas: 15 min afuera, 60 s en la arena |
 | 15 | Mago | Escudo de maná (`escudomana`) | — | 10 s | 45 | Escudo propio del 33 % de la vida, 10 s |
 | 20 | Mago | Parpadeo (`blink`) | — | 12 s | 0 | Ya estaba |
 | 25 | Mago | Clarividencia (`clarividencia`) | — | 30 s | 60 | 10 s: 25 % de crítico (×1,8) en los hechizos contra monstruos; contra jugadores no hay críticos |
 | 30 | Mago | Purga (`remover`) | — | 24 s | 30 | Se saca congelado, aturdido y frenado; 8 s de inmunidad a parálisis |
-| 35 | Mago | Intelecto arcano (`intelecto`) | 0,8 s | 10 s | 60 | +8 de Magia de equipo 90 s a los aliados a 14 celdas |
+| 35 | Mago | Intelecto arcano (`intelecto`) | 0,8 s | 10 s | 60 | +8 de Magia de equipo a la party y a los aliados a 14 celdas: 15 min afuera, 90 s en la arena |
 | 15 | Healer | Escudo guardián (`guardian`) | — | 12 s | 28 | Escudo del 40 % de la vida del aliado, 10 s |
 | 20 | Healer | Paso de luz (`pasoluz`, por `BlinkRequest.skill`) | — | 15 s | 0 | Hasta 6 celdas hacia donde apunta (mismas reglas de celda que el Parpadeo) y se saca el frenado |
 | 25 | Healer | Despertar (`despertar`) | 2,4 s | 20 s | 54 | Revive a un aliado caído con 50 % de vida y maná. En mazmorras y arenas, solo dentro de los 10 s de la caída |
 | 30 | Healer | Esfera celestial (`esfera`) | — | 8 s | 34 | 8 curas del 13 %: cada una salta al aliado más herido a ≤ 6 celdas (no al mismo de recién) |
-| 35 | Healer | Bendición de grupo (`grupo`) | 0,8 s | 10 s | 28 | Fortaleza (+6 % de vida máxima) y Espíritu divino (+50 % de regeneración de maná) juntas, 90 s, a los aliados a 14 celdas |
+| 35 | Healer | Bendición de grupo (`grupo`) | 0,8 s | 10 s | 28 | Fortaleza (+6 % de vida máxima) y Espíritu divino (+50 % de regeneración de maná) juntas, a la party y a los aliados a 14 celdas: 15 min afuera, 90 s en la arena |
 
 Reglas comunes:
 - **Escudos:** se juntan con tope de una barra llena (la vida máxima) y duran 10 s desde el último. Absorben después de la defensa, del multiplicador PvP y del tope por golpe. Un golpe que se come entero el escudo no corta el Segundo aliento ni la invisibilidad. Viajan en `Vitals.shield` y `PlayerVitals.shield`.
 - **Bendiciones y auras:** no se apilan (la nueva renueva la duración). Las que tocan stats (poder, intelecto, fortaleza) recalculan los stats al entrar y al vencer. Viajan en `StatusUpdate.buffs`.
+- **Bendiciones de grupo (poder, amparo, intelecto, grupo; "sin tarea repetitiva"):** quien la lanza se la da a **toda su party que esté en el mismo mundo, sin importar la distancia** (también invisibles), más los aliados de su nación a 14 celdas aunque no sean de la party. **Duran 15 min** (`BLESSING_LONG_S`); el reloj es absoluto y sobrevive a cruzar de mapa (el `Player` se conserva), no a desloguear. **Dentro de la arena** (`ffaRect` o mapa todos contra todos; las mazmorras no cuentan) valen las de Valdrys: 60 s (poder, amparo) y 90 s (intelecto, grupo). **Al entrar a la arena se sacan** las que se traían de afuera (`clearBlessings`, en el tick) y no vuelven al salir. Las auras de 10 s y los escudos no se tocan.
 - **Al morir** se pierden escudos, bendiciones y auras.
 - **Despertar en el cliente:** con un healer aliado a 15 celdas, el muerto espera 10 s antes de pedir reaparecer.
 - Traducción de los atributos de Valdrys (los de ERIS no se tocan en el MVP): Sabiduría → Magia de equipo, Valor → % de vida, Espíritu → regeneración de maná. Son puntos de partida: se ajustan con `sim:pvp` (K7) y la prueba jugada.

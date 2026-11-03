@@ -77,6 +77,8 @@ export class Player {
     timers: PlayerTimer[] = [];
     pvp = new PvpLimiter();
     status = createDefaultStatus();
+    /** Estaba dentro de la arena en la vuelta anterior del reloj (al entrar se sacan las bendiciones de 15 min). */
+    wasInArena = false;
     disconnected = false;
 
     hp = 1000;
