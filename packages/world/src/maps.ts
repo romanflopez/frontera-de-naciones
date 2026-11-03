@@ -8,6 +8,7 @@ import { buildSolmar, type WorldMap } from './index';
 import { HUBS } from './cities';
 import { buildPruebaCaza, buildPruebaMazmorra, PRUEBA_CAZA, PRUEBA_MAZMORRA } from './testmaps';
 import { TRAINING, type PortalProgress } from './training';
+import { KEY_RECIPES, keyMatName } from './quests';
 import { buildSolmarVilla, VILLA, VILLA_BUILDINGS, VILLA_ID, VILLA_N, villaDoor, type VillaBuilding } from './solmar/villa';
 import { buildInterior, INTERIORS, roomOf, TEMPLE_RESPAWN } from './solmar/interiors';
 import { buildVharCiudadela, VHAR, VHAR_CITADEL_ID, VHAR_N, vharDoor, type VharBuilding } from './vhar/citadel';
@@ -257,7 +258,7 @@ export function linkGateReason(l: Link, g: PortalProgress, questName?: (qi: numb
     const gt = l.gate; if (!gt) return null;
     if (gt.lvl !== undefined && g.lvl < gt.lvl) return `Necesitás nivel ${gt.lvl} para pasar.`;
     if (gt.quest !== undefined && g.qi < gt.quest) { const n = questName?.(gt.quest - 1); return n ? `Todavía no: entregá «${n}» al Capitán.` : 'Todavía no cumpliste la misión que pide este paso.'; }
-    if (gt.key && !(g.keys[gt.key] >= 1)) return `Está sellado: necesitás la llave (${gt.key}).`;
+    if (gt.key && !(g.keys[gt.key] >= 1)) return KEY_RECIPES[gt.key] ? `Está sellado: necesitás una ${keyMatName(gt.key)} (cada uno gasta la suya).` : `Está sellado: necesitás la llave (${gt.key}).`;
     return null;
 }
 

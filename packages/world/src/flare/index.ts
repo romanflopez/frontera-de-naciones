@@ -10,6 +10,7 @@
 import type { Prop, WorldMap, Zone } from '../index';
 import type { MapDef, Link } from '../maps';
 import type { MobType } from '../mobs';
+import { DUNGEON_ENTRY_KEYS } from '../quests';
 import { flareTile, type FlareMapData } from './types';
 import { DATA as SALTED_FIELD } from './salted_field';
 import { DATA as STONEWOOD } from './stonewood';
@@ -52,6 +53,20 @@ export const FLARE_FIRST = FLARE_DATA[0];
 const SAFE_R = 5;
 /** Segundos de reaparición: pits y sueltos. */
 const PIT_RESPAWN = 10, LOOSE_RESPAWN = 22;
+/**
+ * Densidad de las mazmorras del corte (docs/MAZMORRAS.md): sin reaparición, los pisos de Flare traían demasiados mobs (D1 75, D2 141).
+ * Primera pasada automática: se queda uno de cada `every` packs (en orden), con `n` mobs cada uno, y se sacan los sueltos. El jefe no se toca.
+ * Queda D1 ≈ 25 y D2 ≈ 40, como en `mecanicas-de-jefe.md` §2. La ubicación fina de packs y élites se hace a mano sobre el mapa.
+ */
+export const DUNGEON_DENSITY: Record<string, { every: number; n: number }> = {
+    cueva_goblin: { every: 2, n: 2 }, minas_goblin: { every: 2, n: 2 },
+    nido_hormiga_leon: { every: 3, n: 3 }, ruinas_de_stormrock: { every: 3, n: 3 },
+};
+function thinZones<T extends { kind: string; n: number }>(eris: string, zones: T[]): T[] {
+    const k = DUNGEON_DENSITY[eris]; if (!k) return zones;
+    let pit = 0;
+    return zones.flatMap((z) => (z.kind === 'boss' ? [z] : z.kind === 'pit' && pit++ % k.every === 0 ? [{ ...z, n: Math.min(z.n, k.n) }] : []));
+}
 
 export interface Cell { x: number; y: number }
 const walk = (d: FlareMapData, x: number, y: number): boolean => x >= 0 && y >= 0 && x < d.size && y < d.size && d.blocked[y][x] === 0;
@@ -108,7 +123,7 @@ export function buildFlareMap(d: FlareMapData): WorldMap {
     for (const l of d.links) disc(l.cell, SAFE_R);
     for (const e of d.extras) disc(e.cell, SAFE_R);
     if (d === FLARE_FIRST) disc(FLARE_BACK, SAFE_R);
-    const zones: Zone[] = d.zones.map((z) => ({ type: z.type as MobType, x: z.x, y: z.y, r: z.r, n: z.n, name: z.name, lvl: z.lvl, ...(d.dungeon && z.kind !== 'boss' ? { tier: 'dungeon' as const } : {}), respawn: z.kind === 'pit' ? PIT_RESPAWN : LOOSE_RESPAWN, aggro: z.kind === 'pit' ? 3 : 4 }));
+    const zones: Zone[] = thinZones(d.eris, d.zones).map((z) => ({ type: z.type as MobType, x: z.x, y: z.y, r: z.r, n: z.n, name: z.name, lvl: z.lvl, ...(d.dungeon && z.kind !== 'boss' ? { tier: 'dungeon' as const } : {}), respawn: z.kind === 'pit' ? PIT_RESPAWN : LOOSE_RESPAWN, aggro: z.kind === 'pit' ? 3 : 4 }));
     return { size: N, tiles, blocked, safe, props, decals: [], zones, buildings: [], npcs: [], spawn: { ...d.entry }, fire: { x: -50, y: -50 }, ...(d.dungeon ? { dungeon: { x0: 0, y0: 0, x1: N - 1, y1: N - 1 } } : {}) };
 }
 
@@ -130,6 +145,8 @@ export function flareMaps(hub: { map: string; to: Cell }): Record<string, MapDef
     const out: Record<string, MapDef> = {};
     for (const d of FLARE_DATA) {
         const links = flareLinks(d);
+        // puertas con llave (docs/LLAVES.md): la entrada desde la superficie al primer piso pide la llave de esa mazmorra
+        if (!d.dungeon) for (const l of links) { const k = DUNGEON_ENTRY_KEYS[l.to.map]; if (k) l.gate = { ...(l.gate ?? {}), key: k }; }
         if (d === FLARE_FIRST) links.push({ id: 'campos_a_ciudad', map: d.eris, ...FLARE_BACK, to: { map: hub.map, ...hub.to }, kind: 'portal', msg: 'Cruzás el portal de vuelta a la ciudad.' });
         const def: MapDef = {
             id: d.eris, name: d.name, region: d.region, size: d.size, lvl: d.lvl, tier: d.tier, pvp: d.pvp, safe: false,

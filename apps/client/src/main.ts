@@ -17,7 +17,7 @@ import { DEFAULT_MAP, RECALL, STAT_CAP, STAT_DESC, STAT_IDS, STAT_NAMES, default
 import { UNIQUE_BY_NAME, UP_MAX, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
-import { DAILY_BY_ID, DAILY_LIMIT, MAIN_QUESTS, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, dailyGold, rewardUniques, type QuestBookView, type QuestGoal } from '@fdn/world';
+import { DAILY_BY_ID, DAILY_LIMIT, MAIN_QUESTS, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, dailyGold, rewardUniques, type QuestBookView, type QuestGoal, KEY_RECIPES, KEY_MAT_NAMES, keyMissing } from '@fdn/world';
 import { spellIcon } from './icons.ts';
 import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
 import { coinIcon, itemIcon, keyIcon, potionIcon, shardIcon } from './itemicons.ts';
@@ -302,6 +302,7 @@ function onServer(m: ServerPayload) {
         }
         case 'mobHitPlayer': onMobHitPlayer(m.value); break;
         case 'mobSpecialEvent': onMobSpecial(m.value); break;
+        case 'bossCast': case 'bossCastEnd': case 'bossTelegraph': case 'bossZone': case 'bossPhase': onBoss(m); break;
         case 'mobDied': onMobDied(m.value); break;
         case 'inventoryState': applyInventory(m.value); break;
         case 'groundItemSpawned': {
@@ -519,6 +520,63 @@ function onKillReward(v: { mobId: number; x: number; y: number; exp: number; gol
     // los avisos de misión llegan como econResult (quest_ready); la cadena vieja de 10 quedó jubilada
 }
 /** Habilidad distintiva del boss (el server decide cuándo y a quién pega): fase 0 = aviso y carga, fase 1 = el golpe en área. */
+// ---------- motor de jefes (docs/JEFES.md): el server avisa, acá solo se dibuja ----------
+const SCHOOL_COL: Record<string, string> = { fis: '#e8e0d0', fuego: '#ff7a3a', acido: '#9be04a', sombra: '#b48cff' };
+const bossCasts = new Map<number, { name: string; col: string; t0: number; dur: number; win: number; lock: boolean }>();
+const bossMarks: { x: number; y: number; r: number; t0: number; dur: number }[] = [];
+const bossZones = new Map<number, { x: number; y: number; r: number; until: number }>();
+const bossRage = new Set<number>();
+function onBoss(msg: { $case: string; value: unknown }) {
+    const T = now(), v = msg.value as Record<string, never>;
+    const m = mobMap.get(v.mobId as number);
+    switch (msg.$case) {
+        case 'bossCast': {
+            const c = v as unknown as { mobId: number; name: string; school: string; durationMs: number; windowFromMs: number; interruptible: boolean };
+            bossCasts.set(c.mobId, { name: c.name, col: SCHOOL_COL[c.school] ?? '#e8e0d0', t0: T, dur: c.durationMs / 1000, win: c.windowFromMs / 1000, lock: !c.interruptible });
+            if (m) float(m.x, m.y - 0.4, `${c.name}${c.interruptible ? '' : ' 🔒'}`, SCHOOL_COL[c.school] ?? '#fff', true);
+            break;
+        }
+        case 'bossCastEnd': {
+            const c = v as unknown as { mobId: number; result: number; by: string };
+            bossCasts.delete(c.mobId);
+            if (c.result === 1 && m) { float(m.x, m.y - 0.6, '¡Interrumpido!', '#ffd24a', true); log(`${c.by || 'Alguien'} cortó el casteo de ${m.name}.`); }
+            break;
+        }
+        case 'bossTelegraph': {
+            const t = v as unknown as { x: number; y: number; r: number; warnMs: number; name: string };
+            bossMarks.push({ x: t.x - 0.5, y: t.y - 0.5, r: t.r, t0: T, dur: t.warnMs / 1000 });
+            if (m) float(m.x, m.y - 0.4, `¡${t.name}!`, '#ff6a4a', true);
+            break;
+        }
+        case 'bossZone': { const z = v as unknown as { id: number; x: number; y: number; r: number; durationMs: number }; bossZones.set(z.id, { x: z.x - 0.5, y: z.y - 0.5, r: z.r, until: T + z.durationMs / 1000 }); break; }
+        case 'bossPhase': {
+            const ph = v as unknown as { mobId: number; event: string; text: string; enraged: boolean };
+            if (ph.enraged) bossRage.add(ph.mobId); else bossRage.delete(ph.mobId);
+            if (ph.event === 'reinicio') bossCasts.delete(ph.mobId);
+            if (ph.text) { log(ph.text, true); if (m) float(m.x, m.y - 0.8, ph.text, ph.enraged ? '#ff4a3a' : '#ffd24a', true); }
+            break;
+        }
+    }
+}
+/** Círculos de aviso y charcos de los jefes, en el piso. */
+function drawBossGround(T: number) {
+    const ell = (x: number, y: number, r: number, fill: string, a: number, stroke?: string) => { const p = iso(x, y), rx = r * TW * 0.707; ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = fill; ctx.beginPath(); ctx.ellipse(p.x, p.y, rx, rx / 2, 0, 0, Math.PI * 2); ctx.fill(); if (stroke) { ctx.globalAlpha = 0.85; ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); } ctx.restore(); };
+    for (const [id, z] of bossZones) { if (z.until <= T) { bossZones.delete(id); continue; } ell(z.x, z.y, z.r, '#7bc43a', 0.32, '#9be04a'); }
+    for (const k of bossMarks.slice()) {
+        const f = (T - k.t0) / k.dur; if (f > 1.15) { bossMarks.splice(bossMarks.indexOf(k), 1); continue; }
+        ell(k.x, k.y, k.r, '#ff3a2a', 0.12, '#ff6a4a'); ell(k.x, k.y, k.r * Math.min(1, f), '#ff3a2a', 0.28);
+    }
+}
+/** Barra de casteo con nombre bajo la barra de vida: el tramo dorado es la ventana del corte blando; con candado no se corta. */
+function drawBossCast(m: Mob, x: number, y: number, T: number) {
+    const c = bossCasts.get(m.id); if (!c) return;
+    const f = Math.min(1, (T - c.t0) / c.dur), w = 90, h = 7;
+    if (f >= 1.2) { bossCasts.delete(m.id); return; }
+    ctx.fillStyle = 'rgba(0,0,0,.8)'; ctx.fillRect(x - w / 2 - 1, y - 1, w + 2, h + 2);
+    if (!c.lock) { ctx.fillStyle = 'rgba(255,210,74,.35)'; ctx.fillRect(x - w / 2 + (w * c.win) / c.dur, y, w - (w * c.win) / c.dur, h); }
+    ctx.fillStyle = c.lock ? '#8a8a8a' : c.col; ctx.fillRect(x - w / 2, y, w * f, h);
+    nameTag(`${c.lock ? '🔒 ' : ''}${c.name}`, x, y + h + 11, c.lock ? '#cfcfcf' : c.col, 1, 11);
+}
 function onMobSpecial(v: { mobId: number; phase: number; x: number; y: number }) {
     const m = mobMap.get(v.mobId), sp = m?.boss?.special; if (!m || !sp) return;
     if (v.phase === 0) { m.busy = now() + 1.1; oneShot(m, 'special', 1.3); float(m.x, m.y - 0.4, `¡${sp.name}!`, sp.col, true); }
@@ -1580,6 +1638,7 @@ function render() {
     for (const q of WAYPOINTS) if (q.x >= minX - 3 && q.x <= maxX + 3 && q.y >= minY - 3 && q.y <= maxY + 3) drawPortalPad(q, T);
     for (const q of LINK_WPS) if (q.x >= minX - 3 && q.x <= maxX + 3 && q.y >= minY - 3 && q.y <= maxY + 3) drawPortalPad(q, T);
     for (const f of fx) if (f.k === 'click') { const p = iso(f.x, f.y); ctx.globalAlpha = 1 - f.t / 0.6; ctx.strokeStyle = '#d6a445'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(p.x, p.y, 10 + f.t * 30, (10 + f.t * 30) / 2, 0, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
+    drawBossGround(T);
     for (const sc of scorch.slice()) { const age = T - sc.t; if (age > 5) { scorch.splice(scorch.indexOf(sc), 1); continue; } const p = iso(sc.x, sc.y); ctx.globalAlpha = Math.min(1, (5 - age) / 2) * 0.55; const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, sc.r * TW * 0.45); g.addColorStop(0, '#120a05'); g.addColorStop(0.7, 'rgba(30,15,5,.6)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(p.x, p.y, sc.r * TW * 0.45, sc.r * TW * 0.225, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
     if (P.ready && mouse.x >= 0) {
         const s = SPELLS[P.ready.i], g = toGrid(mouse.x, mouse.y), tgt = s.aoe ? hover || g : hover;
@@ -1704,9 +1763,10 @@ function drawMob(m: Mob, T: number) {
             ctx.globalAlpha = 0.8; ctx.strokeStyle = sp.col; ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
         }
         const w = 70, y = p.y - m.head - 6; // boss: nombre dorado y barra grande siempre visibles
-        nameTag(m.name, p.x, y - 9, '#ffd24a', 1, 14);
+        nameTag(m.name, p.x, y - 9, bossRage.has(m.id) ? '#ff4a3a' : '#ffd24a', 1, 14);
         ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(p.x - w / 2 - 1, y - 1, w + 2, 8); ctx.fillStyle = '#8c6a1e'; ctx.fillRect(p.x - w / 2, y, w * Math.max(0, m.hp / m.hpMax), 6); ctx.fillStyle = '#e0a82e'; ctx.fillRect(p.x - w / 2, y, w * Math.max(0, m.hp / m.hpMax), 3);
-    } else if (m.hp < m.hpMax) { const w = 34; ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - w / 2 - 1, p.y - m.head - 5, w + 2, 5); ctx.fillStyle = '#c43e2b'; ctx.fillRect(p.x - w / 2, p.y - m.head - 4, w * Math.max(0, m.hp / m.hpMax), 3); }
+        drawBossCast(m, p.x, y + 10, T);
+    } else if (m.hp < m.hpMax || bossCasts.has(m.id)) { drawBossCast(m, p.x, p.y - m.head + 4, T); const w = 34; ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - w / 2 - 1, p.y - m.head - 5, w + 2, 5); ctx.fillStyle = '#c43e2b'; ctx.fillRect(p.x - w / 2, p.y - m.head - 4, w * Math.max(0, m.hp / m.hpMax), 3); }
 }
 function drawDrop(d: Drop, T: number) {
     const fl = d.loot, isGold = !!d.gold || fl?.itemId === 'gold';
@@ -1908,6 +1968,12 @@ function renderBag() {
         if (Q.shards[kid] > 0) mats.push({ key: 's' + kid, html: `<button type="button" class="cl${selX && selX.id === 's' + kid ? ' sel' : ''}" data-mat="s${kid}" aria-label="${kd.shard}, ${Q.shards[kid]}" title="${kd.shard}" style="--rc:#6a4aa0"><img class="iico" alt="" src="${shardIcon(kid)}"><span class="q">${Q.shards[kid]}</span></button>` });
         if (Q.keys[kid] > 0) mats.push({ key: 'k' + kid, html: `<button type="button" class="cl${selX && selX.id === 'k' + kid ? ' sel' : ''}" data-mat="k${kid}" aria-label="${kd.name}, ${Q.keys[kid]}" title="${kd.name}" style="--rc:#c9a227"><img class="iico" alt="" src="${keyIcon(kid)}"><span class="q">${Q.keys[kid]}</span></button>` });
     }
+    // llaves de las mazmorras y sus materiales (docs/LLAVES.md): clic para ver la receta, clic derecho para armar
+    for (const id of KEY_CHAIN_MATS) {
+        const n = QB?.mats[id] ?? 0; if (n <= 0) continue;
+        const isKey = !!KEY_RECIPES[id] || id === 'llave_gastada';
+        mats.push({ key: 'q' + id, html: `<button type="button" class="cl${selX && selX.id === 'q' + id ? ' sel' : ''}" data-mat="q${id}" aria-label="${matName(id)}, ${n}" title="${matName(id)}${keyFor(id) ? ' (clic derecho: armar llave)' : ''}" style="--rc:${isKey ? '#c9a227' : '#6a4aa0'}"><img class="iico" alt="" src="${isKey ? keyIcon('cripta') : shardIcon('cripta')}"><span class="q">${n}</span></button>` });
+    }
     const list = invTab === 'gear' ? gear : invTab === 'cons' ? cons : invTab === 'mat' ? mats : [...gear, ...cons, ...mats];
     const total = Math.max(25, Math.ceil(list.length / 5) * 5), cells = list.map((e) => e.html);
     while (cells.length < total) cells.push(`<div class="cl e" aria-hidden="true"></div>`);
@@ -1917,7 +1983,11 @@ function renderBag() {
     ($('dropBtn') as HTMLButtonElement).disabled = !(sel && sel.from === 'bag');
     document.querySelectorAll<HTMLElement>('#inv [data-bag]').forEach((b) => (b.onclick = () => { sel = { it: P.bag[+b.dataset.bag!], from: 'bag' }; selX = null; renderBag(); }));
     document.querySelectorAll<HTMLElement>('#inv [data-pot]').forEach((b) => (b.onclick = () => { selX = { k: 'pot', id: b.dataset.pot as 'hp' | 'mp' }; sel = null; renderBag(); }));
-    document.querySelectorAll<HTMLElement>('#inv [data-mat]').forEach((b) => (b.onclick = () => { selX = { k: 'mat', id: b.dataset.mat! }; sel = null; renderBag(); }));
+    document.querySelectorAll<HTMLElement>('#inv [data-mat]').forEach((b) => {
+        b.onclick = () => { selX = { k: 'mat', id: b.dataset.mat! }; sel = null; renderBag(); };
+        const k = b.dataset.mat![0] === 'q' ? keyFor(b.dataset.mat!.slice(1)) : undefined;
+        if (k) b.oncontextmenu = (e) => { e.preventDefault(); combineKey(k); };
+    });
     renderTip();
 }
 /** Tooltip flotante a la izquierda de las ventanas abiertas. */
@@ -1929,6 +1999,7 @@ function renderTip() {
     d.style.right = `calc(max(12px, env(safe-area-inset-right, 0px)) + ${(n * 356 * wsc).toFixed(1)}px)`; d.hidden = false;
     if (selX) {
         if (selX.k === 'pot') { const k = selX.id; d.innerHTML = `<div><div class="iname" style="color:${POTS[k].col}">${POTS[k].name}</div><div class="sub">Consumible · ×${pots[k]}</div><div>${k === 'hp' ? 'Recupera 40% de la vida máxima: 20% al instante y el resto en 2 s.' : 'Recupera 50% del maná máximo.'}</div><div class="sub">Delay global de 1,75 s entre pociones.</div><div class="row"><button type="button" id="usePot">Usar (${POTS[k].key})</button></div></div>`; $('usePot').onclick = () => { usePotion(k); renderBag(); }; }
+        else if (selX.id[0] === 'q') { d.innerHTML = keyMatTip(selX.id.slice(1)); d.querySelector<HTMLElement>('[data-combine]')?.addEventListener('click', (e) => combineKey((e.currentTarget as HTMLElement).dataset.combine!)); }
         else if (selX.id === 'forge') d.innerHTML = `<div><div class="iname" style="color:#e5a65a">Piedra de forja</div><div class="sub">Material · ×${forgeStones}</div><div>Sirve para mejorar ítems únicos (+1 a +${UP_MAX}) en un herrero. La sueltan los mobs, más en pits y mazmorras, y los jefes.</div></div>`;
         else { const id = selX.id, kid = id.slice(1) as KeyId, kd = KEYDEFS[kid], shard = id[0] === 's'; d.innerHTML = `<div><div class="iname" style="color:${shard ? '#b99cff' : '#ffd24a'}">${shard ? kd.shard : kd.name}</div><div class="sub">Material · ×${shard ? Q.shards[kid] : Q.keys[kid]}</div><div>${shard ? `Con ${SHARDS_PER_KEY} esquirlas y ${kd.gold} de oro el Capitán forja la ${kd.name}.` : 'Abre la escalera sellada del portal correspondiente.'}</div></div>`; }
         return;
@@ -2067,8 +2138,28 @@ function renderQuest() {
 // ---------- libro de misiones del corte (cadena de 5, encargos del día, repetible): el server decide todo, acá solo se muestra ----------
 let QB: QuestBookView | null = null;
 /** Nombres de los materiales (los del suelo los aprende al levantarlos; los de las llaves vienen de @fdn/world). */
-const MAT_NAMES: Record<string, string> = Object.fromEntries(Object.entries(QUEST_MATS).map(([id, m]) => [id, m.name]));
+const MAT_NAMES: Record<string, string> = { ...Object.fromEntries(Object.entries(QUEST_MATS).map(([id, m]) => [id, m.name])), ...KEY_MAT_NAMES };
 const matName = (id: string) => MAT_NAMES[id] ?? id.replace(/^trophy_/, 'trofeo ').replace(/_/g, ' ');
+// ---------- llaves de las mazmorras (docs/LLAVES.md) ----------
+const KEY_CHAIN_MATS = ['colmillo', 'esencia', 'llave_gastada', 'llave_cueva', 'llave_nido'];
+/** La llave que se arma con este material (o la propia llave, si es una). */
+const keyFor = (id: string): string | undefined => (KEY_RECIPES[id] ? id : Object.keys(KEY_RECIPES).find((k) => id in KEY_RECIPES[k].mats));
+function combineKey(k: string) {
+    const why = keyMissing(k, QB?.mats ?? {}, P.gold);
+    if (why) { toast(why); return; }
+    net.send({ $case: 'econQuestRequest', value: { npcId: '', action: 'combine', key: k } });
+}
+function keyMatTip(id: string): string {
+    const n = QB?.mats[id] ?? 0, k = keyFor(id), r = k ? KEY_RECIPES[k] : undefined;
+    const what = KEY_RECIPES[id] ? `Abre ${KEY_RECIPES[id].dungeon}. Cada jugador gasta la suya al entrar.` : id === 'llave_gastada' ? 'La suelta el jefe de la Cueva goblin, una para cada uno.' : `Material de llave: cae en los pits de nivel ${QUEST_MATS[id]?.tier === 1 ? '1-5' : '6-10'}.`;
+    let recipe = '';
+    if (r && k) {
+        const parts = Object.entries(r.mats).map(([m, c]) => `${c} ${matName(m).toLowerCase()} (${QB?.mats[m] ?? 0}/${c})`).concat(`${r.gold} de oro`);
+        const why = keyMissing(k, QB?.mats ?? {}, P.gold);
+        recipe = `<div class="sub">${r.name}: ${parts.join(' + ')}</div>${why ? `<div class="sub">${esc(why)}</div>` : `<div class="row"><button type="button" data-combine="${k}">Armar ${r.name}</button></div>`}`;
+    }
+    return `<div><div class="iname" style="color:${KEY_RECIPES[id] || id === 'llave_gastada' ? '#ffd24a' : '#b99cff'}">${matName(id)}</div><div class="sub">Material · ×${n}</div><div>${what}</div>${recipe}</div>`;
+}
 const goalLine = (g: QuestGoal, n: number) => `${g.what}: ${Math.min(n, g.n)}/${g.n}`;
 const fmtReset = (ms: number) => { const h = Math.floor(ms / 3_600_000), m = Math.floor((ms % 3_600_000) / 60_000); return h ? `${h} h ${m} min` : `${m} min`; };
 function bookLines(): string {
@@ -2253,7 +2344,7 @@ function loadMap(def: MapDef): string {
     ({ tiles, blocked, safe, props, decals } = MAP);
     ZONES = MAP.zones; WAYPOINTS = MAP.waypoints ?? []; LINKS = def.links; LINK_WPS = linkWps(LINKS);
     // lo que era del mapa anterior: mobs, otros jugadores, suelo, efectos, estado de portales y diálogos
-    mobs.length = 0; mobMap.clear(); others.clear(); drops.length = 0; corpses.length = 0; projs.length = 0; scorch.length = 0; floats.length = 0; fx.length = 0;
+    mobs.length = 0; mobMap.clear(); others.clear(); drops.length = 0; corpses.length = 0; projs.length = 0; scorch.length = 0; floats.length = 0; fx.length = 0; bossCasts.clear(); bossMarks.length = 0; bossZones.clear(); bossRage.clear();
     portalAct.clear(); wpInside = ''; closeWp(); closeShop(); talkNpc = null; talkWpTarget = null;
     P.target = null; P.engage = false; P.pickup = null; P.queued = null; P.foe = null; P.path = []; P.step = null; hover = null; hoverDrop = null;
     cancelCast(); pveT = 0; // el server de este mapa todavía no sabe si estoy muerto ni mi nivel

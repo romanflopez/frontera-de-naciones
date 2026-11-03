@@ -214,3 +214,13 @@ export const partyStatsUpdate = (name: string, hp: number, mp: number): ServerMe
 export const abilityState = (id: string, v: { channeling?: boolean; channelMs?: number; remainingMs?: number; cooldownMs?: number; cooldownTotalMs?: number; reason?: string }): ServerMessage =>
     msg({ $case: 'abilityState', value: { id, channeling: !!v.channeling, channelMs: Math.round(v.channelMs ?? 0), remainingMs: Math.max(0, Math.round(v.remainingMs ?? 0)), cooldownMs: Math.max(0, Math.round(v.cooldownMs ?? 0)), cooldownTotalMs: Math.round(v.cooldownTotalMs ?? 0), reason: v.reason ?? '' } });
 export const spellCastFailed = (): ServerMessage => msg({ $case: 'spellCastFailed', value: {} });
+// ---------- motor de jefes (docs/JEFES.md) ----------
+export const bossCast = (mobId: number, name: string, school: string, durationMs: number, windowFromMs: number, interruptible: boolean): ServerMessage =>
+    msg({ $case: 'bossCast', value: { mobId, name, school, durationMs, windowFromMs, interruptible } });
+/** result: 0 = salió, 1 = cortado, 2 = cancelado. */
+export const bossCastEnd = (mobId: number, result: 0 | 1 | 2, by = ''): ServerMessage => msg({ $case: 'bossCastEnd', value: { mobId, result, by } });
+export const bossTelegraph = (mobId: number, name: string, x: number, y: number, r: number, warnMs: number): ServerMessage =>
+    msg({ $case: 'bossTelegraph', value: { mobId, name, x, y, r, warnMs } });
+export const bossZone = (id: number, mobId: number, name: string, x: number, y: number, r: number, durationMs: number): ServerMessage =>
+    msg({ $case: 'bossZone', value: { id, mobId, name, x, y, r, durationMs } });
+export const bossPhase = (mobId: number, event: string, text: string, enraged: boolean): ServerMessage => msg({ $case: 'bossPhase', value: { mobId, event, text, enraged } });

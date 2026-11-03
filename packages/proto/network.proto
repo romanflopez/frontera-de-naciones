@@ -522,6 +522,12 @@ message ServerMessage {
     ServerItemPickedUp server_item_picked_up = 901;
     // Canal y recarga de una habilidad común (Segundo aliento) o del bloqueo de pociones (K6). Rango propio de tags desde 1000.
     AbilityState ability_state = 1000;
+    // Motor de jefes (docs/JEFES.md). Rango propio de tags desde 1100.
+    BossCast boss_cast = 1100;
+    BossCastEnd boss_cast_end = 1101;
+    BossTelegraph boss_telegraph = 1102;
+    BossZone boss_zone = 1103;
+    BossPhase boss_phase = 1104;
   }
 }
 
@@ -1596,4 +1602,52 @@ message RecallState {
   int32 remaining_ms = 3;
   int32 cooldown_ms = 4;
   string reason = 5;
+}
+
+// ---------- Motor de jefes (docs/JEFES.md) ----------
+/** Un jefe (o un add lanzador) empieza a castear: barra con nombre. Se corta con un corte duro en cualquier momento, o con uno blando desde `window_from_ms`. */
+message BossCast {
+  int32 mob_id = 1;
+  string name = 2;
+  /** Escuela (fis, fuego, acido, sombra): ícono y color de la barra. */
+  string school = 3;
+  int32 duration_ms = 4;
+  /** Desde cuándo (ms desde el inicio) entra un corte blando: el tramo dorado de la barra. */
+  int32 window_from_ms = 5;
+  /** false = candado: no se corta, hay que defenderse o moverse. */
+  bool interruptible = 6;
+}
+/** Terminó un casteo. result: 0 = salió, 1 = lo cortaron ("¡Interrumpido!"), 2 = se canceló (el jefe volvió a su lugar). */
+message BossCastEnd {
+  int32 mob_id = 1;
+  int32 result = 2;
+  /** Nombre de quien lo cortó (vacío si no lo cortaron). */
+  string by = 3;
+}
+/** Aviso en el piso: un círculo de radio `r` en (x, y) que pega a los `warn_ms`. */
+message BossTelegraph {
+  int32 mob_id = 1;
+  string name = 2;
+  float x = 3;
+  float y = 4;
+  float r = 5;
+  int32 warn_ms = 6;
+}
+/** Charco que dura: daña cada segundo a quien esté adentro durante `duration_ms`. */
+message BossZone {
+  int32 id = 1;
+  int32 mob_id = 2;
+  string name = 3;
+  float x = 4;
+  float y = 5;
+  float r = 6;
+  int32 duration_ms = 7;
+}
+/** Cambio de fase del jefe: adds, furia (borde rojo) o furia final por tiempo. */
+message BossPhase {
+  int32 mob_id = 1;
+  /** Qué pasó: "adds", "furia", "furia_final", "reinicio". */
+  string event = 2;
+  string text = 3;
+  bool enraged = 4;
 }

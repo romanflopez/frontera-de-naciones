@@ -242,8 +242,9 @@ test('rasgos al nacer: mutantes y habilidades salen en las proporciones del dise
         return [...(new MobSim(map, host) as unknown as { mobs: Map<number, Raw> }).mobs.values()];
     };
     for (let i = 0; i < 20; i++) for (const m of mk('goblin', 'pozo', 100)) { total++; if (m.traits & TRAIT_MUTANT) mut++; if (m.traits & (TRAIT_ANTI_PHYS | TRAIT_ANTI_MAGIC | TRAIT_TOXIC | TRAIT_EXPLOSIVE)) skill++; assert.equal(m.traits & TRAIT_WILD, 0); }
-    assert.ok(mut / total > 0.02 && mut / total < 0.04, `mutantes ${(mut / total * 100).toFixed(1)} %`);
-    assert.ok(skill / total > 0.08 && skill / total < 0.12, `habilidades ${(skill / total * 100).toFixed(1)} %`);
+    // 2000 sorteos: ±4 desvíos estándar (mutante 3 % ± 1,5; habilidad 10 % ± 2,7) para que el test no falle por azar (con ±2,6 fallaba ~1 de cada 100)
+    assert.ok(mut / total > 0.015 && mut / total < 0.045, `mutantes ${(mut / total * 100).toFixed(1)} %`);
+    assert.ok(skill / total > 0.073 && skill / total < 0.127, `habilidades ${(skill / total * 100).toFixed(1)} %`);
     assert.ok(mk('goblin', 'Merodeadores de prueba', 50).every((m) => m.traits === TRAIT_WILD), 'los mobs sueltos son salvajes y nada más');
     assert.ok(mk('barbaro', 'jefe', 50).every((m) => m.traits === 0), 'los jefes no llevan rasgos');
 });
