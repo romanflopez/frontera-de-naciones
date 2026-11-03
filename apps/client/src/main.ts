@@ -11,6 +11,7 @@ import './ui/loading-craftpix.css';
 import './ui/hud-craftpix.css';
 import './ui/char-craftpix.css';
 import './ui/quests-craftpix.css';
+import './ui/bag-craftpix.css';
 import { levelCard, notify } from './ui/notices';
 import { mountChat } from './ui/mountChat';
 import { mountCastBar } from './ui/CastBar';
@@ -2105,7 +2106,7 @@ function renderBag() {
         mats.push({ key: 'j' + id, html: `<button type="button" class="cl${selX && selX.id === 'j' + id ? ' sel' : ''}" data-mat="j${id}" aria-label="${matName(id)}, ${n}" title="${matName(id)}" style="--rc:#7a7468"><img class="iico" alt="" src="${shardIcon('cripta')}"><span class="q">${n}</span></button>` });
     }
     const list = invTab === 'gear' ? gear : invTab === 'cons' ? cons : invTab === 'mat' ? mats : [...gear, ...cons, ...mats];
-    const total = Math.max(25, Math.ceil(list.length / 5) * 5), cells = list.map((e) => e.html);
+    const total = Math.max(30, Math.ceil(list.length / 6) * 6), cells = list.map((e) => e.html);
     while (cells.length < total) cells.push(`<div class="cl e" aria-hidden="true"></div>`);
     $('inv').innerHTML = cells.join('');
     $('cap').textContent = `Bolsa de equipo ${P.bag.length} / ${BAG_MAX}`;
@@ -2138,7 +2139,8 @@ function renderTip() {
     }
     const it = sel!.it, base: string[] = [];
     const km = upMult(it.up), ru = (n: number) => Math.round(n * km);
-    if (it.dmg) base.push(`Daño ${ru(it.dmg[0])}–${ru(it.dmg[1])}`); if (it.def) base.push(`Defensa ${ru(it.def)}`); if (it.rm) base.push(`Res. mágica ${ru(it.rm)}`); if (it.mag) base.push(`+${ru(it.mag)} daño mágico`);
+    const trow = (k: string, v: string) => `<div class="trow"><span>${k}</span><b>${v}</b></div>`;
+    if (it.dmg) base.push(trow('Daño', `${ru(it.dmg[0])}–${ru(it.dmg[1])}`)); if (it.def) base.push(trow('Defensa', String(ru(it.def)))); if (it.rm) base.push(trow('Res. mágica', String(ru(it.rm)))); if (it.mag) base.push(trow('Daño mágico', `+${ru(it.mag)}`));
     const un = UNIQUE_BY_NAME.get(it.name), q = Math.min(4, Math.max(0, it.rar.k)), cap = UP_MAX_BY_QUALITY[q] ?? UP_MAX;
     const upLine = un ? ((it.up ?? 0) < cap ? `<div class="sub">Mejorar a +${(it.up ?? 0) + 1}: ${upStones(it.up ?? 0)} piedra${upStones(it.up ?? 0) > 1 ? 's' : ''} de forja y ${upGold(un.uniq.tier, it.up ?? 0)} de oro${(it.up ?? 0) >= 7 ? ' y una copia de repuesto de esta pieza' : ''} (en un herrero)</div>` : `<div class="sub">Mejora máxima de un ítem ${it.rar.n.toLowerCase()} (+${cap})</div>`) : '';
     // los atributos fijos del catálogo van primero y los extras al azar después (se distinguen: los extras son los que se reforjan)
@@ -2167,8 +2169,8 @@ function renderTip() {
     }
     const ilvlTxt = un ? ` · ilvl ${un.uniq.ilvl}` : '';
     const reforgeLine = un && nExtra > 0 ? `<div class="sub">Reforjar un extra: ${reforgeStones(it.rf ?? 0)} piedra${reforgeStones(it.rf ?? 0) > 1 ? 's' : ''} de reforja (tenés ${QB?.mats[MAT_REFORJA] ?? 0}) y ${reforgeGold(un.uniq.tier, it.rf ?? 0)} de oro · se duplica en cada reforja</div>` : '';
-    d.innerHTML = `<div style="border-color:${rarCol(it)}"><div class="iname" style="color:${it.rar.c}">${esc(itName(it))}</div><div class="sub">${it.rar.n} · ${it.slot}${ilvlTxt}</div>
-    ${base.length ? `<div>${base.join(' · ')}</div>` : ''}
+    d.innerHTML = `<div style="border-color:${rarCol(it)}"><div class="iname" style="color:${it.rar.c}">${esc(itName(it))}</div><div class="sub trow"><span>${it.slot}${ilvlTxt}</span><b>${it.rar.n}</b></div>
+    ${base.length ? `<div class="tbase">${base.join('')}</div>` : ''}
     ${attrList}${fxLine}${setBlock}
     ${upLine}${reforgeLine}${cmp}
     <div class="row">${sel!.from === 'bag' ? `<button type="button" id="eqBtn">Equipar</button>` : `<button type="button" id="uneqBtn">Sacar</button>`}${un && (it.up ?? 0) < cap ? `<button type="button" id="upBtn">Mejorar</button>` : ''}${Array.from({ length: nExtra }, (_, k) => `<button type="button" class="rfBtn" data-rf="${k}">Reforjar ${k + 1}</button>`).join('')}</div></div>`;
@@ -2513,23 +2515,24 @@ function dailyRows(): string {
     return daily.map((o, i) => {
         const it = dailyItem(o), poor = P.gold < o.price, info = o.attrs.length ? o.attrs.map(attrText).join(' · ') : 'Sin atributos extra';
         const tag = o.star ? (o.sold ? ' — VENDIDA' : ' ★ ESTRELLA') : '';
-        return `<button type="button" class="srow${poor || o.sold ? ' poor' : ''}" data-daily="${i}" ${o.sold ? 'disabled' : ''} title="${esc(info)}">${ico(it)}<span style="color:${it.rar.c}">${esc(it.name)}${tag}<small>${it.rar.n} · ${it.slot} · ${esc(info)}</small></span><em>${o.price} oro</em></button>`;
+        return `<button type="button" class="srow${poor || o.sold ? ' poor' : ''}" data-daily="${i}" ${o.sold ? 'disabled' : ''} title="${esc(info)}">${ico(it)}<span style="color:${it.rar.c}">${esc(it.name)}${tag}<small>${it.rar.n} · ${it.slot} · ${esc(info)}</small></span><em>${o.price}</em></button>`;
     }).join('');
 }
 const junkTotal = (): { n: number; gold: number } => { let n = 0, gold = 0; for (const [id, q] of Object.entries(QB?.mats ?? {})) { const v = junkValue(id); if (v > 0 && q > 0) { n += q; gold += v * q; } } return { n, gold }; };
 function renderShop() {
     if ($('shop').hidden || !shopNpc) return;
     const def = SHOPS[roleOf(shopNpc)];
-    $('shopGold').textContent = fmtNum(P.gold) + ' oro';
+    $('shopGold').textContent = fmtNum(P.gold);
     const buy = def.stock.map((st, i) => {
         const it = st.base ? stockItem(st) : null, poor = P.gold < st.price;
         const icon = it ? ico(it) : `<img class="iico" alt="" src="${potionIcon(st.pot!)}">`;
-        return `<button type="button" class="srow${poor ? ' poor' : ''}" data-buy="${i}" title="${esc(stockInfo(st))}">${icon}<span style="color:${it ? '#e7e2d3' : POTS[st.pot!].col}">${esc(stockLabel(st))}<small>${esc(stockInfo(st))}</small></span><em>${st.price} oro</em></button>`;
+        return `<button type="button" class="srow${poor ? ' poor' : ''}" data-buy="${i}" title="${esc(stockInfo(st))}">${icon}<span style="color:${it ? '#e7e2d3' : POTS[st.pot!].col}">${esc(stockLabel(st))}<small>${esc(stockInfo(st))}</small></span><em>${st.price}</em></button>`;
     }).join('');
     const junk = junkTotal(), dailyBlock = roleOf(shopNpc) === 'mercader' && daily.length ? `<div class="label">Oferta del día (cambia a diario, igual para todos)</div>${dailyRows()}` : '';
-    const junkBtn = junk.n ? `<button type="button" class="srow" id="sellJunk"><span>Vender toda la basura<small>${junk.n} material${junk.n > 1 ? 'es' : ''} del botín</small></span><em>${junk.gold} oro</em></button>` : '';
-    $('shopList').innerHTML = `${dailyBlock}<div class="label">Comprar</div>${buy}<div class="label">Tu bolsa · tocá un item para venderlo</div>${junkBtn}` + (P.bag.length
-        ? P.bag.map((it, i) => `<button type="button" class="srow" data-sell="${i}">${ico(it)}<span style="color:${it.rar.c}">${esc(it.name)}<small>${it.rar.n} · ${it.slot}</small></span><em>${sellPrice(it.name, it.rar.k)} oro</em></button>`).join('')
+    // la basura se vende toda junta desde el pie de la ventana (el "REPAIR ME" del diseño)
+    $('shopJunk').innerHTML = junk.n ? `<button type="button" class="qw-btn" id="sellJunk" title="${junk.n} material${junk.n > 1 ? 'es' : ''} del botín">Vender basura · ${junk.gold} oro</button>` : '';
+    $('shopList').innerHTML = `${dailyBlock}<div class="label">Comprar</div>${buy}<div class="label">Tu bolsa · tocá un item para venderlo</div>` + (P.bag.length
+        ? P.bag.map((it, i) => `<button type="button" class="srow" data-sell="${i}">${ico(it)}<span style="color:${it.rar.c}">${esc(it.name)}<small>${it.rar.n} · ${it.slot}</small></span><em>${sellPrice(it.name, it.rar.k)}</em></button>`).join('')
         : `<div class="label">La bolsa está vacía</div>`);
     document.querySelectorAll<HTMLElement>('[data-buy]').forEach((b) => (b.onclick = () => buyStock(def.stock[+b.dataset.buy!])));
     document.querySelectorAll<HTMLElement>('[data-daily]').forEach((b) => (b.onclick = () => {
@@ -3014,7 +3017,7 @@ async function boot() {
     loadBuildingImages();
     refreshLook(); void initKnight();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, toScreen, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, perf: () => ({ ...perf }), setQb: (v: QuestBookView | null) => { QB = v; renderQuest(); }, questDlg: (name: string) => openQuestDlg({ id: 'capitan_s', name, x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), questLog: toggleQuestLog, mobCount: () => mobs.length, arrows: () => arrows.length });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, perf: () => ({ ...perf }), setQb: (v: QuestBookView | null) => { QB = v; renderQuest(); }, questDlg: (name: string) => openQuestDlg({ id: 'capitan_s', name, x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), questLog: toggleQuestLog, shopDbg: (role = 'mercader') => openShop({ id: role + '_s', name: 'Mercader', x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), uid: () => uid++, RARS: RAR, mobCount: () => mobs.length, arrows: () => arrows.length });
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5), recall: () => ({ on: !!recall, k: recallK(now()), cd: Math.max(0, recallCdEnd - now()) }) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();

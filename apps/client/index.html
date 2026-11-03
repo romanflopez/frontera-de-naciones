@@ -140,7 +140,6 @@ button:hover{border-color:var(--brass)} button:focus-visible{outline:2px solid v
 .fw{--W:340px;--H:516px;z-index:4;top:calc(80px + env(safe-area-inset-top,0px));width:var(--W);height:var(--H);box-sizing:border-box;padding:46px 14px 22px;transform-origin:top right;transform:scale(var(--win-scale));font-family:var(--f-inter);color:#d9ccaa;
   background:radial-gradient(ellipse at 50% 0,#1e1813 0,#0e0b09 60%,#070605 100%);border:3px solid #3b2d1b;border-radius:6px;display:flex;flex-direction:column;
   box-shadow:0 0 0 1px #050302,0 0 0 3px #1c140c,0 0 0 4px #8a6a36,0 0 0 6px #120c06,inset 0 0 0 1px #a58144aa,inset 0 0 60px #000,0 14px 44px #000c}
-#bag{right:max(12px,env(safe-area-inset-right,0px))}
 #char{--H:640px;right:calc(max(12px,env(safe-area-inset-right,0px)) + (var(--W) + 16px) * var(--win-scale))}
 .fw-crest{position:absolute;left:50%;top:-26px;width:196px;height:46px;margin-left:-98px;pointer-events:none;z-index:2;filter:drop-shadow(0 2px 3px #000)}
 .fw-gem{position:absolute;left:50%;bottom:-11px;width:44px;height:22px;margin-left:-22px;pointer-events:none;z-index:2;filter:drop-shadow(0 2px 2px #000)}
@@ -228,15 +227,9 @@ button.sl:not(.dis):hover,.cl:hover{border-color:#e0b765;filter:brightness(1.15)
 #itip .row{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
 #itip .row button{flex:1 1 auto;min-width:72px;padding:6px 8px;height:auto;font:600 12px/1 var(--f-cinzel);color:#e6d4a6;background:linear-gradient(#3c0c14,#220509);border:1px solid #a98340;border-radius:3px}
 #itip .row button:hover{filter:brightness(1.3)}
-#shop{top:calc(84px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(330px,calc(100vw - 24px));padding:12px;display:grid;gap:8px;max-height:calc(100% - 220px);overflow:auto}
-#shop h2{margin:0;font-family:var(--f-display);font-size:15px;color:var(--brass);letter-spacing:.04em;display:flex;align-items:center;gap:8px}
-#shop h2 small{font-family:var(--f-body);color:var(--text);font-variant-numeric:tabular-nums;margin-left:auto}
-#shop h2 small.role{margin-left:0;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em} #shop h2 #shopGold{margin-left:auto}
 .srow.poor{opacity:.55}
 .srow .pico{width:30px;height:30px;flex:none;border-radius:50% 50% 8px 8px;border:2px solid rgba(255,255,255,.35);box-shadow:inset 0 -8px 10px rgba(0,0,0,.35)}
 .srow .pico + span{flex:1}
-#shop{width:min(360px,calc(100vw - 24px))}
-#shop h2 button{padding:0 8px;line-height:22px;font-size:16px}
 #wpmenu{top:calc(56px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(400px,calc(100vw - 24px));padding:0;display:grid;max-height:calc(100% - 56px - var(--hud-h) - 28px);overflow:hidden;background:linear-gradient(180deg,rgba(26,22,14,.96),rgba(12,14,12,.96));border:1px solid #8a6a2a;box-shadow:0 0 0 1px #000,0 6px 28px rgba(0,0,0,.65),inset 0 0 28px rgba(214,164,69,.08)}
 #wpmenu header{padding:11px 12px 8px;border-bottom:1px solid #4a3a1a;background:radial-gradient(120% 140% at 50% -40%,rgba(226,176,74,.22),transparent 70%)}
 #wpmenu h2{margin:0;font-family:var(--f-cinzel);font-weight:700;font-size:17px;letter-spacing:.09em;text-transform:uppercase;color:var(--brass);display:flex;align-items:center;gap:8px;text-shadow:0 0 10px rgba(214,164,69,.45)}
@@ -373,30 +366,28 @@ canvas:focus{outline:none}
     </div>
   </div>
 
-  <div id="bag" class="hud fw" role="dialog" aria-label="Inventario" hidden>
-    <svg class="fw-crest" aria-hidden="true"><use href="#fwcrest"/></svg>
-    <svg class="fw-c tl" aria-hidden="true"><use href="#fwc"/></svg><svg class="fw-c tr" aria-hidden="true"><use href="#fwc"/></svg><svg class="fw-c bl" aria-hidden="true"><use href="#fwc"/></svg><svg class="fw-c br" aria-hidden="true"><use href="#fwc"/></svg>
-    <header class="fw-head"><h2>INVENTARIO</h2><button class="fw-x" id="bagClose" type="button" aria-label="Cerrar Inventario">&times;</button></header>
-    <div class="fw-body">
+  <div id="bag" class="hud cw" role="dialog" aria-label="Inventario" hidden>
+    <header class="cw-head"><h2>INVENTARIO</h2><button class="cw-x" id="bagClose" type="button" aria-label="Cerrar Inventario">&times;</button></header>
+    <div class="cw-body">
       <div class="tabs" role="tablist" aria-label="Filtro de inventario" id="invTabs">
         <button type="button" role="tab" data-tab="all" aria-selected="true">Todo</button><button type="button" role="tab" data-tab="gear" aria-selected="false">Equipo</button><button type="button" role="tab" data-tab="cons" aria-selected="false">Consumibles</button><button type="button" role="tab" data-tab="mat" aria-selected="false">Materiales</button>
       </div>
       <div class="igrid" id="inv"></div>
-      <div class="ifoot">
-        <button type="button" class="fb" id="sortBtn" aria-label="Ordenar bolsa por tipo y rareza"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M7 2L12 10H2Z" fill="currentColor"/></svg>Ordenar</button>
-        <button type="button" class="fb" id="dropBtn" aria-label="Tirar el ítem seleccionado al suelo" title="Tira el ítem al suelo: es tuyo 30 s y después lo puede recoger cualquiera" disabled><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 3.5H12M5 3.5V2H9V3.5M3.5 3.5L4 12H10L10.5 3.5M6 5.5V10M8 5.5V10" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>Tirar</button>
-        <div class="gold" role="img" aria-label="Oro"><img id="goldIco" class="gico" alt="" width="24" height="24"><span id="gold">0</span></div>
-      </div>
       <div class="cap" id="cap"></div>
+      <div class="ifoot">
+        <div class="gold" role="img" aria-label="Oro"><img id="goldIco" class="gico" alt="" width="24" height="24"><span id="gold">0</span></div>
+        <button type="button" class="fb" id="sortBtn" aria-label="Ordenar bolsa por tipo y rareza">Ordenar</button>
+        <button type="button" class="fb" id="dropBtn" aria-label="Tirar el ítem seleccionado al suelo" title="Tira el ítem al suelo: es tuyo 30 s y después lo puede recoger cualquiera" disabled>Tirar</button>
+      </div>
     </div>
-    <svg class="fw-gem" aria-hidden="true"><use href="#fwgem"/></svg>
   </div>
   <div id="itip" class="hud" hidden></div>
   <div id="atip" role="tooltip" hidden></div>
 
-  <div id="shop" class="hud box" hidden>
-    <h2><span id="shopName">Mercader</span> <small id="shopRole" class="role"></small> <small id="shopGold"></small><button id="shopClose" type="button" aria-label="Cerrar">×</button></h2>
-    <div id="shopList"></div>
+  <div id="shop" class="hud cw" role="dialog" aria-label="Vendedor" hidden>
+    <header class="cw-head"><h2><span id="shopName">Mercader</span></h2><button class="cw-x" id="shopClose" type="button" aria-label="Cerrar">&times;</button></header>
+    <div class="cw-body"><div id="shopRole" class="role"></div><div id="shopList"></div></div>
+    <div class="sh-foot"><div id="shopJunk"></div><div class="gold" role="img" aria-label="Oro"><img class="gico" alt="" src="assets/items/misc/oro.png" width="24" height="24"><span id="shopGold">0</span></div></div>
   </div>
 
   <div id="wpmenu" class="hud box" hidden role="dialog" aria-label="Portal de Frontera">
