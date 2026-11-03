@@ -1,6 +1,6 @@
 # Llaves de las mazmorras
 
-Estado: **implementado para los seis dungeons** (2/11/2026). D7 no existe todavía (falta el mapa). Diseño en el doc del proyecto `mvp-dungeons-llaves-quests.md` §3. Regla: farmear una llave cuesta más o menos lo que dura la corrida.
+Estado: **implementado para los siete dungeons** (2/11/2026; D7 con los mapas T7). Diseño en el doc del proyecto `mvp-dungeons-llaves-quests.md` §3. Regla: farmear una llave cuesta más o menos lo que dura la corrida.
 
 ## La cadena
 
@@ -13,6 +13,7 @@ Estado: **implementado para los seis dungeons** (2/11/2026). D7 no existe todav�
 | **Llave de la torre** (abre D4, Torre del hechicero) | 8 tintas arcanas + 300 de oro | Tinta arcana: 6 % en los pits de nivel 16-20 (La Brecha) |
 | **Llave del templo** (abre D5, Templo de Mez) | 8 plumas de tormenta + 450 de oro | Pluma de tormenta: 6 % en los pits de nivel 21-25 (Cenizas II) |
 | **Llave de la fortaleza** (abre D6, el Foso) | 8 brasas infernales + 650 de oro | Brasa infernal: 6 % en los pits de nivel 26-30 (Cenizas III) |
+| **Llave del Fuerte Amir** (abre D7, las Cámaras de tortura) | 8 eslabones malditos + 900 de oro | Eslabón maldito: en los pits de nivel 31-40 (Oasis de Ceniza, Lago Kuuma, Laguna de la Gruta, Minas abandonadas) |
 
 **Cadena solo en D1 → D2** (es el tutorial). De D3 en adelante cada llave sale de los pits del mismo tramo y del mapa de la entrada: un jugador alto nunca vuelve a contenido bajo por una llave (fue de las quejas más fuertes en Dreadmyst).
 
@@ -32,6 +33,5 @@ Estado: **implementado para los seis dungeons** (2/11/2026). D7 no existe todav�
 
 ## Pendiente
 
-- D7 (cuando exista el mapa).
-- Íconos propios (hoy usan los de la llave y la esquirla viejas).
+- Íconos propios en la bolsa de materiales (ya generados en `assets/items/misc/llave_*.png`, PR #37; falta mostrarlos).
 - Si en la prueba se ven más de ~2 corridas por hora sostenidas: "botín del jefe 1 vez cada 20 h".
