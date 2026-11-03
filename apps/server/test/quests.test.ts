@@ -4,10 +4,11 @@ import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
 import {
     DAILY_LIMIT, DAILY_QUESTS, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, MAPS, REPEAT_MATS, applyQuestEvent, buildMap, cleanQuestBook, dailyEligible, mobDef, msToReset,
-    newQuestBook, questDay, rewardUniques, roleOf, rollDailies, TRAIT_MUTANT, type MobType,
+    newQuestBook, questDay, expToLevel, rewardUniques, roleOf, rollDailies, TRAIT_MUTANT, type MobType,
 } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { Economy, type EconCtx, type KillInfo } from '../src/economy.ts';
+import { PartyService, setParties } from '../src/party.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
 import { WorldRegistry, type TransferSession } from '../src/registry.ts';
 import type { PersistedPlayer } from '../src/player.ts';
@@ -235,4 +236,77 @@ test('encargo PvP: cuenta ganarle a la otra nación en mapa de facción, una vez
     v.econ!.lvl = 5; credit(faction, v, a); assert.equal(a.econ!.qb!.d.prog.frontera, 1); assert.ok(a.econ!.qb!.d.done.includes('frontera'), 'se cobra solo');
     a.econ!.qb!.d.prog.frontera = 0; a.econ!.qb!.d.done = []; credit(faction, v, a); assert.equal(a.econ!.qb!.d.prog.frontera, 0, 'al mismo rival se le cuenta una vez por día');
     const b = mk(safe, 'sol', 'solmar'), w2 = mk(safe, 'vh', 'vhar'); credit(safe, w2, b); assert.equal(b.econ!.qb!.d.prog.frontera, 0, 'sin PvP en el mapa no cuenta');
+});
+
+// ---------- quests en party [DM]: en Dreadmyst las muertes de un compañero no contaban y la gente dejaba de agruparse ----------
+function partyWorld(mapId: string, names: string[], faction = 'solmar') {
+    const mem = new MemStorage(), eco = new Economy(mem), reg = new WorldRegistry({ settings, economy: eco });
+    const w = reg.ensure(mapId);
+    const mk = (name: string, fac = faction) => {
+        const sid = `s-${name}`, persisted: PersistedPlayer = { mapId: w.mapId, worldId: w.mapId, x: MAPS[mapId].spawn.x, y: MAPS[mapId].spawn.y, direction: 4, gender: 0, skinColor: 0, hairStyleIndex: 0, underwearColorIndex: 0, movementSpeedMs: 270, runningMode: true, attackMode: true };
+        w.playerConnected(sid, name, () => {}, () => {}, persisted);
+        mem.put(`acc-${name}`, { name, salt: '', hash: '', created: 0, lastLogin: 0 });
+        w.bindAccount(sid, `acc-${name}`);
+        w.onClientSave(sid, JSON.stringify({ cls: 'guerrero', faction: fac }));
+        w.handleClientPacket(sid, { payload: { $case: 'changePlayerProfileRequest', value: { profile: `${fac};guerrero;` } } } as never);
+        return w.playerOf(sid)!;
+    };
+    const ps = names.map((n) => mk(n));
+    const svc = new PartyService({
+        sessionByName: (n) => ps.find((p) => p.characterName === n)?.sessionId, send: () => {},
+        info: (sid) => ({ name: ps.find((p) => p.sessionId === sid)!.characterName, faction, level: 5, hp: 100, maxHp: 100, mp: 0, maxMp: 0, map: mapId, online: true }),
+    });
+    setParties(svc);
+    for (const p of ps.slice(1)) { svc.handle(ps[0].sessionId, 'invite', p.characterName); svc.handle(p.sessionId, 'accept', ''); }
+    return { w, ps, mk };
+}
+
+test('quests en party: el mob que mata un compañero cuenta para todos los cercanos, también para el que está muerto', () => {
+    const q = MAIN_QUESTS[0], goal = q.goals[0]; assert.equal(goal.k, 'kill');
+    const { w, ps: [A, B, C, D] } = partyWorld((goal.k === 'kill' && goal.map) || 'campos_de_sal', ['ana', 'beto', 'caro', 'dani']);
+    try {
+        const sim = (w as unknown as { mobSim: { detail(): { id: number; type: MobType }[]; skillHit(p: unknown, id: number, dmg: number): void } }).mobSim;
+        const target = sim.detail().find((m) => goal.k === 'kill' && goal.mobs.includes(m.type)); assert.ok(target, 'hay un mob del objetivo en el mapa');
+        for (const p of [A, B, C, D]) { const b = p.econ!.qb!; b.m = { i: 0, st: 'active', prog: [0] }; b.d.ids = []; p.econ!.lvl = 1; }
+        B.setPosition(A.posX + 3, A.posY); C.setPosition(A.posX, A.posY + 3); D.setPosition(A.posX + 40, A.posY);
+        C.hp = 0; // muerto, cerca
+        const exp0 = C.econ!.exp, gold0 = C.econ!.gold, bag0 = C.econ!.bag.length;
+        sim.skillHit(A, target!.id, 999_999);
+        assert.equal(A.econ!.qb!.m.prog[0], 1, 'el que lo mató');
+        assert.equal(B.econ!.qb!.m.prog[0], 1, 'el compañero vivo cerca');
+        assert.equal(C.econ!.qb!.m.prog[0], 1, 'el compañero muerto cerca también avanza la misión');
+        assert.equal(D.econ!.qb!.m.prog[0], 0, 'el que está lejos (más de 20 celdas) no');
+        assert.equal(C.econ!.exp, exp0, 'el muerto no cobra exp'); assert.equal(C.econ!.gold, gold0, 'ni oro'); assert.equal(C.econ!.bag.length, bag0, 'ni ítems');
+        assert.equal(C.hp, 0, 'sigue muerto');
+    } finally { setParties(undefined); }
+});
+
+test('quests en party: un encargo que se cobra estando muerto puede subir de nivel pero no revive', () => {
+    const { w, ps: [A, B] } = partyWorld('campos_de_sal', ['ana', 'beto']);
+    try {
+        const sim = (w as unknown as { mobSim: { detail(): { id: number }[]; skillHit(p: unknown, id: number, dmg: number): void } }).mobSim;
+        const st = B.econ!; st.lvl = 1; st.exp = expToLevel(1) - 1; // a 1 de exp de subir
+        st.qb!.d = { day: questDay(Date.now()), ids: ['mutante'], prog: { mutante: 0 }, done: [], ess: false, pvp: [] };
+        B.setPosition(A.posX + 2, A.posY); B.hp = 0;
+        const m = sim.detail()[0];
+        (sim as unknown as { mobs: Map<number, { traits: number }> }).mobs.get(m.id)!.traits |= TRAIT_MUTANT;
+        sim.skillHit(A, m.id, 999_999);
+        assert.ok(st.qb!.d.done.includes('mutante'), 'el encargo se cobró');
+        assert.equal(st.lvl, 2, 'subió de nivel');
+        assert.equal(B.hp, 0, 'pero sigue muerto');
+    } finally { setParties(undefined); }
+});
+
+test('quests en party: el encargo PvP le cuenta a cada compañero cerca con sus propias reglas', () => {
+    const { w, ps: [A, B, C], mk } = partyWorld('canon_goblin', ['sol', 'sol2', 'sol3']);
+    try {
+        const V = mk('vh', 'vhar');
+        for (const p of [A, B, C, V]) { p.econ!.lvl = 10; p.econ!.qb!.d = { day: questDay(Date.now()), ids: ['frontera'], prog: { frontera: 0 }, done: [], ess: false, pvp: [] }; }
+        C.econ!.lvl = 20; // la víctima está 10 niveles abajo de C: a él no le cuenta
+        B.setPosition(A.posX + 2, A.posY); C.setPosition(A.posX, A.posY + 2);
+        (w as unknown as { pvpQuestCredit(v: unknown, id: bigint): void }).pvpQuestCredit(V, A.playerId);
+        assert.ok(A.econ!.qb!.d.done.includes('frontera'));
+        assert.ok(B.econ!.qb!.d.done.includes('frontera'), 'el compañero cerca también');
+        assert.equal(C.econ!.qb!.d.prog.frontera, 0, 'a cada uno con su regla de nivel');
+    } finally { setParties(undefined); }
 });

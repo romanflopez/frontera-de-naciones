@@ -104,9 +104,11 @@ export class GameWorld {
                 reward: (p, info) => {
                     if (!this.econ) return;
                     // party: cada compañero cerca (mismo mundo, vivo) recibe su propio botín y una parte de la exp (docs/PARTY_Y_ARENAS.md §1)
-                    const near = partyMates(p.sessionId).map((sid) => this.players.get(sid)).filter((m): m is Player => !!m && (m === p || (m.hp > 0 && Math.hypot(m.posX - p.posX, m.posY - p.posY) <= PARTY_SHARE_RANGE)));
-                    const mult = partyExpMult(near.length);
-                    for (const m of near.length ? near : [p]) this.econ.reward(m, this.econCtx, { ...info, map: this.mapId }, mult);
+                    // quests en party [DM]: el compañero cerca que está muerto no cobra botín ni exp, pero el mob le cuenta para sus misiones
+                    const inRange = this.partyInRange(p), near = inRange.filter((m) => m === p || m.hp > 0), dead = inRange.filter((m) => m !== p && m.hp <= 0);
+                    const mult = partyExpMult(near.length), k = { ...info, map: this.mapId };
+                    for (const m of near) this.econ.reward(m, this.econCtx, k, mult);
+                    for (const m of dead) { const lvl0 = m.econ?.lvl; this.econ.questCredit(m, k); if (m.econ && m.econ.lvl !== lvl0) this.restat(m); }
                 },
             }, { noRespawn: this.isDungeonRun, elites: !!this.def?.temporary });
             if (this.partySize > 1 || this.isDungeonRun) this.mobSim.setPartyScale(this.partySize);
@@ -1123,7 +1125,7 @@ export class GameWorld {
         p.pvp.meleeGapMs = meleeIntervalSecs(p.combat.aspd) * 1000; // la velocidad de ataque la fija el equipo que guarda el server
         p.prog = progressFromEcon(st);
         if (login) { p.hp = p.combat.savedHp; p.mp = p.combat.savedMp; }
-        else if (p.combat.lvl > prevLvl) { p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; }
+        else if (p.combat.lvl > prevLvl && !p.isDead) { p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; } // subir de nivel muerto (encargo de la party) no te revive
         else { if (p.hp > p.combat.maxHp) p.hp = p.combat.maxHp; if (p.mp > p.combat.maxMp) p.mp = p.combat.maxMp; }
         this.sendVitals(p, true);
     }
@@ -1390,9 +1392,22 @@ export class GameWorld {
     private pvpQuestCredit(victim: Player, killerId?: bigint): void {
         if (!killerId || this.def?.pvp !== 'faction') return;
         const killer = this.playersById.get(killerId); if (!killer || killer === victim || !killer.econ || !victim.econ) return;
-        if (this.factionOf(killer) === this.factionOf(victim) || victim.econ.lvl < killer.econ.lvl - 5) return;
-        const lvl0 = killer.econ.lvl; this.econ?.questPvp(killer, victim.accountKey || victim.characterName);
-        if (killer.econ.lvl !== lvl0) this.restat(killer);
+        if (this.factionOf(killer) === this.factionOf(victim)) return;
+        // quests en party [DM]: le cuenta a cada compañero cerca (vivo o muerto), con sus propias reglas (nivel y una vez por rival)
+        for (const m of this.partyInRange(killer)) {
+            if (m === victim || !m.econ || this.factionOf(m) === this.factionOf(victim) || victim.econ.lvl < m.econ.lvl - 5) continue;
+            const lvl0 = m.econ.lvl; this.econ?.questPvp(m, victim.accountKey || victim.characterName);
+            if (m.econ.lvl !== lvl0) this.restat(m);
+        }
+    }
+    /** El jugador y sus compañeros de party en este mundo a PARTY_SHARE_RANGE celdas o menos (vivos o muertos). Él siempre va primero. */
+    private partyInRange(p: Player): Player[] {
+        const out = [p];
+        for (const sid of partyMates(p.sessionId)) {
+            const m = this.players.get(sid);
+            if (m && m !== p && Math.hypot(m.posX - p.posX, m.posY - p.posY) <= PARTY_SHARE_RANGE) out.push(m);
+        }
+        return out;
     }
     private respawn(p: Player): void {
         if (!p.isDead || Date.now() - p.deadAt < 1800) return;

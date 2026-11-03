@@ -675,6 +675,23 @@ export class Economy {
         return true;
     }
 
+    /** Avance de misión por un mob muerto: el objetivo de matar y, si es el jefe en su piso, el dungeon. Lo usa `reward` y `questCredit`. */
+    private questKill(p: Player, st: Econ, k: KillInfo): void {
+        this.questEvent(p, st, { k: 'kill', type: k.type, map: k.map ?? '', pit: k.origin === 'pit', tier: tierOfLevel(k.def.lvl), myTier: tierOfLevel(st.lvl), mutant: ((k.traits ?? 0) & TRAIT_MUTANT) !== 0 });
+        // el dungeon cuenta solo si el jefe muere en su piso (la instancia de la party), no si aparece en otro mapa
+        if (k.def.boss) for (const d of DUNGEON_IDS) if (DUNGEON_BOSS[d] === k.type && k.map === DUNGEON_MAP[d]) this.questEvent(p, st, { k: 'dungeon', d });
+    }
+
+    /**
+     * Quests en party [DM]: un compañero cerca que no cobra botín (está muerto) igual avanza sus misiones con el mob que mató la party.
+     * Sin exp, oro ni ítems: solo la misión (y el encargo del día, que se cobra solo y sí puede dar exp y subir de nivel).
+     */
+    questCredit(p: Player, k: KillInfo): void {
+        const st = p.econ; if (!st) return;
+        this.questKill(p, st, k); // si un encargo sube de nivel, el aviso ya sale de payDaily; el restat lo hace el mundo
+        this.touch(p); this.snapshot(p);
+    }
+
     reward(p: Player, ctx: EconCtx, k: KillInfo, expMult = 1): void {
         const st = p.econ; if (!st) return;
         const def = k.def, boss = def.boss, lvl0 = st.lvl; // un encargo del día cobrado en este kill también puede subir de nivel
@@ -717,9 +734,7 @@ export class Economy {
             const mats = (st.mats ??= {}); mats[keyDrop] = Math.min(99, (mats[keyDrop] ?? 0) + 1);
             p.send(M.econResult(true, 'quest_mat', `Conseguiste una ${keyMatName(keyDrop)}.`));
         }
-        this.questEvent(p, st, { k: 'kill', type: k.type, map: k.map ?? '', pit: k.origin === 'pit', tier, myTier: tierOfLevel(st.lvl), mutant: ((k.traits ?? 0) & TRAIT_MUTANT) !== 0 });
-        // el dungeon cuenta solo si el jefe muere en su piso (la instancia de la party), no si aparece en otro mapa
-        if (boss) for (const d of DUNGEON_IDS) if (DUNGEON_BOSS[d] === k.type && k.map === DUNGEON_MAP[d]) this.questEvent(p, st, { k: 'dungeon', d });
+        this.questKill(p, st, k);
         const questReady = false, questProg = 0; // la cadena vieja de 10 quedó jubilada: los avisos de misión van por questEvent
         levelUp(st); const ups = st.lvl - lvl0;
         this.touch(p);
