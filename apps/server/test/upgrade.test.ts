@@ -70,3 +70,21 @@ test('mejora +N: sube los stats base (+4 % por nivel) en el cálculo de combate 
     assert.equal(up5.wdmg[1], Math.round(base.wdmg[1] * 1.2));
 });
 
+
+test('mejora +N: desde +8 cada intento gasta una copia de repuesto', () => {
+    const { reg, join } = setup(), w = reg.ensure('solmar_herreria');
+    const npc = buildMap('solmar_herreria').npcs.find((n) => roleOf(n) === 'armero')!;
+    const J = join(w, 'herrero', MAPS.solmar_herreria.spawn); J.p.setPosition(npc.x + 1, npc.y + 1);
+    const st = J.p.econ!; st.gold = 1_000_000; st.forge = 1000;
+    st.bag.push({ u: 900, n: 'Hoja de sal', r: 4, a: [{ id: 'aspd', v: 8 }, { id: 'crit', v: 4 }], up: 7 });
+    const up = () => { J.log.length = 0; w.handleClientPacket(J.session.sessionId, { payload: { $case: 'econUpgradeRequest', value: { npcId: npc.id, uid: 900 } } } as never); return (J.log.filter((m) => m.payload?.$case === 'econResult').at(-1)!.payload as any).value; };
+    const rnd = Math.random;
+    try {
+        assert.equal(up().code, 'spare');
+        st.bag.push({ u: 901, n: 'Hoja de sal', r: 0, a: [] });
+        Math.random = () => 0;
+        assert.equal(up().ok, true);
+        assert.equal(st.bag.find((x) => x.u === 900)!.up, 8);
+        assert.equal(st.bag.some((x) => x.u === 901), false, 'la copia se consumió');
+    } finally { Math.random = rnd; }
+});

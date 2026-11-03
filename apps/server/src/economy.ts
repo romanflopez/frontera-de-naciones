@@ -102,6 +102,8 @@ export const FORGE_BOSS: [number, number] = [3, 5];
 export const UP_RATE = [0.33, 0.33, 0.33, 0.25, 0.2, 0.15, 0.12, 0.25, 0.25, 0.25, 0.25];
 /** Desde esta mejora el fallo baja el ítem un nivel; desactivado a propósito (completar el set no puede depender de apuestas que se pierden). */
 export const UP_RISK_FROM = 99;
+/** Desde este nivel actual (+8 en adelante) cada intento gasta una copia de repuesto de la misma pieza. */
+export const UP_SPARE_FROM = 7;
 export const GOLD_CHANCE = 0.45;
 const pick = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
 
@@ -511,7 +513,14 @@ export class Economy {
             const stones = upStones(up), gold = upGold(u.uniq.tier, up);
             if ((st.forge ?? 0) < stones) return fail('stones', `Necesitás ${stones} piedra${stones > 1 ? 's' : ''} de forja.`);
             if (st.gold < gold) return fail('gold', `Necesitás ${gold} de oro.`);
+            // desde +8 cada intento gasta una copia de repuesto de la misma pieza (de cualquier calidad, en la bolsa)
+            let spare: SItem | undefined;
+            if (up >= UP_SPARE_FROM) {
+                spare = st.bag.find((x) => x.n === it.n && x.u !== it.u);
+                if (!spare) return fail('spare', `Para pasar de +${up} a +${up + 1} necesitás otra ${it.n} de repuesto en la bolsa.`);
+            }
             st.forge = (st.forge ?? 0) - stones; addGold(st, -gold);
+            if (spare) st.bag.splice(st.bag.indexOf(spare), 1);
             if (Math.random() < (UP_RATE[up] ?? 0)) { it.up = up + 1; this.questEvent(p, st, null); return done(`¡${it.n} subió a +${it.up}!`, true); }
             // la mejora a +6 o más es la zona de riesgo: el fallo baja un nivel
             if (up >= UP_RISK_FROM) { it.up = up - 1; return done(`La mejora falló y ${it.n} BAJÓ a +${it.up}. Se perdieron ${stones} piedra${stones > 1 ? 's' : ''} y ${gold} de oro.`, true); }
