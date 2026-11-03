@@ -90,7 +90,7 @@ test('la DF y la RM que vienen de atributos se topean; la base de la armadura no
 });
 
 // ---------- mejora: tope por calidad y zona de riesgo ----------
-test('mejora: un Verde solo llega a +3; a +6 o más el fallo baja un nivel', () => {
+test('mejora: un Verde solo llega a +3; un fallo nunca baja el nivel', () => {
     const { eco, reg, join } = setup();
     const world = reg.ensure('solmar_legacy');
     const { p, log } = join(world, 'Mejorador');
@@ -100,13 +100,13 @@ test('mejora: un Verde solo llega a +3; a +6 o más el fallo baja un nivel', () 
     st.forge = 999; st.gold = 999_999;
     eco.upgrade(p, cx, 'armero_s', verde.u);
     assert.equal(lastResult(log)?.code, 'max');
-    // Dorado en +6: con el dado en contra, baja a +5; con el dado a favor, sube a +7
+    // Dorado en +6: con el dado en contra se queda en +6; con el dado a favor, sube a +7
     const vio = uniqueItem(st, UNIQUE_BASES.find((u) => u.uniq.boss)!, 4);
     vio.up = 6; st.bag.push(vio);
     const rnd = Math.random;
     try {
         Math.random = () => 0.999; eco.upgrade(p, cx, 'armero_s', vio.u);
-        assert.equal(vio.up, 5, 'el fallo en la zona de riesgo baja un nivel');
+        assert.equal(vio.up, 6, 'el fallo no baja el nivel');
         vio.up = 6;
         Math.random = () => 0; eco.upgrade(p, cx, 'armero_s', vio.u);
         assert.equal(vio.up, 7, 'el éxito sube normal');

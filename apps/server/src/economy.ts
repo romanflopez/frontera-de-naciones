@@ -97,11 +97,11 @@ export const FORGE_CHANCE = { loose: 0.05, pit: 0.08, dungeon: 0.18 };
 export const FORGE_BOSS: [number, number] = [3, 5];
 /**
  * Probabilidad de éxito de cada mejora (+1 .. +11): arranca en 33 % para que la gente pueda "limar". Solo vive en el server.
- * Hasta +5, al fallar no pasa nada (se pierden piedras y oro); de +6 en adelante es la zona de riesgo: al fallar el ítem BAJA un nivel.
+ * Al fallar no baja el nivel: solo se pierden piedras y oro (el costo del azar es el tiempo, no perder lo ya hecho).
  */
 export const UP_RATE = [0.33, 0.33, 0.33, 0.25, 0.2, 0.15, 0.12, 0.1, 0.08, 0.06, 0.05];
-/** Desde esta mejora, el fallo baja el ítem un nivel. */
-export const UP_RISK_FROM = 5;
+/** Desde esta mejora el fallo baja el ítem un nivel; desactivado a propósito (completar el set no puede depender de apuestas que se pierden). */
+export const UP_RISK_FROM = 99;
 export const GOLD_CHANCE = 0.45;
 const pick = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
 
