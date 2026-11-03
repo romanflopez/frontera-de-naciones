@@ -87,10 +87,10 @@ export function attrCap(id: AttrId): number {
 function newItem(st: Econ, base: string, r: number, a: SItem['a']): SItem { return { u: st.nextUid++, n: base, r, a }; }
 
 /** Probabilidades de botín de los mobs de bandas con ítems únicos (docs/ITEMS.md §5). El resto del tiempo cae oro. */
-export const UNIQUE_CHANCE = { loose: 0.005, pit: 0.015, dungeon: 0.04 };
+export const UNIQUE_CHANCE = { loose: 0.005, pit: 0.015, dungeon: 0.04, world: 0.04 };
 export const COMMON_CHANCE = 0.06;
 /** Piedras de forja: chance por muerte según el origen del mob, y cantidad que suelta un jefe. */
-export const FORGE_CHANCE = { loose: 0.05, pit: 0.08, dungeon: 0.18 };
+export const FORGE_CHANCE = { loose: 0.05, pit: 0.08, dungeon: 0.18, world: 0.18 };
 export const FORGE_BOSS: [number, number] = [3, 5];
 /** Probabilidad de éxito de cada mejora (+1 .. +UP_MAX): arranca en 33 % para que la gente pueda "limar". Solo vive en el server. Al fallar el ítem no baja (hasta +5), se pierden las piedras y el oro. */
 export const UP_RATE = [0.33, 0.33, 0.33, 0.25, 0.2];
@@ -252,7 +252,7 @@ export interface EconCtx {
     /** Botín en el suelo del mundo del jugador. */
     ground: GroundApi;
 }
-export interface KillInfo { /** rasgos del mob (mobTraits.ts): multiplican la exp (mutante ×3, habilidades ×1,3-1,5, salvaje ×1,25) y el botín del mutante (×2) */ traits?: number; mobId: number; type: MobType; def: MobDef; zoneName: string; /** de dónde sale el mob: suelto, de un pit o de una mazmorra (docs/ITEMS.md) */ origin?: 'loose' | 'pit' | 'dungeon'; x: number; y: number; /** esquirla que suelta el boss de la zona (Zone.drops); si falta, se decide por el nombre */ shard?: KeyId; /** id del mapa donde murió (objetivos de misión por mapa) */ map?: string }
+export interface KillInfo { /** rasgos del mob (mobTraits.ts): multiplican la exp (mutante ×3, habilidades ×1,3-1,5, salvaje ×1,25) y el botín del mutante (×2) */ traits?: number; mobId: number; type: MobType; def: MobDef; zoneName: string; /** de dónde sale el mob: suelto, de un pit o de una mazmorra (docs/ITEMS.md) */ origin?: 'loose' | 'pit' | 'dungeon' | 'world'; x: number; y: number; /** esquirla que suelta el boss de la zona (Zone.drops); si falta, se decide por el nombre */ shard?: KeyId; /** id del mapa donde murió (objetivos de misión por mapa) */ map?: string }
 
 const fail = (code: string, text: string) => ({ ok: false as const, code, text });
 type Outcome = { ok: true; code: string; text: string; stats?: boolean } | { ok: false; code: string; text: string };
@@ -722,9 +722,9 @@ export class Economy {
             else { bagFull = true; ctx.ground.add(item, Math.floor(p.posX) + 0.5, Math.floor(p.posY) + 0.5, [p.accountKey], LOOT_FREE_MS); } // nada se destruye: cae junto al jugador
         }
         let forge = 0;
-        if (boss ? bossU : Math.random() < FORGE_CHANCE[k.origin ?? 'pit']) { forge = boss ? rint(FORGE_BOSS[0], FORGE_BOSS[1]) : 1; st.forge = (st.forge ?? 0) + forge; }
+        if (boss ? (bossU || k.origin === 'world') : Math.random() < FORGE_CHANCE[k.origin ?? 'pit']) { forge = boss ? rint(FORGE_BOSS[0], FORGE_BOSS[1]) : 1; st.forge = (st.forge ?? 0) + forge; }
         if (Math.random() < 0.14) { const kind: PotKind = Math.random() < 0.6 ? 'hp' : 'mp'; if (st.pots[kind] < POT_MAX) { st.pots[kind]++; potion = kind; } }
-        if (boss && !bossU) { const kid: KeyId = k.shard ?? (k.zoneName === 'Cripta olvidada' ? 'foso' : 'cripta'); st.q.shards[kid] = Math.min(99, st.q.shards[kid] + 1); shard = kid; }
+        if (boss && !bossU && k.origin !== 'world') { const kid: KeyId = k.shard ?? (k.zoneName === 'Cripta olvidada' ? 'foso' : 'cripta'); st.q.shards[kid] = Math.min(99, st.q.shards[kid] + 1); shard = kid; }
         // materiales de las llaves: cada uno en los pits de su tier de zona (T1-T7, sin el tope 6 de la banda de ítems; ×2 en mutantes, como el resto del botín)
         const qmats: string[] = [];
         if (!boss && k.origin === 'pit') for (const [id, mt] of Object.entries(QUEST_MATS)) {

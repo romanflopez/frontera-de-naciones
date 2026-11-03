@@ -53,6 +53,8 @@ export class GameWorld {
     private hibernated = false;
     /** Lo setea el registro de mundos: saca al jugador de este mundo y lo manda a otro mapa (portal, respawn). */
     transferHook?: (sessionId: string, dest: { map: string; x: number; y: number }, why: 'respawn' | 'waypoint' | 'home' | 'recall') => void;
+    /** Jefe de mundo (worldBoss.ts): avisa cuando muere, con el que dio el golpe final y cuántos pelearon. */
+    worldBossHook?: (ev: { kind: 'died'; name: string; killer: string; fighters: number }) => void;
     /** Botín en el suelo de este mundo (solo en memoria). */
     private readonly loot = new GroundLoot();
     private lastGroundSync = 0;
@@ -100,6 +102,11 @@ export class GameWorld {
                     if (f && (f.x !== p.posX || f.y !== p.posY)) { this.moveTo(p, p.posX, p.posY, f.x, f.y, false, true); p.send(M.playerTeleported(f.x, f.y)); }
                 },
                 dispel: (p) => { clearBuffs(p.status); if (p.status.statDirty) { p.status.statDirty = false; this.restat(p); } this.announceStatus(p); this.sendVitals(p, true); },
+                worldBossDied: (info, fighters, killer) => {
+                    // jefe de mundo: cobran todos los que pelearon (pegaron, curaron o tanquearon), cada uno con su botín propio, sin reparto de exp
+                    if (this.econ) for (const f of fighters) this.econ.reward(f, this.econCtx, { ...info, zoneName: 'Jefe de mundo', origin: 'world', traits: 0, map: this.mapId }, 1);
+                    this.worldBossHook?.({ kind: 'died', name: info.def.name, killer: killer?.characterName ?? '', fighters: fighters.length });
+                },
                 mobDied: (info) => { if (!info.gm) this.dropLoot(info.type, info.def.name, info.def.lvl, info.x, info.y, info.killer); },
                 reward: (p, info) => {
                     if (!this.econ) return;
@@ -142,6 +149,24 @@ export class GameWorld {
         const p = this.players.get(sessionId); if (!p) return [];
         return [p.sessionId, ...this.nearbyPlayers(p.posX, p.posY, p.sessionId).filter((o) => !this.hiddenFrom(o, p)).map((o) => o.sessionId)];
     }
+
+    /** ¿Hay un jefe de mundo vivo acá? Un mundo con jefe no hiberna aunque esté vacío. */
+    get hasWorldBoss(): boolean { return !!this.mobSim?.worldBoss(); }
+    /**
+     * Jefe de mundo (docs/JEFE_DE_MUNDO.md): lo pone cerca de `at` o, si no se pasa, en el centro de una zona de mobs al azar del mapa.
+     * Devuelve dónde quedó, o undefined si el mapa no tiene mobs o lugar.
+     */
+    spawnWorldBoss(type: MobType, at?: { x: number; y: number }): { x: number; y: number } | undefined {
+        if (!this.mobSim || !this.map) return undefined;
+        const zs = this.map.zones; if (!zs.length) return undefined;
+        const z = at ? undefined : zs[Math.floor(Math.random() * zs.length)], c = at ?? { x: z!.x, y: z!.y };
+        let zi = zs.findIndex((q) => q.type === type);
+        if (zi < 0) { let bd = Infinity; zs.forEach((q, i) => { const d = Math.hypot(q.x - c.x, q.y - c.y); if (d < bd) { bd = d; zi = i; } }); }
+        const r = this.mobSim.spawnWorldBoss(type, c.x, c.y, zi);
+        return r && { x: Math.floor(r.x), y: Math.floor(r.y) };
+    }
+    /** Saca al jefe de mundo (se le terminó el tiempo). */
+    removeWorldBoss(): boolean { return this.mobSim?.removeWorldBoss() ?? false; }
 
     /** Duerme el mundo vacío: se tiran los temporizadores y los mobs (al despertar nacen de nuevo con la vida llena). */
     hibernate(): void {

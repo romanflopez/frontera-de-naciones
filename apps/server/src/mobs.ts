@@ -42,6 +42,8 @@ export interface MobHost {
     reward(killer: Player, info: { mobId: number; type: MobType; def: MobDef; zoneName: string; origin: 'loose' | 'pit' | 'dungeon'; x: number; y: number; shard?: 'cripta' | 'foso'; /** rasgos del mob (mobTraits.ts): multiplican la exp y el botín */ traits: number }): void;
     /** Murió un mob con dueño del golpe final: el mundo tira el botín de suelo (systems/loot.ts). Opcional (tests). */
     mobDied?(info: { type: MobType; def: MobDef; x: number; y: number; gm: boolean; killer?: Player }): void;
+    /** Murió el jefe de mundo: `fighters` son todos los que le sumaron amenaza (pegaron, curaron o tanquearon). Opcional (tests). */
+    worldBossDied?(info: { mobId: number; type: MobType; def: MobDef; x: number; y: number }, fighters: Player[], killer: Player | null): void;
 }
 
 /**
@@ -62,6 +64,8 @@ interface SimMob {
     gm?: boolean;
     /** Add de un jefe: no reaparece al morir. */
     add?: boolean;
+    /** Jefe de mundo (docs/JEFE_DE_MUNDO.md): no reaparece y el botín es para todos los que pelearon. */
+    world?: boolean;
     /** Correa de mazmorra: desde cuándo y dónde no avanza. */
     stuckAt?: number; stuckX?: number; stuckY?: number;
     /** Motor de jefes (bosses.ts): jefes con kit y adds lanzadores. */
@@ -195,6 +199,38 @@ export class MobSim {
             done++; break;
         }
         return done;
+    }
+
+    /**
+     * Jefe de mundo (docs/JEFE_DE_MUNDO.md): nace en una celda libre cerca de (cx, cy), fuera de la zona segura, con su motor de jefe.
+     * No reaparece. Devuelve su id y dónde quedó, o undefined si no encontró lugar.
+     */
+    spawnWorldBoss(type: MobType, cx: number, cy: number, zoneIdx: number): { id: number; x: number; y: number } | undefined {
+        const d0 = mobDef(type), zone: Zone = { type, x: cx, y: cy, r: 10, n: 0, name: 'Jefe de mundo', lvl: d0.lvl };
+        for (let i = 0; i < 200; i++) {
+            const x = Math.floor(cx + (Math.random() * 2 - 1) * (1 + i / 10)), y = Math.floor(cy + (Math.random() * 2 - 1) * (1 + i / 10));
+            if (!this.walk(x, y) || this.map.safe[y]?.[x]) continue;
+            const d = mobDef(type, zone), T = this.now(), id = this.nextId++;
+            this.mobs.set(id, {
+                id, type, def: d, typeIdx: MOB_TYPES.indexOf(type), zone: { ...zone, x: x + 0.5, y: y + 0.5 }, zoneIdx, x: x + 0.5, y: y + 0.5, hp: d.hp, hpMax: d.hp,
+                state: 'idle', target: null, lastAttacker: null, wx: x + 0.5, wy: y + 0.5, wait: 0, nextAtk: 0, nextSp: T + 4, busy: 0,
+                par: 0, imm: 0, slow: 0, poison: 0, poisonTick: 0, moving: false, dead: false, world: true, traits: 0, fled: true, fleeUntil: 0,
+                threat: new Map(), tauntBy: null, tauntUntil: 0, burn: 0, burnTick: 0, burnDmg: 0, burnBy: null,
+                bs: bossStateFor(type),
+            });
+            return { id, x: x + 0.5, y: y + 0.5 };
+        }
+        return undefined;
+    }
+    /** El jefe de mundo vivo, si hay. */
+    worldBoss(): { id: number; x: number; y: number; hp: number; hpMax: number } | undefined {
+        for (const m of this.mobs.values()) if (m.world && !m.dead) return { id: m.id, x: m.x, y: m.y, hp: m.hp, hpMax: m.hpMax };
+        return undefined;
+    }
+    /** Saca al jefe de mundo (se le acabó el tiempo). Devuelve si había uno. */
+    removeWorldBoss(): boolean {
+        for (const [id, m] of this.mobs) if (m.world) { this.mobs.delete(id); this.broadcastNear(m, M.mobDied(m.id, 0n, m.x, m.y, m.typeIdx, m.zoneIdx)); return true; }
+        return false;
     }
 
     /** SOLO GM (/gm limpiar): saca los mobs invocados con /gm mob. */
@@ -523,6 +559,13 @@ export class MobSim {
 
     private kill(m: SimMob, killer: Player | null) {
         m.dead = true; this.mobs.delete(m.id);
+        if (m.world) { // jefe de mundo: cobran todos los que pelearon, no solo la party del golpe final
+            const fighters = [...m.threat.keys()].map((id) => this.host.playerById(id)).filter((p): p is Player => !!p && !p.disconnected);
+            if (killer && !fighters.includes(killer)) fighters.push(killer);
+            this.broadcastNear(m, M.mobDied(m.id, killer ? killer.playerId : 0n, m.x, m.y, m.typeIdx, m.zoneIdx));
+            this.host.worldBossDied?.({ mobId: m.id, type: m.type, def: m.def, x: m.x, y: m.y }, fighters, killer);
+            return;
+        }
         if (killer) this.host.reward(killer, { mobId: m.id, type: m.type, def: m.def, zoneName: m.zone.name, origin: m.zone.tier === 'dungeon' ? 'dungeon' : m.zone.name.startsWith('Merodeadores') ? 'loose' : 'pit', x: m.x, y: m.y, shard: m.zone.drops?.shard, traits: m.traits }); // una sola vez: el mob ya salió del mapa
         if (m.traits & TRAIT_EXPLOSIVE) { // explosivo: al morir pega a todos los jugadores cercanos (aunque no sea el que lo mató)
             const dmg = Math.round(((m.def.dmg[0] + m.def.dmg[1]) / 2) * EXPLOSION_MULT * this.dmgMult(m));

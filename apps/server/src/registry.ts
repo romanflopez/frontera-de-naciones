@@ -132,7 +132,7 @@ export class WorldRegistry {
                 continue;
             }
             // las instancias no hibernan: al despertar renacerían todos los mobs (en una corrida, lo muerto queda muerto)
-            if (!iid && !w.isHibernated && now - since >= this.hibernateAfterMs) { w.hibernate(); console.log(`[Registro] Mundo '${key}' hibernó (vacío).`); }
+            if (!iid && !w.isHibernated && !w.hasWorldBoss && now - since >= this.hibernateAfterMs) { /* con jefe de mundo vivo no duerme */ w.hibernate(); console.log(`[Registro] Mundo '${key}' hibernó (vacío).`); }
         }
         for (const iid of [...this.runs.keys()]) if (!this.runLive(iid) && ![...this.worlds.keys()].some((k) => instanceOf(k) === iid)) this.runs.delete(iid); // corrida que nunca llegó a armarse
         for (const pd of [...this.pending.values()]) if (now - pd.since >= this.transferTimeoutMs) {
