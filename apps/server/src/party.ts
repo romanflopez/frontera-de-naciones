@@ -20,6 +20,8 @@ export interface PartyHooks {
     send(sessionId: string, m: ServerMessage): void;
     info(sessionId: string): MemberInfo | undefined;
     now?(): number;
+    /** Alguien dejó la party: `by` es él mismo si salió (o se desconectó) o el líder si lo expulsó. La arena lo usa para saber a quién penalizar. */
+    left?(sid: string, by: string): void;
 }
 
 interface Party { id: number; leader: string; members: string[]; /** lo último que se mandó: estructura (miembros, nivel, mapa, líder) y hp/mp por nombre */ sent?: { key: string; stats: Map<string, string> } }
@@ -103,6 +105,7 @@ export class PartyService {
         const pid = this.partyOf.get(sid), party = pid ? this.parties.get(pid) : undefined;
         if (!party) { if (msg) this.say(sid, 'No estás en una party.'); return; }
         const name = this.nameOf(sid);
+        this.h.left?.(sid, sid);
         party.members = party.members.filter((m) => m !== sid); this.partyOf.delete(sid);
         if (msg) this.say(sid, msg);
         this.h.send(sid, M.partyState([]));
@@ -115,6 +118,7 @@ export class PartyService {
         const target = party.members.find((m) => this.nameOf(m).toLowerCase() === name.toLowerCase());
         if (!target || target === sid) { this.say(sid, 'Ese jugador no está en tu party.'); return; }
         const tname = this.nameOf(target);
+        this.h.left?.(target, sid);
         party.members = party.members.filter((m) => m !== target); this.partyOf.delete(target);
         this.say(target, 'Te expulsaron de la party.'); this.h.send(target, M.partyState([]));
         this.afterChange(party, `${tname} fue expulsado de la party.`);

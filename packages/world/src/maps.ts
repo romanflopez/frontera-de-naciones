@@ -7,7 +7,7 @@
 import { buildSolmar, type WorldMap } from './index';
 import { HUBS } from './cities';
 import { buildPruebaCaza, buildPruebaMazmorra, PRUEBA_CAZA, PRUEBA_MAZMORRA } from './testmaps';
-import { ARENA as ARENA_MAP, buildArena } from './arena';
+import { ARENA as ARENA_MAP, ARENA_MAPS, buildArena } from './arena';
 import { TRAINING, type PortalProgress } from './training';
 import { KEY_RECIPES, keyMatName } from './quests';
 import { buildSolmarVilla, VILLA, VILLA_BUILDINGS, VILLA_ID, VILLA_N, villaDoor, type VillaBuilding } from './solmar/villa';
@@ -193,13 +193,14 @@ export const MAPS: Record<string, MapDef> = {
         ],
         build: buildPruebaMazmorra,
     },
-    // Arena 1v1 / 2v2 (docs/PARTY_Y_ARENAS.md §2): sin entrada hasta que exista la cola. Temporal (si te desconectás, volvés a tu ciudad) y todos
-    // contra todos mientras no haya equipos de arena en `isEnemyPair`.
-    [ARENA_MAP.id]: {
-        id: ARENA_MAP.id, name: 'Arena', region: 'arena', size: ARENA_MAP.size, lvl: null, pvp: 'ffa', safe: false, debugOnly: true,
+    // Arenas 2v2 / 3v3 (docs/PARTY_Y_ARENAS.md §2): sin portal, se entra por la cola (`/arena`), una instancia por partida. Temporales (si te
+    // desconectás y no volvés a tiempo, aparecés en la villa) y todos contra todos si alguien entra sin partida (GM); con partida, los equipos
+    // los decide el mundo (GameWorld.arena).
+    ...Object.fromEntries(ARENA_MAPS.map((a): [string, MapDef] => [a.id, {
+        id: a.id, name: a.name, region: 'arena', size: ARENA_MAP.size, lvl: null, pvp: 'ffa', safe: false, debugOnly: true,
         spawn: { ...ARENA_MAP.teamA }, respawn: { ...ARENA_MAP.teamA }, temporary: true, rest: { map: VILLA_ID, ...VILLA.spawn },
-        links: [], build: buildArena,
-    },
+        links: [], build: () => buildArena(a.layout),
+    }])),
     ...solmarMaps(),
     ...vharMaps(),
     // mapas importados de Flare: Campos de Sal -> Bosque de Piedra -> Cañón goblin (docs/MAPAS_FLARE.md)
