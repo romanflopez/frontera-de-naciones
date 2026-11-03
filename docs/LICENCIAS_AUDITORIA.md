@@ -32,6 +32,7 @@ Reescribir el historial no deshace lo ya descargado o forkeado. Ver `docs/PLAN_R
 | `demonio.webp` (Demonio del foso) | Pack 3D x320p (`Attack_Swipe`, `Attack_Jump`). Origen sin identificar | Desconocida | Sin dato | Dudoso | Sí | DUDOSA | Alto | Ídem |
 | `fantasy_house.webp` (casa del campamento) | `Fantesy_House.zip` (PSD de 2020) subido por el dueño, "sin archivo de licencia ni autor" (`tools/src/house/export-psd.py`, `atlas.ts`) | Desconocida | Desconocida | **No** hasta que se pruebe | Sí: capa recortada, escalada 0,34 | DUDOSA (sin licencia, sin autor) | Alto | Eliminar o reemplazar si no se identifica al autor; si se identifica, pedir permiso por escrito |
 | `spells/*.png` (49 íconos de hechizos, nombres tipo `burbuja-arcana`, `paso-sombrio`) | Generados con IA a partir de una imagen de referencia (dato del dueño). En el historial figuran en el commit `5d9b840` con "Co-Authored-By: Claude Opus 5.5"; el `CREDITS.txt` anterior decía "arte propio del autor del repo", lo cual **no era exacto** | Depende de los términos del generador usado y de qué era la imagen de referencia (ambos sin registrar). La protección de autor sobre salida 100 % generada por IA es incierta en muchas jurisdicciones | Sin dato | Dudoso | Sí (generados) | DUDOSA | Medio-alto | Registrar herramienta, fecha, prompts y referencia; leer los términos comerciales del generador; si la referencia era arte ajeno, reemplazar. Para cosméticos de pago, no depender de ellos |
+| `ui/craftpix/*` (login y ventanas) | Pack "RPG MMO Game User Interface" de Craftpix (craftpix-net-745192), comprado por el dueño. Texturas de `Textures/` y tres piezas sacadas de `PSD Files/rnm_6.psd` | **Sin leer**: el `license.txt` del pack solo trae el enlace a craftpix.net/file-licenses. Respuestas del vendedor en itch.io: uso comercial sí, "reselling or redistributing the original files as standalone assets is prohibited" (no es el texto de la licencia) | Sin dato | Probable sí | Sí: renombradas y recortadas; las del PSD, compuestas por capa | DUDOSA | Alto mientras el repo sea público | Leer la licencia; mientras tanto están commiteadas a propósito para verlas en prod y salen al pasar el repo a privado |
 | `meta.json` | Generado por los scripts del repo | Propia | No | Sí | n/a | CONFIRMADA | Bajo | Mantener |
 
 ### Íconos y UI dibujados por código (apps/client/src)
@@ -100,6 +101,7 @@ Recomendación: autoalojar los `.woff2` en vez de pedirlos a Google (privacidad 
 6. **Íconos de hechizos hechos con IA**: registrar herramienta, términos comerciales y referencia; el `CREDITS.txt` previo los llamaba "arte propio" (corregido).
 7. **Atribución CC-BY-SA visible en el juego** y copia de la licencia; sin esto se incumple la licencia de Flare.
 8. **Marca/nombre**: búsqueda de marca antes del lanzamiento y antes de cobrar.
+9. **Texturas de Craftpix (`ui/craftpix/*`)**: commiteadas a propósito y de forma temporal para verlas en prod, con el repo todavía público. Leer la licencia del pack y sacarlas del repo (volver a la regla del `.gitignore`) al pasarlo a privado.
 
 ## 7. Decisiones que debe tomar el dueño
 

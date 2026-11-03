@@ -27,5 +27,7 @@ __pycache__/
 # TEMPORAL: subidos a git para verlos en prod; volver a ignorarlos.
 # apps/client/public/assets/fx_priv.*
 
-# Texturas de Craftpix (RPG MMO Game User Interface): licencia sin redistribución. Se copian con tools/src/ui/install_craftpix.py
-apps/client/public/assets/ui/craftpix/
+# Texturas de Craftpix (RPG MMO Game User Interface): licencia sin redistribución.
+# Se copian con tools/src/ui/install_craftpix.py y tools/src/ui/extract_login_psd.py.
+# TEMPORAL: subidas a git para verlas en prod; volver a ignorarlas al pasar el repo a privado.
+# apps/client/public/assets/ui/craftpix/
