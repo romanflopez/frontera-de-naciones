@@ -185,7 +185,8 @@ export const COMBAT_MP_REGEN_PCT = 0.01;
  */
 export const combatMpRegen = (maxMp: number): number => Math.max(PVE_MP_REGEN.min, Math.round(maxMp * PVE_MP_REGEN.pct));
 export { PVE_MP_REGEN, MEDITATE };
-const CLASS_MP: Record<string, [number, number]> = { guerrero: [40, 4], mago: [90, 12], healer: [110, 13] };
+/** Etapa 6b: el maná base del mago pasó de 90 a 200 (con los costos de Valdrys meditaba 30-40 % del tiempo entre el nivel 3 y el 10; sim:pve y sim:pvp en docs/COMBATE.md). */
+const CLASS_MP: Record<string, [number, number]> = { guerrero: [40, 4], mago: [200, 12], healer: [110, 13] };
 export const potionMp = (maxMp: number, pvp = false) => Math.max(pvp ? 20 : 40, Math.round(maxMp * 0.5 * (pvp ? POTION_PVP_MULT : 1)));
 
 export interface CombatStats { lvl: number; cls: string; /** multiplicadores de daño por Fuerza (físico) y Magia (hechizos) */ meleeMult: number; magicMult: number; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; /** crítico total %, velocidad de ataque %, robo de vida % y chance de veneno % (ya con topes) */ crit: number; aspd: number; leech: number; poison: number; savedHp: number; maxMp: number; savedMp: number; /** K8: Daño base extra (Bendición de poder) */ dmgBonus: number }

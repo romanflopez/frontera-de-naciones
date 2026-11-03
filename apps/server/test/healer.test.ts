@@ -73,11 +73,11 @@ test('K5: el healer es una clase jugable con su kit por nivel', () => {
     assert.equal(canUseSkill('guerrero', 40, 'bendicion'), false);
 });
 
-test('K5: vida y maná del healer quedan entre los del paladín y los del mago; el personaje nuevo se crea con bastón', () => {
+test('K5: la vida del healer queda entre la del paladín y la del mago; maná: el mago tiene más (etapa 6b, como en Dreadmyst) y el healer más que el paladín; el personaje nuevo se crea con bastón', () => {
     const h = statsFromChar({ lvl: 10, cls: 'healer', eq: {} }), m = statsFromChar({ lvl: 10, cls: 'mago', eq: {} }), g = statsFromChar({ lvl: 10, cls: 'guerrero', eq: {} });
     assert.equal(h.cls, 'healer');
     assert.ok(h.maxHp > m.maxHp && h.maxHp < g.maxHp, `vida ${h.maxHp}`);
-    assert.ok(h.maxMp > m.maxMp, `maná ${h.maxMp}`);
+    assert.ok(m.maxMp > h.maxMp && h.maxMp > g.maxMp, `maná: mago ${m.maxMp}, healer ${h.maxMp}, paladín ${g.maxMp}`);
     const st = newEcon('healer', 'vhar');
     assert.equal(st.cls, 'healer');
     assert.equal(st.eq.arma?.n, 'Báculo de fresno');
