@@ -146,7 +146,6 @@ export function initLoginUI(ctx: FlowCtx) {
     const setBusy = (on: boolean) => {
         ($('crOk') as HTMLButtonElement).disabled = on;
         ($('selPlay') as HTMLButtonElement).disabled = on || !chars.length;
-        ($('selDel') as HTMLButtonElement).disabled = on || !chars.length;
     };
     function renderSelect() {
         if (!info) return;
@@ -155,11 +154,12 @@ export function initLoginUI(ctx: FlowCtx) {
         const bar = (label: string, v: number, m: number) => `<li><span class="al">${label}</span><span class="av">${v}</span><span class="bar"><i style="width:${Math.round((v / m) * 100)}%"></i></span></li>`;
         const slotHtml = (i: number): string => {
             const sv = chars[i];
-            if (!sv) return `<li><button type="button" class="slot empty" data-new="1" aria-label="Crear personaje nuevo"><span class="sbadge dim"><svg viewBox="-34 -34 68 68" role="presentation"><circle r="32" fill="none" stroke="#a78ad8" stroke-width="2" stroke-dasharray="5 4"/><path d="M0 -9 V9 M-9 0 H9" stroke="#d9c4ff" stroke-width="2.4" stroke-linecap="round"/></svg></span><span class="stxt"><b>Crear personaje</b><small>Slot libre</small></span></button></li>`;
+            if (!sv) return `<li><button type="button" class="slot empty" data-new="1" aria-label="Crear personaje nuevo"><span class="sbadge dim"><svg viewBox="-34 -34 68 68" role="presentation"><circle r="32" fill="none" stroke="#a78ad8" stroke-width="2" stroke-dasharray="5 4"/><path d="M0 -9 V9 M-9 0 H9" stroke="#d9c4ff" stroke-width="2.4" stroke-linecap="round"/></svg></span><span class="stxt"><b>Crear personaje</b><small>${chars.length ? `Quedan ${info!.max - chars.length}` : 'Slot libre'}</small></span></button></li>`;
             const c = clsOf(sv.cls), f = facOf(sv.faction), on = i === selIdx;
-            return `<li><button type="button" class="slot${on ? ' on' : ''}" data-i="${i}" aria-pressed="${on}"><span class="sbadge">${clsIcon(c.id, clsCol(c.id))}</span><span class="stxt"><b>${esc(sv.name)}</b><small>${c.name} · ${f.name}</small></span><span class="lvl">Nv. ${sv.lvl}</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button></li>`;
+            return `<li><button type="button" class="slot${on ? ' on' : ''}" data-i="${i}" aria-pressed="${on}"><span class="sbadge">${clsIcon(c.id, clsCol(c.id))}</span><span class="stxt"><b>${esc(sv.name)}</b><small>${c.name} · ${f.name}</small></span><span class="lvl">Nv. ${sv.lvl}</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button><button type="button" class="sdel" data-del="${i}" title="Borrar personaje" aria-label="Borrar a ${esc(sv.name)}">&times;</button></li>`;
         };
-        $('slots').innerHTML = Array.from({ length: info.max }, (_, i) => slotHtml(i)).join('');
+        const filas = Math.min(chars.length + 1, info.max); // los personajes y, si queda lugar, una sola fila para crear
+        $('slots').innerHTML = Array.from({ length: filas }, (_, i) => slotHtml(i)).join('');
         const sv = chars[selIdx];
         if (!sv) { $('selArt').innerHTML = ''; $('selDetail').innerHTML = ''; setBusy(false); return; }
         const c = clsOf(sv.cls), f = facOf(sv.faction), col = clsCol(c.id);
@@ -171,6 +171,8 @@ export function initLoginUI(ctx: FlowCtx) {
     }
     const ciudadInicial = (fid: string) => ctx.cityName(fid);
     $('slots').addEventListener('click', (e) => {
+        const d = (e.target as HTMLElement).closest<HTMLElement>('.sdel');
+        if (d) { selIdx = Number(d.dataset.del); renderSelect(); openDelete(); return; }
         const b = (e.target as HTMLElement).closest<HTMLElement>('.slot'); if (!b || !info) return;
         if (b.dataset.new) { newName = ''; ($('selErr') as HTMLElement).textContent = ''; show('class'); return; }
         selIdx = Number(b.dataset.i); ($('selErr') as HTMLElement).textContent = ''; renderSelect();
@@ -187,10 +189,9 @@ export function initLoginUI(ctx: FlowCtx) {
         delIn.value = ''; delOk.disabled = true; $('delErr').textContent = ''; delBox.hidden = false; delIn.focus();
     }
     delIn.addEventListener('input', () => { delOk.disabled = !chars[selIdx] || !sameName(delIn.value, chars[selIdx].name); });
-    $('delNo').addEventListener('click', () => { delBox.hidden = true; ($('selDel') as HTMLElement).focus(); });
+    $('delNo').addEventListener('click', () => { delBox.hidden = true; ($('slots').querySelector<HTMLElement>('.slot.on') ?? $('selPlay')).focus(); });
     delOk.addEventListener('click', () => { const sv = chars[selIdx]; if (!info || !sv || !sameName(delIn.value, sv.name)) return; delBox.hidden = true; setBusy(true); info.onDelete(sv.name); });
     delIn.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !delOk.disabled) delOk.click(); });
-    $('selDel').addEventListener('click', openDelete);
 
     // --- tarjetas de clase / facción ---
     function bullets(c: ClassInfo): string[] {

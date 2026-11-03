@@ -62,3 +62,101 @@
 #login .lbar .alt{position:relative;z-index:1;margin:0;font:500 calc(var(--s,1)*13px) "Alegreya SC",Georgia,serif;letter-spacing:.06em;text-transform:uppercase;color:#a9bccd}
 #login .lbar .lnk{font:inherit;letter-spacing:inherit;text-transform:inherit;color:#6fb8ea;text-decoration:none;padding:0 4px}
 #login .lbar .lnk:hover{color:#b6dcf6;text-shadow:0 0 10px #4a9ee0}
+
+/* ===== Selección de personaje (screen "2 - Character Select v2" del pack) =====
+   Barra lateral a la derecha: cabecera, hasta 3 personajes con su botón de borrar, la fila de crear,
+   el detalle del elegido y JUGAR. El muñeco va al centro y el logo entra en su slot arriba a la izquierda. */
+#login[data-screen=select] .lbg::after{content:"";position:absolute;inset:0;
+  background:url(/assets/ui/craftpix/lg-bg.webp) center/cover no-repeat}
+#login[data-screen=select] #lbgScene{filter:none}
+
+/* logo arriba a la izquierda, en el mismo slot del login */
+#login[data-screen=select] .brand{left:46px;right:auto;top:21px;width:287px;text-align:left}
+#login[data-screen=select] .gname{width:287px;height:103px;display:grid;place-items:center;
+  background:url(/assets/ui/craftpix/lg-logo-frame.png) center/100% 100% no-repeat}
+#login[data-screen=select] .gname img{width:auto;height:88px;margin-top:8px;
+  filter:drop-shadow(0 2px 6px rgba(0,0,0,.7))}
+
+/* el muñeco, corrido al centro del hueco que deja la barra lateral */
+#login[data-screen=select] .selart{left:330px;top:140px}
+#login[data-screen=select] .selart::before,#login[data-screen=select] .selart::after{display:none} /* el diseño no lleva halo */
+
+/* cabecera de la barra lateral */
+#login[data-screen=select] .stitle{left:auto;right:43px;top:12px;width:283px;height:57px;margin:0;display:grid;
+  place-items:center;font:500 22px "Alegreya SC",Georgia,serif;letter-spacing:.14em;color:#dfe8f2;
+  text-shadow:0 1px 3px #000;background:url(/assets/ui/craftpix/sel-header.png) center/100% 100% no-repeat}
+#login[data-screen=select] .stitle::before,#login[data-screen=select] .stitle::after{content:none}
+
+/* filas de personaje */
+#login[data-screen=select] .slots{left:auto;right:50px;top:76px;width:269px;padding:0;gap:5px;
+  background:none;border:0;box-shadow:none;backdrop-filter:none;border-radius:0}
+#login[data-screen=select] .slots li{position:relative}
+#login[data-screen=select] .slot{height:55px;padding:0 10px 0 6px;gap:10px;border-radius:0;border:1px solid #0000;
+  background:linear-gradient(90deg,#ffffff0a,#ffffff05 60%,#0000)}
+#login[data-screen=select] .slot:not(.empty):hover{border-color:#5f86a8;background:linear-gradient(90deg,#ffffff16,#ffffff08 60%,#0000)}
+#login[data-screen=select] .slot.on,#login[data-screen=select] .slot.on:hover{border-color:#6fb8ea;
+  background:linear-gradient(90deg,#2a6fa81f,#1b4c7a14 60%,#0000);box-shadow:0 0 12px #3c8fd04d,inset 0 0 18px #3c8fd014}
+#login[data-screen=select] .slot.on::before{content:none}
+#login[data-screen=select] .sbadge{width:44px;height:44px;padding:3px;box-sizing:border-box;
+  background:url(/assets/ui/craftpix/slot.png) center/100% 100% no-repeat}
+#login[data-screen=select] .stxt b{font:500 15px "Alegreya SC",Georgia,serif;letter-spacing:.06em;
+  text-transform:uppercase;color:#e4ecf4}
+#login[data-screen=select] .stxt small{font-size:11.5px;color:#93a7ba}
+#login[data-screen=select] .slot.on .stxt b{color:#fff}
+#login[data-screen=select] .lvl{padding:2px 7px;font-size:10.5px;color:#cfe3f4;background:#20394d;border:1px solid #3d678a;border-radius:2px}
+#login[data-screen=select] .chev{display:none}
+#login[data-screen=select] .slot.empty{border-style:none;background:none;height:40px;justify-content:center}
+#login[data-screen=select] .slot.empty .sbadge{display:none}
+#login[data-screen=select] .slot.empty .stxt{flex:none;text-align:center}
+#login[data-screen=select] .slot.empty .stxt b{font-size:13px;color:#b9cbdb;letter-spacing:.1em}
+#login[data-screen=select] .slot.empty .stxt b::before{content:"+ "}
+#login[data-screen=select] .slot.empty .stxt small{display:none}
+#login[data-screen=select] .slot.empty:not(:disabled):hover .stxt b{color:#eaf3fb}
+#login[data-screen=select] .slots li:has(.slot.empty){border-top:1px solid #8a7640;margin-top:5px;padding-top:6px}
+
+/* borrar: la X aparece sobre la fila elegida o al pasar el mouse */
+#login .sdel{position:absolute;right:8px;top:50%;width:22px;height:22px;margin-top:-11px;padding:0;font-size:0;
+  opacity:0;transition:opacity .12s;border:0;border-radius:0;cursor:pointer;
+  background:url(/assets/ui/craftpix/sel-delete.png) center/100% 100% no-repeat}
+#login .sdel:hover{filter:brightness(1.25)}
+#login .sdel:focus-visible{opacity:1;outline:2px solid #ffd2f4;outline-offset:2px}
+#login[data-screen=select] li:hover .sdel,#login[data-screen=select] li:has(.slot.on) .sdel{opacity:1}
+#login[data-screen=select] li:has(.slot.on) .slot{padding-right:40px}
+
+/* detalle del personaje elegido, anclado abajo como en el diseño */
+#login[data-screen=select] .sdetail{left:auto;right:50px;top:auto;bottom:124px;width:269px;padding:14px 16px;
+  background:linear-gradient(180deg,#ffffff0a,#0000);border:0;border-radius:0;box-shadow:none;backdrop-filter:none}
+#login[data-screen=select] .sdetail h3{font:500 21px "Alegreya SC",Georgia,serif;letter-spacing:.06em;
+  text-transform:uppercase;color:#eaf2fa;text-shadow:0 1px 3px #000}
+#login[data-screen=select] .sdetail .dsub{font-size:12px;color:#93a7ba}
+#login[data-screen=select] .sdetail .attrs,#login[data-screen=select] .sdetail dl{border-top-color:#ffffff1a}
+#login[data-screen=select] .sdetail dt{color:#93a7ba}
+#login[data-screen=select] .sdetail dd{color:#dde8f2}
+#login[data-screen=select] .selerr{left:auto;right:50px;top:auto;bottom:96px;width:269px;text-align:center}
+
+/* JUGAR: la misma placa azul del login, dentro de la barra lateral */
+#login[data-screen=select] .acts{left:43px;right:43px;bottom:30px}
+/* el filete dorado que en el diseño separa la barra lateral del botón */
+#login[data-screen=select] .acts::after{content:"";position:absolute;right:0;bottom:70px;width:283px;height:1px;
+  background:linear-gradient(90deg,#0000,#8a7640 18%,#8a7640 82%,#0000)}
+#login[data-screen=select] #selPlay{position:absolute;right:7px;bottom:0;width:176px;height:54px;min-width:0;padding:0;
+  border:0;border-radius:2px;box-shadow:0 2px 10px #000a;white-space:nowrap;
+  font:500 20px "Alegreya SC",Georgia,serif;letter-spacing:.08em;color:#eef6fc;text-shadow:0 1px 2px #06223c,0 0 8px #06223c;
+  background:url(/assets/ui/craftpix/lg-btn-ov.png) center/100% 100% no-repeat,url(/assets/ui/craftpix/lg-btn-bg.png) center/100% 100% no-repeat,linear-gradient(180deg,#5fa8e0,#2e72b4 55%,#245e98);
+  background-blend-mode:soft-light,multiply,normal;background-color:#3a86c8}
+#login[data-screen=select] #selPlay::before,#login[data-screen=select] #selPlay::after{content:"";position:absolute;
+  top:-4px;bottom:-4px;width:44px;pointer-events:none;background:url(/assets/ui/craftpix/lg-btn-border.png) center/100% 100% no-repeat}
+#login[data-screen=select] #selPlay::before{left:-30px}
+#login[data-screen=select] #selPlay::after{right:-30px;transform:scaleX(-1)}
+#login[data-screen=select] #selPlay:hover:not(:disabled){filter:brightness(1.12) saturate(1.1);transform:none}
+#login[data-screen=select] #selBack{height:40px;min-width:0;padding:0 22px;font-size:13px;color:#cfe0ee;
+  background:linear-gradient(180deg,#ffffff12,#ffffff06);border:1px solid #5f7d99}
+#login[data-screen=select] #selBack:hover{border-color:#8fc0e4}
+
+/* cuadro de confirmación del borrado */
+#login[data-screen=select] .delbox{background:linear-gradient(180deg,#241116f2,#0f0a0cf7);border:1px solid #8a4048;
+  box-shadow:0 0 0 1px #000,0 18px 50px #000c}
+#login[data-screen=select] .delbox h3{font-family:"Alegreya SC",Georgia,serif;letter-spacing:.1em}
+#login[data-screen=select] .delbox .lbtn.ghost{background:linear-gradient(180deg,#ffffff12,#ffffff06);
+  border-color:#5f7d99;color:#cfe0ee}
+#login[data-screen=select] .delbox .lbtn.ghost:hover{border-color:#8fc0e4}

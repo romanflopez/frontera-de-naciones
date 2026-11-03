@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Saca del PSD del login (rnm_6.psd, pack Craftpix "RPG MMO Game User Interface") las tres piezas
-que no vienen sueltas en Textures/: el fondo desenfocado, el marco del logo (el "slot" donde va el
-logo del juego) y la filigrana que lo rodea.
+"""Saca del PSD del lobby (rnm_6.psd, pack Craftpix "RPG MMO Game User Interface") las piezas que no
+vienen sueltas en Textures/: el fondo desenfocado, el marco del logo (el "slot" donde va el logo del
+juego), la filigrana que lo rodea, y de la pantalla de personajes su cabecera y el botón de borrar.
 
 Igual que el resto del pack, los archivos NO se suben a git (licencia sin redistribución): quedan
 en apps/client/public/assets/ui/craftpix/, que está en .gitignore.
@@ -17,6 +17,8 @@ PIECES = [
     ("lg-bg.webp", ["BG"]),
     ("lg-logo-frame.png", ["1 - LOGIN", "LOGO", "logo frame"]),
     ("lg-logo-tribal.png", ["1 - LOGIN", "LOGO", "gt_COLOR"]),
+    ("sel-header.png", ["2 - Character Select v2", "Side Bar", "Header", "h"]),
+    ("sel-delete.png", ["2 - Character Select v2", "Side Bar", "Delete - On Hover"]),
 ]
 
 
@@ -40,6 +42,8 @@ def main() -> int:
 
     # el PSD tiene más capas que el tope por defecto de psd-tools
     psd = PSDImage.open(src, parse_limits=ParseLimits(max_objects=None))
+    for layer in psd:  # las pantallas que no son el login vienen apagadas en el PSD
+        layer.visible = True
     for out, path in PIECES:
         node = psd
         for name in path:
