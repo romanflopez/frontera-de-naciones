@@ -16,7 +16,8 @@
     "maps:tiled": "tsx src/maps/tiled_to_ts.ts",
     "sim:pvp": "tsx src/sim/run.ts",
     "maps:render": "tsx src/maps/render.ts",
-    "sim:pvp:calibrar": "tsx src/sim/calibrate.ts"
+    "sim:pvp:calibrar": "tsx src/sim/calibrate.ts",
+    "sim:pve": "tsx src/sim/pve/run.ts"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.65",

@@ -144,6 +144,36 @@ Reglas comunes:
 - **Despertar en el cliente:** con un healer aliado a 15 celdas, el muerto espera 10 s antes de pedir reaparecer.
 - Traducción de los atributos de Valdrys (los de ERIS no se tocan en el MVP): Sabiduría → Magia de equipo, Valor → % de vida, Espíritu → regeneración de maná. Son puntos de partida: se ajustan con `sim:pvp` (K7) y la prueba jugada.
 
+## Balance PvE (etapa 6b, base Dreadmyst)
+
+`pnpm --filter @fdn/tools sim:pve [--lvl 1,10,20,40] [--n 40] [--cls guerrero,mago,healer]` mide un personaje típico (el mismo de `sim:pvp`, `pvp/builds.ts`) contra mobs de su nivel con las fórmulas del server: tiempo para matar un común y un élite, vida que sacan, farmeo encadenado de 30 min (kills por hora, tiempo parado a recuperarse, muertes, pociones), horas por tramo con `killsToLevel`, y jefes de mazmorra de a uno con el escalado para jugar solo del PR #17. Metas en `tools/src/sim/pve/targets.ts`; sale con código 1 si algo queda afuera. `apps/server/test/pve-6b.test.ts` vigila la curva.
+
+Modelo: pelea "quieta" (el mob llega desde el radio de aggro; nadie kitea ni esquiva), bot con criterio (el mago no gasta lo caro en un común si le falta maná; el paladín sigue con el ataque básico sin maná), descansa si queda con menos de 50 % de vida (o 25 % de maná el mago y el healer).
+
+| Cambio | Antes | Ahora | Dónde |
+|---|---|---|---|
+| Daño de los mobs por nivel | curva `2,5·L + 3` (pensada antes del ×4,24 de vida del PvP) | × `mobDmgMult(L)`: 3,5 al 1, 3,3 al 6, 2,6 al 12, 1,4 al 20, 1 al 25, 0,75 al 30, 0,6 al 40 (interpolado). Los jefes, la raíz (`bossDmgMult`). Se aplica a los tipos de `MOBS` a su nivel, al golpe especial de los jefes y a todo lo reescalado por `mobDef` | `packages/world/src/mobs.ts` |
+| Vida fuera de combate | 1 por segundo fijo (a nivel 40, 10 min para recuperar un mob) | 1 %/s caminando y 3 %/s quieto, desde 2,5 s sin recibir daño y 10 s sin PvP (`HP_REGEN`, `hpRegenPerSec`) | `stats.ts`, cliente |
+| Maná contra monstruos | 1 %/s, mínimo 2 (igual que en PvP) | 2 %/s, mínimo 3 (`PVE_MP_REGEN`). El PvP queda en 1 % con piso de 5 (`pvpMpRegen`, K7): `sim:pvp` da idéntico a antes | `stats.ts`, `pvpCombat.ts`, cliente |
+
+**Antes** (mismo modelo): hasta el 10 un común le sacaba al paladín 1-3 % de la vida y al 20 un 7 % (no había peligro); con 1 de vida por segundo, el paladín se pasaba 58-82 % del tiempo parado entre el 5 y el 40; a nivel 40 el élite le ganaba al paladín y al mago.
+
+**Después** (n = 40):
+
+| Clase | Común le saca (nv 1 / 10 / 20 / 40) | Élite gana (nv 10 / 20 / 40) | Parado (nv 5 / 20 / 40) | Horas 1→10 / 10→20 / 20→30 / 30→40 (total) |
+|---|---|---|---|---|
+| Paladín | 2 % / 8 % / 10 % / 11 % | 100 % / 100 % / 100 % | 28 % / 18 % / 8 % | 1,4 / 10,4 / 27,1 / 50,8 (89,7 h) |
+| Mago | 4 % / 0 % / 12 % / 8 % | 100 % / 100 % / 100 % | 35 % / 24 % / 9 % | 1,7 / 9,8 / 22,8 / 33,5 (67,8 h) |
+| Healer | 0 % / 7 % / 24 % / 29 % (se lo cura) | 100 % / 100 % / 100 % | 18 % / 8 % / 1 % | 1,3 / 7,8 / 19,2 / 36,8 (65,1 h) |
+
+Jefes de a uno con el escalado solo del PR #17 (vida ×0,5, daño ×0,85): el paladín y el healer le ganan al jefe goblin, la Reina, el Mago mayor y el Wyvern; el healer también al Caballero y al Señor del Foso. El mago pierde con todos menos el goblin porque la sim no kitea.
+
+**Lo que queda afuera de meta (pendiente, no se arregla con estas palancas):**
+- **Maná del mago del 3 al 15:** se pasa 30-40 % del tiempo meditando. Su maná es chico al lado de los costos de Valdrys (la Saeta, 14, es el 16 % del maná al nivel 1). Subir la regeneración no alcanza (al 4 %/s sigue en 26-35 % a nivel bajo y a nivel alto el maná queda infinito). La solución de Dreadmyst es que el costo escale con el nivel (`maná = a + b·nivel`, siempre el mismo % del pozo), pero cambia el PvP calibrado en K7: **decisión pendiente**.
+- **Final de tramo del equipo típico (nivel 15 y 30):** el paladín pierde con el élite al 15 y con el Caballero (15) y el Señor del Foso (30) de a uno. Es el equipo de referencia: hasta el 15 lleva el de la tienda sin mejoras. Es el problema de `nivel-40-e-items.md` §5.1 (el poder del ítem no sigue al nivel); se arregla con los ítems, no con los mobs.
+- **Paladín del 5 al 15 para un 28-34 % del tiempo:** mata tan rápido (1,6-4,5 s) que la vida que pierde por minuto supera lo que repone. Con pociones a mano baja; si molesta en la prueba, la palanca es `HP_REGEN.pct`.
+- **Horas totales:** 65-90 h a un mob por vez contra las ~60 h del modelo de `nivel-40-e-items.md` §2.4. El paladín es el más lento del 20 en adelante (las peleas duran 8-22 s). Se mide en la prueba real antes de tocar `killsToLevel`.
+
 ## Progresión post-40: Veteranía (no reset)
 - Niveles 1–50 después del 40.
 - Canal 1 (30–40%): stats capeados (+15–20% total a Veteranía 50).

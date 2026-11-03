@@ -12,7 +12,7 @@ import { useCastStore } from './ui/castStore';
 import { spellTypeOf, type SpellType } from './ui/colors';
 import { chatBus, logToChat, type ChatChannel } from './ui/chatStore';
 import { drawPortalFloor, drawPortalFx, PORTAL_CITY, PORTAL_ZONE } from './portal';
-import { checkSkill, skillDeniedText, canUseSkill, skillLevel } from '@fdn/world';
+import { checkSkill, skillDeniedText, canUseSkill, skillLevel, hpRegenPerSec, HP_REGEN, MEDITATE, PVE_MP_REGEN } from '@fdn/world';
 import { DEFAULT_MAP, RECALL, STAT_CAP, STAT_DESC, STAT_IDS, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, traitLabel, traitHpMult, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
 import { UNIQUE_BY_NAME, UP_MAX, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
@@ -135,7 +135,7 @@ interface Mob extends Omit<Ent, 'ref'>, MobDef {
 interface Casting { i: number; start: number; end: number; len: number }
 const P = {
     x: MAP.spawn.x + 0.5, y: MAP.spawn.y + 0.5, dir: 6, ang: undefined as number | undefined, moving: false, phase: 0, ref: 3.4, one: null as OneShot | null, t0: 0, flash: 0,
-    name: '', cell: { x: MAP.spawn.x, y: MAP.spawn.y }, path: [] as Cell[], step: null as Step | null, stepMs: 270, frozenUntil: 0, foe: null as Other | null, ally: null as Other | null, med: false, medHp: 0,
+    name: '', cell: { x: MAP.spawn.x, y: MAP.spawn.y }, path: [] as Cell[], step: null as Step | null, stepMs: 270, frozenUntil: 0, hurtAt: -1e9, pvpAt: -1e9, foe: null as Other | null, ally: null as Other | null, med: false, medHp: 0,
     target: null as Mob | null, engage: false, pickup: null as Drop | null, repath: 0, queued: null as number | null,
     lvl: 1, exp: 0, hp: 100, mp: 60, fury: 0, shield: 0, shieldEnd: 0, slowEnd: 0, blessEnd: 0, poisonEnd: 0, inv: false, det: false, invEnd: 0, detEnd: 0, immEnd: 0, gold: 0, nextAtk: 0, dead: false, deadT: 0,
     bag: [] as Item[], eq: { arma: null, armadura: null, cabeza: null, anillo: null } as Record<Slot, Item | null>,
@@ -273,6 +273,7 @@ function onServer(m: ServerPayload) {
         case 'pvpHit': {
             const v = m.value;
             if (v.casterId === myId) { // el server me confirma mi golpe con el daño que calculó
+                P.pvpAt = now(); // en combate PvP: no regenera vida (HP_REGEN)
                 if (v.secs > 0) float(v.x, v.y - 0.6, 'Paralizado', '#7fd6ff'); break;
             }
             if (v.fx === 'blizz') fx.push({ k: 'blizz', x: v.x, y: v.y, t: 0, r: v.r || 2.7, d: 3.2 }); else if (v.fx) efxLocal(v.fx, v.x, v.y, v.targetId ? 8 : 0);
@@ -280,6 +281,7 @@ function onServer(m: ServerPayload) {
             if (v.targetId === myId && v.secs < 0) { P.frozenUntil = 0; P.immEnd = now() + 8; log('¡Removiste la parálisis! Sos inmune 8 s.', true); break; }
             if (v.targetId === myId && !P.dead) {
                 {
+                    P.pvpAt = now();
                     if (v.dmg > 0) hurtPlayer(v.dmg, 'phys', true);
                     if (v.secs > 0) { P.frozenUntil = now() + v.secs; P.path = []; P.engage = false; P.foe = null; cancelCast(); toast('¡Te paralizaron!'); }
                 }
@@ -554,7 +556,7 @@ function hurtPlayer(d: number, kind: 'phys' | 'magic' = 'phys', applied = false)
     if (!applied) {
         const tt = totals(); d = mitigate(d, kind === 'magic' ? tt.rm : tt.def);
     }
-    P.flash = 0.12;
+    P.flash = 0.12; P.hurtAt = now(); // corta la regeneración de vida hasta la calma (HP_REGEN.calmMs)
     if (P.casting) P.casting.end = Math.min(P.casting.end + 0.2, P.casting.start + P.casting.len * 1.6);
     if (!(P.one && P.one.anim !== 'hit' && now() < P.one.until)) oneShot(P, 'hit', 0.15);
 }
@@ -1399,7 +1401,7 @@ function update(dt: number) {
         }
         if (!P.step && !P.path.length && !P.moving) sendFacing();
         if (P.pickup) { if (!drops.includes(P.pickup)) P.pickup = null; else if (dist(P, P.pickup) < 1.4) { requestPickup(P.pickup); P.pickup = null; } }
-        regenT += dt; if (regenT >= 1) { regenT = 0; const inCity = isSafe(P.x, P.y); P.hp = Math.min(maxHp(), P.hp + (inCity ? 8 : 1)); P.mp = Math.min(maxMp(), P.mp + (P.med ? Math.max(6, Math.round(maxMp() * 0.08)) : inCity ? 8 : 2)); if (P.med && P.mp >= maxMp()) stopMeditating('Terminaste de meditar: maná lleno.'); syncHp(); }
+        regenT += dt; if (regenT >= 1) { regenT = 0; const inCity = isSafe(P.x, P.y); const calm = now() - P.hurtAt >= HP_REGEN.calmMs / 1000 && now() - P.pvpAt >= 10; /* fuera de combate (y 10 s sin PvP, como PVP_COMBAT_MS) */ P.hp = Math.min(maxHp(), P.hp + (inCity ? Math.max(8, Math.round(hpRegenPerSec(maxHp(), true))) : calm ? Math.round(hpRegenPerSec(maxHp(), P.med || !P.path.length)) : 0)); P.mp = Math.min(maxMp(), P.mp + (P.med ? Math.max(MEDITATE.min, Math.round(maxMp() * MEDITATE.pct)) : inCity ? 8 : now() - P.pvpAt < 10 ? Math.max(5, Math.round(maxMp() * 0.01)) : Math.max(PVE_MP_REGEN.min, Math.round(maxMp() * PVE_MP_REGEN.pct)))); if (P.med && P.mp >= maxMp()) stopMeditating('Terminaste de meditar: maná lleno.'); syncHp(); }
         if (P.med && (P.step || P.path.length || P.casting || P.hp < P.medHp || P.dead)) stopMeditating(P.hp < P.medHp ? 'Te sacaron de la meditación.' : 'Dejaste de meditar.');
         if (P.med) P.medHp = P.hp;
     }

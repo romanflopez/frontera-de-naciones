@@ -53,3 +53,20 @@ export const aspdTotal = (itemAspd: number): number => capTo(itemAspd, COMBAT_CA
 export const leechTotal = (itemLeech: number): number => capTo(itemLeech, COMBAT_CAP.leech);
 /** Segundos mínimos entre dos golpes cuerpo a cuerpo con esa velocidad de ataque (ya topeada). */
 export const meleeIntervalSecs = (aspd: number): number => MELEE_BASE_SECS / (1 + aspdTotal(aspd) / 100);
+
+// ---------- regeneración (etapa 6b; cliente y server usan estas mismas funciones) ----------
+/**
+ * Regen de maná fuera de ciudad y fuera de combate PvP (contra monstruos y caminando): etapa 6b, calibrada con `sim:pve`.
+ * Con el 1 % (mínimo 2) el mago, con los costos de Valdrys y su pool de ERIS, se pasaba 30-45 % del tiempo meditando entre el
+ * nivel 1 y el 20. No toca el PvP: ahí manda `pvpMpRegen` (1 %, piso 5).
+ */
+export const PVE_MP_REGEN = { pct: 0.02, min: 3 } as const;
+/** Meditar quieto: fracción del maná máximo por segundo, con un piso. */
+export const MEDITATE = { pct: 0.08, min: 6 } as const;
+/**
+ * Vida que regenera por segundo fuera de la ciudad y fuera de combate (`HP_REGEN.calmMs` sin recibir daño). Por porcentaje de la
+ * vida máxima, como en Dreadmyst: con 1 por segundo fijo, a nivel 40 (3.700 de vida) recuperar un bicho llevaba 10 minutos.
+ * `resting` = quieto (meditando o parado): regenera más rápido.
+ */
+export const HP_REGEN = { pct: 0.01, restPct: 0.03, min: 1, calmMs: 2500 } as const;
+export const hpRegenPerSec = (maxHp: number, resting: boolean): number => Math.max(HP_REGEN.min, maxHp * (resting ? HP_REGEN.restPct : HP_REGEN.pct));
