@@ -39,7 +39,7 @@ export interface MobHost {
     push?(p: Player, x: number, y: number): void;
     /** Le saca los buffs y escudos (jefes que disipan). Opcional (tests). */
     dispel?(p: Player): void;
-    reward(killer: Player, info: { mobId: number; type: MobType; def: MobDef; zoneName: string; origin: 'loose' | 'pit' | 'dungeon'; x: number; y: number; shard?: 'cripta' | 'foso'; /** rasgos del mob (mobTraits.ts): multiplican la exp y el botín */ traits: number }): void;
+    reward(killer: Player, info: { mobId: number; type: MobType; def: MobDef; zoneName: string; origin: 'loose' | 'pit' | 'dungeon'; x: number; y: number; shard?: 'cripta' | 'foso'; /** rasgos del mob (mobTraits.ts): multiplican la exp y el botín */ traits: number; /** élites y jefes: todos los que les generaron amenaza (botín personal por participante, docs/ITEMS.md) */ participants?: bigint[] }): void;
     /** Murió un mob con dueño del golpe final: el mundo tira el botín de suelo (systems/loot.ts). Opcional (tests). */
     mobDied?(info: { type: MobType; def: MobDef; x: number; y: number; gm: boolean }): void;
 }
@@ -523,7 +523,9 @@ export class MobSim {
 
     private kill(m: SimMob, killer: Player | null) {
         m.dead = true; this.mobs.delete(m.id);
-        if (killer) this.host.reward(killer, { mobId: m.id, type: m.type, def: m.def, zoneName: m.zone.name, origin: m.zone.tier === 'dungeon' ? 'dungeon' : m.zone.name.startsWith('Merodeadores') ? 'loose' : 'pit', x: m.x, y: m.y, shard: m.zone.drops?.shard, traits: m.traits }); // una sola vez: el mob ya salió del mapa
+        // élites y jefes: botín personal, una tirada para cada uno que participó (le generó amenaza); el resto, solo el que mata
+        const participants = m.def.boss || m.traits & TRAIT_ELITE ? [...m.threat.keys()] : undefined;
+        if (killer) this.host.reward(killer, { mobId: m.id, type: m.type, def: m.def, zoneName: m.zone.name, origin: m.zone.tier === 'dungeon' ? 'dungeon' : m.zone.name.startsWith('Merodeadores') ? 'loose' : 'pit', x: m.x, y: m.y, shard: m.zone.drops?.shard, traits: m.traits, participants }); // una sola vez: el mob ya salió del mapa
         if (m.traits & TRAIT_EXPLOSIVE) { // explosivo: al morir pega a todos los jugadores cercanos (aunque no sea el que lo mató)
             const dmg = Math.round(((m.def.dmg[0] + m.def.dmg[1]) / 2) * EXPLOSION_MULT * this.dmgMult(m));
             for (const q of this.host.nearby(m.x, m.y)) if (this.eligible(q) && Math.hypot(m.x - (q.posX + 0.5), m.y - (q.posY + 0.5)) <= EXPLOSION_RADIUS) { q.send(M.mobHitPlayer(m.id, dmg, 0)); this.host.hurt(q, dmg, `${m.def.name} (explosión)`, M.mid(m.id), m.id); }

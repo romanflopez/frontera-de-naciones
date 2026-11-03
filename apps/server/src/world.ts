@@ -7,6 +7,8 @@
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
 import { PARTY_SHARE_RANGE, partyExpMult, partyMates } from './party.ts';
+/** Hasta dónde llega el botín personal de un élite o jefe de mundo para los que participaron (celdas desde donde murió). */
+const BOSS_SHARE_RANGE = 30;
 import { AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, pvpMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionLockMs, potionMp, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, POTION_LOCK_PVP_MS, PVP_COMBAT_MS, pvpCap, pvpScale, pvpVsCtrl, RECALL_PVP_LOCK_MS, INVIS_CD_MS, DETECT_CD_MS, SECOND_WIND, secondWindHeal, progressFromEcon, PVP_SPELLS, BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, POISON_HEAL_TAKEN, HEAL_THREAT, HEALER_SKILLS, STUN_SPELLS, healAmount, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, K8_SKILLS, skillMpCost, SHIELD_MS, BUFF, withBuffs, buffTakenMult, type DmgKind } from './systems/pvpCombat.ts';
 import { HUBS, QUESTS, RECALL, TRAINING, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef, checkSkill, skillDeniedText } from '@fdn/world';
 import { applyParalysis, applySlow, applyBless, applyPoison, applyBuff, applyShield, absorbShield, activeBuffs, clearBuffs, hasBuff, shieldOf, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, isBlessed, isPoisoned, isSlowed, updateStatus } from './systems/statusSystem.ts';
@@ -108,8 +110,14 @@ export class GameWorld {
                     if (!this.econ) return;
                     // party: cada compañero cerca (mismo mundo, vivo) recibe su propio botín y una parte de la exp (docs/PARTY_Y_ARENAS.md §1)
                     const near = partyMates(p.sessionId).map((sid) => this.players.get(sid)).filter((m): m is Player => !!m && (m === p || (m.hp > 0 && Math.hypot(m.posX - p.posX, m.posY - p.posY) <= PARTY_SHARE_RANGE)));
-                    const mult = partyExpMult(near.length);
-                    for (const m of near.length ? near : [p]) this.econ.reward(m, this.econCtx, { ...info, map: this.mapId }, mult);
+                    const mult = partyExpMult(near.length), got = new Set<Player>(near.length ? near : [p]);
+                    for (const m of got) this.econ.reward(m, this.econCtx, { ...info, map: this.mapId }, mult);
+                    // élites y jefes de mundo: botín personal también para los que participaron sin party (amenaza), si siguen vivos y en la zona
+                    for (const id of info.participants ?? []) {
+                        const q = this.playersById.get(id);
+                        if (!q || got.has(q) || q.hp <= 0 || Math.hypot(q.posX + 0.5 - info.x, q.posY + 0.5 - info.y) > BOSS_SHARE_RANGE) continue;
+                        got.add(q); this.econ.reward(q, this.econCtx, { ...info, map: this.mapId }, 1);
+                    }
                 },
             }, { noRespawn: this.isDungeonRun, elites: !!this.def?.temporary });
             if (this.partySize > 1 || this.isDungeonRun) this.mobSim.setPartyScale(this.partySize);
