@@ -167,7 +167,7 @@ function dropMob(m: Mob) {
     mobMap.delete(m.id); if (P.target === m) P.target = null;
 }
 const MOB_DELAY = 0.2;
-function syncMobs(list: { id: number; type: number; zone: number; x: number; y: number; hp: number; par: number; imm: number; poison: boolean; moving: boolean; traits: number }[]) {
+function syncMobs(list: { id: number; type: number; zone: number; x: number; y: number; hp: number; par: number; imm: number; poison: boolean; moving: boolean; traits: number; hpMax?: number }[]) {
     const T = now(), seen = new Set<number>();
     for (const s of list) {
         seen.add(s.id);
@@ -180,6 +180,7 @@ function syncMobs(list: { id: number; type: number; zone: number; x: number; y: 
             mobs.push(m); mobMap.set(s.id, m);
         }
         m.sx = s.x; m.sy = s.y; m.hp = s.hp;
+        if (s.hpMax) m.hpMax = s.hpMax; // el server manda la vida máxima real (élites, escalado por party de las mazmorras)
         m.buf.push({ t: T, x: s.x, y: s.y }); if (m.buf.length > 8) m.buf.shift();
         if (s.par > 0.05) { if (m.par <= T) m.parT = T; m.par = T + s.par; } else m.par = 0;
         m.imm = T + s.imm; m.poison = s.poison ? T + 1 : 0;

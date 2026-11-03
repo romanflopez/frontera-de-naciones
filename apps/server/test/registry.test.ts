@@ -333,7 +333,7 @@ test('mazmorra: cada party entra junta a su propia instancia; los demás, a la s
         svc.handle(A.session.sessionId, 'invite', 'beto'); svc.handle(B.session.sessionId, 'accept', '');
         assert.equal(reg.handlePortal(A.session, 'caza_a_mazmorra', save), null);
         const keyA = A.session.worldId;
-        assert.match(keyA, /^prueba_mazmorra#p\d+$/);
+        assert.match(keyA, /^prueba_mazmorra#p\d+-\d+$/);
         assert.equal(B.session.worldId, keyA, 'el compañero cercano cruza a la misma instancia');
         assert.equal(D.session.worldId, 'prueba_caza', 'quien no está en la party no cruza');
         // alguien sin party: instancia propia, distinta

@@ -1333,6 +1333,8 @@ message MobSnap {
   bool moving = 10;
   /** Rasgos del mob (máscara de bits, ver packages/world/src/mobTraits.ts): mutante, anti-físico, anti-mágico, tóxico, explosivo, salvaje. */
   int32 traits = 11;
+  /** Vida máxima real (rasgos y escalado por party de las mazmorras incluidos). 0 = el cliente la calcula como antes. */
+  int32 hp_max = 12;
 }
 /** Mobs a la vista del jugador, 10 veces por segundo. */
 message MobsSnapshot {

@@ -100,8 +100,22 @@ export class GameWorld {
                     const mult = partyExpMult(near.length);
                     for (const m of near.length ? near : [p]) this.econ.reward(m, this.econCtx, { ...info, map: this.mapId }, mult);
                 },
-            });
+            }, { noRespawn: this.isDungeonRun, elites: !!this.def?.temporary });
+            if (this.partySize > 1 || this.isDungeonRun) this.mobSim.setPartyScale(this.partySize);
         }
+    }
+
+    /**
+     * Corrida de mazmorra (docs/MAZMORRAS.md): una instancia (`mapa#id`) de un mapa temporal. Adentro nada reaparece, hay élites, los mobs se
+     * escalan con la party y se tiene una sola vida: al reaparecer después de caer, volvés a la superficie y esa corrida se terminó para vos.
+     */
+    get isDungeonRun(): boolean { return this.id.includes('#') && !!this.def?.temporary; }
+    /** Jugadores con los que se escaló la instancia (1 por defecto). */
+    private partySize = 1;
+    /** El registro la fija al crear la corrida, con los que entraron juntos. Devuelve el escalado aplicado. */
+    setPartyScale(n: number): { hp: number; dmg: number } | undefined {
+        this.partySize = Math.max(1, Math.floor(n) || 1);
+        return this.mobSim?.setPartyScale(this.partySize);
     }
 
     /** Clave del mundo: el id del mapa, más `#instancia` si es una instancia privada. */
@@ -1377,7 +1391,10 @@ export class GameWorld {
         p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; p.meditating = false; p.lastDamager = null; p.potionEpoch++;
         // cada mapa define dónde reaparecés (MapDef.respawn): el hogar de tu facción, la entrada de la mazmorra, la posta del claro...
         const fallback = this.config.spawn ?? { x: 6, y: 7 };
-        const target = this.def ? respawnTarget(this.def, this.factionOf(p)) : { map: this.mapId, ...(HUBS[this.factionOf(p)] ?? fallback) };
+        // una vida por corrida: caer en una mazmorra te saca a la superficie (el registro te marca y no podés volver a esta corrida)
+        const run = this.isDungeonRun && this.def?.rest;
+        if (run) p.send(M.sendMessage('Caíste: tu corrida terminó. Volvés a la superficie.'));
+        const target = run ? { ...run } : this.def ? respawnTarget(this.def, this.factionOf(p)) : { map: this.mapId, ...(HUBS[this.factionOf(p)] ?? fallback) };
         if (target.map !== this.mapId) { this.sendVitals(p, true); this.transferHook?.(p.sessionId, target, 'respawn'); return; }
         const hub = target;
         let x = hub.x, y = hub.y;

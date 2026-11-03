@@ -1505,6 +1505,8 @@ export interface MobSnap {
   moving: boolean;
   /** Rasgos del mob (máscara de bits, ver packages/world/src/mobTraits.ts): mutante, anti-físico, anti-mágico, tóxico, explosivo, salvaje. */
   traits: number;
+  /** Vida máxima real (rasgos y escalado por party de las mazmorras incluidos). 0 = el cliente la calcula como antes. */
+  hpMax: number;
 }
 
 /** Mobs a la vista del jugador, 10 veces por segundo. */
@@ -19235,7 +19237,20 @@ export const PveStatusRequest: MessageFns<PveStatusRequest> = {
 };
 
 function createBaseMobSnap(): MobSnap {
-  return { id: 0, type: 0, zone: 0, x: 0, y: 0, hp: 0, par: 0, imm: 0, poison: false, moving: false, traits: 0 };
+  return {
+    id: 0,
+    type: 0,
+    zone: 0,
+    x: 0,
+    y: 0,
+    hp: 0,
+    par: 0,
+    imm: 0,
+    poison: false,
+    moving: false,
+    traits: 0,
+    hpMax: 0,
+  };
 }
 
 export const MobSnap: MessageFns<MobSnap> = {
@@ -19272,6 +19287,9 @@ export const MobSnap: MessageFns<MobSnap> = {
     }
     if (message.traits !== 0) {
       writer.uint32(88).int32(message.traits);
+    }
+    if (message.hpMax !== 0) {
+      writer.uint32(96).int32(message.hpMax);
     }
     return writer;
   },
@@ -19377,6 +19395,14 @@ export const MobSnap: MessageFns<MobSnap> = {
             message.traits = reader.int32();
             continue;
           }
+          case 12: {
+            if (tag !== 96) {
+              break;
+            }
+
+            message.hpMax = reader.int32();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -19405,6 +19431,7 @@ export const MobSnap: MessageFns<MobSnap> = {
     message.poison = object.poison ?? false;
     message.moving = object.moving ?? false;
     message.traits = object.traits ?? 0;
+    message.hpMax = object.hpMax ?? 0;
     return message;
   },
 };

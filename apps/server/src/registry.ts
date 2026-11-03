@@ -6,6 +6,10 @@
  *   2. completeTransfer (cuando llega MapReady, o por tiempo): lo mete en B, que le manda el estado inicial.
  * La clave de un mundo es `mapId` (mundo compartido) o `mapId#instanceId` (instancia privada). Las mazmorras (`MapDef.temporary`) son
  * una instancia por party (`p<id>`) o una propia si el jugador no tiene party (`u<sessionId>`); ver docs/DUNGEONS_INSTANCIAS.md.
+ *
+ * Corridas (docs/MAZMORRAS.md): cada entrada desde afuera a una mazmorra vacía arranca una corrida nueva (`p<id>-<n>`), con todo vivo y
+ * escalado a los que entraron juntos. Mientras quede alguien adentro (en cualquier piso), los compañeros que lleguen se suman a la misma.
+ * Una vida por corrida: el que cae y reaparece vuelve a la superficie y no puede volver a entrar a esa corrida.
  */
 import { QUESTS, getMapDef, linkGateReason, mapHash, type Link, type WorldMap } from '@fdn/world';
 import type { GameWorldConfig, Settings } from './config.ts';
@@ -31,19 +35,27 @@ export interface RegistryOptions {
 export interface TransferSession { sessionId: string; worldId: string }
 export interface TransferDest { map: string; x: number; y: number; instanceId?: string; direction?: number }
 
+/** Una corrida de mazmorra: los pisos que la forman son los mundos `mapa#id` con este mismo id. */
+interface Run { size: number; dead: Set<string> }
+
 interface Pending { player: Player; session: TransferSession; map: string; key: string; x: number; y: number; direction?: number; hash: string; since: number }
 
 export const DEFAULT_HIBERNATE_MS = 15_000;
-export const DEFAULT_INSTANCE_TTL_MS = 300_000; // una instancia de mazmorra vacía vive 5 min (por si alguien vuelve de la ciudad)
+export const DEFAULT_INSTANCE_TTL_MS = 60_000; // una corrida vacía (todos sus pisos) se da de baja al minuto; la próxima entrada arranca otra
 export const DEFAULT_TRANSFER_TIMEOUT_MS = 20_000;
 
 export const worldKey = (mapId: string, instanceId = ''): string => (instanceId ? `${mapId}#${instanceId}` : mapId);
+/** Id de instancia de una clave de mundo ('' si es un mundo compartido). */
+export const instanceOf = (key: string): string => { const i = key.indexOf('#'); return i < 0 ? '' : key.slice(i + 1); };
 
 export class WorldRegistry {
     private readonly worlds = new Map<string, GameWorld>();
     private readonly maps = new Map<string, WorldMap>();
     private readonly emptySince = new Map<string, number>();
     private readonly pending = new Map<string, Pending>();
+    /** Corridas de mazmorra vivas, por id de instancia; y el último número de corrida de cada party o jugador. */
+    private readonly runs = new Map<string, Run>();
+    private readonly runSeq = new Map<string, number>();
     private handle?: NodeJS.Timeout;
     private lastSweep = 0;
     private readonly hibernateAfterMs: number;
@@ -80,8 +92,10 @@ export class WorldRegistry {
             const map = this.mapOf(def.id);
             const config: GameWorldConfig = { id: key, name: instanceId ? `${def.name} (instancia ${instanceId})` : def.name, map: def.id, music: def.music, spawn: { ...def.spawn } };
             w = new GameWorld(config, this.o.settings, occupancyFromGrid(map.blocked), map, this.o.economy, def);
-            w.transferHook = (sessionId, dest) => this.transferFromWorld(sessionId, dest);
+            w.transferHook = (sessionId, dest, why) => this.transferFromWorld(sessionId, dest, why);
             this.worlds.set(key, w);
+            const run = instanceId ? this.runs.get(instanceId) : undefined;
+            if (run && w.isDungeonRun) w.setPartyScale(run.size); // otro piso de la misma corrida: misma escala
             console.log(`[Registro] Mundo '${key}' creado (${map.size}x${map.size}, ${w.mobCount} mobs). Mundos: ${this.worlds.size}`);
         }
         this.emptySince.delete(key);
@@ -107,18 +121,34 @@ export class WorldRegistry {
     /** Duerme los mundos vacíos hace tiempo, da de baja las instancias vacías vencidas y mete a los que esperan MapReady hace demasiado. */
     sweep(now = Date.now()): void {
         for (const [key, w] of [...this.worlds]) {
-            if (w.playerCount > 0 || this.pendingInto(key)) { this.emptySince.delete(key); continue; }
+            const iid = instanceOf(key);
+            // un piso de una corrida no está vacío mientras quede alguien en otro piso de la misma corrida
+            if (iid ? this.runLive(iid) : w.playerCount > 0 || this.pendingInto(key)) { this.emptySince.delete(key); continue; }
             const since = this.emptySince.get(key);
             if (since === undefined) { this.emptySince.set(key, now); continue; }
-            if (key.includes('#') && now - since >= this.instanceTtlMs) { w.dispose(); this.worlds.delete(key); this.emptySince.delete(key); console.log(`[Registro] Instancia '${key}' dada de baja.`); continue; }
-            if (!w.isHibernated && now - since >= this.hibernateAfterMs) { w.hibernate(); console.log(`[Registro] Mundo '${key}' hibernó (vacío).`); }
+            if (iid && now - since >= this.instanceTtlMs) {
+                w.dispose(); this.worlds.delete(key); this.emptySince.delete(key); console.log(`[Registro] Instancia '${key}' dada de baja.`);
+                if (![...this.worlds.keys()].some((k) => instanceOf(k) === iid)) this.runs.delete(iid);
+                continue;
+            }
+            // las instancias no hibernan: al despertar renacerían todos los mobs (en una corrida, lo muerto queda muerto)
+            if (!iid && !w.isHibernated && now - since >= this.hibernateAfterMs) { w.hibernate(); console.log(`[Registro] Mundo '${key}' hibernó (vacío).`); }
         }
+        for (const iid of [...this.runs.keys()]) if (!this.runLive(iid) && ![...this.worlds.keys()].some((k) => instanceOf(k) === iid)) this.runs.delete(iid); // corrida que nunca llegó a armarse
         for (const pd of [...this.pending.values()]) if (now - pd.since >= this.transferTimeoutMs) {
             console.log(`[Registro] ${pd.player.characterName}: no llegó MapReady a tiempo; lo meto igual en '${pd.key}'.`);
             this.attach(pd);
         }
     }
     private pendingInto(key: string): boolean { for (const p of this.pending.values()) if (p.key === key) return true; return false; }
+    /** ¿Queda alguien (o alguien llegando) en algún piso de la corrida `iid`? */
+    runLive(iid: string): boolean {
+        for (const [k, w] of this.worlds) if (instanceOf(k) === iid && w.playerCount > 0) return true;
+        for (const p of this.pending.values()) if (instanceOf(p.key) === iid) return true;
+        return false;
+    }
+    /** Datos de una corrida (tests y depuración). */
+    runOf(iid: string): { size: number; dead: string[] } | undefined { const r = this.runs.get(iid); return r && { size: r.size, dead: [...r.dead] }; }
 
     dispose(): void {
         if (this.handle) clearInterval(this.handle);
@@ -193,10 +223,18 @@ export class WorldRegistry {
         const r = w.checkLink(p, portalId);
         if (!('link' in r)) { if (r.why) p.send(M.sendMessage(r.why)); return r.why; }
         const link: Link = r.link;
-        const srcKey = s.worldId, instanceId = this.instanceFor(s, link.to.map);
+        const srcKey = s.worldId, inst = this.instanceFor(s, link.to.map, p.characterName);
+        if ('deny' in inst) { p.send(M.sendMessage(inst.deny)); return inst.deny; }
+        const instanceId = inst.id;
         if (!this.beginTransfer(s, { map: link.to.map, x: link.to.x, y: link.to.y, instanceId: instanceId || undefined }, save)) return null;
         w.consumeLinkKey(p, link); // la llave se descuenta al cruzar, como las escaleras con llave del mapa original
-        if (instanceId) this.bringParty(s.sessionId, srcKey, link, instanceId);
+        if (instanceId) {
+            const n = 1 + this.bringParty(s.sessionId, srcKey, link, instanceId);
+            if (inst.fresh) { // corrida nueva: se escala con los que entraron juntos
+                const run = this.runs.get(instanceId)!; run.size = n;
+                for (const [k, iw] of this.worlds) if (instanceOf(k) === instanceId) iw.setPartyScale(n);
+            }
+        }
         return null;
     }
 
@@ -204,20 +242,30 @@ export class WorldRegistry {
      * Instancia a la que lleva un cruce hacia `destMap`: '' (mundo compartido) si no es mazmorra; si el jugador ya está en una
      * instancia de mazmorra (cambio de piso, reaparición en la entrada) se queda en ella; si no, la de su party o una propia.
      */
-    private instanceFor(s: TransferSession, destMap: string): string {
-        if (!getMapDef(destMap)?.temporary) return '';
+    private instanceFor(s: TransferSession, destMap: string, who = ''): { id: string; fresh?: boolean } | { deny: string } {
+        if (!getMapDef(destMap)?.temporary) return { id: '' };
         const i = s.worldId.indexOf('#');
-        if (i >= 0 && getMapDef(s.worldId.slice(0, i))?.temporary) return s.worldId.slice(i + 1);
+        if (i >= 0 && getMapDef(s.worldId.slice(0, i))?.temporary) return { id: s.worldId.slice(i + 1) };
         const pid = partyIdOf(s.sessionId);
-        return pid !== undefined ? `p${pid}` : `u${s.sessionId}`;
+        const base = pid !== undefined ? `p${pid}` : `u${s.sessionId}`, seq = this.runSeq.get(base) ?? 0, cur = `${base}-${seq}`;
+        // la corrida de la party sigue viva: se suma (salvo que ya haya caído en ella)
+        if (seq > 0 && this.runs.has(cur) && this.runLive(cur)) {
+            if (who && this.runs.get(cur)!.dead.has(who)) return { deny: 'Caíste en esta corrida: esperá a que tu party salga para entrar a una nueva.' };
+            return { id: cur };
+        }
+        const id = `${base}-${seq + 1}`;
+        this.runSeq.set(base, seq + 1); this.runs.set(id, { size: 1, dead: new Set() });
+        return { id, fresh: true };
     }
 
     /**
      * Los compañeros de party que están cerca del portal (mismo mundo, vivos, a PARTY_SHARE_RANGE celdas o menos) cruzan juntos a la
      * misma instancia. Cada uno tiene que cumplir los requisitos del vínculo (nivel, misión, llave) y paga su propia llave.
      */
-    private bringParty(leaderSid: string, srcKey: string, link: Link, instanceId: string): void {
-        const src = this.worlds.get(srcKey); if (!src) return;
+    private bringParty(leaderSid: string, srcKey: string, link: Link, instanceId: string): number {
+        const src = this.worlds.get(srcKey); if (!src) return 0;
+        const run = this.runs.get(instanceId);
+        let n = 0;
         const lead = this.sessionHook?.(leaderSid);
         for (const sid of partyMates(leaderSid)) {
             if (sid === leaderSid || this.pending.has(sid)) continue;
@@ -226,15 +274,22 @@ export class WorldRegistry {
             if (Math.hypot(m.posX - link.x, m.posY - link.y) > PARTY_SHARE_RANGE) continue;
             const why = linkGateReason(link, m.prog, (i) => QUESTS[i]?.name);
             if (why) { m.send(M.sendMessage(`No entrás con tu party: ${why}`)); if (lead) src.playerOf(leaderSid)?.send(M.sendMessage(`${m.characterName} no puede entrar: ${why}`)); continue; }
+            if (run?.dead.has(m.characterName)) { m.send(M.sendMessage('Caíste en esta corrida: no podés volver a entrar.')); continue; }
             if (!this.beginTransfer(h.session, { map: link.to.map, x: link.to.x, y: link.to.y, instanceId }, h.save)) continue;
-            src.consumeLinkKey(m, link);
+            src.consumeLinkKey(m, link); n++;
         }
+        return n;
     }
 
     /** Respawn/teletransporte iniciado por el propio mundo (muerte con punto de reaparición en otro mapa). */
-    private transferFromWorld(sessionId: string, dest: TransferDest): void {
+    private transferFromWorld(sessionId: string, dest: TransferDest, why?: string): void {
         const s = this.sessionHook?.(sessionId); if (!s) return;
-        const instanceId = dest.instanceId ?? (this.instanceFor(s.session, dest.map) || undefined);
+        const src = this.worlds.get(s.session.worldId), iid = instanceOf(s.session.worldId);
+        // una vida por corrida: el que reaparece después de caer en una mazmorra queda marcado en esa corrida
+        if (why === 'respawn' && iid && src?.isDungeonRun) { const name = src.playerOf(sessionId)?.characterName; if (name) this.runs.get(iid)?.dead.add(name); }
+        const inst = dest.instanceId !== undefined ? { id: dest.instanceId } : this.instanceFor(s.session, dest.map);
+        const instanceId = 'id' in inst ? inst.id || undefined : undefined;
+        if ('deny' in inst) { src?.playerOf(sessionId)?.send(M.sendMessage(inst.deny)); return; }
         this.beginTransfer(s.session, { ...dest, instanceId }, s.save);
     }
     /** index.ts lo setea: resuelve la sesión (y cómo guardarla) a partir de su id. */
