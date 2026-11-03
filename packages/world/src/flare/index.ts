@@ -1,11 +1,11 @@
 /**
- * Mapas importados de Flare (docs/MAPAS_FLARE.md): campos de caza y mazmorras (tiers T1-T6) al tamaño nativo del mapa original, con 3 pits de mobs
+ * Mapas importados de Flare (docs/MAPAS_FLARE.md): campos de caza y mazmorras (tiers T1-T7) al tamaño nativo del mapa original, con 3 pits de mobs
  * distintos y mobs sueltos entre medio. Los datos los genera tools/src/flare/maps.ts (CC-BY-SA 3.0, ver CREDITS) y los tiles salen del
  * atlas `flare_<hoja>.webp` (tools/src/flare/mapatlas.ts). Todo es dato fijo: cliente y server arman exactamente lo mismo.
  *   Villa de Solmar / Ciudadela de Vhar --portal--> Campos de Sal -> Bosque de Piedra -> Cañón goblin -> Pantano de Merrimead
  *   Pantano -> Altas de Nazia (Nv 4-5) y Pantano -> Cementerio de Lochport (Nv 5) -> Risco del Sur (Nv 5-6) -> La Brecha (Nv 6-7, cueva)
- *   T7 (Nv 31-40): Cenizas III -> Oasis de Ceniza -> Lago Kuuma -> Laguna de la Gruta (sin mazmorra todavía)
- *   Mazmorras de grupo (una por tier, docs/TIERS_DE_ZONA.md): Cañón goblin -> D1, Altas de Nazia -> D2, Cementerio -> D3, La Brecha -> D4, Cenizas II -> D5, Cenizas III -> D6
+ *   T6-T7: Cenizas III -> Granja de Roble Negro -> Oasis de Ceniza -> Lago Kuuma -> Laguna de la Gruta -> Minas abandonadas
+ *   Mazmorras de grupo (una por tier, docs/TIERS_DE_ZONA.md): Cañón goblin -> D1, Altas de Nazia -> D2, Cementerio -> D3, La Brecha -> D4, Cenizas II -> D5, Cenizas III -> D6, Lago Kuuma -> D7
  */
 import type { Prop, WorldMap, Zone } from '../index';
 import type { MapDef, Link } from '../maps';
@@ -39,12 +39,16 @@ import { DATA as UNDERWORLD_MINES } from './underworld_mines';
 import { DATA as OASIS } from './oasis';
 import { DATA as LAKE_KUUMA } from './lake_kuuma';
 import { DATA as GROT_LAGOON } from './grot_lagoon';
+import { DATA as BLACK_OAK_FARM } from './black_oak_farm';
+import { DATA as ABANDONED_MINES } from './abandoned_mines';
+import { DATA as FORT_AMIR } from './fort_amir';
+import { DATA as TORTURE_CHAMBERS } from './torture_chambers';
 
 export { flareTile, FLARE_BASE } from './types';
 export type { FlareMapData } from './types';
 
 /** En el orden de la cadena: la primera es la que une el portal de las ciudades. */
-export const FLARE_DATA: FlareMapData[] = [SALTED_FIELD, STONEWOOD, GOBLIN_CAMP, MERRIMEAD_SWAMP, NAZIA_HIGHLANDS, LOCHPORT_CEMETERY, SOUTHERN_RIDGE, THE_BREACH, GOBLIN_CAVE, PERDITION_MINES, ANTLION_NEST, STORMROCK_RUINS, ST_MARIA_2, ST_MARIA_3, WIZARDS_TOWER_1, WIZARDS_TOWER_2, TEMPLE_OF_MEZ_1, TEMPLE_OF_MEZ_2, UNDERWORLD_STRONGHOLD_1, THE_PIT, STORMROCK_PASS, UNDERWORLD, UNDERWORLD_CATACOMBS, UNDERWORLD_MINES, OASIS, LAKE_KUUMA, GROT_LAGOON];
+export const FLARE_DATA: FlareMapData[] = [SALTED_FIELD, STONEWOOD, GOBLIN_CAMP, MERRIMEAD_SWAMP, NAZIA_HIGHLANDS, LOCHPORT_CEMETERY, SOUTHERN_RIDGE, THE_BREACH, GOBLIN_CAVE, PERDITION_MINES, ANTLION_NEST, STORMROCK_RUINS, ST_MARIA_2, ST_MARIA_3, WIZARDS_TOWER_1, WIZARDS_TOWER_2, TEMPLE_OF_MEZ_1, TEMPLE_OF_MEZ_2, UNDERWORLD_STRONGHOLD_1, THE_PIT, STORMROCK_PASS, UNDERWORLD, UNDERWORLD_CATACOMBS, UNDERWORLD_MINES, BLACK_OAK_FARM, OASIS, LAKE_KUUMA, GROT_LAGOON, ABANDONED_MINES, FORT_AMIR, TORTURE_CHAMBERS];
 const byFlareId = new Map(FLARE_DATA.map((d) => [d.id, d]));
 const byEris = new Map(FLARE_DATA.map((d) => [d.eris, d]));
 export const FLARE_FIRST = FLARE_DATA[0];
@@ -66,6 +70,8 @@ export const DUNGEON_DENSITY: Record<string, { every: number; n: number }> = {
     torre_del_hechicero: { every: 3, n: 3 }, camaras_de_investigacion: { every: 3, n: 3 },
     templo_de_mez: { every: 2, n: 3 }, salon_de_mez: { every: 2, n: 3 },
     fortaleza_infernal: { every: 2, n: 3 }, foso_del_demonio: { every: 2, n: 3 },
+    // D7 (el tope): la mazmorra más cargada
+    fuerte_amir: { every: 2, n: 3 }, camaras_de_tortura: { every: 2, n: 3 },
 };
 function thinZones<T extends { kind: string; n: number }>(eris: string, zones: T[]): T[] {
     const k = DUNGEON_DENSITY[eris]; if (!k) return zones;

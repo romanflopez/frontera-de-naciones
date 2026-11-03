@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { DUNGEON_ENTRY_KEYS, KEY_RECIPES, MOBS, QUEST_MATS, findLink, getMapDef, keyMissing, linkGateReason, tierOfLevel } from '@fdn/world';
+import { DUNGEON_ENTRY_KEYS, KEY_RECIPES, MOBS, QUEST_MATS, findLink, getMapDef, keyMissing, linkGateReason, tierOfLvl } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { Economy, type EconCtx } from '../src/economy.ts';
 import { PartyService, setParties } from '../src/party.ts';
@@ -111,8 +111,8 @@ test('el jefe de D1 suelta una llave gastada a cada uno, solo si muere en su pis
     assert.ok(A.log.some((m) => m.payload?.$case === 'econResult' && /Llave gastada/.test(m.payload.value.text)));
 });
 
-test('los seis dungeons tienen llave: puerta cerrada, receta, y el material cae en los pits del mapa de la entrada', () => {
-    const entries: Record<string, string> = { cueva_goblin: 'canon_goblin', nido_hormiga_leon: 'altas_de_nazia', cripta_olvidada: 'cementerio_de_lochport', torre_del_hechicero: 'la_brecha', templo_de_mez: 'cenizas_ii', fortaleza_infernal: 'cenizas_iii' };
+test('los siete dungeons tienen llave: puerta cerrada, receta, y el material cae en los pits del mapa de la entrada', () => {
+    const entries: Record<string, string> = { cueva_goblin: 'canon_goblin', nido_hormiga_leon: 'altas_de_nazia', cripta_olvidada: 'cementerio_de_lochport', torre_del_hechicero: 'la_brecha', templo_de_mez: 'cenizas_ii', fortaleza_infernal: 'cenizas_iii', fuerte_amir: 'lago_kuuma' };
     assert.deepEqual(Object.keys(DUNGEON_ENTRY_KEYS).sort(), Object.keys(entries).sort());
     for (const [dungeon, surface] of Object.entries(entries)) {
         const key = DUNGEON_ENTRY_KEYS[dungeon], r = KEY_RECIPES[key];
@@ -120,7 +120,7 @@ test('los seis dungeons tienen llave: puerta cerrada, receta, y el material cae 
         const door = getMapDef(surface)!.links.find((l) => l.to.map === dungeon)!;
         assert.equal(door.gate?.key, key, `${surface} → ${dungeon} pide ${key}`);
         // cada material de pit de la receta cae en los pits del mapa de la entrada
-        const pitTiers = new Set(getMapDef(surface)!.build().zones.filter((z) => z.respawn === 10).map((z) => tierOfLevel(z.lvl ?? 0)));
+        const pitTiers = new Set<number>(getMapDef(surface)!.build().zones.filter((z) => z.respawn === 10).map((z) => tierOfLvl(z.lvl ?? 0)));
         for (const m of Object.keys(r.mats)) if (QUEST_MATS[m]) assert.ok(pitTiers.has(QUEST_MATS[m].tier), `${m} (T${QUEST_MATS[m].tier}) cae en ${surface}`);
     }
 });

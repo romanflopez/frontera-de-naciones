@@ -2,8 +2,8 @@
  * Misiones del corte del MVP (docs del proyecto: `mvp-dungeons-llaves-quests.md` §4).
  *
  * Tres cosas, todas con el Capitán de la ciudad:
- * - **Camino del aventurero** (con el Capitán): cadena de 20 que te lleva por todos los mapas abiertos y los 6 dungeons, de Campos de
- *   Sal (nivel 1) al Señor del Foso (nivel 29). Del 31 al 40 todavía no hay mapas (T7): ahí siguen los encargos del día.
+ * - **Camino del aventurero** (con el Capitán): cadena que te lleva por todos los mapas abiertos y los 7 dungeons, de Campos de
+ *   Sal (nivel 1) al Gran Verdugo (nivel 38-40).
  * - **Encargos del día** (sin NPC): se van abriendo por nivel, avanzan solos y se cobran solos al completarse. Tope de 3
  *   cobrados por día; se reinician a las 06:00 de Argentina (09:00 UTC). El primero del día paga además una esencia.
  * - **Repetible:** entregar 10 materiales iguales a cambio de oro o de una piedra de forja (sumidero de lo que sobra del farmeo).
@@ -22,6 +22,8 @@ export const MAT_COLMILLO = 'colmillo';
 export const MAT_ESENCIA = 'esencia';
 /** Materiales de las llaves de D3 a D6: 6 % en los pits de su tramo (8 ≈ 130 kills, más o menos lo que dura la corrida). */
 export const MAT_HUESO = 'hueso_antiguo', MAT_TINTA = 'tinta_arcana', MAT_PLUMA = 'pluma_tormenta', MAT_BRASA = 'brasa_infernal';
+/** Material de la llave de D7: 6 % en los pits del T7 (nivel 31-40). */
+export const MAT_ESLABON = 'eslabon_maldito';
 export const QUEST_MATS: Record<string, { name: string; tier: number; chance: number }> = {
     [MAT_COLMILLO]: { name: 'Colmillo', tier: 1, chance: 0.08 },
     [MAT_ESENCIA]: { name: 'Esencia', tier: 2, chance: 0.03 },
@@ -29,11 +31,12 @@ export const QUEST_MATS: Record<string, { name: string; tier: number; chance: nu
     [MAT_TINTA]: { name: 'Tinta arcana', tier: 4, chance: 0.06 },
     [MAT_PLUMA]: { name: 'Pluma de tormenta', tier: 5, chance: 0.06 },
     [MAT_BRASA]: { name: 'Brasa infernal', tier: 6, chance: 0.06 },
+    [MAT_ESLABON]: { name: 'Eslabón maldito', tier: 7, chance: 0.06 },
 };
 // ---------- llaves de las mazmorras (docs/LLAVES.md) ----------
 /** Llave de la cueva (D1), llave gastada (la suelta el jefe de D1, una por jugador) y llave del nido (D2). Viven en los materiales del personaje. */
 export const MAT_LLAVE_CUEVA = 'llave_cueva', MAT_LLAVE_GASTADA = 'llave_gastada', MAT_LLAVE_NIDO = 'llave_nido';
-export const MAT_LLAVE_CRIPTA = 'llave_cripta_olvidada', MAT_LLAVE_TORRE = 'llave_torre', MAT_LLAVE_TEMPLO = 'llave_templo', MAT_LLAVE_FORTALEZA = 'llave_fortaleza';
+export const MAT_LLAVE_CRIPTA = 'llave_cripta_olvidada', MAT_LLAVE_TORRE = 'llave_torre', MAT_LLAVE_TEMPLO = 'llave_templo', MAT_LLAVE_FORTALEZA = 'llave_fortaleza', MAT_LLAVE_AMIR = 'llave_amir';
 /** Receta de cada llave: materiales + oro. Se arma en cualquier lado (clic derecho sobre la llave o el material en la bolsa). */
 export const KEY_RECIPES: Record<string, { name: string; dungeon: string; mats: Record<string, number>; gold: number }> = {
     [MAT_LLAVE_CUEVA]: { name: 'Llave de la cueva', dungeon: 'la Cueva goblin', mats: { [MAT_COLMILLO]: 8 }, gold: 60 },
@@ -43,6 +46,7 @@ export const KEY_RECIPES: Record<string, { name: string; dungeon: string; mats: 
     [MAT_LLAVE_TORRE]: { name: 'Llave de la torre', dungeon: 'la Torre del hechicero', mats: { [MAT_TINTA]: 8 }, gold: 300 },
     [MAT_LLAVE_TEMPLO]: { name: 'Llave del templo', dungeon: 'el Templo de Mez', mats: { [MAT_PLUMA]: 8 }, gold: 450 },
     [MAT_LLAVE_FORTALEZA]: { name: 'Llave de la fortaleza', dungeon: 'el Foso del demonio', mats: { [MAT_BRASA]: 8 }, gold: 650 },
+    [MAT_LLAVE_AMIR]: { name: 'Llave del Fuerte Amir', dungeon: 'las Cámaras de tortura', mats: { [MAT_ESLABON]: 8 }, gold: 900 },
 };
 export const KEY_MAT_NAMES: Record<string, string> = { [MAT_LLAVE_GASTADA]: 'Llave gastada', ...Object.fromEntries(Object.entries(KEY_RECIPES).map(([id, r]) => [id, r.name])) };
 /** Qué jefe suelta qué llave (al 100 %, una para cada jugador que lo mata o está cerca en la party). */
@@ -50,7 +54,7 @@ export const BOSS_KEY_DROPS: Partial<Record<MobType, string>> = { goblin_jefe: M
 /** Puerta de entrada (desde la superficie) de cada mazmorra con llave: el mapa del primer piso → la llave que pide. */
 export const DUNGEON_ENTRY_KEYS: Record<string, string> = {
     cueva_goblin: MAT_LLAVE_CUEVA, nido_hormiga_leon: MAT_LLAVE_NIDO,
-    cripta_olvidada: MAT_LLAVE_CRIPTA, torre_del_hechicero: MAT_LLAVE_TORRE, templo_de_mez: MAT_LLAVE_TEMPLO, fortaleza_infernal: MAT_LLAVE_FORTALEZA,
+    cripta_olvidada: MAT_LLAVE_CRIPTA, torre_del_hechicero: MAT_LLAVE_TORRE, templo_de_mez: MAT_LLAVE_TEMPLO, fortaleza_infernal: MAT_LLAVE_FORTALEZA, fuerte_amir: MAT_LLAVE_AMIR,
 };
 /** Lo que falta para armar `key` con `mats` y `gold`, o null si alcanza. */
 export function keyMissing(key: string, mats: Record<string, number>, gold: number): string | null {
@@ -67,12 +71,12 @@ export const keyMatName = (id: string): string => KEY_MAT_NAMES[id] ?? QUEST_MAT
 export const RESERVED_MATS = new Set([...Object.keys(QUEST_MATS), ...Object.keys(KEY_RECIPES), MAT_LLAVE_GASTADA]);
 
 /** Jefe que cierra cada dungeon del corte: matarlo (vos o tu party cerca) cuenta como completarlo. */
-export type DungeonId = 'd1' | 'd2' | 'd3' | 'd4' | 'd5' | 'd6';
-export const DUNGEON_IDS: DungeonId[] = ['d1', 'd2', 'd3', 'd4', 'd5', 'd6'];
-export const DUNGEON_BOSS: Record<DungeonId, MobType> = { d1: 'goblin_jefe', d2: 'antlion_reina', d3: 'caballero_cripta', d4: 'mago_mayor', d5: 'wyvern_aire', d6: 'demonio_foso' };
-export const DUNGEON_NAME: Record<DungeonId, string> = { d1: 'la Cueva goblin', d2: 'el Nido de hormiga león', d3: 'la Cripta olvidada', d4: 'la Torre del hechicero', d5: 'el Templo de Mez', d6: 'el Foso del demonio' };
+export type DungeonId = 'd1' | 'd2' | 'd3' | 'd4' | 'd5' | 'd6' | 'd7';
+export const DUNGEON_IDS: DungeonId[] = ['d1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7'];
+export const DUNGEON_BOSS: Record<DungeonId, MobType> = { d1: 'goblin_jefe', d2: 'antlion_reina', d3: 'caballero_cripta', d4: 'mago_mayor', d5: 'wyvern_aire', d6: 'demonio_foso', d7: 'verdugo' };
+export const DUNGEON_NAME: Record<DungeonId, string> = { d1: 'la Cueva goblin', d2: 'el Nido de hormiga león', d3: 'la Cripta olvidada', d4: 'la Torre del hechicero', d5: 'el Templo de Mez', d6: 'el Foso del demonio', d7: 'las Cámaras de tortura' };
 /** Piso del jefe: el dungeon solo cuenta si el jefe muere ahí (en la instancia), no si aparece en otro lado (GM, mapas de prueba). */
-export const DUNGEON_MAP: Record<DungeonId, string> = { d1: 'minas_goblin', d2: 'ruinas_de_stormrock', d3: 'sepulcro_profundo', d4: 'camaras_de_investigacion', d5: 'salon_de_mez', d6: 'foso_del_demonio' };
+export const DUNGEON_MAP: Record<DungeonId, string> = { d1: 'minas_goblin', d2: 'ruinas_de_stormrock', d3: 'sepulcro_profundo', d4: 'camaras_de_investigacion', d5: 'salon_de_mez', d6: 'foso_del_demonio', d7: 'camaras_de_tortura' };
 
 // ---------- objetivos ----------
 export type QuestGoal =
@@ -241,11 +245,53 @@ export const MAIN_QUESTS: MainQuest[] = [
         reward: { expPct: 25, gold: 750, forge: 3 },
     },
     {
+        id: 'granja', name: 'La granja muerta', minLvl: 28,
+        say: 'Saliendo de las Cenizas hay una granja que nadie trabaja hace años, pero los corrales no están vacíos. Bajá a 10 zombis oscuros en la Granja de Roble Negro.',
+        done: 'Del otro lado de la granja empieza el desierto.',
+        goals: [kill('granja_roble_negro', ['zombie_dark'], 10, 'Zombis oscuros en la Granja de Roble Negro')],
+        reward: { expPct: 25, gold: 900, forge: 3 },
+    },
+    {
         id: 'foso', name: 'El Señor del Foso', minLvl: 29,
         say: 'Debajo de la fortaleza infernal está el Foso, y en el foso, su señor. Es lo más hondo que se conoce. Si volvés, sos leyenda. La fortaleza se abre con su llave: 8 brasas infernales (pits de nivel 26 a 30, como los de las Cenizas III) y 650 de oro.',
-        done: 'El Señor del Foso cayó. Completaste el camino del aventurero.',
+        done: 'El Señor del Foso cayó. Pero hay algo más allá de las cenizas.',
         goals: [{ k: 'dungeon', d: 'd6', n: 1, what: 'Completar el Foso del demonio' }],
         reward: { expPct: 50, gold: 1500, forge: 10, unique: 'boss_d6_choice' },
+    },
+    {
+        id: 'oasis', name: 'El oasis de ceniza', minLvl: 31,
+        say: 'Más allá del Foso empieza una tierra que no está en los mapas. En el Oasis de Ceniza anidan wyverns de fuego: matá a 10.',
+        done: 'El agua del oasis sabe a ceniza, pero sirve.',
+        goals: [kill('oasis_de_ceniza', ['wyvern_fire'], 10, 'Wyverns de fuego en el Oasis de Ceniza')],
+        reward: { expPct: 25, gold: 1000, forge: 3 },
+    },
+    {
+        id: 'kuuma', name: 'El lago helado', minLvl: 33,
+        say: 'Al norte del oasis el agua se congela. En el Lago Kuuma las hormigas de hielo cavan bajo la nieve: bajá a 12.',
+        done: 'Viste el fuerte del otro lado del lago. Todavía no: primero la gruta.',
+        goals: [kill('lago_kuuma', ['ice_ant'], 12, 'Hormigas de hielo en el Lago Kuuma')],
+        reward: { expPct: 25, gold: 1100, forge: 4 },
+    },
+    {
+        id: 'laguna', name: 'La laguna de la gruta', minLvl: 35,
+        say: 'Los hechiceros de la Laguna de la Gruta juntan eslabones malditos para algo que vive debajo del fuerte. Matá a 10.',
+        done: 'Los eslabones abren la puerta del Fuerte Amir. Guardalos.',
+        goals: [kill('laguna_de_la_gruta', ['skeleton_mage'], 10, 'Hechiceros en la Laguna de la Gruta')],
+        reward: { expPct: 25, gold: 1200, forge: 4 },
+    },
+    {
+        id: 'minas', name: 'Las minas abandonadas', minLvl: 38,
+        say: 'El último tramo: las Minas abandonadas. Lo que cavaron ahí no quiso quedarse abajo. Bajá a 12 zombis oscuros de las galerías.',
+        done: 'Ya conocés todo lo que hay arriba. Lo que falta está debajo del fuerte.',
+        goals: [kill('minas_abandonadas', ['zombie_dark'], 12, 'Zombis oscuros en las Minas abandonadas')],
+        reward: { expPct: 25, gold: 1400, forge: 5 },
+    },
+    {
+        id: 'verdugo', name: 'El Gran Verdugo', minLvl: 38,
+        say: 'Más allá del Lago Kuuma está el Fuerte Amir, y debajo, las Cámaras de tortura del Gran Verdugo. Nadie que bajó contó cómo es. La puerta pide la llave del fuerte: 8 eslabones malditos (pits de nivel 31 a 40) y 900 de oro. Llevá a los mejores.',
+        done: 'El Gran Verdugo cayó. Completaste el camino del aventurero: sos leyenda.',
+        goals: [{ k: 'dungeon', d: 'd7', n: 1, what: 'Completar las Cámaras de tortura' }],
+        reward: { expPct: 50, gold: 3000, forge: 15, unique: 'boss_d7_choice' },
     },
 ];
 
@@ -258,7 +304,8 @@ export const DAILY_QUESTS: DailyQuest[] = [
     { id: 'dia_d3', name: 'Bajada a la cripta', minLvl: 14, maxLvl: 20, goal: { k: 'dungeon', d: 'd3', n: 1, what: 'Completar la Cripta olvidada' } },
     { id: 'dia_d4', name: 'Las cámaras de la torre', minLvl: 19, maxLvl: 25, goal: { k: 'dungeon', d: 'd4', n: 1, what: 'Completar la Torre del hechicero' } },
     { id: 'dia_d5', name: 'El trono del aire', minLvl: 24, maxLvl: 30, goal: { k: 'dungeon', d: 'd5', n: 1, what: 'Completar el Templo de Mez' } },
-    { id: 'dia_d6', name: 'El Foso', minLvl: 29, goal: { k: 'dungeon', d: 'd6', n: 1, what: 'Completar el Foso del demonio' } },
+    { id: 'dia_d6', name: 'El Foso', minLvl: 29, maxLvl: 35, goal: { k: 'dungeon', d: 'd6', n: 1, what: 'Completar el Foso del demonio' } },
+    { id: 'dia_d7', name: 'Las cámaras del Verdugo', minLvl: 38, goal: { k: 'dungeon', d: 'd7', n: 1, what: 'Completar las Cámaras de tortura' } },
     { id: 'mutante', name: 'Cazador de mutantes', minLvl: 1, goal: { k: 'mutant', n: 1, what: 'Matar un mutante' } },
     { id: 'frontera', name: 'Defensa de la frontera', minLvl: 3, goal: { k: 'pvp', n: 1, what: 'Ganar una pelea en mapa de facción' } },
 ];

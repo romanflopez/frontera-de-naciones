@@ -46,6 +46,10 @@ for (const f of files) {
     for (const row of DATA.layers.object) for (const id of row) if (id) set.add(id);
 }
 
+// piezas de Flare que usan los mapas armados por código (la arena)
+const { ARENA_FLARE_IDS } = (await import(pathToFileURL(join(root, 'packages', 'world', 'src', 'arena.ts')).href)) as { ARENA_FLARE_IDS: Record<string, number[]> };
+for (const [ts, ids] of Object.entries(ARENA_FLARE_IDS)) { const set = used.get(ts) ?? new Set<number>(); used.set(ts, set); for (const id of ids) set.add(id); }
+
 const metaPath = join(out, 'meta.json'), meta = JSON.parse(readFileSync(metaPath, 'utf8'));
 for (const [tileset, ids] of used) {
     const base = FLARE_BASE[tileset];

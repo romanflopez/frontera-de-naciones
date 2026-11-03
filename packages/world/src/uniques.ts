@@ -71,6 +71,9 @@ const DEFS: Def[] = [
     { tier: 6, arch: 'armaM', name: 'Báculo del Mago mayor', boss: 'mago_mayor', mult: 1.3 }, { tier: 6, arch: 'armMag', name: 'Túnica del Mago mayor', boss: 'mago_mayor', mult: 1.3 },
     { tier: 6, arch: 'arma1', name: 'Garra del Wyvern del aire', look: 'longsword', boss: 'wyvern_aire', mult: 1.4 }, { tier: 6, arch: 'armMed', name: 'Cota de escamas del viento', boss: 'wyvern_aire', mult: 1.4 },
     { tier: 6, arch: 'arma2', name: 'Hoja del Señor del Foso', look: 'zweihander', boss: 'demonio_foso', mult: 1.5 }, { tier: 6, arch: 'armPes', name: 'Coraza del Foso', boss: 'demonio_foso', mult: 1.5 },
+    // D7 (el tope del juego, Nv 40): un arma por arquetipo, lo mejor que se consigue hasta que entren las legendarias con aura
+    { tier: 6, arch: 'arma2', name: 'Hacha del Gran Verdugo', look: 'zweihander', boss: 'verdugo', mult: 1.7 }, { tier: 6, arch: 'arma1', name: 'Cuchilla de las cámaras', look: 'longsword', boss: 'verdugo', mult: 1.7 },
+    { tier: 6, arch: 'armaM', name: 'Cetro del suplicio', boss: 'verdugo', mult: 1.7 }, { tier: 6, arch: 'cabF', name: 'Capucha del Verdugo', boss: 'verdugo', mult: 1.7 },
 ];
 
 export interface UniqueInfo { tier: number; attrs: [AttrId, number][]; boss?: MobType }

@@ -11,7 +11,7 @@
 import {
     ATTR_RANGES, traitExpMult, traitDropMult, BAG_MAX, BASE_BY_NAME, BASES, KEY_IDS, KEYDEFS, POT_MAX, POTS, QUESTS, roleOf, SHARDS_PER_KEY, SHOP_SERVER_RANGE,
     MAPS, SHOPS, SLOTS, SRV_ATTR, TRAINING, buildMap, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statBonus, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, mobDef, sellPrice, trainingUnlocked,
-    BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BASES, UP_MAX, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, type UniqueBase,
+    BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BASES, UP_MAX, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, tierOfLvl, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
     DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
     mainComplete, newQuestBook, repeatGold, rewardUniques, rollDailies, type QuestBook, type QuestEvent, type QuestHave, type QuestReward,
@@ -705,10 +705,10 @@ export class Economy {
         if (boss ? bossU : Math.random() < FORGE_CHANCE[k.origin ?? 'pit']) { forge = boss ? rint(FORGE_BOSS[0], FORGE_BOSS[1]) : 1; st.forge = (st.forge ?? 0) + forge; }
         if (Math.random() < 0.14) { const kind: PotKind = Math.random() < 0.6 ? 'hp' : 'mp'; if (st.pots[kind] < POT_MAX) { st.pots[kind]++; potion = kind; } }
         if (boss && !bossU) { const kid: KeyId = k.shard ?? (k.zoneName === 'Cripta olvidada' ? 'foso' : 'cripta'); st.q.shards[kid] = Math.min(99, st.q.shards[kid] + 1); shard = kid; }
-        // materiales de las llaves del corte: colmillo en pits T1, esencia en pits T2 (×2 en mutantes, como el resto del botín)
+        // materiales de las llaves: cada uno en los pits de su tier de zona (T1-T7, sin el tope 6 de la banda de ítems; ×2 en mutantes, como el resto del botín)
         const qmats: string[] = [];
         if (!boss && k.origin === 'pit') for (const [id, mt] of Object.entries(QUEST_MATS)) {
-            if (mt.tier === tier && Math.random() < mt.chance * traitDropMult(k.traits ?? 0)) { const mats = (st.mats ??= {}); mats[id] = Math.min(9999, (mats[id] ?? 0) + 1); qmats.push(mt.name); }
+            if (mt.tier === tierOfLvl(def.lvl) && Math.random() < mt.chance * traitDropMult(k.traits ?? 0)) { const mats = (st.mats ??= {}); mats[id] = Math.min(9999, (mats[id] ?? 0) + 1); qmats.push(mt.name); }
         }
         for (const name of qmats) p.send(M.econResult(true, 'quest_mat', `Conseguiste un ${name}.`));
         // llave que suelta el jefe (la gastada de D1): una para cada uno, solo si muere en su piso de la mazmorra

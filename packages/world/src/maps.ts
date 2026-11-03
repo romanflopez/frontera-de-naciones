@@ -7,6 +7,7 @@
 import { buildSolmar, type WorldMap } from './index';
 import { HUBS } from './cities';
 import { buildPruebaCaza, buildPruebaMazmorra, PRUEBA_CAZA, PRUEBA_MAZMORRA } from './testmaps';
+import { ARENA as ARENA_MAP, buildArena } from './arena';
 import { TRAINING, type PortalProgress } from './training';
 import { KEY_RECIPES, keyMatName } from './quests';
 import { buildSolmarVilla, VILLA, VILLA_BUILDINGS, VILLA_ID, VILLA_N, villaDoor, type VillaBuilding } from './solmar/villa';
@@ -191,6 +192,13 @@ export const MAPS: Record<string, MapDef> = {
             { id: 'mazmorra_atajo', map: PRUEBA_MAZMORRA.id, ...PRUEBA_MAZMORRA.shortcut, to: { map: 'solmar_legacy', x: 11, y: 12 }, kind: 'oneway', msg: 'Un atajo secreto te devuelve a Solmar.' },
         ],
         build: buildPruebaMazmorra,
+    },
+    // Arena 1v1 / 2v2 (docs/PARTY_Y_ARENAS.md §2): sin entrada hasta que exista la cola. Temporal (si te desconectás, volvés a tu ciudad) y todos
+    // contra todos mientras no haya equipos de arena en `isEnemyPair`.
+    [ARENA_MAP.id]: {
+        id: ARENA_MAP.id, name: 'Arena', region: 'arena', size: ARENA_MAP.size, lvl: null, pvp: 'ffa', safe: false, debugOnly: true,
+        spawn: { ...ARENA_MAP.teamA }, respawn: { ...ARENA_MAP.teamA }, temporary: true, rest: { map: VILLA_ID, ...VILLA.spawn },
+        links: [], build: buildArena,
     },
     ...solmarMaps(),
     ...vharMaps(),

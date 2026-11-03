@@ -37,9 +37,11 @@ export const TRAINING: TrainingStep[] = [
     T(9, 'cenizas_i', 'Cenizas I', 21, '#e04a5a'),
     T(10, 'cenizas_ii', 'Cenizas II', 23, '#cf4a86'),
     T(11, 'cenizas_iii', 'Cenizas III', 26, '#a64ad0'),
-    T(12, 'oasis_de_ceniza', 'Oasis de Ceniza', 31, '#e8c27a'),
-    T(13, 'lago_kuuma', 'Lago Kuuma', 34, '#9fd6f0'),
-    T(14, 'laguna_de_la_gruta', 'Laguna de la Gruta', 37, '#c2a8f0'),
+    T(12, 'granja_roble_negro', 'Granja de Roble Negro', 28, '#b8d06a'),
+    T(13, 'oasis_de_ceniza', 'Oasis de Ceniza', 31, '#e8c27a'),
+    T(14, 'lago_kuuma', 'Lago Kuuma', 33, '#9fd6f0'),
+    T(15, 'laguna_de_la_gruta', 'Laguna de la Gruta', 35, '#c2a8f0'),
+    T(16, 'minas_abandonadas', 'Minas abandonadas', 38, '#c98a5a'),
 ];
 export const TRAINING_IDS = TRAINING.map((t) => t.id);
 

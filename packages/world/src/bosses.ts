@@ -109,6 +109,8 @@ export const ADD_KITS: Record<string, BossKit> = {
     // obrera escupidora de la Reina (D2, al 30 %): el Lord Zargan en chico, anti-cura a uno al azar
     escupidora: { gap: 2, abilities: [{ kind: 'cast', id: 'saliva', name: 'Saliva ácida', school: 'acido', castMs: 1800, every: 9, first: 2, target: 'random', effect: { r: 0, dmgK: 0.5, antiHeal: 8 } }] },
     // hechicero de la cripta y de la torre: una saeta sombría a uno al azar, que se corta (los Hechiceros deshonrados de Kandorys)
+    // carcelero del Gran Verdugo (D7, al 50 % en trío o más): encadena a uno al azar (frenado + anti-cura); hay que cortarlo o matarlo rápido
+    carcelero: { gap: 2, abilities: [{ kind: 'cast', id: 'grillete', name: 'Grillete', school: 'sombra', castMs: 2000, every: 9, first: 2, target: 'random', effect: { r: 0, dmgK: 1, slow: 4, antiHeal: 6 } }] },
     hechicero: { gap: 2, abilities: [{ kind: 'cast', id: 'saeta', name: 'Saeta sombría', school: 'sombra', castMs: 2000, every: 8, first: 3, target: 'random', effect: { r: 0, dmgK: 2 } }] },
 };
 
@@ -194,5 +196,25 @@ export const BOSS_KITS: Partial<Record<MobType, BossKit>> = {
         stackFury: { every: 10, pct: 0.03 },
         enrage: { atHp: 0.25, dmg: 1.5, castSpeed: 0.7 },
         hardEnrage: { secs: 420, dmg: 3 },
+    },
+    // D7 (Nv 40, el tope): el examen final. Pide todo lo aprendido: tanque que aguante el Hachazo con sangrado, cortes del Suplicio (anti-cura
+    // de sala) en la ventana, salir del tirón de las Cadenas, esquivar el Patíbulo y disipar con candado que obliga a re-bufear.
+    // Fase 2 (50 %): carceleros que encadenan. Fase 3 (25 %): furia. Tope duro a los 8 minutos.
+    verdugo: {
+        abilities: [
+            { kind: 'tankHit', id: 'hachazo', name: 'Hachazo', every: 10, first: 6, warnMs: 900, mult: 3.2, bleed: { pct: 0.035, ticks: 6, maxStacks: 4 } },
+            { kind: 'telegraph', id: 'patibulo', name: 'Patíbulo', every: 9, first: 4, warnMs: 1200, at: 'random', r: 2.8, dmgK: 1.6, stun: 1, pool: { name: 'Sangre del patíbulo', r: 2.8, secs: 6, dpsK: 0.35 } },
+            { kind: 'cast', id: 'suplicio', name: 'Suplicio', school: 'sombra', castMs: 2500, every: 13, first: 9, effect: { r: 14, pctHp: 0.55, antiHeal: 6 } },
+            { kind: 'pull', id: 'cadenas', name: 'Cadenas del verdugo', every: 21, first: 15, r: 12, blastR: 3.2, warnMs: 1500, dmgK: 3.2 },
+            { kind: 'cast', id: 'sentencia', name: 'Sentencia', school: 'fis', castMs: 2000, every: 26, first: 22, lock: true, effect: { r: 14, terror: 2, dispel: true } },
+        ],
+        adds: [
+            { atHp: 0.6, text: 'El Verdugo llama a sus condenados.', spawn: [{ type: 'zombie_dark', n: 3 }] },
+            { atHp: 0.5, text: 'Bajan los carceleros con sus grilletes.', spawn: [{ type: 'skeleton', n: 1, kit: 'carcelero', name: 'Carcelero' }, { type: 'skeleton', n: 1, minParty: 3, kit: 'carcelero', name: 'Carcelero' }] },
+            { atHp: 0.25, text: 'Las celdas se abren.', spawn: [{ type: 'zombie_dark', n: 2 }, { type: 'skeleton_mage', n: 1, kit: 'hechicero', name: 'Brujo de las cámaras' }] },
+        ],
+        stackFury: { every: 10, pct: 0.035 },
+        enrage: { atHp: 0.25, dmg: 1.5, castSpeed: 0.7 },
+        hardEnrage: { secs: 480, dmg: 3 },
     },
 };

@@ -35,12 +35,16 @@ interface MapSpec {
     dungeon?: boolean; respawnMap?: string;
     /** Jefe final: una zona de 1 mob en el punto más lejano de las entradas. */
     boss?: { type: string; name: string };
+    /** Sala del jefe despejada: se sacan los pits y sueltos a menos de estas celdas del jefe (así no se pelea con un pack encima). */
+    bossClear?: number;
     /** Vínculos de Flare a descartar (id de Flare del destino) y nivel mínimo para los que quedan (id de Flare del destino -> nivel). */
     /** Vínculos de Flare que se descartan por destino exacto [mapa, tx, ty] (apuntan a una celda que en ERIS quedó sellada). */
     skipLinks?: [string, number, number][];
     dropLinks?: string[]; linkGates?: Record<string, number>;
     /** Rectángulos [x,y,w,h] que se abren (puertas trabadas de Flare que se abren con un evento): sin colisión ni objeto. */
     open?: [number, number, number, number][];
+    /** Abre todas las celdas que algún evento de Flare libera (`mapmod=…collision,x,y,0`): puertas, rejas y palancas quedan abiertas de entrada. */
+    openMods?: boolean;
     /** Parte de los obstáculos sueltos que se conserva al abrir el mapa (por defecto KEEP_PROPS). */
     keepProps?: number;
 }
@@ -102,26 +106,45 @@ const SPECS: MapSpec[] = [
     { id: 'stormrock_pass', eris: 'paso_de_stormrock', name: 'Paso de Stormrock', region: 'comun', pvp: 'faction', lvl: [18, 20], tier: 4, dropLinks: ['stormrock_ruins'], skipLinks: [['the_breach', 23, 14], ['the_breach', 76, 41]],
         pits: [{ name: 'Riscos de wyvern', type: 'wyvern' }, { name: 'Hormigueros helados', type: 'ice_ant' }, { name: 'Cumbre helada', type: 'wyvern_ice' }],
         loose: [{ type: 'skeleton_archer' }], extras: [{ to: 'cenizas_i', where: 'far' }] },
-    { id: 'underworld', eris: 'cenizas_i', name: 'Cenizas I', region: 'comun', pvp: 'faction', lvl: [21, 23], tier: 5,
+    { id: 'underworld', eris: 'cenizas_i', name: 'Cenizas I', region: 'comun', pvp: 'faction', lvl: [21, 23], tier: 5, dropLinks: ['torture_chambers'],
         pits: [{ name: 'Brasas de la ceniza', type: 'fire_ant' }, { name: 'Hechiceros de ceniza', type: 'skeleton_mage' }, { name: 'Muertos calcinados', type: 'zombie_dark' }],
         loose: [{ type: 'skeleton' }], extras: [{ to: 'paso_de_stormrock', where: 'near' }] },
     { id: 'underworld_catacombs', eris: 'cenizas_ii', name: 'Cenizas II', region: 'comun', pvp: 'faction', lvl: [23, 25], tier: 5,
         pits: [{ name: 'Osario', type: 'skeleton' }, { name: 'Tumbas ardientes', type: 'cursed_grave' }, { name: 'Arqueros de las catacumbas', type: 'skeleton_archer' }],
         loose: [{ type: 'zombie_dark' }], extras: [{ to: 'templo_de_mez', where: 'far', kind: 'door', gate: 19 }] },
-    { id: 'underworld_mines', eris: 'cenizas_iii', name: 'Cenizas III', region: 'comun', pvp: 'faction', lvl: [26, 30], tier: 6, dropLinks: ['underworld_stronghold_1'],
+    { id: 'underworld_mines', eris: 'cenizas_iii', name: 'Cenizas III', region: 'comun', pvp: 'faction', lvl: [26, 28], tier: 6, dropLinks: ['underworld_stronghold_1'],
         pits: [{ name: 'Mineros condenados', type: 'zombie_dark' }, { name: 'Hornos de wyvern', type: 'wyvern_fire' }, { name: 'Galerías de brasas', type: 'fire_ant' }],
-        loose: [{ type: 'skeleton_mage' }], extras: [{ to: 'fortaleza_infernal', where: 'far', kind: 'door', gate: 24 }] },
-    // T7 (Nv 31-40, docs/TIERS_DE_ZONA.md): tres mapas abiertos de la reserva de Flare. Cenizas III -> Oasis (camino de Flare) -> Lago Kuuma
-    // -> Laguna de la Gruta (portales de piedra). Todavía sin mazmorra propia (la del T7 entra con los jefes nuevos, ver docs/ROADMAP_MAPAS.md).
-    { id: 'oasis', eris: 'oasis_de_ceniza', name: 'Oasis de Ceniza', region: 'comun', pvp: 'faction', lvl: [31, 34], tier: 7,
+        loose: [{ type: 'skeleton_mage' }], extras: [{ to: 'fortaleza_infernal', where: 'far', kind: 'door', gate: 24 }, { to: 'granja_roble_negro', where: 'near' }] },
+    // T6, segundo mapa abierto (Nv 28-30): la Granja de Roble Negro, de pasto, para cortar la seguidilla de cuevas. Flare la une al Risco del Sur
+    // y a las cloacas (no importados): se llega por un portal desde Cenizas III y sale al Oasis de Ceniza.
+    { id: 'black_oak_farm', openMods: true, eris: 'granja_roble_negro', name: 'Granja de Roble Negro', region: 'comun', pvp: 'faction', lvl: [28, 30], tier: 6,
+        dropLinks: ['black_oak_city', 'dilapidated_sewers', 'southern_ridge'],
+        pits: [{ name: 'Corrales podridos', type: 'zombie_dark' }, { name: 'Silos de las hormigas', type: 'fire_ant' }, { name: 'Molino de los hechiceros', type: 'skeleton_mage' }],
+        loose: [{ type: 'zombie' }], extras: [{ to: 'cenizas_iii', where: 'near' }, { to: 'oasis_de_ceniza', where: 'far' }] },
+    // T7 (Nv 31-40, docs/TIERS_DE_ZONA.md): cuatro mapas abiertos de la reserva de Flare. Cenizas III -> Oasis (camino de Flare) -> Lago Kuuma
+    // -> Laguna de la Gruta (portales de piedra) -> Minas abandonadas (camino de Flare). La mazmorra (D7) entra por el Lago Kuuma.
+    { id: 'oasis', eris: 'oasis_de_ceniza', name: 'Oasis de Ceniza', region: 'comun', pvp: 'faction', lvl: [31, 33], tier: 7,
         pits: [{ name: 'Dunas de las hormigas', type: 'antlion' }, { name: 'Pozos de fuego', type: 'fire_ant' }, { name: 'Nidos del oasis', type: 'wyvern_fire' }],
-        loose: [{ type: 'antlion_small' }], extras: [{ to: 'lago_kuuma', where: 'far' }] },
-    { id: 'lake_kuuma', eris: 'lago_kuuma', name: 'Lago Kuuma', region: 'comun', pvp: 'faction', lvl: [34, 37], tier: 7, dropLinks: ['blackmire_mines', 'fort_amir'],
+        loose: [{ type: 'antlion_small' }], extras: [{ to: 'lago_kuuma', where: 'far' }, { to: 'granja_roble_negro', where: 'near' }] },
+    { id: 'lake_kuuma', eris: 'lago_kuuma', name: 'Lago Kuuma', region: 'comun', pvp: 'faction', lvl: [33, 35], tier: 7, dropLinks: ['blackmire_mines'], linkGates: { fort_amir: 29 },
         pits: [{ name: 'Hormigueros del lago', type: 'ice_ant' }, { name: 'Vigías helados', type: 'skeleton_archer' }, { name: 'Riscos del lago', type: 'wyvern_ice' }],
         loose: [{ type: 'ice_ant' }], extras: [{ to: 'oasis_de_ceniza', where: 'near' }, { to: 'laguna_de_la_gruta', where: 'far' }] },
-    { id: 'grot_lagoon', eris: 'laguna_de_la_gruta', name: 'Laguna de la Gruta', region: 'comun', pvp: 'faction', lvl: [37, 40], tier: 7, dropLinks: ['abandoned_mines'],
+    { id: 'grot_lagoon', eris: 'laguna_de_la_gruta', name: 'Laguna de la Gruta', region: 'comun', pvp: 'faction', lvl: [35, 37], tier: 7,
         pits: [{ name: 'Orilla helada', type: 'wyvern_ice' }, { name: 'Hechiceros de la gruta', type: 'skeleton_mage' }, { name: 'Cumbre de la laguna', type: 'wyvern' }],
         loose: [{ type: 'skeleton' }], extras: [{ to: 'lago_kuuma', where: 'near' }] },
+    // T7, cuarto mapa abierto (Nv 38-40, el tope): las Minas abandonadas. Flare las une a la Laguna (camino propio); las salidas a La Brecha y a
+    // Blackmire se descartan.
+    { id: 'abandoned_mines', eris: 'minas_abandonadas', name: 'Minas abandonadas', region: 'comun', pvp: 'faction', lvl: [38, 40], tier: 7, dropLinks: ['the_breach', 'blackmire_mines'],
+        pits: [{ name: 'Galerías de los muertos', type: 'zombie_dark' }, { name: 'Pozos de las hormigas', type: 'antlion' }, { name: 'Socavón de los hechiceros', type: 'skeleton_mage' }],
+        loose: [{ type: 'skeleton_archer' }] },
+    // D7 (T7): Fuerte Amir y Cámaras de tortura (2 pisos, Nv 38-40, jefe: el Gran Verdugo). La entrada es la puerta de Flare del Lago Kuuma
+    // (Nv 29); Flare no une los dos pisos, así que van por una puerta propia.
+    { id: 'fort_amir', openMods: true, eris: 'fuerte_amir', name: 'Fuerte Amir', region: 'mazmorra', pvp: 'off', lvl: [38, 39], tier: 7, dungeon: true,
+        pits: [{ name: 'Guardia del fuerte', type: 'skeleton' }, { name: 'Ballesteros de las murallas', type: 'skeleton_archer' }, { name: 'Hechiceros del fuerte', type: 'skeleton_mage' }],
+        loose: [{ type: 'zombie_dark' }], extras: [{ to: 'camaras_de_tortura', where: 'far' }] },
+    { id: 'torture_chambers', openMods: true, eris: 'camaras_de_tortura', name: 'Cámaras de tortura', region: 'mazmorra', pvp: 'off', lvl: [39, 40], tier: 7, dungeon: true, respawnMap: 'fuerte_amir', dropLinks: ['underworld'],
+        pits: [{ name: 'Celdas de los condenados', type: 'zombie_dark' }, { name: 'Potros del verdugo', type: 'cursed_grave' }, { name: 'Carceleros', type: 'skeleton_archer' }],
+        loose: [{ type: 'skeleton' }], boss: { type: 'verdugo', name: 'Sala del Gran Verdugo' }, bossClear: 10, extras: [{ to: 'fuerte_amir', where: 'near' }] },
     { id: 'merrimead_swamp', eris: 'pantano_de_merrimead', name: 'Pantano de Merrimead', region: 'comun', pvp: 'faction', lvl: [6, 8], tier: 2,
         pits: [{ name: 'Ciénaga de zombis', type: 'zombie' }, { name: 'Pozo oscuro', type: 'zombie_dark' }, { name: 'Lápidas del pantano', type: 'cursed_grave' }],
         loose: [{ type: 'zombie' }], extras: [{ to: 'altas_de_nazia', where: 'far' }] },
@@ -133,8 +156,8 @@ const SPECS: MapSpec[] = [
         loose: [{ type: 'cursed_grave' }], extras: [{ to: 'risco_del_sur', where: 'far' }, { to: 'cripta_olvidada', where: 'near', kind: 'door', gate: 9 }] },
     { id: 'the_breach', eris: 'la_brecha', name: 'La Brecha', region: 'comun', pvp: 'faction', lvl: [16, 18], tier: 4,
         pits: [{ name: 'Túneles de hormiga león', type: 'antlion' }, { name: 'Hormigueros de la brecha', type: 'fire_ant' }, { name: 'Mineros caídos', type: 'zombie_dark' }],
-        loose: [{ type: 'antlion_small' }, { type: 'fire_ant' }], dropLinks: ['antlion_nest'], extras: [{ to: 'risco_del_sur', where: 'near' }, { to: 'torre_del_hechicero', where: 'far', kind: 'door', gate: 14 }] },
-    { id: 'southern_ridge', eris: 'risco_del_sur', name: 'Risco del Sur', region: 'comun', pvp: 'faction', lvl: [13, 15], tier: 3,
+        loose: [{ type: 'antlion_small' }, { type: 'fire_ant' }], dropLinks: ['antlion_nest', 'abandoned_mines'], extras: [{ to: 'risco_del_sur', where: 'near' }, { to: 'torre_del_hechicero', where: 'far', kind: 'door', gate: 14 }] },
+    { id: 'southern_ridge', eris: 'risco_del_sur', name: 'Risco del Sur', region: 'comun', pvp: 'faction', lvl: [13, 15], tier: 3, dropLinks: ['black_oak_farm'],
         pits: [{ name: 'Risco de las hormigas', type: 'antlion' }, { name: 'Atalaya en ruinas', type: 'skeleton_mage' }, { name: 'Grietas de fuego', type: 'fire_ant' }],
         loose: [{ type: 'antlion' }, { type: 'skeleton' }], extras: [{ to: 'cementerio_de_lochport', where: 'near' }, { to: 'la_brecha', where: 'far' }] },
 ];
@@ -168,7 +191,7 @@ const FILLS: Record<string, { floor: number[]; deco: [number, number[]][] }> = {
 
 interface Region { x: number; y: number; w: number; h: number; category: string; level: number; min: number; max: number }
 interface FlareLinkRaw { x: number; y: number; w: number; h: number; to: string; tx: number; ty: number; tooltip: string }
-interface Parsed { w: number; h: number; tileset: string; title: string; hero: { x: number; y: number }; layers: Record<string, number[][]>; regions: Region[]; links: FlareLinkRaw[] }
+interface Parsed { w: number; h: number; tileset: string; title: string; hero: { x: number; y: number }; layers: Record<string, number[][]>; regions: Region[]; links: FlareLinkRaw[]; modOpen: [number, number][] }
 
 function parseMap(path: string): Parsed {
     const hdr: Record<string, string> = {}, layers: Record<string, number[][]> = {}, regions: Region[] = [], links: FlareLinkRaw[] = [];
@@ -201,7 +224,8 @@ function parseMap(path: string): Parsed {
     }
     flush();
     const [hx, hy] = (hdr.hero_pos ?? '0,0').split(',').map(Number);
-    return { w: Number(hdr.width), h: Number(hdr.height), tileset: hdr.tileset ?? '', title: hdr.title ?? '', hero: { x: hx, y: hy }, layers, regions, links };
+    const modOpen = [...readFileSync(path, 'utf8').matchAll(/collision,(\d+),(\d+),0\b/g)].map((m) => [Number(m[1]), Number(m[2])] as [number, number]);
+    return { w: Number(hdr.width), h: Number(hdr.height), tileset: hdr.tileset ?? '', title: hdr.title ?? '', hero: { x: hx, y: hy }, layers, regions, links, modOpen };
 }
 
 const hashStr = (s: string): number => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
@@ -235,6 +259,7 @@ function convert(spec: MapSpec): object {
     const grid = (name: string): number[][] => Array.from({ length: N }, (_, y) => Array.from({ length: N }, (_, x) => (y < p.h && x < p.w ? p.layers[name]?.[y]?.[x] ?? 0 : 0)));
     const background = grid('background'), object = grid('object'), collision = grid('collision');
     for (const [ox, oy, ow, oh] of spec.open ?? []) for (let y = oy; y < oy + oh; y++) for (let x = ox; x < ox + ow; x++) { collision[y][x] = 0; object[y][x] = 0; }
+    if (spec.openMods) for (const [x, y] of p.modOpen) if (y < N && x < N) { collision[y][x] = 0; object[y][x] = 0; }
     // Marcadores de editor de Flare (triángulos violeta 92-95 de pasto y nieve): en Flare no se ven en el juego; acá se sacan.
     if (/tileset_(snowplains|grassland)\.txt$/.test(p.tileset)) for (const row of object) for (let x = 0; x < row.length; x++) if (row[x] >= 92 && row[x] <= 95) row[x] = 0;
 
@@ -388,6 +413,7 @@ function convert(spec: MapSpec): object {
     if (spec.boss) {
         const b = cand.filter((c) => taken.every((t) => dist(t, c) >= 15)).sort((a, c) => Math.min(...taken.map((t) => dist(c, t))) - Math.min(...taken.map((t) => dist(a, t))) || a.y - c.y || a.x - c.x)[0];
         if (!b) throw new Error(`${spec.id}: no encontré lugar para el jefe`);
+        if (spec.bossClear) for (let i = zones.length - 1; i >= 0; i--) if (dist(zones[i], b) < spec.bossClear) zones.splice(i, 1);
         zones.push({ type: spec.boss.type, x: b.x, y: b.y, r: 6, n: 1, name: spec.boss.name, lvl: spec.lvl[1], kind: 'boss' });
         if (!knownMobs.has(spec.boss.type)) throw new Error(`${spec.id}: tipo de jefe desconocido "${spec.boss.type}"`);
     }
