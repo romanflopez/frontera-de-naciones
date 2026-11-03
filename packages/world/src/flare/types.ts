@@ -59,5 +59,15 @@ export const isFlareCliff = (tileset: string, id: number): boolean => !!FLARE_CL
  * `base + (id - from)`. Sirven de piso del vacío en las cuevas: roca oscura bajo las caras transparentes de las paredes, en vez del
  * negro de Flare o del musgo verde. Las arma tools/src/flare/mapatlas.ts.
  */
-export const FLARE_SHADE: Record<string, { from: number; to: number; base: number; k: number }> = { cave: { from: 16, to: 31, base: 900, k: 0.42 } };
-export const shadeSource = (tileset: string, id: number): number | undefined => { const s = FLARE_SHADE[tileset]; return s && id >= s.base && id <= s.base + s.to - s.from ? s.from + id - s.base : undefined; };
+export const FLARE_SHADE: Record<string, { from: number; to: number; bands: { base: number; k: number }[] }> = {
+    // tres bandas de oscuridad: la primera fila de vacío pegada al mapa, la segunda y el resto (se funde a negro, como una cueva de verdad)
+    cave: { from: 16, to: 31, bands: [{ base: 900, k: 0.3 }, { base: 920, k: 0.16 }, { base: 940, k: 0.07 }] },
+    dungeon: { from: 16, to: 23, bands: [{ base: 900, k: 0.34 }, { base: 920, k: 0.18 }, { base: 940, k: 0.08 }] },
+};
+const shadeBand = (tileset: string, id: number) => { const s = FLARE_SHADE[tileset]; const b = s?.bands.find((q) => id >= q.base && id <= q.base + s.to - s.from); return s && b ? { s, b } : undefined; };
+/** Pieza de Flare de la que sale una pieza oscurecida (o undefined si no lo es). */
+export const shadeSource = (tileset: string, id: number): number | undefined => { const r = shadeBand(tileset, id); return r ? r.s.from + id - r.b.base : undefined; };
+/** Brillo de una pieza oscurecida (1 si no lo es). */
+export const shadeK = (tileset: string, id: number): number => shadeBand(tileset, id)?.b.k ?? 1;
+/** Id de la pieza oscurecida de `id` (piso de la hoja) en la banda `band` (0 = la más clara). */
+export const shadeId = (tileset: string, id: number, band: number): number => { const s = FLARE_SHADE[tileset]; const b = s.bands[Math.min(band, s.bands.length - 1)]; return b.base + id - s.from; };

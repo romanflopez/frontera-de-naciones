@@ -8,6 +8,7 @@
  * Determinista: sin Math.random ni hora; el mismo mapa da siempre el mismo archivo.
  */
 import { pitLevel, TIERS, type Tier } from '../../../packages/world/src/tiers';
+import { shadeId } from '../../../packages/world/src/flare/types';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -166,26 +167,28 @@ const SPECS: MapSpec[] = [
  * Relleno del vacío por tileset (el vacío de Flare es negro): piso de la propia hoja y objetos que lo cubren, en porcentajes
  * acumulados. Las celdas rellenadas quedan bloqueadas. Los ids son los de la hoja (se ven en el catálogo de tools/src/flare/mapatlas.ts).
  */
-const FILLS: Record<string, { floor: number[]; deco: [number, number[]][] }> = {
+const FILLS: Record<string, { floor: number[]; deco: [number, number[]][]; shade?: boolean }> = {
     grassland: {
         floor: Array.from({ length: 16 }, (_, i) => 16 + i),
         deco: [[0.17, [248, 249, 250, 251]], [0.24, [252, 253, 254, 255]], [0.29, [240, 241, 242, 243]], [0.33, [128, 129, 130, 131]], [0.45, [112, 113, 124, 125, 126, 127]]],
     },
-    // Cueva: el vacío es roca maciza. Piso de tierra oscurecida (900-915, ver FLARE_SHADE) con columnas de roca sueltas, estalagmitas y
-    // piedras: las caras de atrás de las paredes son transparentes y dejan ver esa roca oscura (antes era musgo verde y parecía un pantano).
+    // Cueva: el vacío es oscuridad. Piso de tierra oscurecida en tres bandas (FLARE_SHADE) que se funde a negro lejos del mapa, con
+    // estalagmitas y piedras solo en la primera fila (las caras de atrás de las paredes son transparentes y dejan ver esa sombra). Sin
+    // trozos de pared sueltos: parecían columnas paradas sobre una losa.
     cave: {
-        floor: Array.from({ length: 16 }, (_, i) => 900 + i),
-        deco: [[0.10, [64, 65, 68, 69, 72, 76, 80, 84, 96, 97, 98, 99, 100, 101, 102, 103]], [0.17, [144, 145, 146, 147, 148, 149]], [0.23, [150, 151, 152, 153]], [0.25, [132, 133, 134, 135]]],
+        floor: Array.from({ length: 16 }, (_, i) => 16 + i), shade: true,
+        deco: [[0.08, [144, 145, 146, 147, 148, 149]], [0.13, [150, 151, 152, 153]], [0.15, [132, 133, 134, 135]]],
     },
     // Nieve: el vacío es nieve lisa (16-31) con árboles pelados, rocas nevadas, matas y tocones (sin las piezas del agua ni los marcadores violeta 92-95).
     snowplains: {
         floor: Array.from({ length: 16 }, (_, i) => 16 + i),
         deco: [[0.13, [244, 245, 246, 247]], [0.17, [128, 129, 130, 131]], [0.22, [112, 113, 124, 125, 126, 127]], [0.23, [136]]],
     },
-    // Mazmorra de piedra: piso liso (16-19, 21, 23) con muñones de muro (cara negra transparente), huesos y calaveras.
+    // Mazmorra de piedra: lo mismo que la cueva, piso liso oscurecido en bandas que se funde a negro y apenas unos huesos en la primera fila
+    // (antes eran muñones de muro por todos lados y el mapa se veía como un bosque de columnas grises).
     dungeon: {
-        floor: [16, 17, 18, 19, 21, 23],
-        deco: [[0.30, [48, 49, 50, 56, 57, 58, 59, 60, 61]], [0.36, [66, 67, 68, 69, 70]], [0.38, [144, 145, 146, 147, 148]]],
+        floor: [16, 17, 18, 19, 21, 23], shade: true,
+        deco: [[0.04, [144, 145, 146, 147, 148]]],
     },
 };
 
@@ -346,12 +349,20 @@ function convert(spec: MapSpec): object {
     // y objetos que lo cubren. Esas celdas ya están bloqueadas (no se pueden pisar).
     const fill = FILLS[tsName];
     if (fill) {
+        // distancia (en celdas, contando diagonales) de cada celda de vacío al mapa de Flare: decide la banda de sombra
+        const far: number[][] = Array.from({ length: N }, (_, y) => Array.from({ length: N }, (_, x) => (background[y][x] !== 0 ? 0 : Infinity)));
+        const q: [number, number][] = []; for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (far[y][x] === 0) q.push([x, y]);
+        for (let i = 0; i < q.length; i++) {
+            const [cx, cy] = q[i];
+            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const nx = cx + dx, ny = cy + dy; if (nx >= 0 && ny >= 0 && nx < N && ny < N && far[ny][nx] === Infinity) { far[ny][nx] = far[cy][cx] + 1; q.push([nx, ny]); } }
+        }
         for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
             if (background[y][x] !== 0) continue;
             const r = (k: number) => hashStr(`${spec.id}:${x},${y},${k}`) / 4294967296;
             // el piso va siempre (también bajo los acantilados, que tienen la cara de atrás transparente); los objetos, solo en celdas vacías
-            background[y][x] = fill.floor[Math.floor(r(0) * fill.floor.length)];
-            if (object[y][x] !== 0) continue;
+            const f = fill.floor[Math.floor(r(0) * fill.floor.length)];
+            background[y][x] = fill.shade ? shadeId(tsName, f, far[y][x] - 1) : f;
+            if (object[y][x] !== 0 || (fill.shade && far[y][x] > 1)) continue;
             const roll = r(1), band = fill.deco.find(([t]) => roll < t);
             if (band) object[y][x] = band[1][Math.floor(r(2) * band[1].length)];
         }

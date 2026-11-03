@@ -10,7 +10,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
-import { FLARE_BASE, FLARE_SHADE, isFlareCliff, shadeSource } from '../../../packages/world/src/flare/types';
+import { FLARE_BASE, isFlareCliff, shadeK, shadeSource } from '../../../packages/world/src/flare/types';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const flare = process.env.FLARE_DIR ?? join(root, 'reference', 'flare-game');
@@ -101,7 +101,7 @@ for (const [tileset, ids] of used) {
             g.putImageData(img, px, py);
         }
         if (shadeSource(tileset, it.id) !== undefined) {
-            const k = FLARE_SHADE[tileset].k, img = g.getImageData(px, py, it.w, it.h), a = img.data;
+            const k = shadeK(tileset, it.id), img = g.getImageData(px, py, it.w, it.h), a = img.data;
             for (let i = 0; i < a.length; i += 4) { a[i] = Math.round(a[i] * k); a[i + 1] = Math.round(a[i + 1] * k); a[i + 2] = Math.round(a[i + 2] * k * 1.05); }
             g.putImageData(img, px, py);
         }
