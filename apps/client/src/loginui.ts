@@ -4,6 +4,7 @@
  * Este módulo es solo vista y flujo; la conexión, el guardado y enterWorld siguen en main.ts.
  */
 import './login.css';
+import './ui/login-craftpix.css';
 import { mountDoll } from './paperdoll.ts';
 
 export interface ClassInfo { id: string; name: string; desc: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; armor?: string; spells: string[] }

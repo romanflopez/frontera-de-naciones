@@ -6,6 +6,7 @@
  * mobs, combate, hechizos, loot y experiencia (pasan al server en la fase 1b).
  */
 import { CombatTextManager, type CombatTextEvent } from './systems/CombatTextManager';
+import './ui/craftpix.css';
 import { mountChat } from './ui/mountChat';
 import { mountCastBar } from './ui/CastBar';
 import { useCastStore } from './ui/castStore';
@@ -2825,6 +2826,7 @@ function showLogin(error = '') {
     $('login').hidden = false; $('loginErr').textContent = error; flow.show('login');
     const nameIn = $('nameIn') as HTMLInputElement;
     try { nameIn.value ||= localStorage.getItem('fdn:lastName') ?? ''; } catch { /* sin almacenamiento */ }
+    try { ($('rememberIn') as HTMLInputElement).checked = localStorage.getItem('fdn:remember') !== '0'; } catch { /* sin almacenamiento */ }
     nameIn.focus();
 }
 $('loginForm').addEventListener('submit', async (e) => {
@@ -2834,7 +2836,11 @@ $('loginForm').addEventListener('submit', async (e) => {
     const regErr = flow.checkRegister(); if (regErr) { $('loginErr').textContent = regErr; return; }
     const btn = $('loginBtn') as HTMLButtonElement, auto = autoEnter; autoEnter = false;
     btn.disabled = true; $('loginErr').textContent = 'Conectando…';
-    try { localStorage.setItem('fdn:lastName', name); } catch { /* sin almacenamiento */ }
+    try {
+        const remember = ($('rememberIn') as HTMLInputElement).checked;
+        localStorage.setItem('fdn:remember', remember ? '1' : '0');
+        if (remember) localStorage.setItem('fdn:lastName', name); else localStorage.removeItem('fdn:lastName');
+    } catch { /* sin almacenamiento */ }
     pendingSave = null; welcomeBack = false;
     flowActive = false; inFlow = false;
     net.onMessage = (m) => {

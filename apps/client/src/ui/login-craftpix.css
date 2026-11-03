@@ -1,0 +1,64 @@
+/* Pantalla de login con el diseño del pack Craftpix "RPG MMO Game User Interface" (screen 1 - LOGIN).
+   Solo la pantalla de login (data-screen="login"); selección y creación quedan como estaban.
+   Las texturas (lg-*.png) no están en git: tools/src/ui/install_craftpix.py. Sin ellas se ve el diseño anterior. */
+#login .lbar,#login .remember{display:none}
+
+/* fondo del PSD (lg-bg.webp): capa de arriba, así si el archivo falta queda el escenario de ERIS */
+#login[data-screen=login] .lbg::after{content:"";position:absolute;inset:0;
+  background:url(/assets/ui/craftpix/lg-bg.webp) center/cover no-repeat}
+
+/* marca: la filigrana del pack y el marco del logo como "slot" (adentro va el logo del juego) */
+#login[data-screen=login] .brand{top:0;height:300px}
+#login[data-screen=login] .brand::before{content:"";position:absolute;left:50%;top:8px;width:672px;height:295px;margin-left:-336px;
+  background:url(/assets/ui/craftpix/lg-logo-tribal.png) center/100% 100% no-repeat}
+#login[data-screen=login] .gname{position:absolute;left:50%;top:103px;width:345px;height:123px;margin-left:-172px;display:grid;place-items:center;
+  background:url(/assets/ui/craftpix/lg-logo-frame.png) center/100% 100% no-repeat}
+#login[data-screen=login] .gname img{position:relative;width:auto;height:94px;margin-top:10px;
+  filter:drop-shadow(0 2px 6px rgba(0,0,0,.7)) drop-shadow(0 0 18px rgba(120,170,220,.3))}
+#login[data-screen=login] .tagl{display:none}
+
+/* formulario sin tarjeta */
+#login[data-screen=login] .lcard{top:356px;width:416px;margin-left:-208px;padding:0;gap:18px;justify-items:center;background:none;border:0;box-shadow:none;backdrop-filter:none;border-radius:0}
+#login[data-screen=login] .field{width:335px}
+#login[data-screen=login] .field svg{display:none}
+#login[data-screen=login] .field input{height:42px;padding:0 14px;text-align:center;text-transform:uppercase;letter-spacing:.06em;font:500 15px "Alegreya SC",Georgia,serif;color:#e9dcc0;
+  background:linear-gradient(180deg,#1b1f25,#14171b);border:1px solid #8a7640;border-radius:1px;box-shadow:inset 0 0 0 1px #000,inset 0 0 0 2px #3a3322,0 1px 6px #0008}
+#login[data-screen=login] .field input::placeholder{color:#c9bd9c;opacity:.85}
+#login[data-screen=login] .field input:focus{outline:none;border-color:#d8c070;box-shadow:inset 0 0 0 1px #000,inset 0 0 0 2px #3a3322,0 0 14px rgba(110,170,225,.55)}
+#login[data-screen=login] .field input:focus-visible{outline:none}
+
+/* recordarme */
+#login[data-screen=login] .remember{margin-top:7px;display:flex;align-items:center;justify-content:center;gap:10px;width:100%;height:50px;cursor:pointer;
+  font:500 13px "Alegreya SC",Georgia,serif;letter-spacing:.06em;text-transform:uppercase;color:#c9bd9c;background:linear-gradient(90deg,#0000,#ffffff0d 22%,#ffffff0d 78%,#0000)}
+#login .remember input{position:absolute;opacity:0;pointer-events:none}
+#login .remember .cbx{position:relative;width:20px;height:20px;box-sizing:border-box;background:#1a1d22;border:2px solid #7a6a3e;border-image:url(/assets/ui/craftpix/lg-field.png) 3 fill/2px stretch}
+#login .remember .cbx::after{content:"";position:absolute;inset:3px;background:#a8924f url(/assets/ui/craftpix/lg-check.png) center/100% 100% no-repeat;opacity:0;transition:opacity .12s}
+#login .remember input:checked + .cbx::after{opacity:1}
+#login .remember:hover .cbx{box-shadow:0 0 10px rgba(130,190,240,.6)}
+#login .remember input:focus-visible + .cbx{outline:2px solid #9cc4e4;outline-offset:2px}
+
+/* botón: placa de piedra teñida de azul con los corchetes dorados a los lados */
+#login[data-screen=login] #loginBtn{position:relative;width:236px;height:54px;min-width:0;padding:0;margin:4px 0 0;white-space:nowrap;border:0;border-radius:2px;box-shadow:0 2px 10px #000a;
+  font:500 20px "Alegreya SC",Georgia,serif;letter-spacing:.08em;color:#eef6fc;text-shadow:0 1px 2px #06223c,0 0 8px #06223c;
+  background:url(/assets/ui/craftpix/lg-btn-ov.png) center/100% 100% no-repeat,url(/assets/ui/craftpix/lg-btn-bg.png) center/100% 100% no-repeat,linear-gradient(180deg,#5fa8e0,#2e72b4 55%,#245e98);
+  background-blend-mode:soft-light,multiply,normal;background-color:#3a86c8}
+#login[data-screen=login] #loginBtn::before,#login[data-screen=login] #loginBtn::after{content:"";position:absolute;top:-4px;bottom:-4px;width:44px;pointer-events:none;
+  background:url(/assets/ui/craftpix/lg-btn-border.png) center/100% 100% no-repeat}
+#login[data-screen=login] #loginBtn::before{left:-30px}
+#login[data-screen=login] #loginBtn::after{right:-30px;transform:scaleX(-1)}
+#login[data-screen=login] #loginBtn:hover:not(:disabled){filter:brightness(1.12) saturate(1.1);transform:none;box-shadow:0 2px 14px rgba(90,160,230,.55)}
+#login[data-screen=login] #loginBtn:active:not(:disabled){filter:brightness(.92);transform:translateY(1px)}
+#login[data-screen=login] #loginBtn span{position:relative}
+#login[data-screen=login] .err{color:#f0907a}
+#login[data-screen=login] .hint{color:#9cb0c4}
+
+/* barra inferior con el link de cuenta y los adornos a los lados */
+#login[data-screen=login] .lbar{display:flex;position:absolute;left:0;right:0;bottom:0;height:calc(var(--s,1)*42px);z-index:3;align-items:center;justify-content:center;
+  background:url(/assets/ui/craftpix/lg-bar-border.png) 0 0/auto 3px repeat-x,linear-gradient(180deg,#171a20,#0f1216)}
+#login .lbar::before,#login .lbar::after{content:"";position:absolute;bottom:0;width:calc(var(--s,1)*300px);height:calc(var(--s,1)*52px);pointer-events:none;
+  background:url(/assets/ui/craftpix/lg-bar-tribal.png) 0 100%/100% auto no-repeat;filter:sepia(1) saturate(5) hue-rotate(172deg) brightness(.95) drop-shadow(0 0 6px #3c8fd0)}
+#login .lbar::before{left:0}
+#login .lbar::after{right:0;transform:scaleX(-1)}
+#login .lbar .alt{position:relative;z-index:1;margin:0;font:500 calc(var(--s,1)*13px) "Alegreya SC",Georgia,serif;letter-spacing:.06em;text-transform:uppercase;color:#a9bccd}
+#login .lbar .lnk{font:inherit;letter-spacing:inherit;text-transform:inherit;color:#6fb8ea;text-decoration:none;padding:0 4px}
+#login .lbar .lnk:hover{color:#b6dcf6;text-shadow:0 0 10px #4a9ee0}
