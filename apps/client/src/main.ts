@@ -9,6 +9,7 @@ import { CombatTextManager, type CombatTextEvent } from './systems/CombatTextMan
 import './ui/craftpix.css';
 import './ui/loading-craftpix.css';
 import './ui/hud-craftpix.css';
+import './ui/char-craftpix.css';
 import { levelCard, notify } from './ui/notices';
 import { mountChat } from './ui/mountChat';
 import { mountCastBar } from './ui/CastBar';
@@ -1983,6 +1984,7 @@ $('openBag').addEventListener('click', toggleBag);
 $('openChar').addEventListener('click', toggleChar);
 $('bagClose').addEventListener('click', () => { $('bag').hidden = true; renderBag(); });
 $('charClose').addEventListener('click', () => { $('char').hidden = true; renderBag(); });
+$('charBagBtn').addEventListener('click', () => { $('bag').hidden = bagOpen(); renderBag(); });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && (bagOpen() || charOpen()) && !(e.target instanceof HTMLInputElement)) closeWins(); });
 document.querySelectorAll<HTMLElement>('#invTabs [data-tab]').forEach((b) => b.addEventListener('click', () => { invTab = b.dataset.tab as typeof invTab; renderBag(); }));
 $('focus').addEventListener('click', () => { if (focus) { focus = null; toast('Foco suelto.'); } });
@@ -1994,8 +1996,10 @@ $('dropBtn').addEventListener('click', () => {
 /** Borde de rareza (los comunes en bronce para que no destaquen). */
 const rarCol = (it: Item) => (it.rar.k ? it.rar.c : '#6b5a3c');
 const GLY: Record<string, string> = { cabeza: 'g-cabeza', armadura: 'g-armadura', arma: 'g-arma', botas: 'g-botas', amuleto: 'g-amuleto', escudo: 'g-escudo', anillo: 'g-anillo', guantes: 'g-guantes' };
-const EQ_L: [string, string, Slot | null][] = [['cabeza', 'Casco', 'cabeza'], ['armadura', 'Armadura', 'armadura'], ['arma', 'Arma', 'arma'], ['botas', 'Botas', 'botas']];
-const EQ_R: [string, string, Slot | null][] = [['amuleto', 'Amuleto', 'amuleto'], ['escudo', 'Escudo', null], ['anillo', 'Anillo', 'anillo'], ['guantes', 'Guantes', 'guantes']];
+// los 8 slots alrededor del muñeco (diseño del pack): 4 a la izquierda, 3 a la derecha y el arma abajo
+const EQ_L: [string, string, Slot | null][] = [['cabeza', 'Casco', 'cabeza'], ['armadura', 'Armadura', 'armadura'], ['guantes', 'Guantes', 'guantes'], ['botas', 'Botas', 'botas']];
+const EQ_R: [string, string, Slot | null][] = [['amuleto', 'Amuleto', 'amuleto'], ['anillo', 'Anillo', 'anillo'], ['anillo', 'Anillo 2', 'anillo2']];
+const EQ_B: [string, string, Slot | null][] = [['arma', 'Arma', 'arma']];
 function slotBtn([g, label, slot]: [string, string, Slot | null]) {
     const gl = `<svg class="gl" aria-hidden="true"><use href="#${GLY[g]}"/></svg>`;
     if (!slot) return `<button type="button" class="sl dis" disabled aria-label="${label} (no disponible todavía)" title="${label}: no disponible todavía">${gl}</button>`;
@@ -2071,7 +2075,8 @@ function renderBag() {
     if (!bagOpen() && !charOpen()) { $('itip').hidden = true; return; }
     $('gold').textContent = fmtNum(P.gold);
     $('eqL').innerHTML = EQ_L.map(slotBtn).join(''); $('eqR').innerHTML = EQ_R.map(slotBtn).join('');
-    $('eqRings').innerHTML = slotBtn(['anillo', 'Anillo 2', 'anillo2']) + `<button type="button" class="sl dis" disabled aria-label="Anillo 3 (no disponible todavía)" title="Anillo 3: no disponible todavía"><svg class="gl" aria-hidden="true"><use href="#g-anillo"/></svg></button>`;
+    $('eqB').innerHTML = EQ_B.map(slotBtn).join('');
+    $('chName').textContent = P.name || ''; $('chTitle').textContent = `${CLS.name} de ${FACTIONS.find((f) => f.id === selectedFaction)?.name ?? ''}`;
     renderChar();
     document.querySelectorAll<HTMLElement>('#char [data-eq]').forEach((b) => (b.onclick = () => { const it = P.eq[b.dataset.eq as Slot]; sel = it ? { it, from: 'eq' } : null; selX = null; renderBag(); }));
     // celdas del inventario según la pestaña

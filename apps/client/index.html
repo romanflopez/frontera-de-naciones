@@ -355,21 +355,25 @@ canvas:focus{outline:none}
 
   <div id="bagBtn" class="hud"><button id="openChar" type="button">Personaje (C)</button> <button id="openBag" type="button">Bolsa (I)</button> <button id="exitBtn" type="button">Salir</button></div>
 
-  <div id="char" class="hud fw" role="dialog" aria-label="Personaje" hidden>
-    <svg class="fw-crest" aria-hidden="true"><use href="#fwcrest"/></svg>
-    <svg class="fw-c tl" aria-hidden="true"><use href="#fwc"/></svg><svg class="fw-c tr" aria-hidden="true"><use href="#fwc"/></svg><svg class="fw-c bl" aria-hidden="true"><use href="#fwc"/></svg><svg class="fw-c br" aria-hidden="true"><use href="#fwc"/></svg>
-    <header class="fw-head"><h2>PERSONAJE</h2><button class="fw-x" id="charClose" type="button" aria-label="Cerrar Personaje">&times;</button></header>
-    <div class="fw-body">
-      <div class="paper">
-        <div class="eqcol" id="eqL"></div>
-        <div class="stage"><canvas id="heroCv" width="190" height="250" aria-label="Tu personaje"></canvas><div id="eqRings" class="rings"></div></div>
-        <div class="eqcol" id="eqR"></div>
-      </div>
-      <div class="lvl"><b id="lvN">Lv. 1</b><div class="lvbar" role="progressbar" aria-label="Experiencia" id="lvBar"><i id="lvI"></i></div><span id="lvT">0 / 0</span></div>
-      <div class="attrs" id="attrs"></div>
-      <div class="stats" id="stats"></div>
+  <div id="char" class="hud cw" role="dialog" aria-label="Personaje" hidden>
+    <header class="cw-head"><h2>PERSONAJE</h2><button class="cw-x" id="charClose" type="button" aria-label="Cerrar Personaje">&times;</button></header>
+    <div class="cw-body">
+      <section class="cw-left">
+        <div class="cw-who"><b id="chName"></b><span id="chTitle"></span></div>
+        <div class="cw-paper">
+          <div class="eqcol" id="eqL"></div>
+          <div class="stage"><canvas id="heroCv" width="190" height="250" aria-label="Tu personaje"></canvas><div class="cw-rc" aria-hidden="true"></div></div>
+          <div class="eqcol" id="eqR"></div>
+          <div class="cw-bottom" id="eqB"></div>
+        </div>
+        <button type="button" class="cw-inv" id="charBagBtn">Inventario</button>
+      </section>
+      <section class="cw-right">
+        <div class="lvl"><b id="lvN">Lv. 1</b><div class="lvbar" role="progressbar" aria-label="Experiencia" id="lvBar"><i id="lvI"></i></div><span id="lvT">0 / 0</span></div>
+        <div class="attrs" id="attrs"></div>
+        <div class="stats" id="stats"></div>
+      </section>
     </div>
-    <svg class="fw-gem" aria-hidden="true"><use href="#fwgem"/></svg>
   </div>
 
   <div id="bag" class="hud fw" role="dialog" aria-label="Inventario" hidden>

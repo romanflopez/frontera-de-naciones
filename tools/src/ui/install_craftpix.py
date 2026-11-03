@@ -28,6 +28,24 @@ FILES = {
     "lg-bar-border.png": "Lobby/Bottom Bar/BottomBar_Border.png",
     "lg-bar-tribal.png": "Lobby/Bottom Bar/Tribals/BottomBar_SideTribal_Fill.png",
     "icon-close.png": "Controls/Buttons/Square/Icons/Button_S1_Icon_Close.png",
+    # ventana Personaje (char-craftpix.css)
+    "win-bg.png": "Windows/Window/Window_Background.png",
+    "win-hdr-bg.png": "Windows/Window/Header/Window_Header_Background.png",
+    "win-hdr-arrow.png": "Windows/Window/Header/Window_Header_Border_Center.png",
+    "win-hdr-line.png": "Windows/Window/Header/Window_Header_Border_Side.png",
+    "win-hdr-tribal.png": "Windows/Window/Header/Window_Header_Tribals_Fill.png",
+    "ch-silhouette.png": "Windows/Character/Character_Example.png",
+    "ch-rc-left.png": "Windows/Character/Rotation Controls/Character_RC_Left.png",
+    "ch-rc-mid.png": "Windows/Character/Rotation Controls/Character_RC_Middle.png",
+    "sep-v.png": "Miscellaneous/Separators/Seprator_Vertical.png",
+    "sep-h.png": "Miscellaneous/Separators/Seprator_Horizontal.png",
+    "ch-slot-cabeza.png": "Windows/Character/Equip Slot/Icons/Helmet.png",
+    "ch-slot-armadura.png": "Windows/Character/Equip Slot/Icons/Chest.png",
+    "ch-slot-guantes.png": "Windows/Character/Equip Slot/Icons/Gloves.png",
+    "ch-slot-botas.png": "Windows/Character/Equip Slot/Icons/Boots.png",
+    "ch-slot-amuleto.png": "Windows/Character/Equip Slot/Icons/Necklace.png",
+    "ch-slot-anillo.png": "Windows/Character/Equip Slot/Icons/Ring.png",
+    "ch-slot-arma.png": "Windows/Character/Equip Slot/Icons/MainWeapon.png",
 }
 
 

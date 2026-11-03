@@ -1,0 +1,76 @@
+/* Ventana Personaje con el diseño del pack Craftpix "RPG MMO Game User Interface" (screen CHARACTER):
+   marco oscuro con borde dorado (win-bg.png en 9 partes), cabecera con filigrana azul y la flecha dorada,
+   el muñeco al centro con los 8 slots alrededor (4 izq, 3 der, arma abajo) y, a la derecha, nivel, atributos
+   y estadísticas en lugar de la lista de títulos del PSD. Las texturas se instalan con tools/src/ui/install_craftpix.py. */
+#char.cw{--W:516px;--H:580px;z-index:4;top:calc(80px + env(safe-area-inset-top,0px));right:calc(max(12px,env(safe-area-inset-right,0px)) + (340px + 16px) * var(--win-scale));
+  width:var(--W);height:var(--H);box-sizing:border-box;padding:0;display:flex;flex-direction:column;transform-origin:top right;transform:scale(var(--win-scale));
+  font-family:"Alegreya Sans",system-ui,sans-serif;color:#c9bfae;
+  border:12px solid transparent;border-image:url(/assets/ui/craftpix/win-bg.png) 12 fill/12px stretch;background:#15181b;box-shadow:0 14px 44px #000c}
+/* cabecera */
+.cw-head{position:relative;flex:none;height:48px;margin:-4px -4px 0;display:grid;place-items:center;
+  background:url(/assets/ui/craftpix/win-hdr-bg.png) 0 0/64px 64px repeat;overflow:visible}
+.cw-head::before{content:"";position:absolute;inset:0;background:url(/assets/ui/craftpix/win-hdr-tribal.png) 50% 50%/auto 125% repeat-x;
+  filter:sepia(1) saturate(6) hue-rotate(175deg) brightness(.9);opacity:.85;pointer-events:none}
+.cw-head::after{content:"";position:absolute;left:0;right:0;bottom:-2px;height:3px;background:url(/assets/ui/craftpix/win-hdr-line.png) 0 50%/auto 3px repeat-x;pointer-events:none}
+.cw-head h2{position:relative;margin:0;font:400 22px/1 "Alegreya SC",Georgia,serif;letter-spacing:.1em;color:#e9dcc0;text-shadow:0 1px 3px #000,0 0 12px #000}
+.cw-head h2::after{content:"";position:absolute;left:50%;top:38px;width:64px;height:14px;margin-left:-32px;background:url(/assets/ui/craftpix/win-hdr-arrow.png) 50% 50%/64px 14px no-repeat}
+.cw-x{position:absolute;right:8px;top:12px;width:26px;height:26px;padding:0;font-size:0;border:0;border-radius:2px;cursor:pointer;z-index:2;
+  background:url(/assets/ui/craftpix/icon-close.png) 50% 50%/12px 12px no-repeat,url(/assets/ui/craftpix/btn-sq.png) 0 0/100% 100% no-repeat,#1b1d20}
+.cw-x:hover{filter:brightness(1.3)}
+.cw-x:focus-visible{outline:2px solid #9cc4e4;outline-offset:2px}
+/* cuerpo: muñeco a la izquierda, números a la derecha, separador vertical del pack */
+.cw-body{flex:1;min-height:0;display:grid;grid-template-columns:318px 1fr;gap:0 10px;padding:14px 4px 8px 4px}
+.cw-left{position:relative;display:flex;flex-direction:column;min-height:0;padding-right:10px;
+  background:url(/assets/ui/craftpix/sep-v.png) 100% 50%/4px 100% no-repeat}
+.cw-who{display:grid;justify-items:center;gap:3px;margin-bottom:6px}
+.cw-who b{font:700 15px/1 "Alegreya SC",Georgia,serif;letter-spacing:.06em;text-transform:uppercase;color:#f0e6cf;text-shadow:0 1px 2px #000}
+.cw-who span{font:400 13px/1 "Alegreya",Georgia,serif;color:#a9a08c}
+.cw-paper{position:relative;flex:1;min-height:0;display:grid;grid-template-columns:44px 1fr 44px;grid-template-rows:1fr auto;gap:0 10px;padding:4px 20px 0}
+.cw-paper .eqcol{display:flex;flex-direction:column;justify-content:space-evenly;gap:8px;padding:6px 0}
+.cw-paper .stage{position:relative;display:grid;place-items:end center;overflow:hidden}
+.cw-paper .stage::before{content:"";position:absolute;left:50%;top:0;width:150px;height:100%;margin-left:-75px;
+  background:url(/assets/ui/craftpix/ch-silhouette.png) 50% 0/contain no-repeat;opacity:.22;filter:brightness(1.7);pointer-events:none}
+.cw-paper #heroCv{position:relative;width:100%;max-width:190px;height:auto;image-rendering:pixelated;filter:drop-shadow(0 6px 6px #000);margin-bottom:22px}
+.cw-rc{position:absolute;left:50%;bottom:2px;width:80px;height:18px;margin-left:-40px;pointer-events:none;
+  background:url(/assets/ui/craftpix/ch-rc-left.png) 0 50%/auto 18px no-repeat,url(/assets/ui/craftpix/ch-rc-mid.png) 50% 50%/auto 10px no-repeat;opacity:.9}
+.cw-rc::after{content:"";position:absolute;right:0;top:0;width:30px;height:18px;background:url(/assets/ui/craftpix/ch-rc-left.png) 100% 50%/auto 18px no-repeat;transform:scaleX(-1)}
+.cw-bottom{grid-column:1/-1;display:flex;justify-content:center;gap:10px;padding:6px 0 2px}
+/* ranuras: marco del pack y el icono "fantasma" del tipo de slot cuando está vacía */
+.cw .sl{width:44px;height:44px;flex:none;border-color:#4b4330;background:url(/assets/ui/craftpix/slot.png) 0 0/100% 100% no-repeat,#101214}
+.cw .sl svg.gl{display:none}
+.cw .sl:not(:has(.iico))::after{content:"";position:absolute;inset:6px;background:var(--ghost) 50% 50%/contain no-repeat;opacity:.9;filter:brightness(1.8)}
+.cw .sl[data-eq=cabeza]{--ghost:url(/assets/ui/craftpix/ch-slot-cabeza.png)}
+.cw .sl[data-eq=armadura]{--ghost:url(/assets/ui/craftpix/ch-slot-armadura.png)}
+.cw .sl[data-eq=guantes]{--ghost:url(/assets/ui/craftpix/ch-slot-guantes.png)}
+.cw .sl[data-eq=botas]{--ghost:url(/assets/ui/craftpix/ch-slot-botas.png)}
+.cw .sl[data-eq=amuleto]{--ghost:url(/assets/ui/craftpix/ch-slot-amuleto.png)}
+.cw .sl[data-eq=anillo],.cw .sl[data-eq=anillo2]{--ghost:url(/assets/ui/craftpix/ch-slot-anillo.png)}
+.cw .sl[data-eq=arma]{--ghost:url(/assets/ui/craftpix/ch-slot-arma.png)}
+.cw .sl:hover{border-color:#d8c070;filter:brightness(1.2)}
+/* botón Inventario abajo a la izquierda */
+.cw-inv{align-self:flex-start;margin:4px 0 0 4px;height:26px;padding:0 12px;font:400 12px/1 "Alegreya SC",Georgia,serif;letter-spacing:.06em;text-transform:uppercase;color:#d9ccaa;
+  background:linear-gradient(#262a2f,#15181b);border:1px solid #3a3f46;border-radius:1px;box-shadow:inset 0 0 0 1px #000,0 1px 4px #000a;cursor:pointer}
+.cw-inv:hover{border-color:#8a7640;color:#f0e6cf}
+/* columna derecha: nivel, atributos y estadísticas con el estilo plano del pack */
+.cw-right{display:flex;flex-direction:column;gap:8px;min-height:0;padding-right:4px}
+.cw .lvl{height:26px;padding:0 8px;background:#101214;border:1px solid #3a3f46;border-radius:2px;box-shadow:inset 0 0 6px #000}
+.cw .lvl b{font:400 14px/1 "Alegreya SC",Georgia,serif;color:#e9dcc0}
+.cw .lvl span{font-size:10.5px;color:#a9a08c}
+.cw .lvbar{height:7px;border-color:#3a3f46;background:#07090b}
+.cw .lvbar i{background:linear-gradient(#6cc3f2,#2c7fbd);box-shadow:0 0 6px #3c9fe0aa}
+.cw .attrs{margin:0;padding:4px 8px;background:#101214;border:1px solid #2b2f35;border-radius:2px;box-shadow:inset 0 0 10px #000}
+.cw .atrh{font-size:12px;color:#c9bfae}
+.cw .atrh b{color:#8fd4ff}
+.cw .atrr{font:400 11px/1 "Alegreya SC",Georgia,serif;letter-spacing:.04em;padding:3px 7px;background:#1c2024;color:#d9ccaa;border:1px solid #3a3f46}
+.cw .atrr:hover{background:#262a2f;border-color:#8a7640}
+.cw .atrg{grid-template-columns:1fr}
+.cw .atr{height:21px;font-size:12px;border-bottom:1px solid #22262b;color:#c9bfae}
+.cw .atr b{color:#f0e6cf}
+.cw .atrb{width:18px;height:18px;line-height:14px;font-size:14px;background:#1c2024;color:#8fd4ff;border:1px solid #3a3f46}
+.cw .atrb:not(:disabled):hover{border-color:#8fd4ff}
+.cw .stats{flex:1;grid-template-columns:1fr;gap:0;padding:2px 8px;background:#101214;border:1px solid #2b2f35;border-radius:2px;box-shadow:inset 0 0 10px #000;overflow:auto;scrollbar-width:thin;scrollbar-color:#3a3f46 #101214}
+.cw .stat{height:21px;font-size:11.5px;border-bottom:1px solid #22262b}
+.cw .stat svg{width:13px;height:13px;color:#8a7640}
+.cw .stat span{color:#a9a08c}
+.cw .stat b{color:#f0e6cf}
+.cw button:focus-visible{outline:2px solid #9cc4e4;outline-offset:2px}
