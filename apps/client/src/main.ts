@@ -11,6 +11,7 @@ import './ui/loading-craftpix.css';
 import './ui/hud-craftpix.css';
 import './ui/char-craftpix.css';
 import './ui/quests-craftpix.css';
+import './ui/book-craftpix.css';
 import './ui/bag-craftpix.css';
 import { levelCard, notify } from './ui/notices';
 import { mountChat } from './ui/mountChat';
@@ -26,6 +27,7 @@ import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
 import { DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, MAIN_QUESTS, type MainQuest, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, dailyGold, rewardUniques, type QuestBookView, type QuestGoal, KEY_RECIPES, KEY_MAT_NAMES, keyMissing, TRAIT_ELITE } from '@fdn/world';
 import { spellIcon } from './icons.ts';
+import { bookListHtml, bookTreeHtml, bookTipHtml } from './spellbook.ts';
 import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
 import { coinIcon, itemIcon, keyIcon, miscIconUrl, potionIcon, setPieceOf, shardIcon } from './itemicons.ts';
 import { initLoginUI } from './loginui.ts';
@@ -1465,6 +1467,7 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'i' || e.key === 'I') toggleBag();
     if (e.key === 'c' || e.key === 'C') toggleChar();
     if (e.key === 'l' || e.key === 'L') toggleQuestLog();
+    if (e.key === 'p' || e.key === 'P') toggleSpellBook();
     if (e.key === 'Escape') { if (P.casting || P.ready) cancelCast('Hechizo cancelado.'); else P.target = null; }
 });
 
@@ -1919,7 +1922,7 @@ function renderBuffs() {
     if (el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; }
 }
 function hud() {
-    renderBuffs(); tickLogout(); potCdTick(); recallTick();
+    renderBuffs(); tickLogout(); potCdTick(); recallTick(); renderSpellBook();
     const T = now(), mh = maxHp(), mm = maxMp();
     const hf = clamp(P.hp / mh, 0, 1), mf = clamp(P.mp / mm, 0, 1);
     $('liqHp').style.transform = `translateY(${(1 - hf) * 100}%)`; $('liqMp').style.transform = `translateY(${(1 - mf) * 100}%)`;
@@ -1982,13 +1985,13 @@ const bagOpen = () => !$('bag').hidden, charOpen = () => !$('char').hidden;
 function toggleBag() { const open = bagOpen(); $('bag').hidden = open; $('char').hidden = open; renderBag(); }
 /** C: solo la ventana de Personaje. */
 function toggleChar() { $('char').hidden = charOpen(); renderBag(); }
-function closeWins() { $('bag').hidden = true; $('char').hidden = true; $('itip').hidden = true; $('qlog').hidden = true; }
+function closeWins() { $('bag').hidden = true; $('char').hidden = true; $('itip').hidden = true; $('qlog').hidden = true; $('book').hidden = true; $('btip').hidden = true; }
 $('openBag').addEventListener('click', toggleBag);
 $('openChar').addEventListener('click', toggleChar);
 $('bagClose').addEventListener('click', () => { $('bag').hidden = true; renderBag(); });
 $('charClose').addEventListener('click', () => { $('char').hidden = true; renderBag(); });
 $('charBagBtn').addEventListener('click', () => { $('bag').hidden = bagOpen(); renderBag(); });
-window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && (bagOpen() || charOpen() || qlOpen()) && !(e.target instanceof HTMLInputElement)) closeWins(); });
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && (bagOpen() || charOpen() || qlOpen() || spellBookOpen()) && !(e.target instanceof HTMLInputElement)) closeWins(); });
 document.querySelectorAll<HTMLElement>('#invTabs [data-tab]').forEach((b) => b.addEventListener('click', () => { invTab = b.dataset.tab as typeof invTab; renderBag(); }));
 $('focus').addEventListener('click', () => { if (focus) { focus = null; toast('Foco suelto.'); } });
 $('sortBtn').addEventListener('click', () => net.send({ $case: 'econSortRequest', value: {} }));
@@ -2386,6 +2389,30 @@ function mainRewardsHtml(rw: MainQuest['reward']): string {
     if (rw.unique) h += rewardTile(miscIconUrl('cofre'), '', rw.unique === 'class_t1_random' ? 'Un único de tu clase' : 'Un único a elección', '#d8a53c');
     return h;
 }
+// ---------- Libro de hechizos (P): pestaña Habilidades (lista) y Progresión (árbol de desbloqueo por nivel; Talentos llega con el rebirth) ----------
+let bookTab: 'list' | 'tree' = 'list', bookLvl = -1;
+const spellBookOpen = () => !$('book').hidden;
+function toggleSpellBook() { $('book').hidden = spellBookOpen(); $('btip').hidden = true; bookLvl = -1; renderSpellBook(); }
+function renderSpellBook() {
+    if (!spellBookOpen() || (bookLvl === P.lvl && $('bookPane').dataset.tab === bookTab)) return;
+    bookLvl = P.lvl; const pane = $('bookPane'); pane.dataset.tab = bookTab;
+    const list = SPELLS.filter((s) => s.id).map((s) => ({ id: s.id!, name: s.name, mp: s.mp, cd: s.cd, col: s.col, key: s.key, range: s.range, castT: s.castT, instant: s.instant }));
+    pane.innerHTML = bookTab === 'list' ? bookListHtml(CLS.id, P.lvl, list) : bookTreeHtml(CLS.id, P.lvl, list);
+    for (const b of $('book').querySelectorAll<HTMLButtonElement>('.bk-tabs button')) b.setAttribute('aria-selected', String(b.dataset.tab === bookTab));
+}
+$('book').querySelector('.bk-tabs')!.addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-tab]'); if (!b) return; bookTab = b.dataset.tab as 'list' | 'tree'; renderSpellBook(); });
+$('bookClose').addEventListener('click', toggleSpellBook);
+$('openBook').addEventListener('click', toggleSpellBook);
+// tooltip de los nodos del árbol (y de las filas, por si la descripción no entra)
+$('bookPane').addEventListener('mouseover', (e) => {
+    const n = (e.target as HTMLElement).closest<HTMLElement>('.bk-node'); if (!n) { $('btip').hidden = true; return; }
+    const s = SPELLS.find((x) => x.id === n.dataset.spell); if (!s) return;
+    const tip = $('btip'); tip.innerHTML = bookTipHtml(CLS.id, { id: s.id!, name: s.name, mp: s.mp, cd: s.cd, col: s.col, key: s.key, range: s.range, castT: s.castT, instant: s.instant }); tip.hidden = false;
+    const r = n.getBoundingClientRect(), w = $('book').getBoundingClientRect();
+    tip.style.left = Math.min(window.innerWidth - 270, w.right + 8) + 'px'; tip.style.top = Math.max(8, Math.min(window.innerHeight - 160, r.top - 10)) + 'px';
+});
+$('bookPane').addEventListener('mouseleave', () => { $('btip').hidden = true; });
+
 // ---------- ventana de Misiones (L): lista a la izquierda, detalle a la derecha ----------
 let qlSel = '';
 const qlOpen = () => !$('qlog').hidden;
