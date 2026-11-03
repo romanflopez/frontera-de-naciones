@@ -36,6 +36,16 @@ FILES = {
     "ab-xp-fill.png": "HUD/Action Bar/Experience Bar/XPBar_Fill.png",
     "ab-tribal.png": "HUD/Action Bar/ActionBar_Tribals.png",
     "icon-close.png": "Controls/Buttons/Square/Icons/Button_S1_Icon_Close.png",
+    # marco de objetivo y foco, diálogo con retrato y burbuja de NPC (hud-craftpix.css, quests-craftpix.css)
+    "np-bg.png": "HUD/Nameplate/Nameplate_Background.png",
+    "np-bar.png": "HUD/Nameplate/Nameplate_Bar_Primary.png",
+    "np-lvl.png": "HUD/Nameplate/Nameplate_LevelFrame.png",
+    "np-skull.png": "HUD/Unit Frames/Main/Level/UnitFrame_Main_Level_Skull.png",
+    "np-elite.png": "HUD/Unit Frames/Main/UnitFrame_Main_Elite.png",
+    "av-bg.png": "HUD/Unit Frames/Main/Avatar/UnitFrame_Main_Avatar_Background.png",
+    "av-ov.png": "HUD/Unit Frames/Main/Avatar/UnitFrame_Main_Avatar_Overlay.png",
+    "bubble-bg.png": "Mobile/NPC Bubble/Bubble_Background.png",
+    "bubble-arrow.png": "Mobile/NPC Bubble/Arrow.png",
     # ventana Personaje (char-craftpix.css)
     "win-bg.png": "Windows/Window/Window_Background.png",
     "win-hdr-bg.png": "Windows/Window/Header/Window_Header_Background.png",

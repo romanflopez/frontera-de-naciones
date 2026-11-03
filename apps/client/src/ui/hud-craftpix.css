@@ -130,3 +130,52 @@
 }
 #hudroot #chips .chp u{color:#8da0b2}
 #hudroot #chips .chp b{color:#dfe7ef}
+
+/* ===== marco de OBJETIVO (#target) y de FOCO (#focus) con la nameplate del pack (screen HUD):
+   placa oscura con el bisel dorado, barra con el grabado del pack teñida de naranja (máscara), nivel en el redondel
+   de la izquierda, calavera en lugar del número cuando es jefe, y el dragón del pack asomando detrás de un élite. ===== */
+#target.hud,#focus.hud{background:none;border:0;border-radius:0;box-shadow:none;padding:0;display:block;overflow:visible}
+#target{width:min(300px,46vw)}
+#focus{width:min(210px,32vw);left:calc(50% + min(150px,23vw) + 14px)}
+.np{position:relative;height:50px;padding:7px 14px 0 50px;
+  background:url(/assets/ui/craftpix/np-bg.png) 0 50%/100% 100% no-repeat;filter:drop-shadow(0 3px 6px #000a)}
+#focus .np{height:42px;padding:5px 12px 0 42px}
+.np .name{display:block;margin:0;font:400 14px/1.15 "Alegreya SC",Georgia,serif;letter-spacing:.04em;color:#f0e6cf;text-shadow:0 1px 2px #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#focus .np .name{font-size:12px}
+.np .name small{display:none}
+/* nivel: redondel del pack, centrado a la izquierda de la placa */
+.np-lvl{position:absolute;left:-2px;top:50%;width:46px;height:46px;transform:translateY(-50%);display:grid;place-items:center;
+  background:url(/assets/ui/craftpix/np-lvl.png) 50% 50%/100% 100% no-repeat;font:700 14px/1 "Alegreya Sans",system-ui,sans-serif;color:#e9dcc0;text-shadow:0 1px 2px #000}
+#focus .np-lvl{width:38px;height:38px;font-size:12px}
+.np.boss .np-lvl{font-size:0;background-image:url(/assets/ui/craftpix/np-skull.png),url(/assets/ui/craftpix/np-lvl.png);background-size:18px auto,100% 100%}
+/* barra: la textura del pack como máscara, el color abajo (naranja; dorado en jefes; celeste en el foco) */
+.np .bar{position:relative;height:13px;margin-top:3px;background:#1a1612;border:0;border-radius:0;overflow:hidden;
+  -webkit-mask:url(/assets/ui/craftpix/np-bar.png) 0 50%/100% 100% no-repeat;mask:url(/assets/ui/craftpix/np-bar.png) 0 50%/100% 100% no-repeat}
+#focus .np .bar{height:11px;margin-top:2px}
+.np .bar i{background:linear-gradient(#e0623a,#a8381c);box-shadow:inset 0 1px 0 #ff9a6a66}
+.np .bar::after{content:"";position:absolute;inset:0;background:url(/assets/ui/craftpix/np-bar.png) 0 50%/100% 100% no-repeat;opacity:.28;mix-blend-mode:screen;pointer-events:none}
+.np .bar span{position:absolute;left:8px;top:0;font-size:9.5px;line-height:13px;color:#fff;text-shadow:0 1px 1px #000;font-variant-numeric:tabular-nums}
+#focus .np .bar span{line-height:11px;font-size:9px}
+#focus .np .bar i{background:linear-gradient(#6cc3f2,#2c7fbd)}
+.np.boss .name{color:#ffd24a}
+.np.boss .bar i{background:linear-gradient(#e8b43a,#9a6c14)}
+/* élite: el dragón del pack asoma detrás de la placa */
+.np.elite::before{content:"";position:absolute;right:-22px;top:-26px;width:56px;height:56px;background:url(/assets/ui/craftpix/np-elite.png) 50% 50%/contain no-repeat;opacity:.9;pointer-events:none}
+/* chips de estado (paralizado, inmune, envenenado) debajo de la placa */
+#target .chips{margin:4px 0 0 50px}
+/* el estilo viejo de jefe (index.html) queda pisado por la placa */
+#target.boss.hud{width:min(340px,52vw);border:0;box-shadow:none}
+#target .np.boss .name{font-size:14px;color:#ffd24a}
+#target .np.boss .bar{height:13px}
+#target .np.boss .bar i{background:linear-gradient(#e8b43a,#9a6c14)}
+#target .np.boss .bar span{font-size:9.5px;line-height:13px}
+
+/* ===== burbuja del NPC (saludo del vendedor sobre su cabeza, textura NPC Bubble del pack) ===== */
+#npcBubble{position:absolute;z-index:5;width:max-content;max-width:230px;padding:10px 14px 12px;transform:translate(-50%,-100%);
+  font:400 13px/1.35 "Alegreya",Georgia,serif;color:#e2d9c4;text-shadow:0 1px 1px #000;pointer-events:none;
+  border:14px solid transparent;border-image:url(/assets/ui/craftpix/bubble-bg.png) 40 fill/14px stretch;background:#262a2e;
+  filter:drop-shadow(0 4px 8px #000a);animation:bubbleIn .18s ease-out}
+#npcBubble::after{content:"";position:absolute;left:50%;bottom:-24px;width:22px;height:20px;margin-left:-4px;background:url(/assets/ui/craftpix/bubble-arrow.png) 50% 50%/contain no-repeat;transform:scaleX(-1)}
+#npcBubble b{display:block;margin-bottom:2px;font:400 11px/1 "Alegreya SC",Georgia,serif;letter-spacing:.08em;color:#8fd4ff}
+#npcBubble[hidden]{display:none}
+@keyframes bubbleIn{from{opacity:0;transform:translate(-50%,calc(-100% + 6px))}to{opacity:1;transform:translate(-50%,-100%)}}

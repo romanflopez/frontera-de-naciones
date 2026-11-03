@@ -1922,7 +1922,7 @@ function renderBuffs() {
     if (el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; }
 }
 function hud() {
-    renderBuffs(); tickLogout(); potCdTick(); recallTick(); renderSpellBook();
+    renderBuffs(); tickLogout(); potCdTick(); recallTick(); renderSpellBook(); tickBubble();
     const T = now(), mh = maxHp(), mm = maxMp();
     const hf = clamp(P.hp / mh, 0, 1), mf = clamp(P.mp / mm, 0, 1);
     $('liqHp').style.transform = `translateY(${(1 - hf) * 100}%)`; $('liqMp').style.transform = `translateY(${(1 - mf) * 100}%)`;
@@ -1944,8 +1944,8 @@ function hud() {
     const m = P.target && mobs.includes(P.target) ? P.target : null;
     $('target').hidden = !m;
     if (m) {
-        $('target').classList.toggle('boss', !!m.boss);
-        $('tName').textContent = m.name; $('tLvl').textContent = (m.boss ? 'Boss · ' : '') + 'Nv ' + m.lvl;
+        $('target').classList.toggle('boss', !!m.boss); $('tNp').classList.toggle('boss', !!m.boss); $('tNp').classList.toggle('elite', !!m.elite && !m.boss);
+        $('tName').textContent = m.name; $('tLvl').textContent = String(m.lvl); $('tLvl').title = (m.boss ? 'Jefe · ' : m.elite ? 'Élite · ' : '') + 'Nivel ' + m.lvl;
         $('tHpI').style.width = Math.max(0, (m.hp / m.hpMax) * 100) + '%'; $('tHpT').textContent = `${Math.max(0, Math.ceil(m.hp))} / ${m.hpMax}`;
         const ch: string[] = [];
         if (m.par > T) ch.push(`<span class="chip par">Paralizado ${(m.par - T).toFixed(1)} s</span>`);
@@ -1957,7 +1957,8 @@ function hud() {
     $('focus').hidden = !fcs;
     if (fcs) {
         const hp = fcs.k === 'mob' ? fcs.m.hp : fcs.o.hp ?? 0, mx = fcs.k === 'mob' ? fcs.m.hpMax : fcs.o.maxHp ?? 0;
-        $('fName').textContent = fcs.k === 'mob' ? fcs.m.name : fcs.o.name; $('fLvl').textContent = fcs.k === 'mob' ? 'Nv ' + fcs.m.lvl : '';
+        $('fName').textContent = fcs.k === 'mob' ? fcs.m.name : fcs.o.name; $('fLvl').textContent = fcs.k === 'mob' ? String(fcs.m.lvl) : (fcs.o as { lvl?: number }).lvl ? String((fcs.o as { lvl?: number }).lvl) : '';
+        $('fNp').classList.toggle('boss', fcs.k === 'mob' && !!fcs.m.boss); $('fNp').classList.toggle('elite', fcs.k === 'mob' && !!fcs.m.elite && !fcs.m.boss);
         $('fHpI').style.width = mx > 0 ? Math.max(0, Math.min(100, (hp / mx) * 100)) + '%' : '0%'; $('fHpT').textContent = mx > 0 ? `${Math.max(0, Math.ceil(hp))} / ${mx}` : '';
     }
     $('gold').textContent = fmtNum(P.gold);
@@ -2453,7 +2454,7 @@ function bookTalk(n: Npc) {
 }
 function openQuestDlg(n: Npc) {
     const d = $('qdlg'); shopNpc = n; talkNpc = null;
-    $('qdName').textContent = n.name; d.hidden = false;
+    $('qdName').textContent = n.name; setDlgAvatar(n); d.hidden = false;
     // la cadena vieja de 10 quedó jubilada: el Capitán da el Camino del aventurero y los encargos del día (renderBook), y sigue forjando las llaves viejas
     $('qdBody').innerHTML = `<b>Forja</b>: ${SHARDS_PER_KEY} esquirlas (las sueltan los jefes) + oro = 1 llave.`;
     $('qdBtn').hidden = true;
@@ -2517,6 +2518,18 @@ const auction = createAuctionUI({ send: (p) => net.send(p), bag: () => P.bag, go
 /** Dar e Intercambiar entre jugadores (ventana propia en trade.ts; el server valida todo, ver docs/INTERCAMBIO.md). */
 const trade = createTradeUI({ send: (p) => net.send(p), bag: () => P.bag, gold: () => P.gold, fromInv: itemFromInv, icon: ico, attrText, esc, fmt: fmtNum, toast });
 const deposit = createDepositUI({ send: (p) => net.send(p), bag: () => P.bag, gold: () => P.gold, pots: () => pots, keys: () => Q.keys, shards: () => Q.shards, fromInv: itemFromInv, icon: ico, attrText, esc, fmt: fmtNum, requestClose: () => closeShop() });
+/** Burbuja de saludo del NPC (textura NPC Bubble del pack), sobre su cabeza durante unos segundos; sigue a la cámara. */
+let bubble: { n: Npc; until: number } | null = null;
+function showBubble(n: Npc, title: string, text: string, secs = 5) {
+    const el = $('npcBubble'); el.innerHTML = `<b>${title}</b>${text}`; el.hidden = false; bubble = { n, until: now() + secs }; tickBubble();
+}
+function tickBubble() {
+    const el = $('npcBubble'); if (!bubble) { if (!el.hidden) el.hidden = true; return; }
+    if (now() > bubble.until || P.dead) { bubble = null; el.hidden = true; return; }
+    const p = toScreen(bubble.n.x + 0.5, bubble.n.y + 0.5); el.style.left = p.x + 'px'; el.style.top = p.y - 72 * Z + 'px';
+}
+/** Retrato del diálogo: inicial del NPC sobre el color de su oficio (hasta tener retratos). */
+function setDlgAvatar(n: Npc) { const def = SHOPS[roleOf(n)] ?? SHOPS.guardia; const av = $('qdAv'); av.style.setProperty('--c', def.col); av.querySelector('i')!.textContent = n.name.trim().charAt(0).toUpperCase(); }
 function openShop(n: Npc = MAP.npcs[0]) {
     const role = roleOf(n); bookTalk(n);
     if (role === 'subastador') { closeShop(); shopNpc = n; talkNpc = null; auction.open(n); return; }
@@ -2525,16 +2538,16 @@ function openShop(n: Npc = MAP.npcs[0]) {
     if (role === 'guardia' || ROLE_LINES[role]) { openTalk(n); return; }
     const def = SHOPS[role]; if (!def) return;
     shopNpc = n; talkNpc = null; $('qdlg').hidden = true; $('shopName').textContent = n.name; $('shopRole').textContent = def.label; $('shop').hidden = false; renderShop();
-    log(`${n.name}: «${def.greet}»`);
+    showBubble(n, def.label, def.greet); log(`${n.name}: «${def.greet}»`);
 }
 /** Guardias y otros NPC de ambiente: una charla corta, sin tienda. */
 function openTalk(n: Npc) {
     const role = roleOf(n), lines = (n.id.includes('_v') ? ROLE_LINES[role + '_v'] : undefined) ?? ROLE_LINES[role] ?? GUARD_LINES[n.id.endsWith('_v') || n.id.includes('_v') ? 'v' : 's'];
     shopNpc = n; talkNpc = null; $('shop').hidden = true;
-    $('qdName').textContent = n.name; $('qdlg').hidden = false; $('qdForges').innerHTML = ''; $('qdBtn').hidden = true;
+    $('qdName').textContent = n.name; setDlgAvatar(n); $('qdlg').hidden = false; $('qdForges').innerHTML = ''; $('qdBtn').hidden = true;
     $('qdBody').innerHTML = `<small>${(SHOPS[role] ?? SHOPS.guardia).label}</small><br>${lines[Math.floor(R() * lines.length)]}`;
 }
-function closeShop() { shopNpc = null; $('shop').hidden = true; $('qdlg').hidden = true; auction.close(); deposit.close(); }
+function closeShop() { shopNpc = null; bubble = null; $('npcBubble').hidden = true; $('shop').hidden = true; $('qdlg').hidden = true; auction.close(); deposit.close(); }
 /** Oferta del día (global, la manda el server): líneas comunes con descuento y, cada tanto, la estrella con el roll ya tirado (stock 1 de todo el server). */
 let daily: { base: string; quality: number; attrs: Item['attrs']; price: number; star: boolean; sold: boolean }[] = [];
 const dailyItem = (o: (typeof daily)[number]): Item => ({ ...(ALL_BASES.find((x) => x.name === o.base) ?? ALL_BASES[0]), id: -1, rar: RAR[o.quality], attrs: o.attrs });
