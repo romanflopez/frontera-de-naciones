@@ -5,9 +5,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { BASE_BY_NAME, COMBAT_CAP, EXTRAS_BY_QUALITY, JUNK_MATS, UNIQUE_BASES, UP_MAX_BY_QUALITY, rollExtras, type AttrId } from '@fdn/world';
+import { BASE_BY_NAME, COMBAT_CAP, EXTRAS_BY_QUALITY, JUNK_MATS, QUALITY_NAMES, UNIQUE_BASES, UP_MAX_BY_QUALITY, rollExtras, type AttrId } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
-import { ECON_VERSION, Economy, bossQuality, migrateEcon, newEcon, rollQuality, uniqueItem, type EconCtx } from '../src/economy.ts';
+import { BOSS_LADDER, ECON_VERSION, Economy, bossQuality, migrateEcon, newEcon, rollQuality, uniqueItem, type EconCtx } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
 import { WorldRegistry, type TransferSession } from '../src/registry.ts';
 import type { PersistedPlayer } from '../src/player.ts';
@@ -39,15 +39,18 @@ const ctx = (npcs: { id: string; x: number; y: number }[] = []): EconCtx => ({ n
 const lastResult = (log: ServerMessage[]) => { const r = log.filter((m) => m.payload?.$case === 'econResult').at(-1)?.payload as { value: { ok: boolean; code: string; text: string } } | undefined; return r?.value; };
 
 // ---------- sorteo de calidad ----------
-test('rollQuality y bossQuality: siempre dentro de la escalera', () => {
+test('rollQuality y bossQuality: siempre dentro de la escalera (Común < Verde < Azul < Violeta < Dorado)', () => {
+    assert.deepEqual(QUALITY_NAMES, ['Común', 'Verde', 'Azul', 'Violeta', 'Dorado']);
+    const ladder: [Parameters<typeof bossQuality>[0], number, number][] = [['goblin_jefe', 2, 3], ['antlion_reina', 2, 3], ['caballero_cripta', 3, 4], ['mago_mayor', 3, 4], ['wyvern_aire', 3, 4], ['demonio_foso', 3, 4], ['verdugo', 3, 4]];
     for (let i = 0; i < 500; i++) {
-        assert.ok([1, 2].includes(rollQuality('pit')));
-        assert.ok([1, 2].includes(rollQuality('loose')));
-        assert.ok([1, 2].includes(rollQuality('dungeon')));
-        assert.ok([2, 3].includes(bossQuality(1))); assert.ok([2, 3].includes(bossQuality(2)));
-        assert.ok([3, 4].includes(bossQuality(3))); assert.ok([3, 4].includes(bossQuality(5)));
-        assert.equal(bossQuality(6), 4);
+        for (const o of ['pit', 'loose', 'dungeon'] as const) assert.ok([1, 2].includes(rollQuality(o)), 'los mobs comunes solo dan Verde o Azul');
+        for (const [b, lo, hi] of ladder) { const q = bossQuality(b); assert.ok(q >= lo && q <= hi, `${b}: ${q}`); }
     }
+    // la chance del escalón de arriba crece de mazmorra en mazmorra
+    const chances = ladder.map(([b]) => BOSS_LADDER[b]![1]);
+    const d3to7 = chances.slice(2); assert.deepEqual([...d3to7].sort((a, b) => a - b), d3to7, 'D3-D7 crecen');
+    // el Dorado (calidad máxima) es de jefes de D3 en adelante y D7 es el que más lo da
+    assert.ok(BOSS_LADDER.verdugo![1] > BOSS_LADDER.demonio_foso![1]);
 });
 
 test('rollExtras: cantidad por calidad, sin repetidos y sin pisar los fijos; nunca exp', () => {
@@ -97,7 +100,7 @@ test('mejora: un Verde solo llega a +3; a +6 o más el fallo baja un nivel', () 
     st.forge = 999; st.gold = 999_999;
     eco.upgrade(p, cx, 'armero_s', verde.u);
     assert.equal(lastResult(log)?.code, 'max');
-    // Violeta en +6: con el dado en contra, baja a +5; con el dado a favor, sube a +7
+    // Dorado en +6: con el dado en contra, baja a +5; con el dado a favor, sube a +7
     const vio = uniqueItem(st, UNIQUE_BASES.find((u) => u.uniq.boss)!, 4);
     vio.up = 6; st.bag.push(vio);
     const rnd = Math.random;
@@ -111,7 +114,7 @@ test('mejora: un Verde solo llega a +3; a +6 o más el fallo baja un nivel', () 
 });
 
 // ---------- migración v5 ----------
-test('migración v5: únicos de banda → Azul, de jefe → Violeta, botín viejo → Común sin atributos', () => {
+test('migración v5: únicos de banda → Azul, de jefe → la calidad más alta, botín viejo → Común sin atributos', () => {
     const st = newEcon('guerrero', 'solmar');
     const band = uniqueItem(st, UNIQUE_BASES.find((u) => !u.uniq.boss)!, 2), boss = uniqueItem(st, UNIQUE_BASES.find((u) => u.uniq.boss)!, 4);
     band.r = 2; band.a = band.a.slice(0, 2); boss.r = 3; boss.a = boss.a.slice(0, 2); // como se guardaban antes (sin extras)
@@ -188,7 +191,7 @@ test('oferta del día: determinística por día UTC, estrella con roll visible y
         if (!s) continue;
         stars++;
         assert.ok(!s.u.uniq.boss, 'los de jefe no se venden');
-        assert.ok([2, 3].includes(s.offer.quality));
+        assert.ok([2, 3].includes(s.offer.quality), 'la estrella es Azul o Violeta');
         assert.ok(s.offer.price >= 1000, `precio ${s.offer.price}`);
         assert.ok(s.offer.attrs.length === s.u.uniq.attrs.length + (s.offer.quality >= 2 ? 2 : 1), 'roll visible completo');
     }
@@ -237,4 +240,25 @@ test('oferta del día: la compra de la estrella se anuncia a todo el server (una
         assert.equal(said.length, 1, 'solo el que se la lleva dispara el aviso');
         assert.match(said[0], /oferta estrella/);
     } finally { Date.now = realNow; }
+});
+
+// ---------- balance de drops por banda ----------
+test('drops: caen ~14 únicos por banda subiendo de nivel y ~2 por corrida de mazmorra (la chance baja con las muertes que pide la banda)', async () => {
+    const { UNIQUE_PIT_CHANCE, uniqueChance } = await import('../src/economy.ts');
+    const { TIERS, TIER_LIST, expToLevel, mobExpCurve, levelExpMult, DUNGEON_IDS, buildMap } = await import('@fdn/world');
+    const kills = (L: number) => expToLevel(L) / (mobExpCurve(L) * levelExpMult(L));
+    let prev = Infinity;
+    for (const t of TIER_LIST) {
+        const [a, b] = TIERS[t]; let k = 0; for (let L = a; L <= Math.min(b, 39); L++) k += kills(L);
+        const per = k * uniqueChance(t, 'pit');
+        assert.ok(per >= 7 && per <= 20, `T${t}: ${per.toFixed(1)} únicos en la banda (${Math.round(k)} muertes)`);
+        assert.ok(UNIQUE_PIT_CHANCE[t - 1] < prev, `T${t}: la chance baja con la banda`); prev = UNIQUE_PIT_CHANCE[t - 1];
+        assert.equal(uniqueChance(t, 'loose'), uniqueChance(t, 'pit') / 3);
+    }
+    // una corrida son los dos pisos de la mazmorra (entrada + piso del jefe); mobs por corrida = suma de sus zonas
+    const FLOORS = [['cueva_goblin', 'minas_goblin'], ['nido_hormiga_leon', 'ruinas_de_stormrock'], ['cripta_olvidada', 'sepulcro_profundo'], ['torre_del_hechicero', 'camaras_de_investigacion'], ['templo_de_mez', 'salon_de_mez'], ['fortaleza_infernal', 'foso_del_demonio'], ['fuerte_amir', 'camaras_de_tortura']];
+    DUNGEON_IDS.forEach((d, i) => {
+        const mobs = FLOORS[i].reduce((a, id) => a + buildMap(id).zones.reduce((n, z) => n + z.n, 0), 0), perRun = mobs * uniqueChance(i + 1, 'dungeon');
+        assert.ok(perRun >= 1.6 && perRun <= 2.4, `${d}: ${perRun.toFixed(2)} únicos por corrida (${mobs} mobs)`);
+    });
 });

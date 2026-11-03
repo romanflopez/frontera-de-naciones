@@ -195,7 +195,7 @@ export const combatMpRegen = (maxMp: number): number => Math.max(2, Math.round(m
 
 export const potionMp = (maxMp: number, pvp = false) => Math.max(pvp ? 20 : 40, Math.round(maxMp * 0.5 * (pvp ? POTION_PVP_MULT : 1)));
 
-export interface CombatStats { lvl: number; cls: string; /** multiplicadores de daño por Fuerza (físico) y Magia (hechizos) */ meleeMult: number; magicMult: number; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; /** crítico total %, velocidad de ataque %, robo de vida % y chance de veneno % (ya con topes) */ crit: number; aspd: number; leech: number; poison: number; savedHp: number; maxMp: number; savedMp: number; /** K8: Daño base extra (Bendición de poder) */ dmgBonus: number; /** efectos especiales de los ítems Violeta de jefe puestos (docs/ITEMS.md): quemadura, aturdir, vampirismo */ fx?: string[] }
+export interface CombatStats { lvl: number; cls: string; /** multiplicadores de daño por Fuerza (físico) y Magia (hechizos) */ meleeMult: number; magicMult: number; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; /** crítico total %, velocidad de ataque %, robo de vida % y chance de veneno % (ya con topes) */ crit: number; aspd: number; leech: number; poison: number; savedHp: number; maxMp: number; savedMp: number; /** K8: Daño base extra (Bendición de poder) */ dmgBonus: number; /** efectos especiales de los ítems Dorado de jefe puestos (docs/ITEMS.md): quemadura, aturdir, vampirismo */ fx?: string[] }
 
 export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 140, maxMp: 40, savedMp: 40, dmgBonus: 0 };
 
@@ -219,7 +219,7 @@ export function statsFromChar(o: StatSource | undefined, uncapCrit = false): Com
         const b = BASE_BY_NAME.get(it.n);
         if (b && fitsSlot(b.slot, slot)) { const k = upMult(it.up); if (b.dmg) s.wdmg = k === 1 ? b.dmg : [Math.round(b.dmg[0] * k), Math.round(b.dmg[1] * k)]; if (b.mag) s.mag += Math.round(b.mag * k); if (b.def) s.def += Math.round(b.def * k); if (b.rm) s.rm += Math.round(b.rm * k); }
         for (const a of it.a ?? []) addAttr(a);
-        const f = UNIQUE_BY_NAME.get(it.n)?.uniq.fx; if (f && (it.r ?? 0) >= 4) fx.add(f); // el efecto especial solo está activo en la calidad Violeta
+        const f = UNIQUE_BY_NAME.get(it.n)?.uniq.fx; if (f && (it.r ?? 0) >= 4) fx.add(f); // el efecto especial solo está activo en la calidad Dorado
     }
     for (const bonus of activeSets(names)) for (const [id, v] of bonus.stats) addAttr({ id, v }); // bonos de set (2/4/6 piezas): pasan por los mismos topes
     if (fx.size) s.fx = [...fx];

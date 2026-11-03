@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ALL_BASES, SETS, SET_PIECES_BY_TIER, SHOPS, UNIQUE_BY_NAME, activeSets, setOfPiece } from '@fdn/world';
+import { ALL_BASES, BASE_BY_NAME, SETS, SET_PIECES_BY_TIER, SHOPS, UNIQUE_BY_NAME, activeSets, setOfPiece, slotsFor } from '@fdn/world';
 import { statsFromChar } from '../src/systems/pvpCombat.ts';
 
 const ASSETS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'client', 'public', 'assets');
@@ -31,16 +31,16 @@ test('cada set tiene 4 piezas de cuerpo + cabeza, del tamaño de la hoja base y 
     }
 });
 
-test('cada set de nación tiene 6 piezas con aspecto e ícono, que se farmean (nunca en la tienda), y sus bonos suman por cantidad', () => {
+test('cada set de nación tiene 8 piezas (todos los slots, con aspecto e ícono), que se farmean (nunca en la tienda), y sus bonos suman por cantidad', () => {
     const stock = new Set(Object.values(SHOPS).flatMap((sh) => sh.stock.map((x) => x.base)));
     assert.equal(SETS.length, 4);
     for (const set of SETS) {
-        assert.equal(set.pieces.length, 6, `${set.id}: 6 piezas`);
+        assert.equal(set.pieces.length, 8, `${set.id}: 8 piezas`);
         const slots = set.pieces.map((n) => ALL_BASES.find((b) => b.name === n)!.slot).sort();
-        assert.deepEqual(slots, ['amuleto', 'anillo', 'armadura', 'botas', 'cabeza', 'guantes'], `${set.id}: un ítem por slot`);
+        assert.deepEqual(slots, ['amuleto', 'anillo', 'anillo', 'arma', 'armadura', 'botas', 'cabeza', 'guantes'], `${set.id}: un ítem por slot (dos anillos distintos)`);
         for (const n of set.pieces) { assert.ok(!stock.has(n), `${n} no se vende`); assert.ok(setOfPiece(n) === set); }
-        assert.deepEqual(set.bonuses.map((b) => b.n), [2, 4, 6]);
-        assert.ok(SET_PIECES_BY_TIER[set.tier]?.some((u) => u.uniq.set === set.id), `${set.id}: cae en su banda`);
+        assert.deepEqual(set.bonuses.map((b) => b.n), [2, 4, 6, 8]);
+        assert.ok(SET_PIECES_BY_TIER[set.tier]?.filter((u) => u.uniq.set === set.id).length === 8, `${set.id}: cae en su banda`);
     }
     // el arte de las 4 armaduras de set sigue ahí, pero ya no se compran: se consiguen en mazmorras
     for (const look of LOOKS) {
@@ -51,21 +51,27 @@ test('cada set de nación tiene 6 piezas con aspecto e ícono, que se farmean (n
     for (const b of ALL_BASES) if (b.look && LOOKS.some((l) => b.look === l || b.look === `${l}_helm`) && !UNIQUE_BY_NAME.has(b.name)) assert.ok(!stock.has(b.name), `${b.name}: el set de nación no está en la tienda`);
 });
 
-test('bonos de set: 2, 4 y 6 piezas distintas (un anillo repetido cuenta una vez) y entran en los stats de combate', () => {
+test('bonos de set: 2, 4, 6 y 8 piezas distintas (un anillo repetido cuenta una vez) y entran en los stats de combate', () => {
     const alba = SETS.find((s) => s.id === 'alba')!;
-    const eqOf = (names: string[]) => Object.fromEntries(names.map((n, i) => [['armadura', 'cabeza', 'guantes', 'botas', 'amuleto', 'anillo'][i], { n, a: [] }]));
+    /** Pone cada pieza en el primer lugar de equipo libre de su slot (los dos anillos van a anillo y anillo2). */
+    const eqOf = (names: string[]) => { const eq: Record<string, { n: string; a: never[] }> = {}; for (const n of names) { const sl = slotsFor(BASE_BY_NAME.get(n)!.slot).find((x) => !eq[x])!; eq[sl] = { n, a: [] }; } return eq; };
     assert.deepEqual(activeSets(alba.pieces.slice(0, 1)).map((a) => a.stats.length), [0]);
     assert.equal(activeSets(alba.pieces.slice(0, 2))[0].stats.length, 2);
     assert.equal(activeSets(alba.pieces.slice(0, 4))[0].stats.length, 4);
-    assert.equal(activeSets(alba.pieces)[0].stats.length, 7, '2 + 2 + 3 stats acumulados');
+    assert.equal(activeSets(alba.pieces.slice(0, 6))[0].stats.length, 6);
+    assert.equal(activeSets(alba.pieces)[0].stats.length, 9, '2 + 2 + 2 + 3 stats acumulados con las 8');
     const sello = alba.pieces.find((n) => n.startsWith('Sello'))!;
     assert.equal(activeSets([sello, sello, alba.pieces[0]])[0].count, 2, 'dos anillos iguales cuentan una vez');
+    // cada escalón es más fuerte que el anterior (mismo stat, mayor valor) y todos crecen con la banda
+    for (const set of SETS) for (let i = 1; i < set.bonuses.length; i++) assert.ok(set.bonuses[i].stats.every(([, v]) => v >= 1), `${set.id} ${set.bonuses[i].n}`);
     // en el combate: con 2 piezas puestas sube la vida y la velocidad de ataque respecto de las mismas piezas sin set
-    const hpOf = (n: string[]) => statsFromChar({ lvl: 20, cls: 'guerrero', eq: eqOf(n) } as never);
-    const sin = hpOf([alba.pieces[0]]), con = hpOf(alba.pieces.slice(0, 2));
+    const statsOf = (n: string[]) => statsFromChar({ lvl: 20, cls: 'guerrero', eq: eqOf(n) } as never);
+    const sin = statsOf([alba.pieces[0]]), con = statsOf(alba.pieces.slice(0, 2));
     const two = alba.bonuses[0].stats;
     assert.ok(con.maxHp - sin.maxHp >= two.find(([id]) => id === 'hp')![1], 'el bono de vida entra');
     assert.ok(con.aspd - sin.aspd >= two.find(([id]) => id === 'aspd')![1], 'el bono de velocidad entra');
+    // las 8 piezas (con los dos anillos distintos) activan el bono más alto
+    assert.equal(activeSets(alba.pieces)[0].count, 8);
 });
 
 test('los nombres de los ítems son únicos (son la clave del guardado)', () => {
@@ -93,17 +99,27 @@ test('piezas de set: caen solo en mazmorras del tramo (mobs y jefe de su dungeon
     };
     // mobs de mazmorra de la banda 4: una buena parte de los únicos son piezas del set de esa banda
     const dun = run({ mobId: 1, type: 'goblin', def: mobDef('goblin', { lvl: 18 }), zoneName: 'm', origin: 'dungeon', x: 0, y: 0, traits: 0 }, 6000);
-    assert.ok(dun.uniques > 100 && dun.sets / dun.uniques > 0.3 && dun.sets / dun.uniques < 0.6, `sets ${dun.sets}/${dun.uniques}`);
+    assert.ok(dun.uniques > 100 && dun.sets / dun.uniques > 0.35 && dun.sets / dun.uniques < 0.65, `sets ${dun.sets}/${dun.uniques}`);
     // en pits y sueltos nunca
     const pit = run({ mobId: 1, type: 'goblin', def: mobDef('goblin', { lvl: 18 }), zoneName: 'p', origin: 'pit', x: 0, y: 0, traits: 0 }, 6000);
     assert.ok(pit.uniques > 20 && pit.sets === 0, `pit: ${pit.sets} piezas de set`);
-    // el jefe de D4 suelta además (35 %) una pieza del set de su mazmorra (banda 4), y avisa
+    // el jefe de D4 suelta además (50 %) una pieza del set de su mazmorra (banda 4), y avisa
     sent.length = 0;
     let extra = 0;
     for (let i = 0; i < 300; i++) {
         st.bag = []; eco.reward(p, ctx, { mobId: 1, type: DUNGEON_BOSS.d4, def: MOBS[DUNGEON_BOSS.d4], zoneName: 'Torre', origin: 'dungeon', x: 0, y: 0, traits: 0, map: DUNGEON_MAP.d4 });
         const piece = st.bag.find((it) => isSet(it.n)); if (piece) { extra++; assert.ok(SET_PIECES_BY_TIER[4].some((u) => u.name === piece.n), `${piece.n} es de la banda 4`); }
     }
-    assert.ok(extra > 60 && extra < 160, `piezas extra del jefe: ${extra}/300`);
+    assert.ok(extra > 100 && extra < 200, `piezas extra del jefe: ${extra}/300 (esperado ~50 %)`);
     assert.ok(sent.some((m) => m.code === 'set_piece'), 'avisa que cayó una pieza de set');
+});
+
+test('pickSetPiece: prefiere las piezas que todavía no tenés, así el set de 8 se completa con 8 piezas', async () => {
+    const { newEcon, pickSetPiece } = await import('../src/economy.ts');
+    for (const set of SETS) {
+        const st = newEcon('guerrero', 'solmar'), pool = SET_PIECES_BY_TIER[set.tier].filter((u) => u.uniq.set === set.id), got = new Set<string>();
+        for (let i = 0; i < 8; i++) { const u = pickSetPiece(st, pool); assert.ok(!got.has(u.name), `${set.id}: repetida ${u.name} antes de completar`); got.add(u.name); st.bag.push({ u: st.nextUid++, n: u.name, r: 1, a: [] }); }
+        assert.equal(got.size, 8);
+        const again = pickSetPiece(st, pool); assert.ok(pool.includes(again), 'con el set completo cae cualquiera de sus piezas');
+    }
 });

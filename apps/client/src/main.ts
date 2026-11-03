@@ -99,8 +99,8 @@ const RAR: Rarity[] = [
     { n: 'Común', c: '#e7e2d3', k: 0, p: 0.7 },
     { n: 'Verde', c: '#7fd98a', k: 1, p: 0.2 },
     { n: 'Azul', c: '#6fa8ff', k: 2, p: 0.07 },
-    { n: 'Dorado', c: '#ffd24a', k: 3, p: 0.02 },
-    { n: 'Violeta', c: '#c77dff', k: 4, p: 0.01 },
+    { n: 'Violeta', c: '#c77dff', k: 3, p: 0.02 },
+    { n: 'Dorado', c: '#ffd24a', k: 4, p: 0.01 },
 ];
 /** Texto de cada atributo; los rangos y las bases viven en @fdn/world (el server valida con las mismas tablas). */
 const ATTR_FMT: Record<AttrId, (v: number) => string> = {
@@ -2056,7 +2056,7 @@ function renderTip() {
     const attrList = it.attrs.length
         ? `<ul>${it.attrs.map((a, k) => (k < nFixed ? `<li style="color:#8fb6f0">${attrText(a)}</li>` : `<li style="color:#ffd27f">${attrText(a)} <small>(extra)</small></li>`)).join('')}</ul>`
         : `<div class="sub">Sin atributos extra</div>`;
-    const fxLine = un?.uniq.fx ? `<div class="sub" style="color:${q >= 4 ? '#c77dff' : '#6f6a80'}">${q >= 4 ? '✦' : '✧ (solo en Violeta)'} ${esc(FX_INFO[un.uniq.fx].name)}: ${esc(FX_INFO[un.uniq.fx].text)}</div>` : '';
+    const fxLine = un?.uniq.fx ? `<div class="sub" style="color:${q >= 4 ? '#ffd24a' : '#6f6a80'}">${q >= 4 ? '✦' : '✧ (solo en Dorado)'} ${esc(FX_INFO[un.uniq.fx].name)}: ${esc(FX_INFO[un.uniq.fx].text)}</div>` : '';
     // set: cuántas piezas llevás y los bonos (verde los activos, gris los que faltan)
     const set = setOfPiece(it.name);
     let setBlock = '';

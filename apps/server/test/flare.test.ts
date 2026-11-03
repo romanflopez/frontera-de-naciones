@@ -106,9 +106,9 @@ test('uniqueItem: fijos con variación ±10 %, calidad sorteada y extras según 
     const st = newEcon('guerrero', 'solmar');
     for (const u of UNIQUE_BASES) {
         const it = uniqueItem(st, u);
-        // banda sin calidad pedida → Azul (2); jefe → su escalera (D1-D2 Azul+, D3-D5 Dorado+, D6-D7 Violeta)
+        // banda sin calidad pedida → Azul (2); jefe → su escalera (D1-D2 Azul o Violeta; D3-D7 Violeta o Dorado)
         if (!u.uniq.boss) assert.equal(it.r, 2);
-        else assert.ok(it.r >= (u.uniq.tier >= 6 ? 4 : u.uniq.tier >= 3 ? 3 : 2) && it.r <= 4, `${u.name} calidad ${it.r}`);
+        else { const lo = ['goblin_jefe', 'antlion_reina'].includes(u.uniq.boss) ? 2 : 3; assert.ok(it.r >= lo && it.r <= lo + 1, `${u.name} calidad ${it.r}`); }
         // los fijos primero, con su variación; después los extras que indica la calidad
         assert.equal(it.a.length, u.uniq.attrs.length + EXTRAS_BY_QUALITY[it.r]);
         u.uniq.attrs.forEach(([id, v], i) => { const got = it.a[i]; assert.equal(got.id, id); assert.ok(got.v >= Math.floor(v * 0.9) && got.v <= Math.ceil(v * 1.1), `${u.name} ${id} ${got.v} vs ${v}`); });

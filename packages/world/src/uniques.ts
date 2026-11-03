@@ -22,7 +22,7 @@ export const UNIQUE_VARIATION = 0.1;
 export const bandIlvl = (tier: number): number => 5 * Math.min(7, Math.max(1, Math.round(tier)));
 
 type Arch = 'arma1' | 'arma2' | 'armaM' | 'armPes' | 'armMed' | 'armMag' | 'cabF' | 'cabM' | 'guanF' | 'guanM' | 'botaF' | 'botaM' | 'amuO' | 'amuD' | 'anilloO' | 'anilloD';
-/** Efectos especiales de los ítems de jefe: solo están activos en la calidad Violeta (r = 4). Los aplica el server (mobs.ts). */
+/** Efectos especiales de los ítems de jefe: solo están activos en la calidad Dorado (r = 4). Los aplica el server (mobs.ts). */
 export type FxId = 'quemadura' | 'aturdir' | 'vampirismo';
 export const FX_INFO: Record<FxId, { name: string; text: string }> = {
     quemadura: { name: 'Quemadura', text: 'Tus golpes básicos tienen 15 % de prender fuego al enemigo.' },
@@ -145,7 +145,7 @@ const DEFS: Def[] = [
     { tier: 7, arch: 'amuO', name: 'Amuleto del abismo' }, { tier: 7, arch: 'amuD', name: 'Talismán de Amir' },
     { tier: 7, arch: 'anilloO', name: 'Anillo del abismo', look: 'ring_ruby' }, { tier: 7, arch: 'anilloD', name: 'Sello de Amir', look: 'ring_silver' },
     // Jefes de mazmorra (D1-D7): ilvl = el de su banda +5 (tope 40) y un multiplicador chico; cada jefe trae un ítem de cada tipo con efecto
-    // especial (activo solo en Violeta) en las armas, y uno de los slots nuevos para que las mazmorras completen el equipo.
+    // especial (activo solo en Dorado) en las armas, y uno de los slots nuevos para que las mazmorras completen el equipo.
     { tier: 2, arch: 'arma1', name: 'Cuchilla del Jefe goblin', look: 'hand_axe', boss: 'goblin_jefe', mult: 1.08, fx: 'vampirismo' }, { tier: 2, arch: 'armPes', name: 'Peto del Jefe goblin', boss: 'goblin_jefe', mult: 1.06 },
     { tier: 2, arch: 'amuO', name: 'Colmillo del Jefe goblin', boss: 'goblin_jefe', mult: 1.08 },
     { tier: 4, arch: 'arma1', name: 'Aguijón de la Reina', look: 'longsword', boss: 'antlion_reina', mult: 1.12, fx: 'vampirismo' }, { tier: 4, arch: 'armPes', name: 'Caparazón de la Reina', boss: 'antlion_reina', mult: 1.12 },
@@ -164,23 +164,27 @@ const DEFS: Def[] = [
     { tier: 7, ilvl: 40, arch: 'armaM', name: 'Cetro del suplicio', boss: 'verdugo', mult: 1.35, fx: 'quemadura' }, { tier: 7, ilvl: 40, arch: 'cabF', name: 'Capucha del Verdugo', boss: 'verdugo', mult: 1.36 },
     { tier: 7, ilvl: 40, arch: 'guanM', name: 'Guantes del suplicio', boss: 'verdugo', mult: 1.35 }, { tier: 7, ilvl: 40, arch: 'botaF', name: 'Botas del Gran Verdugo', boss: 'verdugo', mult: 1.36 },
     { tier: 7, ilvl: 40, arch: 'amuD', name: 'Amuleto del Gran Verdugo', boss: 'verdugo', mult: 1.36 },
-    // Piezas de set (docs/ITEMS.md §sets): solo caen en mazmorras (mobs y jefes del tramo), nunca en la tienda. Los bonos viven en SETS.
+    // Piezas de set (docs/ITEMS.md): 8 por set (arma, armadura, cabeza, guantes, botas, amuleto y dos anillos distintos). Solo caen en mazmorras, nunca en la tienda. Los bonos viven en SETS.
     // Alba de Solmar (T4, malla): ágil
+    { tier: 4, arch: 'arma1', name: 'Espada del Alba', look: 'longsword', set: 'alba' },
     { tier: 4, arch: 'armMed', name: 'Malla del Alba', look: 'sol_malla', set: 'alba' }, { tier: 4, arch: 'cabF', name: 'Yelmo del Alba', look: 'sol_malla_helm', set: 'alba' },
     { tier: 4, arch: 'guanF', name: 'Guantes del Alba', set: 'alba' }, { tier: 4, arch: 'botaF', name: 'Botas del Alba', set: 'alba' },
-    { tier: 4, arch: 'amuO', name: 'Amuleto del Alba', set: 'alba' }, { tier: 4, arch: 'anilloO', name: 'Sello del Alba', set: 'alba' },
+    { tier: 4, arch: 'amuO', name: 'Amuleto del Alba', set: 'alba' }, { tier: 4, arch: 'anilloO', name: 'Sello del Alba', set: 'alba' }, { tier: 4, arch: 'anilloD', name: 'Aro del Alba', set: 'alba' },
     // Cenit de Solmar (T5, placas): tanque
+    { tier: 5, arch: 'arma1', name: 'Maza del Cenit', look: 'mace', off: 'kite_shield', set: 'cenit' },
     { tier: 5, arch: 'armPes', name: 'Coraza del Cenit', look: 'sol_placas', set: 'cenit' }, { tier: 5, arch: 'cabF', name: 'Yelmo del Cenit', look: 'sol_placas_helm', set: 'cenit' },
     { tier: 5, arch: 'guanF', name: 'Guanteletes del Cenit', set: 'cenit' }, { tier: 5, arch: 'botaF', name: 'Grebas del Cenit', set: 'cenit' },
-    { tier: 5, arch: 'amuD', name: 'Amuleto del Cenit', set: 'cenit' }, { tier: 5, arch: 'anilloD', name: 'Sello del Cenit', set: 'cenit' },
+    { tier: 5, arch: 'amuD', name: 'Amuleto del Cenit', set: 'cenit' }, { tier: 5, arch: 'anilloD', name: 'Sello del Cenit', set: 'cenit' }, { tier: 5, arch: 'anilloO', name: 'Aro del Cenit', set: 'cenit' },
     // Ceniza de Vhar (T6, malla): lanzador
+    { tier: 6, arch: 'armaM', name: 'Cayado de ceniza ardiente', set: 'ceniza' },
     { tier: 6, arch: 'armMed', name: 'Cota de ceniza ardiente', look: 'vhar_malla', set: 'ceniza' }, { tier: 6, arch: 'cabF', name: 'Yelmo de ceniza ardiente', look: 'vhar_malla_helm', set: 'ceniza' },
     { tier: 6, arch: 'guanM', name: 'Guantes de ceniza ardiente', set: 'ceniza' }, { tier: 6, arch: 'botaM', name: 'Botas de ceniza ardiente', set: 'ceniza' },
-    { tier: 6, arch: 'amuO', name: 'Amuleto de ceniza ardiente', set: 'ceniza' }, { tier: 6, arch: 'anilloO', name: 'Sello de ceniza ardiente', set: 'ceniza' },
+    { tier: 6, arch: 'amuO', name: 'Amuleto de ceniza ardiente', set: 'ceniza' }, { tier: 6, arch: 'anilloO', name: 'Sello de ceniza ardiente', set: 'ceniza' }, { tier: 6, arch: 'anilloD', name: 'Aro de ceniza ardiente', set: 'ceniza' },
     // Brasa de Vhar (T7, placas): ofensivo pesado
+    { tier: 7, arch: 'arma2', name: 'Hacha de brasa eterna', look: 'battle_axe', set: 'brasa' },
     { tier: 7, arch: 'armPes', name: 'Placas de brasa eterna', look: 'vhar_placas', set: 'brasa' }, { tier: 7, arch: 'cabF', name: 'Yelmo de brasa eterna', look: 'vhar_placas_helm', set: 'brasa' },
     { tier: 7, arch: 'guanF', name: 'Guanteletes de brasa eterna', set: 'brasa' }, { tier: 7, arch: 'botaF', name: 'Grebas de brasa eterna', set: 'brasa' },
-    { tier: 7, arch: 'amuO', name: 'Amuleto de brasa eterna', set: 'brasa' }, { tier: 7, arch: 'anilloO', name: 'Sello de brasa eterna', set: 'brasa' },
+    { tier: 7, arch: 'amuO', name: 'Amuleto de brasa eterna', set: 'brasa' }, { tier: 7, arch: 'anilloO', name: 'Sello de brasa eterna', set: 'brasa' }, { tier: 7, arch: 'anilloD', name: 'Aro de brasa eterna', set: 'brasa' },
 ];
 
 export interface UniqueInfo { tier: number; attrs: [AttrId, number][]; boss?: MobType; /** nivel de ítem: de él salen el poder base y la escala de los extras */ ilvl: number; fx?: FxId; set?: string }
@@ -209,15 +213,15 @@ for (const u of UNIQUE_BASES) if (u.uniq.boss) (BOSS_UNIQUES[u.uniq.boss] ??= []
 
 // ---------- calidad (docs/ITEMS.md): se sortea al caer y define extras y tope de mejora ----------
 /**
- * La calidad vive en `r` del ítem guardado: 0 Común (tienda/arranque, sin extras), 1 Verde, 2 Azul, 3 Dorado, 4 Violeta.
+ * La calidad vive en `r` del ítem guardado: 0 Común (tienda/arranque, sin extras), 1 Verde, 2 Azul, 3 Violeta, 4 Dorado (la más alta).
  * Define cuántos stats EXTRA al azar trae el ítem (van al final de `a`, después de los fijos del catálogo: los fijos
  * son `uniq.attrs.length`, así que los extras de un único son `a.slice(uniq.attrs.length)`) y hasta dónde se mejora (+N).
- * Dorado y Violeta rollean los extras en el rango alto; Violeta es solo de jefes y trae el efecto especial (cuando exista).
+ * Violeta y Dorado rollean los extras en el rango alto; Dorado es solo de jefes y activa el efecto especial de los ítems de jefe.
  */
-export const QUALITY_NAMES = ['Común', 'Verde', 'Azul', 'Dorado', 'Violeta'];
+export const QUALITY_NAMES = ['Común', 'Verde', 'Azul', 'Violeta', 'Dorado'];
 /** Cantidad de stats extra por calidad. */
 export const EXTRAS_BY_QUALITY = [0, 1, 2, 2, 2] as const;
-/** Tope de mejora (+N) por calidad: el +11 queda reservado a los Violeta de jefe. */
+/** Tope de mejora (+N) por calidad: el +11 queda reservado a los Dorado de jefe. */
 export const UP_MAX_BY_QUALITY = [1, 3, 5, 8, 11] as const;
 /** Desde esta calidad los extras rollean en el rango alto. */
 export const QUALITY_HI_ROLL = 3;
@@ -237,18 +241,19 @@ export const SLOT_EXTRA_MULT: Record<Slot, number> = { arma: 1, armadura: 1, cab
 // ---------- sets (docs/ITEMS.md): bonos por cantidad de piezas equipadas ----------
 export interface SetBonus { n: number; stats: [AttrId, number][] }
 export interface SetDef { id: string; name: string; tier: number; faction: 'solmar' | 'vhar'; pieces: string[]; bonuses: SetBonus[] }
-/** Valor de un stat de bono de set: la escala lineal de los extras al ilvl de la banda × `k` (2 piezas 1×, 4 piezas 1,6×, 6 piezas 2,2×). */
+/** Valor de un stat de bono de set: la escala lineal de los extras al ilvl de la banda × `k` (2 piezas 1×, 4 piezas 1,5×, 6 piezas 2×, 8 piezas 2,8×). */
 const setStat = (id: AttrId, tier: number, k: number): [AttrId, number] => { const [a, b] = EXTRA_SCALE[id]; return [id, Math.max(1, R((a + b * bandIlvl(tier)) * k))]; };
-const mkSet = (id: string, name: string, tier: number, faction: 'solmar' | 'vhar', two: AttrId[], four: AttrId[], six: AttrId[]): SetDef => ({
+const SET_STEPS: [number, number][] = [[2, 1], [4, 1.5], [6, 2], [8, 2.8]];
+const mkSet = (id: string, name: string, tier: number, faction: 'solmar' | 'vhar', ...stats: AttrId[][]): SetDef => ({
     id, name, tier, faction, pieces: UNIQUE_BASES.filter((u) => u.uniq.set === id).map((u) => u.name),
-    bonuses: [{ n: 2, stats: two.map((a) => setStat(a, tier, 1)) }, { n: 4, stats: four.map((a) => setStat(a, tier, 1.6)) }, { n: 6, stats: six.map((a) => setStat(a, tier, 2.2)) }],
+    bonuses: SET_STEPS.map(([n, k], i) => ({ n, stats: stats[i].map((a) => setStat(a, tier, k)) })),
 });
-/** Los 4 sets de armadura (arte de Solmar y Vhar): uno por banda desde la T4; se completan con 6 piezas (armadura, cabeza, guantes, botas, amuleto y anillo). */
+/** Los 4 sets de nación (arte de Solmar y Vhar): uno por banda desde la T4; 8 piezas (todos los slots) con bonos a 2, 4, 6 y 8 piezas distintas. */
 export const SETS: SetDef[] = [
-    mkSet('alba', 'Alba de Solmar', 4, 'solmar', ['hp', 'aspd'], ['crit', 'leech'], ['hp', 'crit', 'aspd']),
-    mkSet('cenit', 'Cenit de Solmar', 5, 'solmar', ['hp', 'df'], ['df', 'rm'], ['hp', 'df', 'rpar']),
-    mkSet('ceniza', 'Ceniza de Vhar', 6, 'vhar', ['mp', 'mag'], ['mag', 'crit'], ['mag', 'mp', 'hp']),
-    mkSet('brasa', 'Brasa de Vhar', 7, 'vhar', ['hp', 'crit'], ['crit', 'aspd'], ['leech', 'crit', 'hp']),
+    mkSet('alba', 'Alba de Solmar', 4, 'solmar', ['hp', 'aspd'], ['crit', 'leech'], ['hp', 'crit'], ['aspd', 'crit', 'leech']),
+    mkSet('cenit', 'Cenit de Solmar', 5, 'solmar', ['hp', 'df'], ['df', 'rm'], ['hp', 'rpar'], ['df', 'rm', 'hp']),
+    mkSet('ceniza', 'Ceniza de Vhar', 6, 'vhar', ['mp', 'mag'], ['mag', 'crit'], ['mp', 'hp'], ['mag', 'mp', 'leech']),
+    mkSet('brasa', 'Brasa de Vhar', 7, 'vhar', ['hp', 'crit'], ['crit', 'aspd'], ['leech', 'hp'], ['crit', 'aspd', 'leech']),
 ];
 export const SET_BY_ID = new Map(SETS.map((s) => [s.id, s]));
 /** Set al que pertenece una pieza (por nombre de base). */

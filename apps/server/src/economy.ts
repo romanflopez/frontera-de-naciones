@@ -72,9 +72,26 @@ const emptyEq = (): Record<Slot, SItem | null> => ({ arma: null, armadura: null,
 function newItem(st: Econ, base: string, r: number, a: SItem['a']): SItem { return { u: st.nextUid++, n: base, r, a }; }
 
 /** Probabilidades de botín de los mobs de bandas con ítems únicos (docs/ITEMS.md §5). El resto del tiempo cae oro. */
-export const UNIQUE_CHANCE = { loose: 0.005, pit: 0.015, dungeon: 0.04 };
+/**
+ * Chance de único por muerte, por banda (docs/ITEMS.md, balance 3/11). Idea: en cada banda caen unos ~14 únicos en total mientras
+ * subís por ella (8-18 según la banda), así que la chance baja a medida que la banda necesita más muertes (muertes por banda con
+ * la curva de nivel: 202, 473, 801, 1153, 1531, 1933 y 4574). En mazmorra se apunta a ~2 únicos por corrida (chance = 2 / mobs de
+ * la mazmorra: 25, 40, 49, 49, 55, 55 y 58); los sueltos van a un tercio del pit. Mutantes y élites multiplican encima.
+ */
+export const UNIQUE_PIT_CHANCE = [0.04, 0.021, 0.015, 0.012, 0.009, 0.007, 0.004];
+export const UNIQUE_DUNGEON_CHANCE = [0.08, 0.05, 0.041, 0.041, 0.036, 0.036, 0.034];
+export const uniqueChance = (tier: number, origin: 'loose' | 'pit' | 'dungeon'): number => {
+    const i = Math.min(7, Math.max(1, Math.round(tier))) - 1;
+    return origin === 'dungeon' ? UNIQUE_DUNGEON_CHANCE[i] : origin === 'loose' ? UNIQUE_PIT_CHANCE[i] / 3 : UNIQUE_PIT_CHANCE[i];
+};
 /** Piezas de set: parte de los únicos de los mobs de mazmorra, y chance de que un jefe de mazmorra suelte una pieza de set de su tramo ADEMÁS de su ítem. */
-export const SET_PIECE_SHARE = 0.45, BOSS_SET_CHANCE = 0.35;
+export const SET_PIECE_SHARE = 0.5, BOSS_SET_CHANCE = 0.5;
+/** Pieza de set de un pool: se prefieren las que todavía no tenés (bolsa o puestas), así completar el set de 8 no depende de la suerte con las repetidas; si ya las tenés todas, cualquiera. */
+export function pickSetPiece(st: Econ, pool: UniqueBase[]): UniqueBase {
+    const have = new Set<string>([...st.bag.map((i) => i.n), ...Object.values(st.eq).flatMap((i) => (i ? [i.n] : []))]);
+    const fresh = pool.filter((u) => !have.has(u.name));
+    return pick(fresh.length ? fresh : pool);
+}
 /** Piedras de forja: chance por muerte según el origen del mob, y cantidad que suelta un jefe. */
 export const FORGE_CHANCE = { loose: 0.05, pit: 0.08, dungeon: 0.18 };
 export const FORGE_BOSS: [number, number] = [3, 5];
@@ -89,19 +106,26 @@ export const GOLD_CHANCE = 0.45;
 const pick = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
 
 // ---------- calidad del botín (docs/ITEMS.md: la calidad define extras y tope de mejora) ----------
-/** Calidad de un único de banda al caer de un mob común: casi siempre Verde; Azul con suerte (más en mazmorra). */
+/** Calidad de un único de banda al caer de un mob común: casi siempre Verde; Azul con suerte (más en mazmorra). Violeta y Dorado son de jefes. */
 export function rollQuality(origin: 'loose' | 'pit' | 'dungeon'): number {
     const r = Math.random();
     return r < (origin === 'dungeon' ? 0.4 : origin === 'pit' ? 0.15 : 0.1) ? 2 : 1;
 }
-/** Escalera de los jefes: cada uno garantiza su escalón y tira la chance del siguiente (D1-D2 Azul+25 % Dorado; D3-D5 Dorado+15 % Violeta; D6-D7 Violeta). */
-export function bossQuality(tier: number): number {
-    const r = Math.random();
-    return tier >= 6 ? 4 : tier >= 3 ? (r < 0.15 ? 4 : 3) : r < 0.25 ? 3 : 2;
+/**
+ * Escalera de los jefes de mazmorra: cada uno garantiza una calidad base y tira la chance de la siguiente (Común < Verde < Azul < Violeta < Dorado).
+ * D1-D2: Azul seguro (25 % / 40 % de Violeta); D3-D7: Violeta seguro con chance de Dorado creciente (10 / 15 / 20 / 35 / 60 %).
+ * El Dorado es la calidad máxima (+11 de mejora y efecto especial en los ítems de jefe que lo tienen).
+ */
+export const BOSS_LADDER: Partial<Record<MobType, [base: number, upChance: number]>> = {
+    goblin_jefe: [2, 0.25], antlion_reina: [2, 0.4], caballero_cripta: [3, 0.1], mago_mayor: [3, 0.15], wyvern_aire: [3, 0.2], demonio_foso: [3, 0.35], verdugo: [3, 0.6],
+};
+export function bossQuality(boss: MobType): number {
+    const [base, up] = BOSS_LADDER[boss] ?? [2, 0.25];
+    return base + (Math.random() < up ? 1 : 0);
 }
 /** Un ítem único: sus fijos del catálogo (±10 %), la calidad en `r` y los extras que la calidad indica, al final de `a`. */
 export function uniqueItem(st: Econ, u: UniqueBase, quality?: number): SItem {
-    const q = quality ?? (u.uniq.boss ? bossQuality(u.uniq.tier) : 2);
+    const q = quality ?? (u.uniq.boss ? bossQuality(u.uniq.boss) : 2);
     const a = u.uniq.attrs.map(([id, v]) => ({ id, v: Math.max(1, Math.round(v * (1 + (Math.random() * 2 - 1) * UNIQUE_VARIATION))) }));
     for (const [id, v] of rollExtras(u.slot, uniqueIlvl(u), q, u.uniq.attrs.map(([id]) => id))) a.push({ id, v });
     return newItem(st, u.name, q, a);
@@ -205,7 +229,7 @@ export function migrateEcon(st: Econ): boolean {
     }
     // v4: puntos de stats. Las cuentas viejas arrancan sin repartir y reciben los puntos libres que les corresponden por nivel.
     st.stats = cleanStats(st.stats);
-    // v5: la rareza pasa a ser calidad (docs/ITEMS.md). Únicos de banda → Azul (2), de jefe → Violeta (4), el resto de los
+    // v5: la rareza pasa a ser calidad (docs/ITEMS.md). Únicos de banda → Azul (2), de jefe → la calidad más alta (4, hoy Dorado), el resto de los
     // ítems del botín viejo → Común sin atributos. Los únicos viejos quedan sin extras (mala suerte: se re-farmean o reforjan).
     if (st.v < 5) {
         const fix = (i: SItem | null): void => {
@@ -348,7 +372,7 @@ export class Economy {
      */
     gmBis(p: Player, cls: string): string[] | null {
         const st = p.econ; if (!st || (cls !== 'mago' && cls !== 'healer')) return null; // el healer usa el mismo set de Magia
-        // Todo en Violeta con las tiradas al máximo y la mejora al tope; los extras son los mejores para hechizos (Magia, maná, vida, RM)
+        // Todo en Dorado con las tiradas al máximo y la mejora al tope; los extras son los mejores para hechizos (Magia, maná, vida, RM)
         const top = (name: string): SItem => {
             const u = UNIQUE_BY_NAME.get(name); if (!u) throw new Error(`BiS: no existe ${name}`);
             const fixed = u.uniq.attrs.map(([id]) => id), want = (['mag', 'mp', 'hp', 'rm'] as AttrId[]).filter((id) => !fixed.includes(id)).slice(0, 2);
@@ -783,9 +807,9 @@ export class Economy {
         } else {
             // El ítem solo cae como único de la banda, con poca chance (más en pits y mazmorras); el resto del tiempo, oro.
             // El botín viejo con rareza al azar se eliminó (docs/ITEMS.md): los "comunes" son la basura vendible del suelo (systems/loot.ts).
-            const r = Math.random(), uc = tier <= UNIQUE_TIERS_READY ? UNIQUE_CHANCE[k.origin ?? 'pit'] * dm : 0, gc = GOLD_CHANCE * dm;
+            const r = Math.random(), uc = tier <= UNIQUE_TIERS_READY ? uniqueChance(tier, k.origin ?? 'pit') * dm : 0, gc = GOLD_CHANCE * dm;
             // en mazmorras del tramo, parte de los únicos son piezas de set (solo caen ahí, nunca en pits ni en la tienda)
-            if (r < uc) item = uniqueItem(st, k.origin === 'dungeon' && SET_PIECES_BY_TIER[tier] && Math.random() < SET_PIECE_SHARE ? pick(SET_PIECES_BY_TIER[tier]) : pick(UNIQUES_BY_TIER[tier]), rollQuality(k.origin ?? 'pit'));
+            if (r < uc) item = uniqueItem(st, k.origin === 'dungeon' && SET_PIECES_BY_TIER[tier] && Math.random() < SET_PIECE_SHARE ? pickSetPiece(st, SET_PIECES_BY_TIER[tier]) : pick(UNIQUES_BY_TIER[tier]), rollQuality(k.origin ?? 'pit'));
             else if (r < uc + gc) gold = rint(3, 8) * def.lvl;
         }
         if (gold) addGold(st, gold);
@@ -798,7 +822,7 @@ export class Economy {
         if (boss && bossU) { // pieza de set extra (jefes de mazmorra): la banda es la de su mazmorra (D1 = T1 … D7 = T7), no la del nivel del jefe
             const di = DUNGEON_IDS.findIndex((d) => DUNGEON_BOSS[d] === k.type && k.map === DUNGEON_MAP[d]), pool = di >= 0 ? SET_PIECES_BY_TIER[di + 1] : undefined;
             if (pool && Math.random() < BOSS_SET_CHANCE) {
-                const sp = uniqueItem(st, pick(pool), rollQuality('dungeon'));
+                const sp = uniqueItem(st, pickSetPiece(st, pool), rollQuality('dungeon'));
                 if (st.bag.length < BAG_MAX) st.bag.push(sp); else ctx.ground.add(sp, Math.floor(p.posX) + 0.5, Math.floor(p.posY) + 0.5, [p.accountKey], LOOT_FREE_MS);
                 p.send(M.econResult(true, 'set_piece', `¡Cayó una pieza de set: ${sp.n}!`));
             }

@@ -1,5 +1,5 @@
 /**
- * Efectos especiales de los ítems de jefe (docs/ITEMS.md): solo están activos en la calidad Violeta (r = 4) y los aplica el server
+ * Efectos especiales de los ítems de jefe (docs/ITEMS.md): solo están activos en la calidad Dorado (r = 4) y los aplica el server
  * en PvE: quemadura (prende fuego), estocada aturdidora y vampirismo (cura al matar).
  */
 import { test, mock } from 'node:test';
@@ -14,7 +14,7 @@ const N = 40;
 let clock = 190_000_000;
 mock.method(Date, 'now', () => clock);
 
-test('fx: el efecto de un ítem de jefe solo está activo en Violeta', () => {
+test('fx: el efecto de un ítem de jefe solo está activo en Dorado', () => {
     const arma = (r: number) => statsFromChar({ lvl: 40, cls: 'guerrero', eq: { arma: { n: 'Hacha del Gran Verdugo', r, a: [] } } } as never);
     assert.deepEqual(arma(4).fx, ['aturdir']);
     for (const r of [0, 1, 2, 3]) assert.equal(arma(r).fx, undefined, `r${r} sin efecto`);

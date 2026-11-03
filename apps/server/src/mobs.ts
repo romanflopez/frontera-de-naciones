@@ -48,7 +48,7 @@ export interface MobHost {
  * Reglas de mazmorra (docs/MAZMORRAS.md). En una instancia de mazmorra: lo que muere queda muerto (jefe incluido) y las zonas de mazmorra
  * (`tier: 'dungeon'`) tienen élites fijos. El escalado por party se aplica después con `setPartyScale`.
  */
-/** Efectos de los ítems Violeta de jefe (docs/ITEMS.md): chance de quemar y de aturdir en golpes básicos, segundos de aturdimiento y vida que cura Vampirismo al matar. */
+/** Efectos de los ítems Dorado de jefe (docs/ITEMS.md): chance de quemar y de aturdir en golpes básicos, segundos de aturdimiento y vida que cura Vampirismo al matar. */
 export const FX_BURN_CHANCE = 0.15, FX_STUN_CHANCE = 0.1, FX_STUN_SECS = 0.8, FX_VAMP_FRAC = 0.03;
 export interface MobSimOptions { noRespawn?: boolean; elites?: boolean }
 
@@ -624,7 +624,7 @@ export class MobSim {
         if (m.bs && (dmg > 0 || parSecs > 0 || sp.taunt)) bossInterrupt(this.bh, m, spell, p); // corte duro o blando (en la ventana)
         if (dmg > 0 && sp.slow) m.slow = T + sp.slow;                                  // Esquirla: frena
         if (dmg > 0 && sp.burn) { m.burn = T + BURN_TICKS * BURN_EVERY + 0.05; m.burnTick = T + BURN_EVERY; m.burnDmg = burnTickDmg(p.combat); m.burnBy = p.playerId; } // una sola por mob: la nueva reemplaza
-        // efectos especiales de los ítems Violeta de jefe (docs/ITEMS.md): solo en golpes básicos de PvE
+        // efectos especiales de los ítems Dorado de jefe (docs/ITEMS.md): solo en golpes básicos de PvE
         if (dmg > 0 && spell === 'ataque' && p.combat.fx?.length) {
             if (p.combat.fx.includes('quemadura') && Math.random() < FX_BURN_CHANCE) { m.burn = T + BURN_TICKS * BURN_EVERY + 0.05; m.burnTick = T + BURN_EVERY; m.burnDmg = burnTickDmg(p.combat); m.burnBy = p.playerId; }
             if (p.combat.fx.includes('aturdir') && Math.random() < FX_STUN_CHANCE && m.imm <= T && !this.bossImmune(m)) { m.par = T + FX_STUN_SECS; m.imm = T + FX_STUN_SECS + 8; m.moving = false; }

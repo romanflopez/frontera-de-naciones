@@ -73,7 +73,7 @@ export const ALL_BASES: Base[] = [...BASES, ...SHOP_BASES, ...UNIQUE_BASES];
 export const BASE_BY_NAME = new Map(ALL_BASES.map((b) => [b.name, b]));
 
 /** Calidades: índice 0..4 (docs/ITEMS.md; la tabla con extras y topes vive en uniques.ts). El nombre RARITY_NAMES se mantiene por el cliente. */
-export const RARITY_NAMES = ['Común', 'Verde', 'Azul', 'Dorado', 'Violeta'];
+export const RARITY_NAMES = ['Común', 'Verde', 'Azul', 'Violeta', 'Dorado'];
 
 // ---------- pociones ----------
 export const POTS = { hp: { name: 'Poción de vida', price: 25, key: 'Q', col: '#e0524a' }, mp: { name: 'Poción de maná', price: 30, key: 'E', col: '#4a8fe0' } };
@@ -140,7 +140,7 @@ export const SHOP_SERVER_RANGE = TALK_RANGE + 2;
 export const VALUE: Record<string, number> = {};
 for (const sh of Object.values(SHOPS)) for (const st of sh.stock) if (st.base && VALUE[st.base] == null) VALUE[st.base] = st.price;
 for (const u of UNIQUE_BASES) VALUE[u.name] = uniqueValue(u.uniq.tier, !!u.uniq.boss);
-export const SELL_PRICE = [4, 12, 30, 70, 150]; // oro por calidad (Común..Violeta), más un cuarto del valor de lista
+export const SELL_PRICE = [4, 12, 30, 70, 150]; // oro por calidad (Común..Dorado), más un cuarto del valor de lista
 export const sellPrice = (baseName: string, rarity: number): number => Math.round((SELL_PRICE[rarity] ?? 1) + (VALUE[baseName] ?? 0) * 0.25);
 
 // ---------- misiones y llaves ----------
