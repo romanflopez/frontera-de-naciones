@@ -2492,7 +2492,7 @@ $('wpClose').addEventListener('click', closeWp);
 
 // ---------- menú GM (F9 o /gm menu): solo abre si el server te reconoce como GM (FDN_GM); todo se resuelve con comandos /gm ----------
 const GM_TAG = '\u0001GMMENU';
-interface GmData { maps: { id: string; name: string; lvl: string; dungeon: boolean }[]; players: { name: string; map: string }[]; here: string; mobs: string[] }
+interface GmData { maps: { id: string; name: string; lvl: string; tier?: number; kind?: 'ciudad' | 'caza' | 'mazmorra' | 'sin_entrada'; dungeon: boolean }[]; players: { name: string; map: string }[]; here: string; mobs: string[] }
 let gmLast: GmData | null = null;
 const gmSend = (cmd: string) => net.send({ $case: 'chatMessageSendRequest', value: { message: '/gm ' + cmd } });
 function toggleGm() { const el = $('gmmenu'); if (!el.hidden) { el.hidden = true; return; } gmSend('menu'); }
@@ -2500,14 +2500,15 @@ function renderGm(d: GmData) {
     gmLast = d;
     const el = $('gmmenu'); el.hidden = false;
     const btn = (cmd: string, label: string) => `<button type="button" data-gm="${esc(cmd)}">${label}</button>`;
-    const mapRow = (x: GmData['maps'][number]) => `<button type="button" class="gmmap${x.id === d.here ? ' cur' : ''}" data-gm="ir ${esc(x.id)}"><span>${esc(x.name)}</span><small>${x.dungeon ? 'mazmorra · ' : ''}${x.lvl ? 'Nv ' + esc(x.lvl) : ''}</small></button>`;
+    const mapRow = (x: GmData['maps'][number]) => `<button type="button" class="gmmap${x.id === d.here ? ' cur' : ''}" data-gm="ir ${esc(x.id)}"><span>${esc(x.name)}</span><small>${x.tier ? 'T' + x.tier + ' · ' : ''}${x.lvl ? 'Nv ' + esc(x.lvl) : ''}</small></button>`;
+    const kind = (x: GmData['maps'][number]) => x.kind ?? (x.dungeon ? 'mazmorra' : 'caza');
+    const section = (title: string, k: string, empty = '') => { const rows = d.maps.filter((x) => kind(x) === k); return rows.length ? `<h3>${title}</h3>${rows.map(mapRow).join('')}` : empty; };
     el.innerHTML = `<h2><span>Menú GM</span><button type="button" id="gmClose" aria-label="Cerrar">×</button></h2>
-      <h3>Rápido</h3><div class="gmrow">${btn('curar', 'Curar')}${btn('dios', 'Modo dios')}${btn('llaves 20', 'Llaves ×20')}${btn('oro 10000', '+10.000 oro')}${btn('nivel 12', 'Nv 12')}${btn('nivel 30', 'Nv 30')}${btn('bis', 'Set BiS mago')}${btn('limpiar', 'Limpiar mobs')}</div>
+      <h3>Rápido</h3><div class="gmrow">${btn('curar', 'Curar')}${btn('dios', 'Modo dios')}${btn('llaves 20', 'Llaves ×20')}${btn('oro 10000', '+10.000 oro')}${btn('nivel 12', 'Nv 12')}${btn('nivel 30', 'Nv 30')}${btn('nivel 40', 'Nv 40')}${btn('bis', 'Set BiS mago')}${btn('limpiar', 'Limpiar mobs')}</div>
       <h3>Jugadores conectados</h3>${d.players.length ? d.players.map((p) => `<div class="gmrow"><span>${esc(p.name)} <small>${esc(p.map)}</small></span>${btn('traer ' + p.name, 'Traer acá')}${btn('ira ' + p.name, 'Ir con él')}</div>`).join('') : '<small>No hay nadie más conectado.</small>'}
       <div class="gmrow">${btn('menu', 'Actualizar')}</div>
       <h3>Invocar mob</h3><div class="gmrow"><select id="gmMob">${d.mobs.map((t) => `<option>${esc(t)}</option>`).join('')}</select><input id="gmLvl" type="number" min="1" max="60" placeholder="Nv"><input id="gmN" type="number" min="1" max="20" value="1"><button type="button" id="gmSummon">Invocar</button></div>
-      <h3>Mapas</h3>${d.maps.filter((x) => !x.dungeon).map(mapRow).join('')}
-      <h3>Mazmorras</h3>${d.maps.filter((x) => x.dungeon).map(mapRow).join('') || '<small>Todavía no hay.</small>'}`;
+      ${section('Ciudades', 'ciudad')}${section('Mapas de caza', 'caza')}${section('Mazmorras', 'mazmorra', '<h3>Mazmorras</h3><small>Todavía no hay.</small>')}${section('Sin entrada todavía', 'sin_entrada')}`;
 }
 $('gmmenu').addEventListener('click', (e) => {
     const t = e.target as HTMLElement, b = t.closest('button'); if (!b) return;

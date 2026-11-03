@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { ClientMessage, ServerMessage } from '@fdn/proto';
 import { DATA_DIR, loadSettings, type GameWorldConfig } from './config.ts';
-import { MAPS, MOB_TYPES, getMapDef } from '@fdn/world';
+import { MAPS, MOB_TYPES, factionHome, getMapDef, type MapDef } from '@fdn/world';
 import { loadPosition, resolveSaved, savePosition } from './persist.ts';
 import * as M from './messages.ts';
 import type { PersistedPlayer } from './player.ts';
@@ -267,6 +267,19 @@ wss.on('connection', (ws, req) => {
 // Por defecto solo es GM la cuenta 'rowena'. FDN_GM=nombre1,nombre2 → solo esos personajes; FDN_GM=1 → cualquier cuenta (server local de pruebas); FDN_GM= (vacío) → nadie.
 const GM_ENV = (process.env.FDN_GM ?? 'rowena').trim().toLowerCase();
 const isGm = (name: string) => GM_ENV === '1' || GM_ENV === 'all' || GM_ENV.split(',').map((x) => x.trim()).filter(Boolean).includes(name.toLowerCase());
+/**
+ * Mapas del menú GM: solo lo que hoy está en el juego (las dos ciudades, los mapas de caza y las mazmorras), en orden de tier y nivel.
+ * Afuera los interiores de las ciudades (se entra caminando), el mapa viejo y los de prueba; la arena sí, porque todavía no tiene otra entrada.
+ */
+function gmMaps() {
+    const cities = new Set(['solmar', 'vhar'].map((f) => factionHome(f)?.map));
+    const kindOf = (d: MapDef): 'ciudad' | 'caza' | 'mazmorra' | 'sin_entrada' | null =>
+        d.debugOnly ? (d.id === 'arena' ? 'sin_entrada' : null) : d.safe ? (cities.has(d.id) ? 'ciudad' : null) : d.temporary ? 'mazmorra' : 'caza';
+    return Object.values(MAPS).flatMap((d) => { const kind = kindOf(d); return kind ? [{ d, kind }] : []; })
+        .sort((a, b) => (a.d.tier ?? 0) - (b.d.tier ?? 0) || (a.d.lvl?.[0] ?? 0) - (b.d.lvl?.[0] ?? 0))
+        .map(({ d, kind }) => ({ id: d.id, name: d.name, lvl: d.lvl ? `${d.lvl[0]}-${d.lvl[1]}` : '', tier: d.tier ?? 0, kind, dungeon: kind === 'mazmorra' }));
+}
+
 const GM_HELP = [
     'Comandos GM: /gm mapas · /gm ir <mapa> [x y] · /gm pos [x y] · /gm nivel <n> · /gm oro <n> · /gm curar · /gm dios',
     '/gm mobs · /gm mob <tipo> [nivel] [cantidad] · /gm limpiar · /gm llaves [n] · /gm espada [crit] · /gm traer <jugador> · /gm ira <jugador> · /gm menu (o F9)',
@@ -295,7 +308,7 @@ function handleGm(s: Session, text: string, reply: (m: ServerMessage) => void): 
     const c = cmd.toLowerCase();
     if (c === 'ayuda' || c === 'help') { say(...GM_HELP); return; }
     if (c === 'mapas') {
-        say(...Object.values(MAPS).map((d) => `${d.id} — ${d.name} (${d.lvl ? `Nv ${d.lvl[0]}-${d.lvl[1]}` : 'sin nivel'}${d.temporary ? ', mazmorra' : ''})`));
+        say(...gmMaps().map((d) => `${d.id} — ${d.name} (${d.lvl ? `Nv ${d.lvl}` : 'sin nivel'}${d.dungeon ? ', mazmorra' : ''})`), 'Los interiores y los mapas de prueba no se listan, pero /gm ir los acepta igual.');
         return;
     }
     if (c === 'ir') {
@@ -310,7 +323,7 @@ function handleGm(s: Session, text: string, reply: (m: ServerMessage) => void): 
         return;
     }
     if (c === 'menu') {
-        const maps = Object.values(MAPS).map((d) => ({ id: d.id, name: d.name, lvl: d.lvl ? `${d.lvl[0]}-${d.lvl[1]}` : '', dungeon: !!d.temporary }));
+        const maps = gmMaps();
         const here = worldOf(s)?.mapId ?? '';
         const players = [...sessionsByNetworkId.values()].filter((x) => x.socket?.readyState === x.socket?.OPEN && x !== s).map((x) => ({ name: x.characterName, map: registry.get(x.worldId)?.mapId ?? '' }));
         reply(M.sendMessage(GM_MENU_TAG + JSON.stringify({ maps, players, here, mobs: MOB_TYPES })));
