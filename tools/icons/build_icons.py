@@ -45,7 +45,7 @@ def tint(im, hexcol, strength=0.75):
             px[x, y] = (int(nr * 255), int(ng * 255), int(nb * 255), pa)
     return im
 
-def item(pack, n, dst, size=96, fill=0.8, col=None, strength=0.75):
+def item(pack, n, dst, size=96, fill=0.95, col=None, strength=0.75):
     im = Image.open(src(pack, n)).convert('RGBA')
     bbox = im.getbbox(); im = im.crop(bbox) if bbox else im
     if col: im = tint(im, col, strength)

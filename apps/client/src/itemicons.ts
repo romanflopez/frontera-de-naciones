@@ -438,7 +438,8 @@ function png(path: string): HTMLImageElement | undefined {
 if (typeof Image !== 'undefined') { for (const l of LOOK_ART) png(`assets/items/looks/${l}.png`); for (const m of ['pocion_vida', 'pocion_mana', 'oro']) png(`assets/items/misc/${m}.png`); }
 /** Ruta del ícono de un ítem suelto (`assets/items/misc/<id>.png`): pociones, oro, llaves, materiales, pergaminos. */
 export const miscIconUrl = (id: string): string => `assets/items/misc/${id}.png`;
-const drawPng = (c: Ctx, im: HTMLImageElement) => { c.drawImage(im, 8, 8, 112, 112); };
+// El PNG ya viene con el objeto al 95 % del cuadro: se dibuja hasta el borde interior del marco para que llene el slot.
+const drawPng = (c: Ctx, im: HTMLImageElement) => { c.drawImage(im, 5, 5, 118, 118); };
 
 /** Ícono (data URL) del item. `look` es la pieza del paperdoll (shortsword, plate, mage_hood…); `slot` decide el símbolo; `set` y `piece` eligen el arte de pieza de set. */
 export function itemIcon(look: string | undefined, slot: string, rarCol: string, rarK: number, set?: string, piece?: string): string {
