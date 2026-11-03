@@ -302,6 +302,7 @@ function onServer(m: ServerPayload) {
         }
         case 'mobHitPlayer': onMobHitPlayer(m.value); break;
         case 'mobSpecialEvent': onMobSpecial(m.value); break;
+        case 'bossCast': case 'bossCastEnd': case 'bossTelegraph': case 'bossZone': case 'bossPhase': onBoss(m); break;
         case 'mobDied': onMobDied(m.value); break;
         case 'inventoryState': applyInventory(m.value); break;
         case 'groundItemSpawned': {
@@ -519,6 +520,63 @@ function onKillReward(v: { mobId: number; x: number; y: number; exp: number; gol
     // los avisos de misión llegan como econResult (quest_ready); la cadena vieja de 10 quedó jubilada
 }
 /** Habilidad distintiva del boss (el server decide cuándo y a quién pega): fase 0 = aviso y carga, fase 1 = el golpe en área. */
+// ---------- motor de jefes (docs/JEFES.md): el server avisa, acá solo se dibuja ----------
+const SCHOOL_COL: Record<string, string> = { fis: '#e8e0d0', fuego: '#ff7a3a', acido: '#9be04a', sombra: '#b48cff' };
+const bossCasts = new Map<number, { name: string; col: string; t0: number; dur: number; win: number; lock: boolean }>();
+const bossMarks: { x: number; y: number; r: number; t0: number; dur: number }[] = [];
+const bossZones = new Map<number, { x: number; y: number; r: number; until: number }>();
+const bossRage = new Set<number>();
+function onBoss(msg: { $case: string; value: unknown }) {
+    const T = now(), v = msg.value as Record<string, never>;
+    const m = mobMap.get(v.mobId as number);
+    switch (msg.$case) {
+        case 'bossCast': {
+            const c = v as unknown as { mobId: number; name: string; school: string; durationMs: number; windowFromMs: number; interruptible: boolean };
+            bossCasts.set(c.mobId, { name: c.name, col: SCHOOL_COL[c.school] ?? '#e8e0d0', t0: T, dur: c.durationMs / 1000, win: c.windowFromMs / 1000, lock: !c.interruptible });
+            if (m) float(m.x, m.y - 0.4, `${c.name}${c.interruptible ? '' : ' 🔒'}`, SCHOOL_COL[c.school] ?? '#fff', true);
+            break;
+        }
+        case 'bossCastEnd': {
+            const c = v as unknown as { mobId: number; result: number; by: string };
+            bossCasts.delete(c.mobId);
+            if (c.result === 1 && m) { float(m.x, m.y - 0.6, '¡Interrumpido!', '#ffd24a', true); log(`${c.by || 'Alguien'} cortó el casteo de ${m.name}.`); }
+            break;
+        }
+        case 'bossTelegraph': {
+            const t = v as unknown as { x: number; y: number; r: number; warnMs: number; name: string };
+            bossMarks.push({ x: t.x - 0.5, y: t.y - 0.5, r: t.r, t0: T, dur: t.warnMs / 1000 });
+            if (m) float(m.x, m.y - 0.4, `¡${t.name}!`, '#ff6a4a', true);
+            break;
+        }
+        case 'bossZone': { const z = v as unknown as { id: number; x: number; y: number; r: number; durationMs: number }; bossZones.set(z.id, { x: z.x - 0.5, y: z.y - 0.5, r: z.r, until: T + z.durationMs / 1000 }); break; }
+        case 'bossPhase': {
+            const ph = v as unknown as { mobId: number; event: string; text: string; enraged: boolean };
+            if (ph.enraged) bossRage.add(ph.mobId); else bossRage.delete(ph.mobId);
+            if (ph.event === 'reinicio') bossCasts.delete(ph.mobId);
+            if (ph.text) { log(ph.text, true); if (m) float(m.x, m.y - 0.8, ph.text, ph.enraged ? '#ff4a3a' : '#ffd24a', true); }
+            break;
+        }
+    }
+}
+/** Círculos de aviso y charcos de los jefes, en el piso. */
+function drawBossGround(T: number) {
+    const ell = (x: number, y: number, r: number, fill: string, a: number, stroke?: string) => { const p = iso(x, y), rx = r * TW * 0.707; ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = fill; ctx.beginPath(); ctx.ellipse(p.x, p.y, rx, rx / 2, 0, 0, Math.PI * 2); ctx.fill(); if (stroke) { ctx.globalAlpha = 0.85; ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); } ctx.restore(); };
+    for (const [id, z] of bossZones) { if (z.until <= T) { bossZones.delete(id); continue; } ell(z.x, z.y, z.r, '#7bc43a', 0.32, '#9be04a'); }
+    for (const k of bossMarks.slice()) {
+        const f = (T - k.t0) / k.dur; if (f > 1.15) { bossMarks.splice(bossMarks.indexOf(k), 1); continue; }
+        ell(k.x, k.y, k.r, '#ff3a2a', 0.12, '#ff6a4a'); ell(k.x, k.y, k.r * Math.min(1, f), '#ff3a2a', 0.28);
+    }
+}
+/** Barra de casteo con nombre bajo la barra de vida: el tramo dorado es la ventana del corte blando; con candado no se corta. */
+function drawBossCast(m: Mob, x: number, y: number, T: number) {
+    const c = bossCasts.get(m.id); if (!c) return;
+    const f = Math.min(1, (T - c.t0) / c.dur), w = 90, h = 7;
+    if (f >= 1.2) { bossCasts.delete(m.id); return; }
+    ctx.fillStyle = 'rgba(0,0,0,.8)'; ctx.fillRect(x - w / 2 - 1, y - 1, w + 2, h + 2);
+    if (!c.lock) { ctx.fillStyle = 'rgba(255,210,74,.35)'; ctx.fillRect(x - w / 2 + (w * c.win) / c.dur, y, w - (w * c.win) / c.dur, h); }
+    ctx.fillStyle = c.lock ? '#8a8a8a' : c.col; ctx.fillRect(x - w / 2, y, w * f, h);
+    nameTag(`${c.lock ? '🔒 ' : ''}${c.name}`, x, y + h + 11, c.lock ? '#cfcfcf' : c.col, 1, 11);
+}
 function onMobSpecial(v: { mobId: number; phase: number; x: number; y: number }) {
     const m = mobMap.get(v.mobId), sp = m?.boss?.special; if (!m || !sp) return;
     if (v.phase === 0) { m.busy = now() + 1.1; oneShot(m, 'special', 1.3); float(m.x, m.y - 0.4, `¡${sp.name}!`, sp.col, true); }
@@ -1580,6 +1638,7 @@ function render() {
     for (const q of WAYPOINTS) if (q.x >= minX - 3 && q.x <= maxX + 3 && q.y >= minY - 3 && q.y <= maxY + 3) drawPortalPad(q, T);
     for (const q of LINK_WPS) if (q.x >= minX - 3 && q.x <= maxX + 3 && q.y >= minY - 3 && q.y <= maxY + 3) drawPortalPad(q, T);
     for (const f of fx) if (f.k === 'click') { const p = iso(f.x, f.y); ctx.globalAlpha = 1 - f.t / 0.6; ctx.strokeStyle = '#d6a445'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(p.x, p.y, 10 + f.t * 30, (10 + f.t * 30) / 2, 0, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
+    drawBossGround(T);
     for (const sc of scorch.slice()) { const age = T - sc.t; if (age > 5) { scorch.splice(scorch.indexOf(sc), 1); continue; } const p = iso(sc.x, sc.y); ctx.globalAlpha = Math.min(1, (5 - age) / 2) * 0.55; const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, sc.r * TW * 0.45); g.addColorStop(0, '#120a05'); g.addColorStop(0.7, 'rgba(30,15,5,.6)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(p.x, p.y, sc.r * TW * 0.45, sc.r * TW * 0.225, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
     if (P.ready && mouse.x >= 0) {
         const s = SPELLS[P.ready.i], g = toGrid(mouse.x, mouse.y), tgt = s.aoe ? hover || g : hover;
@@ -1704,9 +1763,10 @@ function drawMob(m: Mob, T: number) {
             ctx.globalAlpha = 0.8; ctx.strokeStyle = sp.col; ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
         }
         const w = 70, y = p.y - m.head - 6; // boss: nombre dorado y barra grande siempre visibles
-        nameTag(m.name, p.x, y - 9, '#ffd24a', 1, 14);
+        nameTag(m.name, p.x, y - 9, bossRage.has(m.id) ? '#ff4a3a' : '#ffd24a', 1, 14);
         ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(p.x - w / 2 - 1, y - 1, w + 2, 8); ctx.fillStyle = '#8c6a1e'; ctx.fillRect(p.x - w / 2, y, w * Math.max(0, m.hp / m.hpMax), 6); ctx.fillStyle = '#e0a82e'; ctx.fillRect(p.x - w / 2, y, w * Math.max(0, m.hp / m.hpMax), 3);
-    } else if (m.hp < m.hpMax) { const w = 34; ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - w / 2 - 1, p.y - m.head - 5, w + 2, 5); ctx.fillStyle = '#c43e2b'; ctx.fillRect(p.x - w / 2, p.y - m.head - 4, w * Math.max(0, m.hp / m.hpMax), 3); }
+        drawBossCast(m, p.x, y + 10, T);
+    } else if (m.hp < m.hpMax || bossCasts.has(m.id)) { drawBossCast(m, p.x, p.y - m.head + 4, T); const w = 34; ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - w / 2 - 1, p.y - m.head - 5, w + 2, 5); ctx.fillStyle = '#c43e2b'; ctx.fillRect(p.x - w / 2, p.y - m.head - 4, w * Math.max(0, m.hp / m.hpMax), 3); }
 }
 function drawDrop(d: Drop, T: number) {
     const fl = d.loot, isGold = !!d.gold || fl?.itemId === 'gold';
@@ -2253,7 +2313,7 @@ function loadMap(def: MapDef): string {
     ({ tiles, blocked, safe, props, decals } = MAP);
     ZONES = MAP.zones; WAYPOINTS = MAP.waypoints ?? []; LINKS = def.links; LINK_WPS = linkWps(LINKS);
     // lo que era del mapa anterior: mobs, otros jugadores, suelo, efectos, estado de portales y diálogos
-    mobs.length = 0; mobMap.clear(); others.clear(); drops.length = 0; corpses.length = 0; projs.length = 0; scorch.length = 0; floats.length = 0; fx.length = 0;
+    mobs.length = 0; mobMap.clear(); others.clear(); drops.length = 0; corpses.length = 0; projs.length = 0; scorch.length = 0; floats.length = 0; fx.length = 0; bossCasts.clear(); bossMarks.length = 0; bossZones.clear(); bossRage.clear();
     portalAct.clear(); wpInside = ''; closeWp(); closeShop(); talkNpc = null; talkWpTarget = null;
     P.target = null; P.engage = false; P.pickup = null; P.queued = null; P.foe = null; P.path = []; P.step = null; hover = null; hoverDrop = null;
     cancelCast(); pveT = 0; // el server de este mapa todavía no sabe si estoy muerto ni mi nivel

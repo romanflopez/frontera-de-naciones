@@ -1,0 +1,132 @@
+/**
+ * Motor de jefes (docs/JEFES.md): las mecánicas de cada jefe como datos. El server las ejecuta (apps/server/src/bosses.ts) y el cliente
+ * solo dibuja lo que le avisan (barra de casteo, círculos en el piso, charcos, furia).
+ *
+ * El daño se escribe en múltiplos del golpe común del propio jefe (`dmgK`), así escala solo con el nivel del jefe y con la party.
+ */
+import type { MobType } from './mobs.ts';
+
+/** Escuela del casteo: ícono y color de la barra, y lo que bloquea un corte (la misma escuela no se puede volver a castear un rato). */
+export type BossSchool = 'fis' | 'fuego' | 'acido' | 'sombra';
+
+/** Lo que hace un casteo o un golpe al salir. `r` = radio alrededor del jefe (0 = solo el objetivo del casteo). */
+export interface BossEffect {
+    r: number;
+    /** Daño en múltiplos del golpe común del jefe. */
+    dmgK?: number;
+    /** Daño en fracción de la vida máxima de cada jugador (los golpes de sala que "sacan el 70 %"). Pasa por la defensa. */
+    pctHp?: number;
+    /** Segundos de aturdido. */
+    stun?: number;
+    /** Segundos de terror: el jugador no puede actuar (hoy es un aturdido con otro nombre). */
+    terror?: number;
+    /** Segundos de frenado. */
+    slow?: number;
+    /** Segundos de anti-cura (el veneno: −30 % de curación recibida). */
+    antiHeal?: number;
+    /** El lanzador se cura esta fracción de su vida máxima. */
+    heal?: number;
+}
+
+/** Casteo con barra. `window` = fracción final de la barra en la que entra un corte blando (por defecto 0,4, mínimo 0,8 s). */
+export interface BossCastDef {
+    kind: 'cast'; id: string; name: string; school: BossSchool;
+    castMs: number; every: number; first?: number;
+    window?: number;
+    /** No se puede cortar (candado). */
+    lock?: boolean;
+    /** A quién apunta un casteo de un objetivo (`effect.r` = 0): el que tanquea o uno al azar. */
+    target?: 'tank' | 'random';
+    effect: BossEffect;
+    /** Salida alternativa: si al terminar su objetivo está a más de `beyond` celdas, en vez del efecto hace esto (carga hasta él y lo golpea). */
+    alt?: { beyond: number; name: string; dmgK: number; slow?: number };
+}
+
+/** Aviso en el piso: círculo de radio `r` en el jefe, en el que tanquea o en un jugador al azar; pega a los `warnMs`. Puede dejar un charco. */
+export interface BossTelegraphDef {
+    kind: 'telegraph'; id: string; name: string; every: number; first?: number;
+    warnMs: number; at: 'self' | 'tank' | 'random'; r: number;
+    dmgK?: number; stun?: number;
+    pool?: { name: string; r: number; secs: number; dpsK: number };
+}
+
+/** Golpe fuerte al que tanquea, con aviso corto. Puede dejar sangrado que se apila. */
+export interface BossTankHitDef {
+    kind: 'tankHit'; id: string; name: string; every: number; first?: number;
+    warnMs: number; mult: number;
+    /** Sangrado: `ticks` pulsos de 1 s de `pct` de la vida máxima por pila, hasta `maxStacks` pilas. */
+    bleed?: { pct: number; ticks: number; maxStacks: number };
+}
+
+export type BossAbilityDef = BossCastDef | BossTelegraphDef | BossTankHitDef;
+
+/** Adds al cruzar un umbral de vida (una sola vez). `minParty`: solo si la corrida es de esa cantidad o más. `kit`: el add tiene sus propias mecánicas. */
+export interface BossAddsDef { atHp: number; text: string; spawn: { type: MobType; n: number; lvl?: number; minParty?: number; kit?: string; name?: string }[] }
+
+export interface BossKit {
+    abilities: BossAbilityDef[];
+    adds?: BossAddsDef[];
+    /** Furia al bajar de `atHp`: daño ×`dmg` y casteos ×`castSpeed` de largo. */
+    enrage?: { atHp: number; dmg: number; castSpeed: number };
+    /** Furia final por tiempo: a los `secs` de pelea, daño ×`dmg`. */
+    hardEnrage?: { secs: number; dmg: number };
+    /** Respiro mínimo entre dos mecánicas (s): dos fuertes nunca caen juntas. Por defecto 4. */
+    gap?: number;
+}
+
+/** Bloqueo de escuela después de un corte (s) y tiempo sin castear (s): la Antimagia de Dreadmyst. */
+export const BOSS_SCHOOL_LOCK = 4, BOSS_CUT_PAUSE = 1;
+export const BOSS_WINDOW_DEFAULT = 0.4, BOSS_WINDOW_MIN_MS = 800;
+export const BOSS_GAP_DEFAULT = 4;
+
+/**
+ * Cortes (docs/JEFES.md §2): un corte duro (todo lo que aturde, congela o provoca) corta en cualquier momento; uno blando, solo si pega en la
+ * ventana del final. Los jefes con kit son inmunes al aturdir: el control corta el casteo pero no los deja aturdidos.
+ */
+export const HARD_INTERRUPTS = new Set(['paralisis', 'nova', 'escudo', 'aturdir', 'carga', 'reprender']);
+export const SOFT_INTERRUPTS = new Set(['castigo', 'juicio', 'esquirla']);
+
+/** Inicio de la ventana de un casteo (ms desde que empieza). */
+export function castWindowFrom(c: Pick<BossCastDef, 'castMs' | 'window'>, castMs = c.castMs): number {
+    const w = Math.max(BOSS_WINDOW_MIN_MS, castMs * (c.window ?? BOSS_WINDOW_DEFAULT));
+    return Math.max(0, Math.round(castMs - Math.min(castMs, w)));
+}
+
+/** Mecánicas de los adds lanzadores. */
+export const ADD_KITS: Record<string, BossKit> = {
+    // chamán del jefe goblin (D1, en dúo o más): una bola de fuego a uno al azar, que se corta
+    chaman: { gap: 2, abilities: [{ kind: 'cast', id: 'fogonazo', name: 'Fogonazo', school: 'fuego', castMs: 2000, every: 8, first: 3, target: 'random', effect: { r: 0, dmgK: 2 } }] },
+    // obrera escupidora de la Reina (D2, al 30 %): el Lord Zargan en chico, anti-cura a uno al azar
+    escupidora: { gap: 2, abilities: [{ kind: 'cast', id: 'saliva', name: 'Saliva ácida', school: 'acido', castMs: 1800, every: 9, first: 2, target: 'random', effect: { r: 0, dmgK: 0.5, antiHeal: 8 } }] },
+};
+
+/** Jefes con el motor nuevo. Los que no están acá siguen con su `special` de siempre. */
+export const BOSS_KITS: Partial<Record<MobType, BossKit>> = {
+    // D1, solo o dúo: ningún corte es obligatorio (alejarse del Grito y esquivar el Pisotón alcanza); cortar es más rápido y seguro
+    goblin_jefe: {
+        abilities: [
+            { kind: 'telegraph', id: 'pisoton', name: 'Pisotón', every: 10, first: 5, warnMs: 1300, at: 'self', r: 3, dmgK: 0.8, stun: 1 },
+            {
+                kind: 'cast', id: 'grito', name: 'Grito de terror', school: 'sombra', castMs: 2000, every: 15, first: 9,
+                effect: { r: 6, dmgK: 0.3, terror: 3 },
+                alt: { beyond: 4, name: 'Carga y desjarrete', dmgK: 1.2, slow: 4 }, // el Minotauro de Kandorys: si te alejás, te carga
+            },
+        ],
+        adds: [{ atHp: 0.5, text: '¡A mí, muchachos!', spawn: [{ type: 'goblin', n: 2, lvl: 5 }, { type: 'hobgoblin', n: 1, lvl: 5, minParty: 2, kit: 'chaman', name: 'Chamán goblin' }] }],
+        enrage: { atHp: 0.25, dmg: 1.5, castSpeed: 0.7 },
+    },
+    // D2, trío: pide un corte cada ~12 s (la Lluvia); alcanza rotando Cadenas, Escudo vengador, Martillo, Reprender o Castigo en la ventana
+    antlion_reina: {
+        abilities: [
+            { kind: 'telegraph', id: 'chorro', name: 'Chorro de ácido', every: 9, first: 4, warnMs: 1300, at: 'random', r: 2.5, dmgK: 1, pool: { name: 'Charco de ácido', r: 2.5, secs: 6, dpsK: 0.3 } },
+            { kind: 'cast', id: 'lluvia', name: 'Lluvia de ácido', school: 'acido', castMs: 2500, every: 12, first: 7, effect: { r: 14, pctHp: 0.7 } },
+            { kind: 'tankHit', id: 'mordida', name: 'Mordida corrosiva', every: 11, first: 10, warnMs: 800, mult: 3, bleed: { pct: 0.03, ticks: 5, maxStacks: 3 } },
+        ],
+        adds: [
+            { atHp: 0.6, text: 'La Reina llama a sus crías.', spawn: [{ type: 'antlion_small', n: 3, lvl: 9 }] },
+            { atHp: 0.3, text: 'La Reina llama a sus crías.', spawn: [{ type: 'antlion_small', n: 2, lvl: 9 }, { type: 'fire_ant', n: 1, lvl: 9, kit: 'escupidora', name: 'Obrera escupidora' }] },
+        ],
+        enrage: { atHp: 0.25, dmg: 1.5, castSpeed: 0.7 },
+        hardEnrage: { secs: 300, dmg: 3 },
+    },
+};

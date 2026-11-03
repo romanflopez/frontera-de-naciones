@@ -92,6 +92,7 @@ export class GameWorld {
                 heal: (p, n) => this.healPlayer(p, n), // robo de vida, Juicio y Castigo
                 refundMp: (p, n) => this.refundMp(p, n), // Castigo
                 poison: (p, secs) => this.poisonPlayer(p, secs), // mobs tóxicos
+                slow: (p, secs) => { if (applySlow(p.status, Date.now(), secs * 1000) > 0) this.announceStatus(p); }, // jefes (Carga y desjarrete)
                 mobDied: (info) => { if (!info.gm) this.dropLoot(info.type, info.def.name, info.def.lvl, info.x, info.y); },
                 reward: (p, info) => {
                     if (!this.econ) return;

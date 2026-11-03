@@ -571,6 +571,13 @@ export interface ServerMessage {
     | //
     /** Canal y recarga de una habilidad común (Segundo aliento) o del bloqueo de pociones (K6). Rango propio de tags desde 1000. */
     { $case: "abilityState"; value: AbilityState }
+    | //
+    /** Motor de jefes (docs/JEFES.md). Rango propio de tags desde 1100. */
+    { $case: "bossCast"; value: BossCast }
+    | { $case: "bossCastEnd"; value: BossCastEnd }
+    | { $case: "bossTelegraph"; value: BossTelegraph }
+    | { $case: "bossZone"; value: BossZone }
+    | { $case: "bossPhase"; value: BossPhase }
     | undefined;
 }
 
@@ -1846,6 +1853,57 @@ export interface RecallState {
   remainingMs: number;
   cooldownMs: number;
   reason: string;
+}
+
+/** Un jefe (o un add lanzador) empieza a castear: barra con nombre. Se corta con un corte duro en cualquier momento, o con uno blando desde `window_from_ms`. */
+export interface BossCast {
+  mobId: number;
+  name: string;
+  /** Escuela (fis, fuego, acido, sombra): ícono y color de la barra. */
+  school: string;
+  durationMs: number;
+  /** Desde cuándo (ms desde el inicio) entra un corte blando: el tramo dorado de la barra. */
+  windowFromMs: number;
+  /** false = candado: no se corta, hay que defenderse o moverse. */
+  interruptible: boolean;
+}
+
+/** Terminó un casteo. result: 0 = salió, 1 = lo cortaron ("¡Interrumpido!"), 2 = se canceló (el jefe volvió a su lugar). */
+export interface BossCastEnd {
+  mobId: number;
+  result: number;
+  /** Nombre de quien lo cortó (vacío si no lo cortaron). */
+  by: string;
+}
+
+/** Aviso en el piso: un círculo de radio `r` en (x, y) que pega a los `warn_ms`. */
+export interface BossTelegraph {
+  mobId: number;
+  name: string;
+  x: number;
+  y: number;
+  r: number;
+  warnMs: number;
+}
+
+/** Charco que dura: daña cada segundo a quien esté adentro durante `duration_ms`. */
+export interface BossZone {
+  id: number;
+  mobId: number;
+  name: string;
+  x: number;
+  y: number;
+  r: number;
+  durationMs: number;
+}
+
+/** Cambio de fase del jefe: adds, furia (borde rojo) o furia final por tiempo. */
+export interface BossPhase {
+  mobId: number;
+  /** Qué pasó: "adds", "furia", "furia_final", "reinicio". */
+  event: string;
+  text: string;
+  enraged: boolean;
 }
 
 function createBaseClientMessage(): ClientMessage {
@@ -7076,6 +7134,21 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "abilityState":
         AbilityState.encode(message.payload.value, writer.uint32(8002).fork()).join();
         break;
+      case "bossCast":
+        BossCast.encode(message.payload.value, writer.uint32(8802).fork()).join();
+        break;
+      case "bossCastEnd":
+        BossCastEnd.encode(message.payload.value, writer.uint32(8810).fork()).join();
+        break;
+      case "bossTelegraph":
+        BossTelegraph.encode(message.payload.value, writer.uint32(8818).fork()).join();
+        break;
+      case "bossZone":
+        BossZone.encode(message.payload.value, writer.uint32(8826).fork()).join();
+        break;
+      case "bossPhase":
+        BossPhase.encode(message.payload.value, writer.uint32(8834).fork()).join();
+        break;
     }
     return writer;
   },
@@ -7951,6 +8024,46 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "abilityState", value: AbilityState.decode(reader, reader.uint32()) };
             continue;
           }
+          case 1100: {
+            if (tag !== 8802) {
+              break;
+            }
+
+            message.payload = { $case: "bossCast", value: BossCast.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 1101: {
+            if (tag !== 8810) {
+              break;
+            }
+
+            message.payload = { $case: "bossCastEnd", value: BossCastEnd.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 1102: {
+            if (tag !== 8818) {
+              break;
+            }
+
+            message.payload = { $case: "bossTelegraph", value: BossTelegraph.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 1103: {
+            if (tag !== 8826) {
+              break;
+            }
+
+            message.payload = { $case: "bossZone", value: BossZone.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 1104: {
+            if (tag !== 8834) {
+              break;
+            }
+
+            message.payload = { $case: "bossPhase", value: BossPhase.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -8632,6 +8745,36 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "abilityState": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "abilityState", value: AbilityState.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "bossCast": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "bossCast", value: BossCast.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "bossCastEnd": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "bossCastEnd", value: BossCastEnd.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "bossTelegraph": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "bossTelegraph", value: BossTelegraph.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "bossZone": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "bossZone", value: BossZone.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "bossPhase": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "bossPhase", value: BossPhase.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -23122,6 +23265,533 @@ export const RecallState: MessageFns<RecallState> = {
     message.remainingMs = object.remainingMs ?? 0;
     message.cooldownMs = object.cooldownMs ?? 0;
     message.reason = object.reason ?? "";
+    return message;
+  },
+};
+
+function createBaseBossCast(): BossCast {
+  return { mobId: 0, name: "", school: "", durationMs: 0, windowFromMs: 0, interruptible: false };
+}
+
+export const BossCast: MessageFns<BossCast> = {
+  encode(message: BossCast, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mobId !== 0) {
+      writer.uint32(8).int32(message.mobId);
+    }
+    if (message.name !== "") {
+      writer.uint32(18).string(message.name);
+    }
+    if (message.school !== "") {
+      writer.uint32(26).string(message.school);
+    }
+    if (message.durationMs !== 0) {
+      writer.uint32(32).int32(message.durationMs);
+    }
+    if (message.windowFromMs !== 0) {
+      writer.uint32(40).int32(message.windowFromMs);
+    }
+    if (message.interruptible !== false) {
+      writer.uint32(48).bool(message.interruptible);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BossCast {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBossCast();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.mobId = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.name = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.school = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.durationMs = reader.int32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.windowFromMs = reader.int32();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.interruptible = reader.bool();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<BossCast>, I>>(base?: I): BossCast {
+    return BossCast.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<BossCast>, I>>(object: I): BossCast {
+    const message = createBaseBossCast();
+    message.mobId = object.mobId ?? 0;
+    message.name = object.name ?? "";
+    message.school = object.school ?? "";
+    message.durationMs = object.durationMs ?? 0;
+    message.windowFromMs = object.windowFromMs ?? 0;
+    message.interruptible = object.interruptible ?? false;
+    return message;
+  },
+};
+
+function createBaseBossCastEnd(): BossCastEnd {
+  return { mobId: 0, result: 0, by: "" };
+}
+
+export const BossCastEnd: MessageFns<BossCastEnd> = {
+  encode(message: BossCastEnd, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mobId !== 0) {
+      writer.uint32(8).int32(message.mobId);
+    }
+    if (message.result !== 0) {
+      writer.uint32(16).int32(message.result);
+    }
+    if (message.by !== "") {
+      writer.uint32(26).string(message.by);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BossCastEnd {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBossCastEnd();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.mobId = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.result = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.by = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<BossCastEnd>, I>>(base?: I): BossCastEnd {
+    return BossCastEnd.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<BossCastEnd>, I>>(object: I): BossCastEnd {
+    const message = createBaseBossCastEnd();
+    message.mobId = object.mobId ?? 0;
+    message.result = object.result ?? 0;
+    message.by = object.by ?? "";
+    return message;
+  },
+};
+
+function createBaseBossTelegraph(): BossTelegraph {
+  return { mobId: 0, name: "", x: 0, y: 0, r: 0, warnMs: 0 };
+}
+
+export const BossTelegraph: MessageFns<BossTelegraph> = {
+  encode(message: BossTelegraph, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mobId !== 0) {
+      writer.uint32(8).int32(message.mobId);
+    }
+    if (message.name !== "") {
+      writer.uint32(18).string(message.name);
+    }
+    if (message.x !== 0) {
+      writer.uint32(29).float(message.x);
+    }
+    if (message.y !== 0) {
+      writer.uint32(37).float(message.y);
+    }
+    if (message.r !== 0) {
+      writer.uint32(45).float(message.r);
+    }
+    if (message.warnMs !== 0) {
+      writer.uint32(48).int32(message.warnMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BossTelegraph {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBossTelegraph();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.mobId = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.name = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 29) {
+              break;
+            }
+
+            message.x = reader.float();
+            continue;
+          }
+          case 4: {
+            if (tag !== 37) {
+              break;
+            }
+
+            message.y = reader.float();
+            continue;
+          }
+          case 5: {
+            if (tag !== 45) {
+              break;
+            }
+
+            message.r = reader.float();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.warnMs = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<BossTelegraph>, I>>(base?: I): BossTelegraph {
+    return BossTelegraph.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<BossTelegraph>, I>>(object: I): BossTelegraph {
+    const message = createBaseBossTelegraph();
+    message.mobId = object.mobId ?? 0;
+    message.name = object.name ?? "";
+    message.x = object.x ?? 0;
+    message.y = object.y ?? 0;
+    message.r = object.r ?? 0;
+    message.warnMs = object.warnMs ?? 0;
+    return message;
+  },
+};
+
+function createBaseBossZone(): BossZone {
+  return { id: 0, mobId: 0, name: "", x: 0, y: 0, r: 0, durationMs: 0 };
+}
+
+export const BossZone: MessageFns<BossZone> = {
+  encode(message: BossZone, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== 0) {
+      writer.uint32(8).int32(message.id);
+    }
+    if (message.mobId !== 0) {
+      writer.uint32(16).int32(message.mobId);
+    }
+    if (message.name !== "") {
+      writer.uint32(26).string(message.name);
+    }
+    if (message.x !== 0) {
+      writer.uint32(37).float(message.x);
+    }
+    if (message.y !== 0) {
+      writer.uint32(45).float(message.y);
+    }
+    if (message.r !== 0) {
+      writer.uint32(53).float(message.r);
+    }
+    if (message.durationMs !== 0) {
+      writer.uint32(56).int32(message.durationMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BossZone {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBossZone();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.id = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.mobId = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.name = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 37) {
+              break;
+            }
+
+            message.x = reader.float();
+            continue;
+          }
+          case 5: {
+            if (tag !== 45) {
+              break;
+            }
+
+            message.y = reader.float();
+            continue;
+          }
+          case 6: {
+            if (tag !== 53) {
+              break;
+            }
+
+            message.r = reader.float();
+            continue;
+          }
+          case 7: {
+            if (tag !== 56) {
+              break;
+            }
+
+            message.durationMs = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<BossZone>, I>>(base?: I): BossZone {
+    return BossZone.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<BossZone>, I>>(object: I): BossZone {
+    const message = createBaseBossZone();
+    message.id = object.id ?? 0;
+    message.mobId = object.mobId ?? 0;
+    message.name = object.name ?? "";
+    message.x = object.x ?? 0;
+    message.y = object.y ?? 0;
+    message.r = object.r ?? 0;
+    message.durationMs = object.durationMs ?? 0;
+    return message;
+  },
+};
+
+function createBaseBossPhase(): BossPhase {
+  return { mobId: 0, event: "", text: "", enraged: false };
+}
+
+export const BossPhase: MessageFns<BossPhase> = {
+  encode(message: BossPhase, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mobId !== 0) {
+      writer.uint32(8).int32(message.mobId);
+    }
+    if (message.event !== "") {
+      writer.uint32(18).string(message.event);
+    }
+    if (message.text !== "") {
+      writer.uint32(26).string(message.text);
+    }
+    if (message.enraged !== false) {
+      writer.uint32(32).bool(message.enraged);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BossPhase {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBossPhase();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.mobId = reader.int32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.event = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.text = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.enraged = reader.bool();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<BossPhase>, I>>(base?: I): BossPhase {
+    return BossPhase.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<BossPhase>, I>>(object: I): BossPhase {
+    const message = createBaseBossPhase();
+    message.mobId = object.mobId ?? 0;
+    message.event = object.event ?? "";
+    message.text = object.text ?? "";
+    message.enraged = object.enraged ?? false;
     return message;
   },
 };
