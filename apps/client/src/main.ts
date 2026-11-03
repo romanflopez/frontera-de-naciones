@@ -7,6 +7,7 @@
  */
 import { CombatTextManager, type CombatTextEvent } from './systems/CombatTextManager';
 import './ui/craftpix.css';
+import './ui/loading-craftpix.css';
 import { mountChat } from './ui/mountChat';
 import { mountCastBar } from './ui/CastBar';
 import { useCastStore } from './ui/castStore';
@@ -2911,26 +2912,39 @@ function enterWorld(name: string) {
     log('Tocá un mob para atacarlo. Apretá un hechizo (1–4), esperá que cargue y hacé clic en el objetivo. Enter para chatear.');
 }
 
+/** Pantalla de carga del arranque (ui/loading-craftpix.css): `k` = progreso 0..1; con `err` muestra el mensaje y frena la barra. */
+function setLoading(k: number, err?: string) {
+    const el = $('loading'); ($('ldFill') as HTMLElement).style.width = `${Math.round(Math.max(0, Math.min(1, k)) * 100)}%`;
+    if (err) { el.classList.add('err'); $('ldText').textContent = err; }
+}
 async function boot() {
+    // progreso real: meta.json + cada atlas de tiles + cada hoja de sprites + el atlas de efectos
+    let ldDone = 0, ldTotal = 2; const ldTick = () => setLoading(++ldDone / ldTotal);
+    const loadT = (src: string) => load(src).then((im) => { ldTick(); return im; }, (e) => { ldTick(); throw e; });
     try {
-        const metaTxt = await (await fetch('assets/meta.json', { cache: 'no-cache' })).text();
+        const metaTxt = await (await fetch('assets/meta.json', { cache: 'no-cache' })).text(); ldTick();
         { let h = 5381; for (let i = 0; i < metaTxt.length; i++) h = ((h * 33) ^ metaTxt.charCodeAt(i)) >>> 0; ASSET_V = h.toString(36); }
         const meta = JSON.parse(metaTxt);
         WORLD = meta.world; delete meta.world;
         BUILD = meta.buildings ?? {}; delete meta.buildings;
         // atlas de tiles: los de siempre y los de los mapas importados de Flare (flare_<hoja>, tools/src/flare/mapatlas.ts)
-        for (const k of ['dungeon', 'terrain', 'town', ...Object.keys(meta).filter((g) => g.startsWith('flare_'))]) {
-            const m = meta[k]; delete meta[k]; if (!m) continue;
-            try { const im = await load(`assets/${k}.webp`); for (const [id, p] of Object.entries(m.pos as Record<string, number[]>)) EXT[Number(id)] = { im, p }; } catch { /* sin ese atlas se ve el mapa sin esas piezas */ }
+        const atlases = ['dungeon', 'terrain', 'town', ...Object.keys(meta).filter((g) => g.startsWith('flare_'))];
+        ldTotal = 2 + atlases.length + 23 + 1; // 23 = hojas de sprites de abajo; +1 el atlas de efectos
+        for (const k of atlases) {
+            const m = meta[k]; delete meta[k]; if (!m) { ldTick(); continue; }
+            try { const im = await loadT(`assets/${k}.webp`); for (const [id, p] of Object.entries(m.pos as Record<string, number[]>)) EXT[Number(id)] = { im, p }; } catch { /* sin ese atlas se ve el mapa sin esas piezas */ }
         }
         PAPER = meta.paper; delete meta.paper; SPR.hero = SPR.hero_other = PAPER as unknown as SpriteMeta;
         Object.assign(SPR, meta);
         const names = ['world', 'goblin', 'zombie', 'skeleton', 'barbaro', 'goblin_elite', 'antlion', 'skeleton_mage', 'fire_ant', 'wyvern', 'minotaur', 'arana', 'golem', 'demonio', 'hobgoblin', 'hobgoblin_archer', 'skeleton_archer', 'zombie_dark', 'cursed_grave', 'ice_ant', 'antlion_small', 'wyvern_fire', 'wyvern_ice'];
-        const imgs = await Promise.all(names.map((n) => load(`assets/${n}.webp`)));
+        ldTotal = 2 + atlases.length + names.length + 1;
+        const imgs = await Promise.all(names.map((n) => loadT(`assets/${n}.webp`)));
         names.forEach((n, i) => (IMG[n] = imgs[i]));
-    } catch { $('loading').textContent = 'No se pudieron cargar los gráficos. Recargá la página.'; return; }
-    $('loading').hidden = true;
+    } catch { setLoading(1, 'No se pudieron cargar los gráficos. Recargá la página.'); return; }
     try { FXM = await (await fetch('assets/fx.json')).json(); IMG.fx = await load('assets/fx.webp'); } catch { FXM = null; }
+    setLoading(1);
+    await new Promise((r) => setTimeout(r, 250)); // que se vea la barra llena antes de pasar al login
+    $('loading').hidden = true;
     // Atlas privado (opcional, mismo tamaño de celda): si no está, efxLocal usa FX_FALLBACK
     if (FXM) try { const pm = await (await fetch('assets/fx_priv.json')).json() as NonNullable<typeof FXM>; IMG.fxp = await load('assets/fx_priv.webp'); for (const [n, r] of Object.entries(pm.rows)) FXM.rows[n] = { ...r, img: 'fxp' }; } catch { /* sin atlas privado */ }
     loadBuildingImages();
