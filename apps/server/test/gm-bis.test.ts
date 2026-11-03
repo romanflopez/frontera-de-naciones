@@ -1,4 +1,4 @@
-/** /gm bis: el set completo del mago (mejores ítems existentes, tiradas máximas y mejora al tope). */
+/** /gm bis: el set completo del mago en los 8 slots (mejores ítems existentes, Violeta, tiradas máximas y mejora al tope). */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { UP_MAX } from '@fdn/world';
@@ -22,16 +22,18 @@ function join(cls: string) {
     return { w, p: w.playerOf('s-1')! };
 }
 
-test('/gm bis: el mago queda con el mejor set, mejora al tope, y sube su Magia, maná y resistencia', () => {
+test('/gm bis: el mago queda con el mejor set en los 8 slots, mejora al tope, y sube su Magia, maná y resistencia', () => {
     const { w, p } = join('mago');
     const before = { mag: p.combat.mag, mp: p.combat.maxMp, rm: p.combat.rm };
     const out = w.gmCommand('s-1', 'bis', []);
-    assert.match(out[0], /Báculo del camposanto/);
+    assert.match(out[0], /Cetro del suplicio/);
     const eq = p.econ!.eq;
-    assert.deepEqual([eq.arma?.n, eq.armadura?.n, eq.cabeza?.n, eq.anillo?.n], ['Báculo del camposanto', 'Mortaja bordada', 'Capuchón de duelo', 'Anillo opaco']);
-    for (const s of ['arma', 'armadura', 'cabeza', 'anillo'] as const) assert.equal(eq[s]!.up, UP_MAX, s);
-    assert.ok(p.combat.mag > before.mag + 40, `Magia ${before.mag} -> ${p.combat.mag}`);
-    assert.ok(p.combat.maxMp > before.mp + 50 && p.combat.rm > before.rm, 'más maná y RM');
+    assert.deepEqual([eq.arma?.n, eq.armadura?.n, eq.cabeza?.n, eq.guantes?.n, eq.botas?.n, eq.amuleto?.n, eq.anillo?.n, eq.anillo2?.n],
+        ['Cetro del suplicio', 'Túnica del Mago mayor', 'Capucha del suplicio', 'Guantes del suplicio', 'Botas del suplicio', 'Amuleto del abismo', 'Anillo opaco', 'Anillo opaco']);
+    for (const s of ['arma', 'armadura', 'cabeza', 'guantes', 'botas', 'amuleto', 'anillo', 'anillo2'] as const) { assert.equal(eq[s]!.up, UP_MAX, s); assert.equal(eq[s]!.r, 4, `${s} Violeta`); }
+    assert.ok(p.combat.mag > before.mag + 100, `Magia ${before.mag} -> ${p.combat.mag}`);
+    assert.ok(p.combat.maxMp > before.mp + 100 && p.combat.rm > before.rm, 'más maná y RM');
+    assert.deepEqual(p.combat.fx, ['quemadura'], 'el Cetro del suplicio trae su efecto (Violeta)');
     assert.equal(p.mp, p.combat.maxMp, 'maná al máximo');
 });
 
@@ -39,7 +41,7 @@ test('/gm bis: lo que llevaba puesto vuelve a la bolsa y se puede repetir sin du
     const { w, p } = join('mago');
     const bag0 = p.econ!.bag.length;
     w.gmCommand('s-1', 'bis', []); assert.equal(p.econ!.bag.length, bag0 + 2, 'vuelven el báculo y la túnica iniciales');
-    w.gmCommand('s-1', 'bis', []); assert.equal(Object.values(p.econ!.eq).filter(Boolean).length, 4);
+    w.gmCommand('s-1', 'bis', []); assert.equal(Object.values(p.econ!.eq).filter(Boolean).length, 8);
 });
 
 test('/gm bis: por ahora solo existe para el mago', () => {

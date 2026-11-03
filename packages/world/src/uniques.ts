@@ -9,31 +9,66 @@ import type { AttrId, Base, Slot } from './economy';
 import type { MobType } from './mobs';
 
 /** Bandas con ítems únicos ya hechos. */
-export const UNIQUE_TIERS_READY = 6;
-/** Tier de ítem de un mob según su nivel. */
-/** Banda de ítems de un mob de nivel `lvl`: la del tier de su nivel (docs/TIERS_DE_ZONA.md), con tope 6. */
+export const UNIQUE_TIERS_READY = 7;
+/** Banda de ítems de un mob de nivel `lvl`: la del tier de su nivel (docs/TIERS_DE_ZONA.md), las 7 bandas tienen catálogo propio. */
 export const tierOfLevel = (lvl: number): number => itemBandOfLevel(lvl);
 /** Variación de los atributos fijos de un único al caer. */
 export const UNIQUE_VARIATION = 0.1;
 
-type Arch = 'arma1' | 'arma2' | 'armaM' | 'armPes' | 'armMed' | 'armMag' | 'cabF' | 'cabM' | 'anilloO' | 'anilloD';
-interface Def { tier: number; arch: Arch; name: string; look?: string; off?: string; boss?: MobType; mult?: number }
+/**
+ * Nivel de ítem (ilvl) de una banda: de él sale el poder base (`stats`) y la escala de los extras. Las 7 bandas son de 5 niveles
+ * (T7 cubre el 31-40 pero sus ítems son ilvl 35: el ilvl 40 solo lo sueltan los jefes del tramo final, docs/ITEMS.md).
+ */
+export const bandIlvl = (tier: number): number => 5 * Math.min(7, Math.max(1, Math.round(tier)));
+
+type Arch = 'arma1' | 'arma2' | 'armaM' | 'armPes' | 'armMed' | 'armMag' | 'cabF' | 'cabM' | 'guanF' | 'guanM' | 'botaF' | 'botaM' | 'amuO' | 'amuD' | 'anilloO' | 'anilloD';
+/** Efectos especiales de los ítems de jefe: solo están activos en la calidad Violeta (r = 4). Los aplica el server (mobs.ts). */
+export type FxId = 'quemadura' | 'aturdir' | 'vampirismo';
+export const FX_INFO: Record<FxId, { name: string; text: string }> = {
+    quemadura: { name: 'Quemadura', text: 'Tus golpes básicos tienen 15 % de prender fuego al enemigo.' },
+    aturdir: { name: 'Estocada aturdidora', text: 'Tus golpes básicos tienen 10 % de aturdir al enemigo 0,8 s.' },
+    vampirismo: { name: 'Vampirismo', text: 'Al matar a un enemigo recuperás 3 % de tu vida máxima.' },
+};
+interface Def { tier: number; arch: Arch; name: string; look?: string; off?: string; boss?: MobType; mult?: number; ilvl?: number; attrs?: [AttrId, AttrId]; fx?: FxId; set?: string }
 
 /** Punto medio de cada atributo (ver ATTR_RANGES): los fijos de un único son este valor por un factor de la banda. */
 const MID: Record<AttrId, number> = { crit: 4, aspd: 8, leech: 4, hp: 16, mp: 13, mag: 4, exp: 6, poison: 11, rpar: 10, df: 6, rm: 8 };
-/** Atributos de cada arquetipo (dos por ítem). */
-const ATTRS: Record<Arch, [AttrId, AttrId]> = {
-    arma1: ['aspd', 'crit'], arma2: ['crit', 'leech'], armaM: ['mag', 'mp'],
-    armPes: ['hp', 'df'], armMed: ['hp', 'aspd'], armMag: ['mp', 'rm'],
-    cabF: ['df', 'hp'], cabM: ['mp', 'mag'], anilloO: ['crit', 'leech'], anilloD: ['hp', 'rm'],
+/**
+ * Pares de atributos fijos de cada arquetipo. Cada ítem toma uno según su banda, así que dos armas de una mano de bandas distintas
+ * NO traen siempre lo mismo (identidad por ítem): aspd+crit, crit+robo, aspd+veneno, robo+aspd…
+ */
+const ARCHS: Arch[] = ['arma1', 'arma2', 'armaM', 'armPes', 'armMed', 'armMag', 'cabF', 'cabM', 'guanF', 'guanM', 'botaF', 'botaM', 'amuO', 'amuD', 'anilloO', 'anilloD'];
+const ATTR_VARIANTS: Record<Arch, [AttrId, AttrId][]> = {
+    arma1: [['aspd', 'crit'], ['crit', 'leech'], ['aspd', 'poison'], ['leech', 'aspd']],
+    arma2: [['crit', 'leech'], ['leech', 'hp'], ['crit', 'aspd'], ['poison', 'leech']],
+    armaM: [['mag', 'mp'], ['mag', 'crit'], ['mp', 'rm'], ['mag', 'leech']],
+    armPes: [['hp', 'df'], ['df', 'rpar'], ['hp', 'rm'], ['df', 'leech']],
+    armMed: [['hp', 'aspd'], ['hp', 'crit'], ['aspd', 'df'], ['hp', 'leech']],
+    armMag: [['mp', 'rm'], ['mag', 'rm'], ['mp', 'hp'], ['rm', 'rpar']],
+    cabF: [['df', 'hp'], ['df', 'rpar'], ['hp', 'rm'], ['df', 'crit']],
+    cabM: [['mp', 'mag'], ['mag', 'rm'], ['mp', 'rpar'], ['mag', 'hp']],
+    guanF: [['aspd', 'crit'], ['crit', 'leech'], ['aspd', 'leech'], ['crit', 'poison']],
+    guanM: [['mag', 'crit'], ['mag', 'mp'], ['mp', 'aspd'], ['mag', 'leech']],
+    botaF: [['df', 'hp'], ['hp', 'rpar'], ['df', 'rm'], ['hp', 'aspd']],
+    botaM: [['rm', 'mp'], ['mp', 'rpar'], ['rm', 'mag'], ['mp', 'hp']],
+    amuO: [['mag', 'crit'], ['crit', 'poison'], ['leech', 'mag'], ['poison', 'aspd']],
+    amuD: [['rpar', 'rm'], ['hp', 'rpar'], ['rm', 'df'], ['hp', 'rm']],
+    anilloO: [['crit', 'leech'], ['aspd', 'crit'], ['leech', 'poison'], ['mag', 'crit']],
+    anilloD: [['hp', 'rm'], ['df', 'hp'], ['rm', 'rpar'], ['hp', 'mp']],
 };
-const SLOT: Record<Arch, Slot> = { arma1: 'arma', arma2: 'arma', armaM: 'arma', armPes: 'armadura', armMed: 'armadura', armMag: 'armadura', cabF: 'cabeza', cabM: 'cabeza', anilloO: 'anillo', anilloD: 'anillo' };
-const LOOK: Record<Arch, string | undefined> = { arma1: 'longsword', arma2: 'maul', armaM: 'staff', armPes: 'plate', armMed: 'chain', armMag: 'mage', cabF: 'plate_helm', cabM: 'mage_hood', anilloO: 'ring_ruby', anilloD: 'ring_jade' };
+const attrsOf = (arch: Arch, tier: number): [AttrId, AttrId] => { const v = ATTR_VARIANTS[arch]; return v[(Math.max(1, tier) - 1 + ARCHS.indexOf(arch)) % v.length]; };
+const SLOT: Record<Arch, Slot> = { arma1: 'arma', arma2: 'arma', armaM: 'arma', armPes: 'armadura', armMed: 'armadura', armMag: 'armadura', cabF: 'cabeza', cabM: 'cabeza', guanF: 'guantes', guanM: 'guantes', botaF: 'botas', botaM: 'botas', amuO: 'amuleto', amuD: 'amuleto', anilloO: 'anillo', anilloD: 'anillo' };
+const LOOK: Record<Arch, string | undefined> = { arma1: 'longsword', arma2: 'maul', armaM: 'staff', armPes: 'plate', armMed: 'chain', armMag: 'mage', cabF: 'plate_helm', cabM: 'mage_hood', guanF: 'glove_plate', guanM: 'glove_mage', botaF: 'boot_plate', botaM: 'boot_mage', amuO: 'amulet_bone', amuD: 'amulet_bone', anilloO: 'ring_ruby', anilloD: 'ring_jade' };
 const OFF: Partial<Record<Arch, string>> = { arma1: 'iron_buckler' };
 
 const R = Math.round;
-/** Stats base del arquetipo a la banda `t` (con `m` = multiplicador, p. ej. 1,25 en ítems de jefe). */
-function stats(arch: Arch, t: number, m: number): Pick<Base, 'dmg' | 'def' | 'rm' | 'mag'> {
+/**
+ * Stats base del arquetipo a nivel de ítem `ilvl` (con `m` = multiplicador, p. ej. 1,15 en ítems de jefe). Lineal en el ilvl:
+ * en los techos de banda (5, 10…) da lo mismo que daba la fórmula por banda, así el equipo sigue el nivel del jugador también
+ * dentro de las bandas y en la T7.
+ */
+function stats(arch: Arch, ilvl: number, m: number): Pick<Base, 'dmg' | 'def' | 'rm' | 'mag'> {
+    const t = ilvl / 5;
     switch (arch) {
         case 'arma1': return { dmg: [R((4 + t * 1.8) * m), R((8 + t * 2.4) * m)] };
         case 'arma2': return { dmg: [R((4 + t * 1.8) * 1.35 * m), R((8 + t * 2.4) * 1.35 * m)] };
@@ -43,6 +78,11 @@ function stats(arch: Arch, t: number, m: number): Pick<Base, 'dmg' | 'def' | 'rm
         case 'armMag': return { def: R(3 + t), rm: R((18 + 5 * t) * m), mag: R((3 + t) * m) };
         case 'cabF': return { def: R((5 + 2.6 * t) * m), rm: R((2 + t) * m) };
         case 'cabM': return { def: R(2 + 0.6 * t), rm: R((8 + 2.6 * t) * m), mag: R((2 + 0.6 * t) * m) };
+        case 'guanF': case 'botaF': return { def: R((4 + 2.1 * t) * m), rm: R((1.6 + 0.8 * t) * m) };
+        case 'guanM': return { def: R(1 + 0.5 * t), rm: R((6 + 2 * t) * m), mag: R((1.5 + 0.5 * t) * m) };
+        case 'botaM': return { def: R(1 + 0.5 * t), rm: R((6 + 2 * t) * m), mag: R((1 + 0.4 * t) * m) };
+        case 'amuD': return { rm: R((4 + t) * m) };
+        case 'amuO': return { mag: R((1 + 0.5 * t) * m) };
         default: return {};
     }
 }
@@ -52,62 +92,117 @@ const DEFS: Def[] = [
     { tier: 1, arch: 'arma1', name: 'Hoja de sal' }, { tier: 1, arch: 'arma2', name: 'Mazo del campamento' }, { tier: 1, arch: 'armaM', name: 'Vara de raíz' },
     { tier: 1, arch: 'armPes', name: 'Coraza de bronce viejo' }, { tier: 1, arch: 'armMed', name: 'Malla del explorador' }, { tier: 1, arch: 'armMag', name: 'Manto de lino bordado' },
     { tier: 1, arch: 'cabF', name: 'Casco del vigía' }, { tier: 1, arch: 'cabM', name: 'Capucha de musgo' },
+    { tier: 1, arch: 'guanF', name: 'Mitones de cuero salado', look: 'glove_leather' }, { tier: 1, arch: 'guanM', name: 'Guantes de lino' },
+    { tier: 1, arch: 'botaF', name: 'Botas del camino', look: 'boot_leather' }, { tier: 1, arch: 'botaM', name: 'Sandalias de musgo' },
+    { tier: 1, arch: 'amuO', name: 'Amuleto de sal' }, { tier: 1, arch: 'amuD', name: 'Amuleto de guijarro' },
     { tier: 1, arch: 'anilloO', name: 'Anillo de sal' }, { tier: 1, arch: 'anilloD', name: 'Anillo de piedra del bosque' },
     // T2 (nivel 6-10: Pantano de Merrimead, Altas de Nazia)
     { tier: 2, arch: 'arma1', name: 'Espada del Cañón' }, { tier: 2, arch: 'arma2', name: 'Hachón del pantano', look: 'zweihander' }, { tier: 2, arch: 'armaM', name: 'Cayado del cenagal' },
     { tier: 2, arch: 'armPes', name: 'Peto de escamas de cieno' }, { tier: 2, arch: 'armMed', name: 'Cota del pantanero' }, { tier: 2, arch: 'armMag', name: 'Túnica del cenagal' },
     { tier: 2, arch: 'cabF', name: 'Yelmo de caña' }, { tier: 2, arch: 'cabM', name: 'Gorro del brujo del pantano' },
+    { tier: 2, arch: 'guanF', name: 'Guantes de cieno curtido', look: 'glove_leather' }, { tier: 2, arch: 'guanM', name: 'Guantes del brujo del pantano' },
+    { tier: 2, arch: 'botaF', name: 'Botas de junco', look: 'boot_leather' }, { tier: 2, arch: 'botaM', name: 'Botas del cenagal' },
+    { tier: 2, arch: 'amuO', name: 'Amuleto de ámbar' }, { tier: 2, arch: 'amuD', name: 'Talismán de caña' },
     { tier: 2, arch: 'anilloO', name: 'Anillo de ámbar' }, { tier: 2, arch: 'anilloD', name: 'Sello del cenagal' },
     // T3 (nivel 11-15: Cementerio de Lochport, Risco del Sur)
     { tier: 3, arch: 'arma1', name: 'Colmillo de las altas', look: 'shortsword' }, { tier: 3, arch: 'arma2', name: 'Martillo de Lochport' }, { tier: 3, arch: 'armaM', name: 'Báculo del camposanto' },
     { tier: 3, arch: 'armPes', name: 'Coraza de Nazia' }, { tier: 3, arch: 'armMed', name: 'Malla del sepulturero' }, { tier: 3, arch: 'armMag', name: 'Mortaja bordada' },
     { tier: 3, arch: 'cabF', name: 'Yelmo del risco' }, { tier: 3, arch: 'cabM', name: 'Capuchón de duelo' },
+    { tier: 3, arch: 'guanF', name: 'Guanteletes del sepulturero' }, { tier: 3, arch: 'guanM', name: 'Guantes de duelo' },
+    { tier: 3, arch: 'botaF', name: 'Botas del risco' }, { tier: 3, arch: 'botaM', name: 'Zapatillas de mortaja' },
+    { tier: 3, arch: 'amuO', name: 'Amuleto de hueso' }, { tier: 3, arch: 'amuD', name: 'Talismán del camposanto' },
     { tier: 3, arch: 'anilloO', name: 'Anillo de hueso' }, { tier: 3, arch: 'anilloD', name: 'Sello del risco' },
     // T4 (nivel 16-20: La Brecha, Paso de Stormrock, Torre del hechicero, Cámaras de investigación): aspecto de Solmar en las armaduras de cuerpo a cuerpo
     { tier: 4, arch: 'arma1', name: 'Maza del minero caído', look: 'mace', off: 'kite_shield' }, { tier: 4, arch: 'arma2', name: 'Hacha de guerra de Stormrock', look: 'battle_axe' }, { tier: 4, arch: 'armaM', name: 'Cayado del investigador' },
     { tier: 4, arch: 'armPes', name: 'Coraza de la Brecha', look: 'sol_placas' }, { tier: 4, arch: 'armMed', name: 'Malla alada del paso', look: 'sol_malla' }, { tier: 4, arch: 'armMag', name: 'Túnica de la torre' },
     { tier: 4, arch: 'cabF', name: 'Yelmo del minero caído', look: 'sol_placas_helm' }, { tier: 4, arch: 'cabM', name: 'Capucha del aprendiz de la torre' },
+    { tier: 4, arch: 'guanF', name: 'Guanteletes del minero caído' }, { tier: 4, arch: 'guanM', name: 'Guantes del aprendiz de la torre' },
+    { tier: 4, arch: 'botaF', name: 'Botas de la Brecha' }, { tier: 4, arch: 'botaM', name: 'Botas del investigador' },
+    { tier: 4, arch: 'amuO', name: 'Amuleto de escama de wyvern' }, { tier: 4, arch: 'amuD', name: 'Talismán de Stormrock' },
     { tier: 4, arch: 'anilloO', name: 'Anillo de escama de wyvern', look: 'ring_gold' }, { tier: 4, arch: 'anilloD', name: 'Sello de la Brecha', look: 'ring_silver' },
     // T5 (nivel 21-25: Cenizas I y II, Templo y Salón de Mez): aparece el aspecto de Vhar (ceniza)
     { tier: 5, arch: 'arma1', name: 'Espada de las cenizas' }, { tier: 5, arch: 'arma2', name: 'Mandoble de Mez', look: 'zweihander' }, { tier: 5, arch: 'armaM', name: 'Báculo del hechicero de ceniza' },
     { tier: 5, arch: 'armPes', name: 'Peto de las catacumbas' }, { tier: 5, arch: 'armMed', name: 'Malla del arquero de ceniza', look: 'vhar_malla' }, { tier: 5, arch: 'armMag', name: 'Túnica del templo de Mez' },
     { tier: 5, arch: 'cabF', name: 'Yelmo astado de las cenizas', look: 'vhar_malla_helm' }, { tier: 5, arch: 'cabM', name: 'Capucha de hollín' },
+    { tier: 5, arch: 'guanF', name: 'Guanteletes de ceniza' }, { tier: 5, arch: 'guanM', name: 'Guantes de hollín' },
+    { tier: 5, arch: 'botaF', name: 'Botas de las catacumbas' }, { tier: 5, arch: 'botaM', name: 'Botas del templo de Mez' },
+    { tier: 5, arch: 'amuO', name: 'Amuleto de brasa' }, { tier: 5, arch: 'amuD', name: 'Talismán de Mez' },
     { tier: 5, arch: 'anilloO', name: 'Anillo de brasa' }, { tier: 5, arch: 'anilloD', name: 'Sello de Mez' },
-    // T6 (nivel 26-30: Cenizas III, Granja de Roble Negro, Fortaleza infernal; también lo común de T7 hasta que haya ítems de nivel 31+)
+    // T6 (nivel 26-30: Cenizas III, Granja de Roble Negro, Fortaleza infernal)
     { tier: 6, arch: 'arma1', name: 'Hoja de los hornos', off: 'kite_shield' }, { tier: 6, arch: 'arma2', name: 'Hachón de Roble Negro', look: 'battle_axe' }, { tier: 6, arch: 'armaM', name: 'Cetro de la fortaleza infernal' },
     { tier: 6, arch: 'armPes', name: 'Placas de los hornos', look: 'vhar_placas' }, { tier: 6, arch: 'armMed', name: 'Cota de escamas de fuego', look: 'vhar_malla' }, { tier: 6, arch: 'armMag', name: 'Manto de la fortaleza' },
     { tier: 6, arch: 'cabF', name: 'Yelmo de brasa viva', look: 'vhar_placas_helm' }, { tier: 6, arch: 'cabM', name: 'Capucha infernal' },
-    { tier: 6, arch: 'anilloO', name: 'Anillo del horno', look: 'ring_ruby' }, { tier: 6, arch: 'anilloD', name: 'Amuleto de Roble Negro', look: 'amulet_bone' },
-    // Jefes de mazmorra (D1-D6): mejores que los de su banda y con el aspecto del tier siguiente
-    { tier: 2, arch: 'arma1', name: 'Cuchilla del Jefe goblin', look: 'hand_axe', boss: 'goblin_jefe', mult: 1.3 }, { tier: 2, arch: 'armPes', name: 'Peto del Jefe goblin', boss: 'goblin_jefe', mult: 1.3 },
-    { tier: 4, arch: 'arma1', name: 'Aguijón de la Reina', look: 'longsword', boss: 'antlion_reina', mult: 1.3 }, { tier: 4, arch: 'armPes', name: 'Caparazón de la Reina', boss: 'antlion_reina', mult: 1.3 },
-    { tier: 5, arch: 'arma2', name: 'Mandoble del Caballero de la cripta', look: 'zweihander', boss: 'caballero_cripta', mult: 1.3 }, { tier: 5, arch: 'cabF', name: 'Yelmo del Caballero de la cripta', boss: 'caballero_cripta', mult: 1.3 },
+    { tier: 6, arch: 'guanF', name: 'Guanteletes de los hornos' }, { tier: 6, arch: 'guanM', name: 'Guantes de la fortaleza' },
+    { tier: 6, arch: 'botaF', name: 'Botas de los hornos' }, { tier: 6, arch: 'botaM', name: 'Botas infernales' },
+    { tier: 6, arch: 'amuO', name: 'Amuleto del horno' }, { tier: 6, arch: 'amuD', name: 'Amuleto de Roble Negro' },
+    { tier: 6, arch: 'anilloO', name: 'Anillo del horno', look: 'ring_ruby' }, { tier: 6, arch: 'anilloD', name: 'Anillo de la fortaleza', look: 'ring_jade' },
+    // T7 (nivel 31-40: Cámaras de tortura, Puerto de la perdición, Fuerte de Amir): ilvl 35; el 40 es de los jefes del tramo final
+    { tier: 7, arch: 'arma1', name: 'Hoja del abismo' }, { tier: 7, arch: 'arma2', name: 'Hachón de las cámaras', look: 'battle_axe' }, { tier: 7, arch: 'armaM', name: 'Cetro del puerto de la perdición' },
+    { tier: 7, arch: 'armPes', name: 'Placas del carcelero', look: 'vhar_placas' }, { tier: 7, arch: 'armMed', name: 'Malla del carcelero', look: 'vhar_malla' }, { tier: 7, arch: 'armMag', name: 'Túnica del abismo' },
+    { tier: 7, arch: 'cabF', name: 'Yelmo del carcelero', look: 'vhar_placas_helm' }, { tier: 7, arch: 'cabM', name: 'Capucha del suplicio' },
+    { tier: 7, arch: 'guanF', name: 'Guanteletes del verdugo' }, { tier: 7, arch: 'guanM', name: 'Guantes del abismo' },
+    { tier: 7, arch: 'botaF', name: 'Botas del carcelero' }, { tier: 7, arch: 'botaM', name: 'Botas del suplicio' },
+    { tier: 7, arch: 'amuO', name: 'Amuleto del abismo' }, { tier: 7, arch: 'amuD', name: 'Talismán de Amir' },
+    { tier: 7, arch: 'anilloO', name: 'Anillo del abismo', look: 'ring_ruby' }, { tier: 7, arch: 'anilloD', name: 'Sello de Amir', look: 'ring_silver' },
+    // Jefes de mazmorra (D1-D7): ilvl = el de su banda +5 (tope 40) y un multiplicador chico; cada jefe trae un ítem de cada tipo con efecto
+    // especial (activo solo en Violeta) en las armas, y uno de los slots nuevos para que las mazmorras completen el equipo.
+    { tier: 2, arch: 'arma1', name: 'Cuchilla del Jefe goblin', look: 'hand_axe', boss: 'goblin_jefe', mult: 1.08, fx: 'vampirismo' }, { tier: 2, arch: 'armPes', name: 'Peto del Jefe goblin', boss: 'goblin_jefe', mult: 1.06 },
+    { tier: 2, arch: 'amuO', name: 'Colmillo del Jefe goblin', boss: 'goblin_jefe', mult: 1.08 },
+    { tier: 4, arch: 'arma1', name: 'Aguijón de la Reina', look: 'longsword', boss: 'antlion_reina', mult: 1.12, fx: 'vampirismo' }, { tier: 4, arch: 'armPes', name: 'Caparazón de la Reina', boss: 'antlion_reina', mult: 1.12 },
+    { tier: 4, arch: 'guanF', name: 'Guanteletes de la Reina', boss: 'antlion_reina', mult: 1.12 },
+    { tier: 5, arch: 'arma2', name: 'Mandoble del Caballero de la cripta', look: 'zweihander', boss: 'caballero_cripta', mult: 1.15, fx: 'aturdir' }, { tier: 5, arch: 'cabF', name: 'Yelmo del Caballero de la cripta', boss: 'caballero_cripta', mult: 1.14 },
+    { tier: 5, arch: 'botaF', name: 'Grebas del Caballero de la cripta', boss: 'caballero_cripta', mult: 1.14 },
     // D4-D6 (docs/LLAVES.md): en la banda más alta (T6), cada jefe un poco por encima del anterior
-    { tier: 6, arch: 'armaM', name: 'Báculo del Mago mayor', boss: 'mago_mayor', mult: 1.3 }, { tier: 6, arch: 'armMag', name: 'Túnica del Mago mayor', boss: 'mago_mayor', mult: 1.3 },
-    { tier: 6, arch: 'arma1', name: 'Garra del Wyvern del aire', look: 'longsword', boss: 'wyvern_aire', mult: 1.4 }, { tier: 6, arch: 'armMed', name: 'Cota de escamas del viento', boss: 'wyvern_aire', mult: 1.4 },
-    { tier: 6, arch: 'arma2', name: 'Hoja del Señor del Foso', look: 'zweihander', boss: 'demonio_foso', mult: 1.5 }, { tier: 6, arch: 'armPes', name: 'Coraza del Foso', boss: 'demonio_foso', mult: 1.5 },
-    // D7 (el tope del juego, Nv 40): un arma por arquetipo, lo mejor que se consigue hasta que entren las legendarias con aura
-    { tier: 6, arch: 'arma2', name: 'Hacha del Gran Verdugo', look: 'zweihander', boss: 'verdugo', mult: 1.7 }, { tier: 6, arch: 'arma1', name: 'Cuchilla de las cámaras', look: 'longsword', boss: 'verdugo', mult: 1.7 },
-    { tier: 6, arch: 'armaM', name: 'Cetro del suplicio', boss: 'verdugo', mult: 1.7 }, { tier: 6, arch: 'cabF', name: 'Capucha del Verdugo', boss: 'verdugo', mult: 1.7 },
+    { tier: 6, arch: 'armaM', name: 'Báculo del Mago mayor', boss: 'mago_mayor', mult: 1.15, fx: 'quemadura' }, { tier: 6, arch: 'armMag', name: 'Túnica del Mago mayor', boss: 'mago_mayor', mult: 1.18 },
+    { tier: 6, arch: 'guanM', name: 'Guantes del Mago mayor', boss: 'mago_mayor', mult: 1.16 },
+    { tier: 6, arch: 'arma1', name: 'Garra del Wyvern del aire', look: 'longsword', boss: 'wyvern_aire', mult: 1.25, fx: 'vampirismo' }, { tier: 6, arch: 'armMed', name: 'Cota de escamas del viento', boss: 'wyvern_aire', mult: 1.25 },
+    { tier: 6, arch: 'botaF', name: 'Botas del Wyvern del aire', boss: 'wyvern_aire', mult: 1.25 },
+    { tier: 6, arch: 'arma2', name: 'Hoja del Señor del Foso', look: 'zweihander', boss: 'demonio_foso', mult: 1.35, fx: 'quemadura' }, { tier: 6, arch: 'armPes', name: 'Coraza del Foso', boss: 'demonio_foso', mult: 1.34 },
+    { tier: 6, arch: 'amuO', name: 'Amuleto del Señor del Foso', boss: 'demonio_foso', mult: 1.35 },
+    // D7 (el tope del juego, Nv 40, ilvl 40): lo mejor que se consigue hasta que entren las legendarias con aura
+    { tier: 7, ilvl: 40, arch: 'arma2', name: 'Hacha del Gran Verdugo', look: 'zweihander', boss: 'verdugo', mult: 1.39, fx: 'aturdir' }, { tier: 7, ilvl: 40, arch: 'arma1', name: 'Cuchilla de las cámaras', look: 'longsword', boss: 'verdugo', mult: 1.39, fx: 'vampirismo' },
+    { tier: 7, ilvl: 40, arch: 'armaM', name: 'Cetro del suplicio', boss: 'verdugo', mult: 1.35, fx: 'quemadura' }, { tier: 7, ilvl: 40, arch: 'cabF', name: 'Capucha del Verdugo', boss: 'verdugo', mult: 1.36 },
+    { tier: 7, ilvl: 40, arch: 'guanM', name: 'Guantes del suplicio', boss: 'verdugo', mult: 1.35 }, { tier: 7, ilvl: 40, arch: 'botaF', name: 'Botas del Gran Verdugo', boss: 'verdugo', mult: 1.36 },
+    { tier: 7, ilvl: 40, arch: 'amuD', name: 'Amuleto del Gran Verdugo', boss: 'verdugo', mult: 1.36 },
+    // Piezas de set (docs/ITEMS.md §sets): solo caen en mazmorras (mobs y jefes del tramo), nunca en la tienda. Los bonos viven en SETS.
+    // Alba de Solmar (T4, malla): ágil
+    { tier: 4, arch: 'armMed', name: 'Malla del Alba', look: 'sol_malla', set: 'alba' }, { tier: 4, arch: 'cabF', name: 'Yelmo del Alba', look: 'sol_malla_helm', set: 'alba' },
+    { tier: 4, arch: 'guanF', name: 'Guantes del Alba', set: 'alba' }, { tier: 4, arch: 'botaF', name: 'Botas del Alba', set: 'alba' },
+    { tier: 4, arch: 'amuO', name: 'Amuleto del Alba', set: 'alba' }, { tier: 4, arch: 'anilloO', name: 'Sello del Alba', set: 'alba' },
+    // Cenit de Solmar (T5, placas): tanque
+    { tier: 5, arch: 'armPes', name: 'Coraza del Cenit', look: 'sol_placas', set: 'cenit' }, { tier: 5, arch: 'cabF', name: 'Yelmo del Cenit', look: 'sol_placas_helm', set: 'cenit' },
+    { tier: 5, arch: 'guanF', name: 'Guanteletes del Cenit', set: 'cenit' }, { tier: 5, arch: 'botaF', name: 'Grebas del Cenit', set: 'cenit' },
+    { tier: 5, arch: 'amuD', name: 'Amuleto del Cenit', set: 'cenit' }, { tier: 5, arch: 'anilloD', name: 'Sello del Cenit', set: 'cenit' },
+    // Ceniza de Vhar (T6, malla): lanzador
+    { tier: 6, arch: 'armMed', name: 'Cota de ceniza ardiente', look: 'vhar_malla', set: 'ceniza' }, { tier: 6, arch: 'cabF', name: 'Yelmo de ceniza ardiente', look: 'vhar_malla_helm', set: 'ceniza' },
+    { tier: 6, arch: 'guanM', name: 'Guantes de ceniza ardiente', set: 'ceniza' }, { tier: 6, arch: 'botaM', name: 'Botas de ceniza ardiente', set: 'ceniza' },
+    { tier: 6, arch: 'amuO', name: 'Amuleto de ceniza ardiente', set: 'ceniza' }, { tier: 6, arch: 'anilloO', name: 'Sello de ceniza ardiente', set: 'ceniza' },
+    // Brasa de Vhar (T7, placas): ofensivo pesado
+    { tier: 7, arch: 'armPes', name: 'Placas de brasa eterna', look: 'vhar_placas', set: 'brasa' }, { tier: 7, arch: 'cabF', name: 'Yelmo de brasa eterna', look: 'vhar_placas_helm', set: 'brasa' },
+    { tier: 7, arch: 'guanF', name: 'Guanteletes de brasa eterna', set: 'brasa' }, { tier: 7, arch: 'botaF', name: 'Grebas de brasa eterna', set: 'brasa' },
+    { tier: 7, arch: 'amuO', name: 'Amuleto de brasa eterna', set: 'brasa' }, { tier: 7, arch: 'anilloO', name: 'Sello de brasa eterna', set: 'brasa' },
 ];
 
-export interface UniqueInfo { tier: number; attrs: [AttrId, number][]; boss?: MobType }
+export interface UniqueInfo { tier: number; attrs: [AttrId, number][]; boss?: MobType; /** nivel de ítem: de él salen el poder base y la escala de los extras */ ilvl: number; fx?: FxId; set?: string }
 export type UniqueBase = Base & { uniq: UniqueInfo };
 
 /** Valor de lista de un único (para el precio de venta/subasta mínima): crece rápido con la banda. */
 export const uniqueValue = (tier: number, boss: boolean): number => Math.round(60 * Math.pow(tier, 1.6) * (boss ? 2 : 1));
 
 export const UNIQUE_BASES: UniqueBase[] = DEFS.map((d): UniqueBase => {
-    const m = d.mult ?? 1, [a, b] = ATTRS[d.arch], f = (0.8 + 0.2 * d.tier) * m;
+    const m = d.mult ?? 1, ilvl = d.ilvl ?? Math.min(40, bandIlvl(d.tier) + (d.boss ? 5 : 0)), [a, b] = d.attrs ?? attrsOf(d.arch, d.tier), f = (0.8 + 0.04 * ilvl) * m;
     return {
-        name: d.name, slot: SLOT[d.arch], ...stats(d.arch, d.tier, m), look: d.look ?? LOOK[d.arch], off: d.off ?? OFF[d.arch],
-        uniq: { tier: d.tier, boss: d.boss, attrs: [[a, Math.max(1, R(MID[a] * f))], [b, Math.max(1, R(MID[b] * f))]] },
+        name: d.name, slot: SLOT[d.arch], ...stats(d.arch, ilvl, m), look: d.look ?? LOOK[d.arch], off: d.off ?? OFF[d.arch],
+        uniq: { tier: d.tier, boss: d.boss, ilvl, fx: d.fx, set: d.set, attrs: [[a, Math.max(1, R(MID[a] * f))], [b, Math.max(1, R(MID[b] * f))]] },
     };
 });
 export const UNIQUE_BY_NAME = new Map(UNIQUE_BASES.map((u) => [u.name, u]));
-/** Únicos que caen de mobs comunes por banda (todos menos los de jefe). */
+/** Únicos que caen de mobs comunes por banda (todos menos los de jefe y las piezas de set). */
 export const UNIQUES_BY_TIER: Record<number, UniqueBase[]> = {};
-for (const u of UNIQUE_BASES) if (!u.uniq.boss) (UNIQUES_BY_TIER[u.uniq.tier] ??= []).push(u);
+for (const u of UNIQUE_BASES) if (!u.uniq.boss && !u.uniq.set) (UNIQUES_BY_TIER[u.uniq.tier] ??= []).push(u);
+/** Piezas de set por banda: caen solo en mazmorras (mobs del tramo y jefes). */
+export const SET_PIECES_BY_TIER: Record<number, UniqueBase[]> = {};
+for (const u of UNIQUE_BASES) if (u.uniq.set) (SET_PIECES_BY_TIER[u.uniq.tier] ??= []).push(u);
 /** Ítems característicos de cada jefe de mazmorra. */
 export const BOSS_UNIQUES: Partial<Record<MobType, UniqueBase[]>> = {};
 for (const u of UNIQUE_BASES) if (u.uniq.boss) (BOSS_UNIQUES[u.uniq.boss] ??= []).push(u);
@@ -139,6 +234,36 @@ const EXTRA_SCALE: Record<AttrId, [number, number]> = {
 };
 /** Multiplicador por ranura (Dreadmyst: pecho/arma 1×, cabeza y futuros guantes/botas 0,65×, anillos/amuleto 0,5×). */
 export const SLOT_EXTRA_MULT: Record<Slot, number> = { arma: 1, armadura: 1, cabeza: 0.65, guantes: 0.65, botas: 0.65, amuleto: 0.5, anillo: 0.5, anillo2: 0.5 };
+// ---------- sets (docs/ITEMS.md): bonos por cantidad de piezas equipadas ----------
+export interface SetBonus { n: number; stats: [AttrId, number][] }
+export interface SetDef { id: string; name: string; tier: number; faction: 'solmar' | 'vhar'; pieces: string[]; bonuses: SetBonus[] }
+/** Valor de un stat de bono de set: la escala lineal de los extras al ilvl de la banda × `k` (2 piezas 1×, 4 piezas 1,6×, 6 piezas 2,2×). */
+const setStat = (id: AttrId, tier: number, k: number): [AttrId, number] => { const [a, b] = EXTRA_SCALE[id]; return [id, Math.max(1, R((a + b * bandIlvl(tier)) * k))]; };
+const mkSet = (id: string, name: string, tier: number, faction: 'solmar' | 'vhar', two: AttrId[], four: AttrId[], six: AttrId[]): SetDef => ({
+    id, name, tier, faction, pieces: UNIQUE_BASES.filter((u) => u.uniq.set === id).map((u) => u.name),
+    bonuses: [{ n: 2, stats: two.map((a) => setStat(a, tier, 1)) }, { n: 4, stats: four.map((a) => setStat(a, tier, 1.6)) }, { n: 6, stats: six.map((a) => setStat(a, tier, 2.2)) }],
+});
+/** Los 4 sets de armadura (arte de Solmar y Vhar): uno por banda desde la T4; se completan con 6 piezas (armadura, cabeza, guantes, botas, amuleto y anillo). */
+export const SETS: SetDef[] = [
+    mkSet('alba', 'Alba de Solmar', 4, 'solmar', ['hp', 'aspd'], ['crit', 'leech'], ['hp', 'crit', 'aspd']),
+    mkSet('cenit', 'Cenit de Solmar', 5, 'solmar', ['hp', 'df'], ['df', 'rm'], ['hp', 'df', 'rpar']),
+    mkSet('ceniza', 'Ceniza de Vhar', 6, 'vhar', ['mp', 'mag'], ['mag', 'crit'], ['mag', 'mp', 'hp']),
+    mkSet('brasa', 'Brasa de Vhar', 7, 'vhar', ['hp', 'crit'], ['crit', 'aspd'], ['leech', 'crit', 'hp']),
+];
+export const SET_BY_ID = new Map(SETS.map((s) => [s.id, s]));
+/** Set al que pertenece una pieza (por nombre de base). */
+export const setOfPiece = (name: string): SetDef | undefined => { const id = UNIQUE_BY_NAME.get(name)?.uniq.set; return id ? SET_BY_ID.get(id) : undefined; };
+/** Sets con piezas puestas: cuántas (nombres distintos) y los bonos activos acumulados (los de 2, 4 y 6 piezas según cuántas haya). */
+export function activeSets(equippedNames: (string | undefined | null)[]): { set: SetDef; count: number; stats: [AttrId, number][] }[] {
+    const by = new Map<string, Set<string>>();
+    for (const n of equippedNames) { if (!n) continue; const s = setOfPiece(n); if (s) (by.get(s.id) ?? by.set(s.id, new Set()).get(s.id)!).add(n); }
+    return [...by].map(([id, names]) => {
+        const set = SET_BY_ID.get(id)!, count = names.size, stats: [AttrId, number][] = [];
+        for (const b of set.bonuses) if (count >= b.n) for (const st of b.stats) stats.push(st);
+        return { set, count, stats };
+    });
+}
+
 /** Un valor de extra ya tirado. */
 export function rollExtra(id: AttrId, ilvl: number, slot: Slot, quality: number, rnd: () => number = Math.random): number {
     const [a, b] = EXTRA_SCALE[id], q = quality >= QUALITY_HI_ROLL ? 1.15 + rnd() * 0.2 : 0.85 + rnd() * 0.3;
@@ -153,9 +278,8 @@ export function rollExtras(slot: Slot, ilvl: number, quality: number, exclude: A
     }
     return out;
 }
-/** ilvl (nivel de ítem) de un único: el techo de su banda; los de jefe, 5 arriba (tope 40). De él sale la escala de los extras. */
-export const bandIlvl = (tier: number): number => [5, 10, 15, 20, 25, 30][Math.min(6, Math.max(1, Math.round(tier))) - 1];
-export const uniqueIlvl = (u: UniqueBase): number => Math.min(40, bandIlvl(u.uniq.tier) + (u.uniq.boss ? 5 : 0));
+/** ilvl (nivel de ítem) de un único: sale del catálogo (techo de la banda; los de jefe +5, tope 40; el verdugo, 40). */
+export const uniqueIlvl = (u: UniqueBase): number => u.uniq.ilvl;
 
 // ---------- mejora (+N) de ítems únicos (docs/ITEMS.md §7) ----------
 /** Techo absoluto de la mejora; el tope real de cada ítem lo pone su calidad (UP_MAX_BY_QUALITY). Las probabilidades de fallo viven solo en el server. */

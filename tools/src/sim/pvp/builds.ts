@@ -12,20 +12,21 @@ export const CLS_NAME: Record<Cls, string> = { guerrero: 'paladín', mago: 'mago
 type Eq = Record<string, { n: string; up?: number }>;
 /** Equipo por tramo: hasta 15 (D1-D3), 16-30, 31-40. */
 const GEAR: Record<Cls, [Eq, Eq, Eq]> = {
+    // equipo de tienda hasta T1 y únicos de banda desde ahí: la tienda ya no iguala a los únicos (≤ 75 %), así que el equipo representativo de cada tramo es el único de su banda
     guerrero: [
-        { arma: { n: 'Espada larga' }, armadura: { n: 'Cota de malla' }, cabeza: { n: 'Cofia de malla' }, anillo: { n: 'Anillo opaco' } },
-        { arma: { n: 'Hacha de guerra', up: 3 }, armadura: { n: 'Placas del Sol', up: 3 }, cabeza: { n: 'Yelmo del Sol', up: 3 }, anillo: { n: 'Anillo opaco', up: 3 } },
-        { arma: { n: 'Mandoble', up: 6 }, armadura: { n: 'Placas del Sol', up: 6 }, cabeza: { n: 'Yelmo del Sol', up: 6 }, anillo: { n: 'Anillo opaco', up: 6 } },
+        { arma: { n: 'Espada del Cañón' }, armadura: { n: 'Cota del pantanero' }, cabeza: { n: 'Yelmo de caña' }, anillo: { n: 'Anillo opaco' } },
+        { arma: { n: 'Hacha de guerra de Stormrock', up: 3 }, armadura: { n: 'Coraza de la Brecha', up: 3 }, cabeza: { n: 'Yelmo del minero caído', up: 3 }, anillo: { n: 'Anillo opaco', up: 3 } },
+        { arma: { n: 'Hachón de las cámaras', up: 6 }, armadura: { n: 'Placas del carcelero', up: 6 }, cabeza: { n: 'Yelmo del carcelero', up: 6 }, anillo: { n: 'Anillo opaco', up: 6 } },
     ],
     mago: [
-        { arma: { n: 'Báculo de fresno' }, armadura: { n: 'Túnica de mago' }, cabeza: { n: 'Capucha de mago' }, anillo: { n: 'Anillo opaco' } },
-        { arma: { n: 'Varita', up: 3 }, armadura: { n: 'Túnica de mago', up: 3 }, cabeza: { n: 'Capucha de mago', up: 3 }, anillo: { n: 'Anillo opaco', up: 3 } },
-        { arma: { n: 'Varita', up: 6 }, armadura: { n: 'Túnica de mago', up: 6 }, cabeza: { n: 'Capucha de mago', up: 6 }, anillo: { n: 'Anillo opaco', up: 6 } },
+        { arma: { n: 'Cayado del cenagal' }, armadura: { n: 'Túnica del cenagal' }, cabeza: { n: 'Gorro del brujo del pantano' }, anillo: { n: 'Anillo opaco' } },
+        { arma: { n: 'Cayado del investigador', up: 3 }, armadura: { n: 'Túnica de la torre', up: 3 }, cabeza: { n: 'Capucha del aprendiz de la torre', up: 3 }, anillo: { n: 'Anillo opaco', up: 3 } },
+        { arma: { n: 'Cetro del puerto de la perdición', up: 6 }, armadura: { n: 'Túnica del abismo', up: 6 }, cabeza: { n: 'Capucha del suplicio', up: 6 }, anillo: { n: 'Anillo opaco', up: 6 } },
     ],
     healer: [
-        { arma: { n: 'Báculo de fresno' }, armadura: { n: 'Túnica de mago' }, cabeza: { n: 'Capucha de mago' }, anillo: { n: 'Anillo opaco' } },
-        { arma: { n: 'Báculo de fresno', up: 3 }, armadura: { n: 'Túnica de mago', up: 3 }, cabeza: { n: 'Capucha de mago', up: 3 }, anillo: { n: 'Anillo opaco', up: 3 } },
-        { arma: { n: 'Báculo de fresno', up: 6 }, armadura: { n: 'Túnica de mago', up: 6 }, cabeza: { n: 'Capucha de mago', up: 6 }, anillo: { n: 'Anillo opaco', up: 6 } },
+        { arma: { n: 'Cayado del cenagal' }, armadura: { n: 'Túnica del cenagal' }, cabeza: { n: 'Gorro del brujo del pantano' }, anillo: { n: 'Anillo opaco' } },
+        { arma: { n: 'Cayado del investigador', up: 3 }, armadura: { n: 'Túnica de la torre', up: 3 }, cabeza: { n: 'Capucha del aprendiz de la torre', up: 3 }, anillo: { n: 'Anillo opaco', up: 3 } },
+        { arma: { n: 'Cetro del puerto de la perdición', up: 6 }, armadura: { n: 'Túnica del abismo', up: 6 }, cabeza: { n: 'Capucha del suplicio', up: 6 }, anillo: { n: 'Anillo opaco', up: 6 } },
     ],
 };
 /** Reparto de los puntos libres: [atributo, fracción]. */

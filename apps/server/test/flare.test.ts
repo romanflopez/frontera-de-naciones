@@ -70,8 +70,8 @@ test('mazmorra D1: puerta con nivel mínimo, jefe, tier de mazmorra y mapas temp
 
 test('ítems únicos: catálogo coherente, tier por nivel y jefes de D1-D3 con sus ítems', () => {
     const names = ALL_BASES.map((b) => b.name); assert.equal(new Set(names).size, names.length, 'nombres repetidos');
-    assert.equal(tierOfLevel(1), 1); assert.equal(tierOfLevel(5), 1); assert.equal(tierOfLevel(6), 2); assert.equal(tierOfLevel(30), 6); assert.equal(tierOfLevel(40), 6);
-    for (let t = 1; t <= UNIQUE_TIERS_READY; t++) assert.equal(UNIQUES_BY_TIER[t].length, 10, `banda ${t}: 10 únicos`);
+    assert.equal(tierOfLevel(1), 1); assert.equal(tierOfLevel(5), 1); assert.equal(tierOfLevel(6), 2); assert.equal(tierOfLevel(30), 6); assert.equal(tierOfLevel(40), 7);
+    for (let t = 1; t <= UNIQUE_TIERS_READY; t++) assert.equal(UNIQUES_BY_TIER[t].length, 16, `banda ${t}: 16 únicos (8 slots)`);
     for (const b of ['goblin_jefe', 'antlion_reina', 'caballero_cripta'] as const) assert.ok(BOSS_UNIQUES[b]!.length >= 2, b);
     for (const u of UNIQUE_BASES) { assert.equal(u.uniq.attrs.length, 2, u.name); assert.ok(u.uniq.attrs.every(([, v]) => v >= 1), u.name); assert.ok(BASE_BY_NAME.get(u.name) === u); }
     // los jefes superan al único del mismo arquetipo de su banda
@@ -79,11 +79,11 @@ test('ítems únicos: catálogo coherente, tier por nivel y jefes de D1-D3 con s
     assert.ok(wb.dmg![1] > w.dmg![1]);
 });
 
-test('ítems únicos T4-T6 y jefes D4-D7: cada banda supera a la anterior y los mobs de T7 sueltan T6', () => {
-    assert.equal(UNIQUE_TIERS_READY, 6);
+test('ítems únicos T4-T7 y jefes D4-D7: cada banda supera a la anterior y la T7 tiene catálogo propio', () => {
+    assert.equal(UNIQUE_TIERS_READY, 7);
     for (const b of ['mago_mayor', 'wyvern_aire', 'demonio_foso', 'verdugo'] as const) assert.ok(BOSS_UNIQUES[b]!.length >= 2, b);
     const arch = (t: number, slot: string, pred: (u: (typeof UNIQUE_BASES)[number]) => boolean) => UNIQUES_BY_TIER[t].filter((u) => u.slot === slot && pred(u));
-    for (let t = 2; t <= 6; t++) {
+    for (let t = 2; t <= 7; t++) {
         // arma de una mano (la de menor daño sin magia), armadura pesada (la de más defensa) y arma mágica: crecen banda a banda
         const w = (x: number) => Math.min(...arch(x, 'arma', (u) => !u.mag).map((u) => u.dmg![1]));
         const a = (x: number) => Math.max(...arch(x, 'armadura', () => true).map((u) => u.def ?? 0));
@@ -97,7 +97,7 @@ test('ítems únicos T4-T6 y jefes D4-D7: cada banda supera a la anterior y los 
         const score = (u: (typeof UNIQUE_BASES)[number]) => (u.dmg?.[1] ?? 0) + (u.def ?? 0) + (u.rm ?? 0) + (u.mag ?? 0);
         assert.ok(score(bu) > Math.min(...peers.map(score)), bu.name);
     }
-    assert.equal(tierOfLevel(35), 6); assert.ok(UNIQUES_BY_TIER[tierOfLevel(40)].length === 10);
+    assert.equal(tierOfLevel(35), 7); assert.ok(UNIQUES_BY_TIER[tierOfLevel(40)].length === 16);
 });
 
 test('uniqueItem: fijos con variación ±10 %, calidad sorteada y extras según la calidad al final de `a`', async () => {

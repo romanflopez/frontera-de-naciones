@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { COMBAT_CAP, EXTRAS_BY_QUALITY, JUNK_MATS, UNIQUE_BASES, UP_MAX_BY_QUALITY, rollExtras, type AttrId } from '@fdn/world';
+import { BASE_BY_NAME, COMBAT_CAP, EXTRAS_BY_QUALITY, JUNK_MATS, UNIQUE_BASES, UP_MAX_BY_QUALITY, rollExtras, type AttrId } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { ECON_VERSION, Economy, bossQuality, migrateEcon, newEcon, rollQuality, uniqueItem, type EconCtx } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
@@ -81,8 +81,9 @@ test('la DF y la RM que vienen de atributos se topean; la base de la armadura no
         anillo: { n: 'Anillo opaco', a: [{ id: 'rm', v: 300 }] }, // base rm 8
     };
     const s = statsFromChar({ lvl: 40, cls: 'guerrero', eq } as never);
-    assert.equal(s.def, 34 + COMBAT_CAP.df);
-    assert.equal(s.rm, 12 + 8 + COMBAT_CAP.rm);
+    const arm = BASE_BY_NAME.get('Armadura de placas')!, ring = BASE_BY_NAME.get('Anillo opaco')!;
+    assert.equal(s.def, arm.def! + COMBAT_CAP.df);
+    assert.equal(s.rm, arm.rm! + ring.rm! + COMBAT_CAP.rm);
 });
 
 // ---------- mejora: tope por calidad y zona de riesgo ----------

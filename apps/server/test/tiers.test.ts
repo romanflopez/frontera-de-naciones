@@ -8,7 +8,7 @@ test('tiers: la tabla cubre los niveles 1 a 40 sin huecos ni solapes', () => {
     for (const t of TIER_LIST) { const [a, b] = TIERS[t]; assert.equal(a, next, `T${t} arranca en ${a}`); assert.ok(b >= a); next = b + 1; }
     assert.equal(next, 41);
     for (let l = 1; l <= 40; l++) { const t = tierOfLvl(l); assert.ok(l >= TIERS[t][0] && l <= TIERS[t][1]); }
-    assert.equal(itemBandOfLevel(1), 1); assert.equal(itemBandOfLevel(10), 2); assert.equal(itemBandOfLevel(30), 6); assert.equal(itemBandOfLevel(40), 6);
+    assert.equal(itemBandOfLevel(1), 1); assert.equal(itemBandOfLevel(10), 2); assert.equal(itemBandOfLevel(30), 6); assert.equal(itemBandOfLevel(40), 7);
     assert.deepEqual([pitLevel([6, 8], 0), pitLevel([6, 8], 1), pitLevel([6, 8], 2), pitLevel([6, 8])], [6, 7, 8, 6]);
 });
 

@@ -35,23 +35,23 @@ export const SRV_ATTR: Record<string, AttrId> = { critical_chance: 'crit', attac
 export interface Base { name: string; slot: Slot; dmg?: [number, number]; def?: number; rm?: number; mag?: number; look?: string; off?: string }
 export const BASES: Base[] = [
     { name: 'Espada corta', slot: 'arma', dmg: [4, 8], look: 'shortsword', off: 'buckler' },
-    { name: 'Hacha de leñador', slot: 'arma', dmg: [6, 11], look: 'hand_axe', off: 'buckler' },
+    { name: 'Hacha de leñador', slot: 'arma', dmg: [5, 8], look: 'hand_axe', off: 'buckler' },
     { name: 'Báculo de fresno', slot: 'arma', dmg: [2, 4], mag: 5, look: 'staff' },
-    { name: 'Espada larga', slot: 'arma', dmg: [7, 12], look: 'longsword', off: 'iron_buckler' },
-    { name: 'Hacha de guerra', slot: 'arma', dmg: [9, 15], look: 'battle_axe' },
-    { name: 'Maza', slot: 'arma', dmg: [6, 11], look: 'mace', off: 'kite_shield' },
-    { name: 'Martillo pesado', slot: 'arma', dmg: [10, 16], look: 'maul' },
-    { name: 'Mandoble', slot: 'arma', dmg: [12, 18], look: 'zweihander' },
+    { name: 'Espada larga', slot: 'arma', dmg: [5, 9], look: 'longsword', off: 'iron_buckler' },
+    { name: 'Hacha de guerra', slot: 'arma', dmg: [7, 11], look: 'battle_axe' },
+    { name: 'Maza', slot: 'arma', dmg: [5, 8], look: 'mace', off: 'kite_shield' },
+    { name: 'Martillo pesado', slot: 'arma', dmg: [8, 12], look: 'maul' },
+    { name: 'Mandoble', slot: 'arma', dmg: [8, 13], look: 'zweihander' },
     { name: 'Varita', slot: 'arma', dmg: [1, 3], mag: 8, look: 'wand' },
-    { name: 'Coraza de cuero', slot: 'armadura', def: 12, rm: 4, look: 'leather' },
-    { name: 'Cota de malla', slot: 'armadura', def: 22, rm: 8, look: 'chain' },
-    { name: 'Armadura de placas', slot: 'armadura', def: 34, rm: 12, look: 'plate' },
-    { name: 'Túnica de mago', slot: 'armadura', def: 4, rm: 24, mag: 4, look: 'mage' },
+    { name: 'Coraza de cuero', slot: 'armadura', def: 11, rm: 4, look: 'leather' },
+    { name: 'Cota de malla', slot: 'armadura', def: 15, rm: 5, look: 'chain' },
+    { name: 'Armadura de placas', slot: 'armadura', def: 19, rm: 6, look: 'plate' },
+    { name: 'Túnica de mago', slot: 'armadura', def: 3, rm: 17, mag: 3, look: 'mage' },
     { name: 'Ropas de tela', slot: 'armadura', def: 4, rm: 6, look: 'cloth' },
     { name: 'Capucha de cuero', slot: 'cabeza', def: 4, rm: 2, look: 'leather_hood' },
-    { name: 'Cofia de malla', slot: 'cabeza', def: 8, rm: 3, look: 'chain_coif' },
-    { name: 'Yelmo de hierro', slot: 'cabeza', def: 12, rm: 4, look: 'plate_helm' },
-    { name: 'Capucha de mago', slot: 'cabeza', def: 2, rm: 10, mag: 3, look: 'mage_hood' },
+    { name: 'Cofia de malla', slot: 'cabeza', def: 6, rm: 2, look: 'chain_coif' },
+    { name: 'Yelmo de hierro', slot: 'cabeza', def: 7, rm: 3, look: 'plate_helm' },
+    { name: 'Capucha de mago', slot: 'cabeza', def: 2, rm: 8, mag: 2, look: 'mage_hood' },
     { name: 'Anillo opaco', slot: 'anillo', rm: 8 },
 ];
 /** Bases que solo venden los comerciantes (no caen de los mobs: así no se mueve el reparto de BASES que usa el server). El nombre es la clave del guardado. */
@@ -59,6 +59,9 @@ export const SHOP_BASES: Base[] = [
     { name: 'Anillo de cobre', slot: 'anillo', look: 'ring_copper' }, { name: 'Anillo de plata', slot: 'anillo', look: 'ring_silver' }, { name: 'Anillo de jade', slot: 'anillo', look: 'ring_jade' },
     { name: 'Anillo del filo', slot: 'anillo', look: 'ring_ruby' }, { name: 'Sello del veloz', slot: 'anillo', look: 'ring_gold' },
     { name: 'Amuleto del cazador', slot: 'amuleto', look: 'amulet_bone' },
+    // guantes y botas de tienda (Comunes sin atributos; los únicos de cada banda los superan)
+    { name: 'Guantes de cuero', slot: 'guantes', def: 2, rm: 1, look: 'glove_leather' }, { name: 'Guanteletes de hierro', slot: 'guantes', def: 5, rm: 2, look: 'glove_plate' }, { name: 'Guantes de tela', slot: 'guantes', def: 1, rm: 4, mag: 1, look: 'glove_mage' },
+    { name: 'Botas de cuero', slot: 'botas', def: 2, rm: 1, look: 'boot_leather' }, { name: 'Botas de placas', slot: 'botas', def: 5, rm: 2, look: 'boot_plate' }, { name: 'Zapatillas de tela', slot: 'botas', def: 1, rm: 4, mag: 1, look: 'boot_mage' },
     // sets de armadura Solmar y Vhar (tools/src/sets/build_sets.py): armadura de 4 piezas + cabeza, con su propio aspecto al equiparlos
     { name: 'Malla alada del Alba', slot: 'armadura', def: 24, rm: 9, look: 'sol_malla' }, { name: 'Yelmo alado del Alba', slot: 'cabeza', def: 9, rm: 3, look: 'sol_malla_helm' },
     { name: 'Placas del Sol', slot: 'armadura', def: 36, rm: 13, look: 'sol_placas' }, { name: 'Yelmo del Sol', slot: 'cabeza', def: 13, rm: 5, look: 'sol_placas_helm' },
@@ -97,8 +100,7 @@ export const SHOPS: Record<string, ShopDef> = {
         stock: [
             { base: 'Ropas de tela', price: 20, lvl: 1 }, { base: 'Capucha de cuero', price: 30, lvl: 1 }, { base: 'Coraza de cuero', price: 70, lvl: 2 }, { base: 'Cofia de malla', price: 90, lvl: 4 },
             { base: 'Yelmo de hierro', price: 190, lvl: 6 }, { base: 'Cota de malla', price: 230, lvl: 5 }, { base: 'Armadura de placas', price: 520, lvl: 9 },
-            { base: 'Yelmo alado del Alba', price: 130, lvl: 5 }, { base: 'Malla alada del Alba', price: 320, lvl: 6 }, { base: 'Yelmo del Sol', price: 260, lvl: 8 }, { base: 'Placas del Sol', price: 680, lvl: 10 },
-            { base: 'Yelmo astado de Ceniza', price: 130, lvl: 5 }, { base: 'Malla de Ceniza', price: 320, lvl: 6 }, { base: 'Yelmo de Brasa', price: 260, lvl: 8 }, { base: 'Placas de Brasa', price: 680, lvl: 10 },
+            { base: 'Guantes de cuero', price: 40, lvl: 2 }, { base: 'Botas de cuero', price: 40, lvl: 2 }, { base: 'Guanteletes de hierro', price: 160, lvl: 6 }, { base: 'Botas de placas', price: 160, lvl: 6 },
         ],
     },
     joyero: {
@@ -115,6 +117,7 @@ export const SHOPS: Record<string, ShopDef> = {
         stock: [
             { pot: 'hp', qty: 5, price: 110, lvl: 1 }, { pot: 'mp', qty: 5, price: 135, lvl: 1 },
             { base: 'Capucha de mago', price: 95, lvl: 3 }, { base: 'Báculo de fresno', price: 70, lvl: 1 }, { base: 'Varita', price: 140, lvl: 4 }, { base: 'Túnica de mago', price: 150, lvl: 4 },
+            { base: 'Guantes de tela', price: 45, lvl: 2 }, { base: 'Zapatillas de tela', price: 45, lvl: 2 },
         ],
     },
     capitan: { label: 'Capitán', col: '#ffd24a', greet: '', stock: [] },

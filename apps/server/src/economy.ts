@@ -11,7 +11,7 @@
 import {
     ATTR_RANGES, traitExpMult, traitDropMult, BAG_MAX, BASE_BY_NAME, BASES, KEY_IDS, KEYDEFS, POT_MAX, POTS, QUESTS, roleOf, SHARDS_PER_KEY, SHOP_SERVER_RANGE,
     SHOPS, SLOTS, slotsFor, fitsSlot, TRAINING, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, sellPrice, trainingUnlocked,
-    BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BASES, UP_MAX, UP_MAX_BY_QUALITY, QUALITY_NAMES, EXTRAS_BY_QUALITY, rollExtra, rollExtras, uniqueIlvl, EXTRA_POOL, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, tierOfLvl, type UniqueBase,
+    BOSS_UNIQUES, UNIQUES_BY_TIER, SET_PIECES_BY_TIER, UNIQUE_BASES, UP_MAX, UP_MAX_BY_QUALITY, QUALITY_NAMES, EXTRAS_BY_QUALITY, rollExtra, rollExtras, uniqueIlvl, EXTRA_POOL, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, tierOfLvl, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
     DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, junkValue, MAT_REFORJA, reforgeGold, reforgeStones, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
     mainComplete, newQuestBook, repeatGold, rewardUniques, rollDailies, type QuestBook, type QuestEvent, type QuestHave, type QuestReward,
@@ -73,6 +73,8 @@ function newItem(st: Econ, base: string, r: number, a: SItem['a']): SItem { retu
 
 /** Probabilidades de botín de los mobs de bandas con ítems únicos (docs/ITEMS.md §5). El resto del tiempo cae oro. */
 export const UNIQUE_CHANCE = { loose: 0.005, pit: 0.015, dungeon: 0.04 };
+/** Piezas de set: parte de los únicos de los mobs de mazmorra, y chance de que un jefe de mazmorra suelte una pieza de set de su tramo ADEMÁS de su ítem. */
+export const SET_PIECE_SHARE = 0.45, BOSS_SET_CHANCE = 0.35;
 /** Piedras de forja: chance por muerte según el origen del mob, y cantidad que suelta un jefe. */
 export const FORGE_CHANCE = { loose: 0.05, pit: 0.08, dungeon: 0.18 };
 export const FORGE_BOSS: [number, number] = [3, 5];
@@ -346,14 +348,18 @@ export class Economy {
      */
     gmBis(p: Player, cls: string): string[] | null {
         const st = p.econ; if (!st || (cls !== 'mago' && cls !== 'healer')) return null; // el healer usa el mismo set de Magia
-        const top = (name: string, extra: SItem['a'] = []): SItem => {
+        // Todo en Violeta con las tiradas al máximo y la mejora al tope; los extras son los mejores para hechizos (Magia, maná, vida, RM)
+        const top = (name: string): SItem => {
             const u = UNIQUE_BY_NAME.get(name); if (!u) throw new Error(`BiS: no existe ${name}`);
-            const it = newItem(st, name, 4, [...u.uniq.attrs.map(([id, v]) => ({ id, v: Math.round(v * (1 + UNIQUE_VARIATION)) })), ...extra]);
-            it.up = UP_MAX; return it;
+            const fixed = u.uniq.attrs.map(([id]) => id), want = (['mag', 'mp', 'hp', 'rm'] as AttrId[]).filter((id) => !fixed.includes(id)).slice(0, 2);
+            const a = [...u.uniq.attrs.map(([id, v]) => ({ id, v: Math.round(v * (1 + UNIQUE_VARIATION)) })), ...want.map((id) => ({ id, v: rollExtra(id, uniqueIlvl(u), u.slot, 4, () => 0.99) }))];
+            const it = newItem(st, name, 4, a); it.up = UP_MAX; return it;
         };
-        const ring = newItem(st, 'Anillo opaco', 4, [{ id: 'mag', v: ATTR_RANGES.mag[1] }, { id: 'mp', v: ATTR_RANGES.mp[1] }, { id: 'hp', v: ATTR_RANGES.hp[1] }]);
-        ring.up = UP_MAX;
-        const set: Partial<Record<Slot, SItem>> = { arma: top('Báculo del camposanto'), armadura: top('Mortaja bordada'), cabeza: top('Capuchón de duelo'), anillo: ring };
+        const ring = (): SItem => { const r = newItem(st, 'Anillo opaco', 4, [{ id: 'mag', v: ATTR_RANGES.mag[1] }, { id: 'mp', v: ATTR_RANGES.mp[1] }, { id: 'hp', v: ATTR_RANGES.hp[1] }]); r.up = UP_MAX; return r; };
+        const set: Partial<Record<Slot, SItem>> = {
+            arma: top('Cetro del suplicio'), armadura: top('Túnica del Mago mayor'), cabeza: top('Capucha del suplicio'), guantes: top('Guantes del suplicio'),
+            botas: top('Botas del suplicio'), amuleto: top('Amuleto del abismo'), anillo: ring(), anillo2: ring(),
+        };
         for (const slot of Object.keys(set) as Slot[]) { const prev = st.eq[slot]; if (prev && st.bag.length < BAG_MAX) st.bag.push(prev); st.eq[slot] = set[slot]!; }
         this.touch(p);
         return (Object.keys(set) as Slot[]).map((sl) => set[sl]!.n);
@@ -773,7 +779,8 @@ export class Economy {
             // El ítem solo cae como único de la banda, con poca chance (más en pits y mazmorras); el resto del tiempo, oro.
             // El botín viejo con rareza al azar se eliminó (docs/ITEMS.md): los "comunes" son la basura vendible del suelo (systems/loot.ts).
             const r = Math.random(), uc = tier <= UNIQUE_TIERS_READY ? UNIQUE_CHANCE[k.origin ?? 'pit'] * dm : 0, gc = GOLD_CHANCE * dm;
-            if (r < uc) item = uniqueItem(st, pick(UNIQUES_BY_TIER[tier]), rollQuality(k.origin ?? 'pit'));
+            // en mazmorras del tramo, parte de los únicos son piezas de set (solo caen ahí, nunca en pits ni en la tienda)
+            if (r < uc) item = uniqueItem(st, k.origin === 'dungeon' && SET_PIECES_BY_TIER[tier] && Math.random() < SET_PIECE_SHARE ? pick(SET_PIECES_BY_TIER[tier]) : pick(UNIQUES_BY_TIER[tier]), rollQuality(k.origin ?? 'pit'));
             else if (r < uc + gc) gold = rint(3, 8) * def.lvl;
         }
         if (gold) addGold(st, gold);
@@ -783,6 +790,14 @@ export class Economy {
         }
         let forge = 0;
         if (boss ? bossU : Math.random() < FORGE_CHANCE[k.origin ?? 'pit']) { forge = boss ? rint(FORGE_BOSS[0], FORGE_BOSS[1]) : 1; st.forge = (st.forge ?? 0) + forge; }
+        if (boss && bossU) { // pieza de set extra (jefes de mazmorra): la banda es la de su mazmorra (D1 = T1 … D7 = T7), no la del nivel del jefe
+            const di = DUNGEON_IDS.findIndex((d) => DUNGEON_BOSS[d] === k.type && k.map === DUNGEON_MAP[d]), pool = di >= 0 ? SET_PIECES_BY_TIER[di + 1] : undefined;
+            if (pool && Math.random() < BOSS_SET_CHANCE) {
+                const sp = uniqueItem(st, pick(pool), rollQuality('dungeon'));
+                if (st.bag.length < BAG_MAX) st.bag.push(sp); else ctx.ground.add(sp, Math.floor(p.posX) + 0.5, Math.floor(p.posY) + 0.5, [p.accountKey], LOOT_FREE_MS);
+                p.send(M.econResult(true, 'set_piece', `¡Cayó una pieza de set: ${sp.n}!`));
+            }
+        }
         if (boss && bossU) { // piedras de reforja: solo de jefes de mazmorra, 1-2 por corrida para cada uno (docs/ITEMS.md)
             const n = rint(1, 2), mats = (st.mats ??= {}); mats[MAT_REFORJA] = Math.min(999, (mats[MAT_REFORJA] ?? 0) + n);
             p.send(M.econResult(true, 'quest_mat', `Conseguiste ${n} piedra${n > 1 ? 's' : ''} de reforja.`));

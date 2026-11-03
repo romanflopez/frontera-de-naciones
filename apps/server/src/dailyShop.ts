@@ -38,7 +38,7 @@ const pick = <T>(a: readonly T[], r: () => number): T => a[Math.floor(r() * a.le
 export function dailyStar(now = Date.now()): { u: UniqueBase; offer: DailyOffer } | null {
     const r = rng(dayKey(now) * 2654435761 + 7);
     if (r() >= STAR_CHANCE) return null;
-    const pool = UNIQUE_BASES.filter((u) => !u.uniq.boss); // los de jefe no se venden: se farmean
+    const pool = UNIQUE_BASES.filter((u) => !u.uniq.boss && !u.uniq.set); // los de jefe y las piezas de set no se venden: se farmean
     const u = pick(pool, r), quality = r() < STAR_GOLD_SHARE ? 3 : 2;
     const attrs = u.uniq.attrs.map(([id, v]) => ({ id, v: Math.max(1, Math.round(v * (1 + (r() * 2 - 1) * UNIQUE_VARIATION))) }));
     for (const [id, v] of rollExtras(u.slot, uniqueIlvl(u), quality, u.uniq.attrs.map(([id]) => id), r)) attrs.push({ id, v });

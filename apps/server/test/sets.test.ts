@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ALL_BASES, SHOPS } from '@fdn/world';
+import { ALL_BASES, SETS, SET_PIECES_BY_TIER, SHOPS, UNIQUE_BY_NAME, activeSets, setOfPiece } from '@fdn/world';
+import { statsFromChar } from '../src/systems/pvpCombat.ts';
 
 const ASSETS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'client', 'public', 'assets');
 const meta = JSON.parse(readFileSync(join(ASSETS, 'meta.json'), 'utf8')).paper as { cw: number; ch: number; cols: number; anims: Record<string, unknown>; sets: Record<string, string[]>; pieces: Record<string, string>; helms: string[] };
@@ -30,15 +31,41 @@ test('cada set tiene 4 piezas de cuerpo + cabeza, del tamaño de la hoja base y 
     }
 });
 
-test('cada set tiene su armadura y su yelmo como ítems, con stats de su tipo, ícono y a la venta en el armadurero', () => {
-    const stock = new Set(SHOPS.armadurero.stock.map((s) => s.base));
+test('cada set de nación tiene 6 piezas con aspecto e ícono, que se farmean (nunca en la tienda), y sus bonos suman por cantidad', () => {
+    const stock = new Set(Object.values(SHOPS).flatMap((sh) => sh.stock.map((x) => x.base)));
+    assert.equal(SETS.length, 4);
+    for (const set of SETS) {
+        assert.equal(set.pieces.length, 6, `${set.id}: 6 piezas`);
+        const slots = set.pieces.map((n) => ALL_BASES.find((b) => b.name === n)!.slot).sort();
+        assert.deepEqual(slots, ['amuleto', 'anillo', 'armadura', 'botas', 'cabeza', 'guantes'], `${set.id}: un ítem por slot`);
+        for (const n of set.pieces) { assert.ok(!stock.has(n), `${n} no se vende`); assert.ok(setOfPiece(n) === set); }
+        assert.deepEqual(set.bonuses.map((b) => b.n), [2, 4, 6]);
+        assert.ok(SET_PIECES_BY_TIER[set.tier]?.some((u) => u.uniq.set === set.id), `${set.id}: cae en su banda`);
+    }
+    // el arte de las 4 armaduras de set sigue ahí, pero ya no se compran: se consiguen en mazmorras
     for (const look of LOOKS) {
         const arm = ALL_BASES.find((b) => b.look === look), helm = ALL_BASES.find((b) => b.look === `${look}_helm`);
         assert.ok(arm && arm.slot === 'armadura' && helm && helm.slot === 'cabeza', `${look}: ítems`);
-        assert.ok(stock.has(arm.name) && stock.has(helm.name), `${look}: en la tienda`);
-        assert.ok((arm.def ?? 0) >= 22 && (arm.rm ?? 0) >= 8, `${look}: stats de malla o placas`);
         for (const f of [`${look}.png`, `${look}_helm.png`]) assert.ok(existsSync(join(ASSETS, 'icons', f)), `falta el ícono ${f}`);
     }
+    for (const b of ALL_BASES) if (b.look && LOOKS.some((l) => b.look === l || b.look === `${l}_helm`) && !UNIQUE_BY_NAME.has(b.name)) assert.ok(!stock.has(b.name), `${b.name}: el set de nación no está en la tienda`);
+});
+
+test('bonos de set: 2, 4 y 6 piezas distintas (un anillo repetido cuenta una vez) y entran en los stats de combate', () => {
+    const alba = SETS.find((s) => s.id === 'alba')!;
+    const eqOf = (names: string[]) => Object.fromEntries(names.map((n, i) => [['armadura', 'cabeza', 'guantes', 'botas', 'amuleto', 'anillo'][i], { n, a: [] }]));
+    assert.deepEqual(activeSets(alba.pieces.slice(0, 1)).map((a) => a.stats.length), [0]);
+    assert.equal(activeSets(alba.pieces.slice(0, 2))[0].stats.length, 2);
+    assert.equal(activeSets(alba.pieces.slice(0, 4))[0].stats.length, 4);
+    assert.equal(activeSets(alba.pieces)[0].stats.length, 7, '2 + 2 + 3 stats acumulados');
+    const sello = alba.pieces.find((n) => n.startsWith('Sello'))!;
+    assert.equal(activeSets([sello, sello, alba.pieces[0]])[0].count, 2, 'dos anillos iguales cuentan una vez');
+    // en el combate: con 2 piezas puestas sube la vida y la velocidad de ataque respecto de las mismas piezas sin set
+    const hpOf = (n: string[]) => statsFromChar({ lvl: 20, cls: 'guerrero', eq: eqOf(n) } as never);
+    const sin = hpOf([alba.pieces[0]]), con = hpOf(alba.pieces.slice(0, 2));
+    const two = alba.bonuses[0].stats;
+    assert.ok(con.maxHp - sin.maxHp >= two.find(([id]) => id === 'hp')![1], 'el bono de vida entra');
+    assert.ok(con.aspd - sin.aspd >= two.find(([id]) => id === 'aspd')![1], 'el bono de velocidad entra');
 });
 
 test('los nombres de los ítems son únicos (son la clave del guardado)', () => {

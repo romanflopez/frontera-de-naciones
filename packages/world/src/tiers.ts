@@ -9,8 +9,8 @@ export const TIERS: Record<Tier, [number, number]> = { 1: [1, 5], 2: [6, 10], 3:
 export const TIER_LIST = Object.keys(TIERS).map(Number) as Tier[];
 /** Tier al que pertenece un nivel (1..7). */
 export const tierOfLvl = (lvl: number): Tier => (TIER_LIST.find((t) => lvl <= TIERS[t][1]) ?? 7);
-/** Banda de ítems que suelta un mob de nivel `lvl`: la de su tier, con tope 6 (el T7 usa la 6, más legendarios). */
-export const itemBandOfLevel = (lvl: number): number => Math.min(6, tierOfLvl(Math.max(1, lvl)));
+/** Banda de ítems que suelta un mob de nivel `lvl`: la de su tier (las 7 bandas tienen catálogo; la T7 es de ilvl 35). */
+export const itemBandOfLevel = (lvl: number): number => tierOfLvl(Math.max(1, lvl));
 /**
  * Nivel de los mobs de un pit en un mapa que cubre `range` (sub-rango de su tier): A (0) el más bajo, C (2) el más alto, B en el medio.
  * Los sueltos (`pit` indefinido) van al nivel de A.
