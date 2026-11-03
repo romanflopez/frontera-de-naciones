@@ -332,16 +332,15 @@ canvas:focus{outline:none}
   <div id="toast" class="hud" role="status" hidden></div>
   <div id="notif" class="hud" role="status" aria-live="polite"></div>
 
-  <div id="target" class="hud box" hidden>
-    <div class="name"><span id="tName"></span><small id="tLvl"></small></div>
-    <div class="bar hp"><i id="tHpI"></i><span id="tHpT"></span></div>
+  <div id="target" class="hud" hidden>
+    <div class="np" id="tNp"><span class="np-lvl" id="tLvl" aria-label="Nivel"></span><div class="name"><span id="tName"></span></div><div class="bar hp"><i id="tHpI"></i><span id="tHpT"></span></div></div>
     <div class="chips" id="tChips"></div>
   </div>
 
-  <div id="focus" class="hud box" hidden title="Foco · clic para soltarlo · Tab para pasar a él">
-    <div class="name"><span id="fName"></span><small id="fLvl"></small></div>
-    <div class="bar hp"><i id="fHpI"></i><span id="fHpT"></span></div>
+  <div id="focus" class="hud" hidden title="Foco · clic para soltarlo · Tab para pasar a él">
+    <div class="np" id="fNp"><span class="np-lvl" id="fLvl" aria-label="Nivel"></span><div class="name"><span id="fName"></span></div><div class="bar hp"><i id="fHpI"></i><span id="fHpT"></span></div></div>
   </div>
+  <div id="npcBubble" class="hud" hidden></div>
 
   <div id="bagBtn" class="hud"><button id="openChar" type="button">Personaje (C)</button> <button id="openBag" type="button">Bolsa (I)</button> <button id="openQuests" type="button">Misiones (L)</button> <button id="openBook" type="button">Libro (P)</button> <button id="exitBtn" type="button">Salir</button></div>
 
@@ -398,6 +397,7 @@ canvas:focus{outline:none}
   <div id="gmmenu" class="hud box" hidden role="dialog" aria-label="Menú GM"></div>
 
   <div id="qdlg" class="hud cw" role="dialog" aria-label="Diálogo" hidden>
+    <div class="qd-av" id="qdAv" aria-hidden="true"><i></i></div>
     <header class="cw-head"><h2 id="qdName">Capitán</h2><button class="cw-x" id="qdClose" type="button" aria-label="Cerrar">&times;</button></header>
     <div class="cw-body">
       <div id="qdMain"></div>

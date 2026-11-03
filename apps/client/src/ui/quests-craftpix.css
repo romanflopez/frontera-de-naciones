@@ -66,3 +66,11 @@
 #qlog .ql-foot{margin-top:auto;display:flex;gap:12px;padding-top:12px}
 #qlog .ql-foot .qw-btn{margin-left:0;height:34px;padding:0 20px;font-size:13px}
 #qlog .ql-foot .qw-btn.r{margin-left:auto}
+
+/* ===== retrato del NPC en el diálogo (screen HUD del pack: círculo con bisel dorado asomando sobre la ventana) ===== */
+#qdlg.cw{margin-top:54px;overflow:visible}
+#qdlg .qd-av{position:absolute;left:50%;top:-70px;width:84px;height:84px;transform:translateX(-50%);display:grid;place-items:center;
+  background:url(/assets/ui/craftpix/av-bg.png) 50% 50%/100% 100% no-repeat;z-index:3;pointer-events:none}
+#qdlg .qd-av::after{content:"";position:absolute;inset:6px;background:url(/assets/ui/craftpix/av-ov.png) 50% 50%/100% 100% no-repeat}
+#qdlg .qd-av i{width:60px;height:60px;border-radius:50%;display:grid;place-items:center;font:400 30px/1 "Alegreya SC",Georgia,serif;color:#f0e6cf;text-shadow:0 1px 3px #000;
+  background:radial-gradient(circle at 35% 30%,color-mix(in srgb,var(--c,#8a7640) 70%,#fff 10%),color-mix(in srgb,var(--c,#8a7640) 60%,#000) 75%)}
