@@ -18,7 +18,7 @@ const rules: Rules = {
     ...SERVER_RULES,
     dmgMult: num('mult', SERVER_RULES.dmgMult), hitCap: num('cap', SERVER_RULES.hitCap),
     potLockMs: num('potlock', SERVER_RULES.potLockMs / 1000) * 1000, potMult: num('pot', SERVER_RULES.potMult), mpRegenPct: num('regen', SERVER_RULES.mpRegenPct), mpRegenMin: num('regenmin', SERVER_RULES.mpRegenMin),
-    poisonOn: arg('veneno') ? arg('veneno')!.split(',') : SERVER_RULES.poisonOn, healCd: num('curacd', SERVER_RULES.healCd), castigoMult: num('castigo', SERVER_RULES.castigoMult), renewTotal: process.argv.includes('--renovar-total'),
+    poisonOn: arg('veneno') ? arg('veneno')!.split(',') : SERVER_RULES.poisonOn, healCd: num('curacd', SERVER_RULES.healCd), castigoMult: num('castigo', SERVER_RULES.castigoMult),
 };
 const lvls = (arg('lvl') ?? '12').split(',').map(Number), n = num('n', 60);
 

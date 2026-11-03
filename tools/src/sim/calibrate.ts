@@ -27,7 +27,7 @@ export function penalty(r: Row): number {
 const out: { rules: Rules; score: number; fails: number; rows: Row[] }[] = [];
 const t0 = performance.now();
 for (const dmgMult of grid.mult) for (const hitCap of grid.cap) for (const lock of grid.lock) for (const potMult of grid.pot) for (const mpRegenPct of grid.regen) for (const mpRegenMin of grid.rmin) {
-    const rules: Rules = { ...SERVER_RULES, dmgMult, hitCap, potLockMs: lock * 1000, potMult, mpRegenPct, mpRegenMin, renewTotal: process.argv.includes('--renovar-total') || SERVER_RULES.renewTotal };
+    const rules: Rules = { ...SERVER_RULES, dmgMult, hitCap, potLockMs: lock * 1000, potMult, mpRegenPct, mpRegenMin };
     const rows = runAll(lvl, rules, n);
     out.push({ rules, rows, score: Math.round(rows.reduce((a, r) => a + penalty(r), 0) * 10) / 10, fails: rows.filter((r) => !r.ok).length });
 }

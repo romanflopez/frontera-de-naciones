@@ -6,6 +6,7 @@
  * empieza el combate, Remover si quedan ≥ 1,5 s de control, Segundo aliento debajo del 45 % cuando nadie lo puede cortar.
  */
 import type { Act, Fighter, Policy, Sim } from './engine.ts';
+import { SKILLS } from '../../../../apps/server/src/systems/pvpCombat.ts';
 
 const toward = (w: Sim, f: Fighter, t: Fighter, run = true): Act => ({ t: 'move', dx: t.x - f.x, dy: t.y - f.y, run });
 const away = (w: Sim, f: Fighter, t: Fighter, run = true): Act => { const [dx, dy] = w.awayDir(f, t); return { t: 'move', dx, dy, run }; };
@@ -107,7 +108,7 @@ export const healer: Policy = (f, w) => {
     if (melee && dc <= 3 && w.ctrlLeftMs(close) === 0) { const a = use(w, f, 'reprender', close) ?? use(w, f, 'novasagrada'); if (a) return { act: a, ...c }; }
     // curar
     if (hh < 0.6) { const a = (w.allies(f).filter((x) => x.hp / x.s.maxHp < 0.75).length > 1 ? use(w, f, 'orbe', hurt) : null) ?? use(w, f, 'curacion', hurt); if (a) return { act: a, ...c }; }
-    if (hh < 0.9 && w.now >= (hurt.mem.renewUntil ?? 0)) { const a = use(w, f, 'renovar', hurt); if (a) { hurt.mem.renewUntil = w.now + 6000; return { act: a, ...c }; } }
+    if (hh < 0.9 && w.now >= (hurt.mem.renewUntil ?? 0)) { const a = use(w, f, 'renovar', hurt); if (a) { hurt.mem.renewUntil = w.now + SKILLS.renovar.hot!.ticks * SKILLS.renovar.hot!.every * 1000; return { act: a, ...c }; } }
     // pegar
     if (melee && dc <= 4) { const a = use(w, f, 'novasagrada'); if (a) return { act: a, ...c }; }
     if (melee && dc <= 3 && w.ctrlLeftMs(close) < 1000) return { act: away(w, f, close), ...c };

@@ -13,7 +13,7 @@
  * - pociones con bloqueo compartido y la de vida en 20 % + 4 pulsos de 0,5 s.
  * Lo que no está en el server y es supuesto de la sim: un jugador no actúa más rápido que cada 250-400 ms (tiempo de reacción).
  */
-import { BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, BURN_EVERY, BURN_TICKS, AURA_HEAL_FRAC, FURY_MS, POISON_HEAL_TAKEN, POTION_HOT_EVERY_MS, PVP_COMBAT_MS, PVP_SPELLS, PvpLimiter, RUN_MS, SECOND_WIND, SKILLS, STUN_SPELLS, UTIL_MP, WALK_MS, burnTickDmg, castMsOf, damageAfterDefense, healAmount, isCast, paralysisSecs, potionHpSplit, rollSpellDamage, secondWindHeal, spellDmgKind, type CombatStats, type DmgKind } from '../../../../apps/server/src/systems/pvpCombat.ts';
+import { BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, BURN_EVERY, BURN_TICKS, AURA_HEAL_FRAC, FURY_MS, POISON_HEAL_TAKEN, POTION_HOT_EVERY_MS, PVP_COMBAT_MS, PVP_SPELLS, PvpLimiter, RUN_MS, SECOND_WIND, SKILLS, STUN_SPELLS, UTIL_MP, WALK_MS, burnTickDmg, castMsOf, damageAfterDefense, healAmount, isCast, paralysisSecs, potionHpSplit, rollSpellDamage, secondWindHeal, skillMpCost, spellDmgKind, type CombatStats, type DmgKind } from '../../../../apps/server/src/systems/pvpCombat.ts';
 import { applyBless, applyParalysis, applyPoison, applySlow, castRemover, createDefaultStatus, expireTimed, isBlessed, isPoisoned, isSlowed, updateStatus, type CharacterStatus } from '../../../../apps/server/src/systems/statusSystem.ts';
 import { canUseSkill } from '@fdn/world';
 import { cap, potHp, potMp, scale, vsCtrl, type Rules } from './rules.ts';
@@ -33,7 +33,7 @@ export interface Fighter {
     cast: { id: string; at: number; tgt: Fighter } | null;
     windUntil: number; windCdUntil: number;
     potReadyAt: number; lastPotAt: number; pvpUntil: number;
-    burnSeq: number; burnUntil: number; renewSeq: number;
+    burnSeq: number; burnUntil: number; renewSeq: number; renewUntil: number;
     nextActAt: number; furyCdUntil: number; furyUntil: number;
     lastCast: Map<string, number>; lastMelee: number;
     /** memoria libre para la política (objetivo fijado, etc.) */
@@ -170,9 +170,10 @@ export class Sim {
     /** Habilidad de SKILLS (= handleSkill / healerSkill / handleBlink). */
     private skill(f: Fighter, id: string, tgt?: Fighter): boolean {
         const sp = SKILLS[id], now = this.now;
-        if (!f.lim.skillReady(id, now) || f.mp < sp.mp || this.frozen(f)) return false;
+        const mp = skillMpCost(id, true); // en la sim todo es combate PvP
+        if (!f.lim.skillReady(id, now) || f.mp < mp || this.frozen(f)) return false;
         if (id === 'curacion' && now - (f.lastCast.get('curacion') ?? -1e12) < this.spec.rules.healCd * 950) return false;
-        const commit = () => { f.mp -= sp.mp; f.lim.markSkill(id, now); f.lastCast.set(id, now); f.m.casts++; };
+        const commit = () => { f.mp -= mp; f.lim.markSkill(id, now); f.lastCast.set(id, now); f.m.casts++; };
         const roll = (t: Fighter) => rollSpellDamage(id, f.s, this.fury(f) && this.inPvp(t));
         const near = (r: number, of: Fighter = f) => this.foes(f).filter((o) => this.dist(of, o) <= r);
         switch (id) {
@@ -208,9 +209,10 @@ export class Sim {
             case 'renovar': {
                 const t = tgt ?? f;
                 if (this.dist(f, t) > sp.range + 1.5) return false;
-                commit();
-                if (t.team !== f.team) { this.burn(t, f); return true; }
-                const seq = ++t.renewSeq, per = healAmount(sp.hot!.frac / (this.spec.rules.renewTotal ? sp.hot!.ticks : 1), f.s, t.s.maxHp);
+                if (t.team !== f.team) { commit(); this.burn(t, f); return true; }
+                if (this.now < t.renewUntil) return false; // como el server: no se reaplica sobre el mismo objetivo hasta que termine
+                commit(); t.renewUntil = this.now + sp.hot!.ticks * sp.hot!.every * 1000;
+                const seq = ++t.renewSeq, per = healAmount(sp.hot!.frac, f.s, t.s.maxHp);
                 for (let k = 1; k <= sp.hot!.ticks; k++) this.later(k * sp.hot!.every * 1000, () => { if (t.renewSeq === seq) this.heal(t, per, f); });
                 return true;
             }
@@ -335,7 +337,7 @@ export function simulate(spec: SimSpec): SimResult {
             const f: Fighter = {
                 id: id++, team: ti as 0 | 1, cls: side.cls, name: `${ti ? 'B' : 'A'}${k + 1}-${side.cls}`, s, hp: s.maxHp, mp: s.maxMp,
                 x: (ti ? 1 : -1) * gap / 2, y: (k - (team.length - 1) / 2) * 3, st: createDefaultStatus(), lim, cast: null, windUntil: 0, windCdUntil: 0,
-                potReadyAt: 0, lastPotAt: -1e12, pvpUntil: 0, burnSeq: 0, burnUntil: 0, renewSeq: 0, nextActAt: 0, furyCdUntil: 0, furyUntil: 0,
+                potReadyAt: 0, lastPotAt: -1e12, pvpUntil: 0, burnSeq: 0, burnUntil: 0, renewSeq: 0, renewUntil: 0, nextActAt: 0, furyCdUntil: 0, furyUntil: 0,
                 lastCast: new Map(), lastMelee: -1e12, mem: {}, taken: [], deadAt: 0,
                 m: { dmg: 0, heal: 0, pots: 0, potsMp: 0, starved: 0, winds: 0, windsCut: 0, casts: 0, interrupted: 0, ccSecs: 0, bySpell: {} },
             };

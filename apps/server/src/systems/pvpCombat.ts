@@ -111,7 +111,7 @@ export const SKILLS: Record<string, ClassSkill> = {
     intelecto: { cls: 'mago', mp: 60, range: 0, cd: 10, cast: true, aoe: 14, buff: 'intelecto', buffSecs: 90 },           // Intelecto arcano: +Magia 90 s
     // Healer (K5). Maná: los costos de Valdrys escalados al pool de ERIS (Castigo queda igual: 18).
     curacion: { cls: 'healer', mp: 48, range: 12, cd: 5, cast: true, heal: 0.4 },                                         // Curación: cast 1,5 s, 40 % de la vida
-    renovar: { cls: 'healer', mp: 26, range: 12, cd: 3, cast: false, hot: { ticks: 6, every: 1, frac: 0.0625 }, burn: true }, // Renovar: aliado cura en 6 s; enemigo, quemadura
+    renovar: { cls: 'healer', mp: 26, range: 12, cd: 3, cast: false, hot: { ticks: 4, every: 3, frac: 0.03 }, burn: true }, // Renovar: aliado 12 % en 12 s (1 %/s, no se reaplica hasta que termine); enemigo, quemadura
     bendicion: { cls: 'healer', mp: 30, range: 12, cd: 20, cast: false, bless: 10 },                                     // Bendición sagrada: 10 s
     novasagrada: { cls: 'healer', mp: 36, dmg: [14, 21], k: 1.2, stat: 'mag', range: 0, cd: 6, aoe: 4.5, cast: false, selfHeal: 0.12 }, // Nova sagrada
     orbe: { cls: 'healer', mp: 56, range: 12, cd: 10, cast: true, aoe: 4, heal: 0.2 },                                   // Orbe sagrado: cast 1,5 s, 20 % en área
@@ -147,6 +147,18 @@ export function buffTakenMult(status: CharacterStatus, now: number): number {
     return (hasBuff(status, 'amparo', now) ? BUFF.amparoTaken : 1) * (hasBuff(status, 'represalia', now) ? BUFF.represaliaTaken : 1);
 }
 /** Habilidades del healer que se piden por skillRequest. */
+/**
+ * Curas en PvP (balance del healer, sale de K7): mientras el que cura está en combate contra jugadores, sus curas cuestan
+ * ×2,5 de maná. En PvE se queda el costo de la tabla. Sin esto, el piso de 5 de maná por segundo de PvP le paga al healer
+ * casi una Curación cada 10 s y no muere nunca (`sim:pvp`). La cura en sí no se reduce: contra jugadores sigue valiendo solo el veneno.
+ */
+export const PVP_HEAL_MP_MULT = 2.5;
+export const PVP_HEAL_MP_SKILLS: readonly string[] = ['curacion', 'renovar', 'orbe', 'esfera', 'guardian'];
+/** Maná que cuesta una habilidad de SKILLS, según si el que la usa está en combate PvP. */
+export const skillMpCost = (id: string, inPvp: boolean): number => {
+    const mp = SKILLS[id]?.mp ?? 0;
+    return inPvp && PVP_HEAL_MP_SKILLS.includes(id) ? Math.round(mp * PVP_HEAL_MP_MULT) : mp;
+};
 export const HEALER_SKILLS = ['curacion', 'renovar', 'bendicion', 'novasagrada', 'orbe'] as const;
 /** Bendición sagrada: daño recibido ×0,8 y curación recibida ×1,3 mientras dura; inmune a congelado y aturdido. */
 export const BLESS_DMG_TAKEN = 0.8, BLESS_HEAL_TAKEN = 1.3;

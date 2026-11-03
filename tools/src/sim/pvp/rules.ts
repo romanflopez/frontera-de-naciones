@@ -28,12 +28,10 @@ export interface Rules {
     healCd: number;
     /** PROPUESTA (no está en el server): multiplicador de Castigo contra jugadores (hoy 1). */
     castigoMult: number;
-    /** PROPUESTA: Renovar cura `frac` repartido en los 6 pulsos (6,25 % en total, como dice kits-de-clase.md) en vez de por pulso (37,5 % hoy). */
-    renewTotal: boolean;
 }
 
 export const SERVER_RULES: Rules = {
-    dmgMult: PVP_DMG_MULT, hitCap: PVP_HIT_CAP, vsCtrlMax: PVP_VS_CTRL_MAX, potLockMs: POTION_LOCK_PVP_MS, potMult: POTION_PVP_MULT, mpRegenPct: COMBAT_MP_REGEN_PCT, mpRegenMin: PVP_MP_REGEN_MIN, poisonOn: [], healCd: 5, castigoMult: 1, renewTotal: false,
+    dmgMult: PVP_DMG_MULT, hitCap: PVP_HIT_CAP, vsCtrlMax: PVP_VS_CTRL_MAX, potLockMs: POTION_LOCK_PVP_MS, potMult: POTION_PVP_MULT, mpRegenPct: COMBAT_MP_REGEN_PCT, mpRegenMin: PVP_MP_REGEN_MIN, poisonOn: [], healCd: 5, castigoMult: 1,
 };
 
 export const scale = (r: Rules, raw: number): number => Math.max(1, Math.round(raw * r.dmgMult));
