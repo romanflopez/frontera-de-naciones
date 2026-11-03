@@ -128,6 +128,9 @@ export interface ClientMessage {
     | //
     /** Mejora de ítems únicos en el herrero (docs/ITEMS.md §7). */
     { $case: "econUpgradeRequest"; value: EconUpgradeRequest }
+    | //
+    /** Reforja: re-tira UN stat extra del ítem (docs/ITEMS.md): piedras de reforja de jefes + oro, costo que se duplica por ítem. */
+    { $case: "econReforgeRequest"; value: EconReforgeRequest }
     | { $case: "saveCharacterRequest"; value: SaveCharacterRequest }
     | { $case: "mobHitRequest"; value: MobHitRequest }
     | { $case: "pveStatusRequest"; value: PveStatusRequest }
@@ -1628,6 +1631,13 @@ export interface EconUpgradeRequest {
   uid: number;
 }
 
+/** Reforja del extra número `extra` (0 o 1, contando desde el final de los fijos) del ítem `uid` en el herrero. */
+export interface EconReforgeRequest {
+  npcId: string;
+  uid: number;
+  extra: number;
+}
+
 /** Repartir puntos de stats: action = "add" (suma `points` al stat `stat`: str, vit, dex, mag o luk) o "reset" (devuelve todos los puntos). El server valida todo. */
 export interface StatAllocRequest {
   action: string;
@@ -2074,6 +2084,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         break;
       case "econUpgradeRequest":
         EconUpgradeRequest.encode(message.payload.value, writer.uint32(786).fork()).join();
+        break;
+      case "econReforgeRequest":
+        EconReforgeRequest.encode(message.payload.value, writer.uint32(794).fork()).join();
         break;
       case "saveCharacterRequest":
         SaveCharacterRequest.encode(message.payload.value, writer.uint32(642).fork()).join();
@@ -2662,6 +2675,17 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             };
             continue;
           }
+          case 99: {
+            if (tag !== 794) {
+              break;
+            }
+
+            message.payload = {
+              $case: "econReforgeRequest",
+              value: EconReforgeRequest.decode(reader, reader.uint32()),
+            };
+            continue;
+          }
           case 80: {
             if (tag !== 642) {
               break;
@@ -3206,6 +3230,15 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           message.payload = {
             $case: "econUpgradeRequest",
             value: EconUpgradeRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "econReforgeRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "econReforgeRequest",
+            value: EconReforgeRequest.fromPartial(object.payload.value),
           };
         }
         break;
@@ -20890,6 +20923,85 @@ export const EconUpgradeRequest: MessageFns<EconUpgradeRequest> = {
     const message = createBaseEconUpgradeRequest();
     message.npcId = object.npcId ?? "";
     message.uid = object.uid ?? 0;
+    return message;
+  },
+};
+
+function createBaseEconReforgeRequest(): EconReforgeRequest {
+  return { npcId: "", uid: 0, extra: 0 };
+}
+
+export const EconReforgeRequest: MessageFns<EconReforgeRequest> = {
+  encode(message: EconReforgeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.npcId !== "") {
+      writer.uint32(10).string(message.npcId);
+    }
+    if (message.uid !== 0) {
+      writer.uint32(16).int32(message.uid);
+    }
+    if (message.extra !== 0) {
+      writer.uint32(24).int32(message.extra);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EconReforgeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseEconReforgeRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.npcId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.uid = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.extra = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<EconReforgeRequest>, I>>(base?: I): EconReforgeRequest {
+    return EconReforgeRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EconReforgeRequest>, I>>(object: I): EconReforgeRequest {
+    const message = createBaseEconReforgeRequest();
+    message.npcId = object.npcId ?? "";
+    message.uid = object.uid ?? 0;
+    message.extra = object.extra ?? 0;
     return message;
   },
 };

@@ -11,9 +11,9 @@
 import {
     ATTR_RANGES, traitExpMult, traitDropMult, BAG_MAX, BASE_BY_NAME, BASES, KEY_IDS, KEYDEFS, POT_MAX, POTS, QUESTS, roleOf, SHARDS_PER_KEY, SHOP_SERVER_RANGE,
     SHOPS, SLOTS, TRAINING, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, sellPrice, trainingUnlocked,
-    BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BASES, UP_MAX, UP_MAX_BY_QUALITY, QUALITY_NAMES, rollExtras, uniqueIlvl, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, tierOfLvl, type UniqueBase,
+    BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BASES, UP_MAX, UP_MAX_BY_QUALITY, QUALITY_NAMES, EXTRAS_BY_QUALITY, rollExtra, rollExtras, uniqueIlvl, EXTRA_POOL, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, tierOfLvl, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
-    DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, junkValue, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
+    DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, junkValue, MAT_REFORJA, reforgeGold, reforgeStones, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
     mainComplete, newQuestBook, repeatGold, rewardUniques, rollDailies, type QuestBook, type QuestEvent, type QuestHave, type QuestReward,
 } from '@fdn/world';
 import { canPickup, GROUND_MAX_PER_OWNER, PICKUP_RANGE, type GroundApi } from './ground.ts';
@@ -33,7 +33,7 @@ const lootScale = (() => { const v = Number(process.env.FDN_DEBUG_LOOT_SCALE); r
 export const LOOT_FREE_MS = 60_000 * lootScale;
 export const DROP_FREE_MS = 30_000 * lootScale;
 
-export interface SItem { u: number; n: string; r: number; a: { id: AttrId; v: number }[]; /** nivel de mejora (+N), solo ítems únicos */ up?: number }
+export interface SItem { u: number; n: string; r: number; a: { id: AttrId; v: number }[]; /** nivel de mejora (+N), solo ítems únicos */ up?: number; /** reforjas ya hechas (el costo de la próxima se duplica con cada una) */ rf?: number }
 export interface Econ {
     v: number;
     cls: string; faction: string;
@@ -114,7 +114,7 @@ function cleanImportItem(st: Econ, v: unknown, clipped: string[], trusted = fals
     if (uniq && !trusted) { // únicos: solo con sus atributos fijos (se aceptan los del cliente si caen en la variación permitida)
         const lim = UNIQUE_VARIATION + 0.05, given = new Map<string, number>(); for (const x of Array.isArray(o.a) ? o.a : []) { const e = (x ?? {}) as Record<string, unknown>; if (typeof e.id === 'string') given.set(e.id, clampInt(e.v, 1, 1e6)); }
         for (const [id, v] of uniq.uniq.attrs) { const g = given.get(id); a.push({ id, v: g !== undefined && g >= Math.floor(v * (1 - lim)) && g <= Math.ceil(v * (1 + lim)) ? g : v }); }
-        const ni = newItem(st, base.name, uniq.uniq.boss ? 4 : 2, a); const upv = clampInt(o.up, 0, UP_MAX); if (upv) ni.up = upv; return ni;
+        const ni = newItem(st, base.name, uniq.uniq.boss ? 4 : 2, a); const upv = clampInt(o.up, 0, UP_MAX); if (upv) ni.up = upv; const rfv = clampInt(o.rf, 0, 99); if (rfv) ni.rf = rfv; return ni;
     }
     if (isShop && !trusted) { // bases de tienda: solo existen con los atributos fijos de su línea de stock
         const line = Object.values(SHOPS).flatMap((s) => s.stock).find((x) => x.base === base.name);
@@ -245,7 +245,7 @@ export const toInvItem = (i: SItem) => ({ uid: i.u, base: i.n, rarity: i.r, attr
 
 /** JSON de CharSave v1 que usa el cliente para la pantalla de selección y para armar su espejo inicial. */
 export function toCharSave(st: Econ): string {
-    const it = (i: SItem | null) => (i ? { n: i.n, r: i.r, a: i.a, up: i.up ?? 0 } : null);
+    const it = (i: SItem | null) => (i ? { n: i.n, r: i.r, a: i.a, up: i.up ?? 0, rf: i.rf ?? 0 } : null);
     return JSON.stringify({
         v: 1, faction: st.faction, cls: st.cls, lvl: st.lvl, exp: st.exp, gold: st.gold, hp: st.hp, mp: st.mp,
         bag: st.bag.map(it), eq: Object.fromEntries(SLOTS.map((s) => [s, it(st.eq[s])])),
@@ -454,6 +454,36 @@ export class Economy {
             // la mejora a +6 o más es la zona de riesgo: el fallo baja un nivel
             if (up >= UP_RISK_FROM) { it.up = up - 1; return done(`La mejora falló y ${it.n} BAJÓ a +${it.up}. Se perdieron ${stones} piedra${stones > 1 ? 's' : ''} y ${gold} de oro.`, true); }
             return done(`La mejora falló: se perdieron ${stones} piedra${stones > 1 ? 's' : ''} y ${gold} de oro. ${it.n} sigue en +${up}.`);
+        });
+    }
+
+    /**
+     * Reforja (docs/ITEMS.md): re-tira UN stat extra elegido del ítem (los fijos y la calidad no se tocan). Cuesta piedras
+     * de reforja (solo de jefes de mazmorra) + oro, y el costo se duplica con cada reforja del MISMO ítem (sin tope duro:
+     * el tope es el precio). El extra nuevo sale del pool, sin pisar los fijos ni el otro extra; puede repetir el id actual
+     * (re-tira el valor). Así la reforja acorta el re-farmeo del roll perfecto sin subir el techo de poder.
+     */
+    reforge(p: Player, ctx: EconCtx, npcId: string, uid: number, extra: number): void {
+        this.run(p, ctx, (st) => {
+            if (p.isDead) return fail('dead', 'Estás muerto.');
+            const npc = this.near(p, ctx, npcId); if (!npc) return fail('far', 'Estás muy lejos del herrero.');
+            if (!['armero', 'armadurero'].includes(roleOf(npc))) return fail('no_smith', 'Ese NPC no reforja equipo.');
+            const it = st.bag.find((x) => x.u === uid) ?? Object.values(st.eq).find((x) => x?.u === uid) ?? undefined; if (!it) return fail('no_item', 'No tenés ese item.');
+            const u = UNIQUE_BY_NAME.get(it.n); if (!u) return fail('not_unique', 'Solo se reforjan los ítems únicos.');
+            const nBase = u.uniq.attrs.length, nExtra = Math.min(EXTRAS_BY_QUALITY[Math.min(4, Math.max(0, it.r))] ?? 0, Math.max(0, it.a.length - nBase));
+            if (nExtra <= 0) return fail('no_extras', 'Ese ítem no tiene stats extra para reforjar.');
+            const i = clampInt(extra, 0, nExtra - 1); const idx = nBase + i;
+            const rf = it.rf ?? 0, stones = reforgeStones(rf), gold = reforgeGold(u.uniq.tier, rf);
+            const have = st.mats?.[MAT_REFORJA] ?? 0;
+            if (have < stones) return fail('stones', `Necesitás ${stones} piedra${stones > 1 ? 's' : ''} de reforja (tenés ${have}).`);
+            if (st.gold < gold) return fail('gold', `Necesitás ${gold} de oro.`);
+            st.mats![MAT_REFORJA] = have - stones; addGold(st, -gold);
+            const fixed = u.uniq.attrs.map(([id]) => id), other = it.a.filter((_, j) => j >= nBase && j !== idx).map((x) => x.id);
+            const pool = EXTRA_POOL.filter((id) => !fixed.includes(id) && !other.includes(id));
+            const id = pool[Math.floor(Math.random() * pool.length)];
+            const v = rollExtra(id, uniqueIlvl(u), u.slot, it.r);
+            const prev = it.a[idx]; it.a[idx] = { id, v }; it.rf = rf + 1;
+            return done(`Reforjado: ${prev.id} ${prev.v} → ${id} ${v}. La próxima reforja de ${it.n} cuesta ${reforgeStones(rf + 1)} piedra${reforgeStones(rf + 1) > 1 ? 's' : ''}.`, true);
         });
     }
 
@@ -724,6 +754,10 @@ export class Economy {
         }
         let forge = 0;
         if (boss ? bossU : Math.random() < FORGE_CHANCE[k.origin ?? 'pit']) { forge = boss ? rint(FORGE_BOSS[0], FORGE_BOSS[1]) : 1; st.forge = (st.forge ?? 0) + forge; }
+        if (boss && bossU) { // piedras de reforja: solo de jefes de mazmorra, 1-2 por corrida para cada uno (docs/ITEMS.md)
+            const n = rint(1, 2), mats = (st.mats ??= {}); mats[MAT_REFORJA] = Math.min(999, (mats[MAT_REFORJA] ?? 0) + n);
+            p.send(M.econResult(true, 'quest_mat', `Conseguiste ${n} piedra${n > 1 ? 's' : ''} de reforja.`));
+        }
         if (Math.random() < 0.14) { const kind: PotKind = Math.random() < 0.6 ? 'hp' : 'mp'; if (st.pots[kind] < POT_MAX) { st.pots[kind]++; potion = kind; } }
         if (boss && !bossU) { const kid: KeyId = k.shard ?? (k.zoneName === 'Cripta olvidada' ? 'foso' : 'cripta'); st.q.shards[kid] = Math.min(99, st.q.shards[kid] + 1); shard = kid; }
         // materiales de las llaves: cada uno en los pits de su tier de zona (T1-T7, sin el tope 6 de la banda de ítems; ×2 en mutantes, como el resto del botín)

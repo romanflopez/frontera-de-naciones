@@ -138,3 +138,35 @@ test('vender basura (uid 0): paga el valor de JUNK_MATS y no toca los materiales
     eco.sell(p, cx, 'mercader_s', 0);
     assert.equal(lastResult(log)?.code, 'no_junk');
 });
+
+// ---------- reforja ----------
+test('reforja: re-tira un extra elegido, cobra piedras + oro y duplica el costo por ítem; los fijos no se tocan', async () => {
+    const { MAT_REFORJA, reforgeStones } = await import('@fdn/world');
+    const { eco, reg, join } = setup();
+    const world = reg.ensure('solmar_legacy');
+    const { p, log } = join(world, 'Reforjador');
+    const st = p.econ!, cx = ctx([{ id: 'armero_s', x: 11, y: 11 }]);
+    const u = UNIQUE_BASES.find((x) => !x.uniq.boss)!;
+    const it = uniqueItem(st, u, 2); st.bag.push(it); // Azul: 2 extras
+    const nBase = u.uniq.attrs.length;
+    st.gold = 1_000_000; st.mats = { [MAT_REFORJA]: 1 };
+    const before = it.a.map((a) => ({ ...a }));
+    eco.reforge(p, cx, 'armero_s', it.u, 0);
+    assert.equal(lastResult(log)?.ok, true);
+    assert.deepEqual(it.a.slice(0, nBase).map((a) => a.id), before.slice(0, nBase).map((a) => a.id), 'los fijos quedan');
+    assert.ok(!u.uniq.attrs.some(([id]) => id === it.a[nBase].id), 'el extra nuevo no pisa un fijo');
+    assert.notEqual(it.a[nBase].id, it.a[nBase + 1].id, 'los dos extras no se repiten');
+    assert.equal(st.mats[MAT_REFORJA], 0); assert.equal(it.rf, 1);
+    // la segunda reforja del mismo ítem cuesta el doble
+    assert.equal(reforgeStones(it.rf!), 2);
+    st.mats[MAT_REFORJA] = 1;
+    eco.reforge(p, cx, 'armero_s', it.u, 0);
+    assert.equal(lastResult(log)?.code, 'stones', 'con 1 piedra no alcanza para la segunda');
+    // un Verde con 1 extra solo puede reforjar el 0; un Común no reforja
+    const verde = uniqueItem(st, u, 1); st.bag.push(verde); st.mats[MAT_REFORJA] = 9;
+    eco.reforge(p, cx, 'armero_s', verde.u, 5); // índice fuera de rango: se recorta al 0
+    assert.equal(lastResult(log)?.ok, true);
+    const comun = uniqueItem(st, u, 0); st.bag.push(comun);
+    eco.reforge(p, cx, 'armero_s', comun.u, 0);
+    assert.equal(lastResult(log)?.code, 'no_extras');
+});

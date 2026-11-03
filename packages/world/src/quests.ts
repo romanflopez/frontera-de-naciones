@@ -84,10 +84,16 @@ export const JUNK_MATS: Record<string, { name: string; value: number }> = {
 export const junkValue = (id: string): number => JUNK_MATS[id]?.value ?? (id.startsWith('trophy_') ? 3 : 0);
 
 /** Nombre de una llave, material de llave o basura (para los avisos y la bolsa). */
-export const keyMatName = (id: string): string => KEY_MAT_NAMES[id] ?? QUEST_MATS[id]?.name ?? JUNK_MATS[id]?.name ?? id;
+export const keyMatName = (id: string): string => (id === MAT_REFORJA ? 'Piedra de reforja' : KEY_MAT_NAMES[id] ?? QUEST_MATS[id]?.name ?? JUNK_MATS[id]?.name ?? id);
+
+/** Piedra de reforja (docs/ITEMS.md): re-tira un stat extra de un ítem. La sueltan solo los jefes de mazmorra (1-2 por corrida). */
+export const MAT_REFORJA = 'piedra_reforja';
+/** Costo de la reforja número `rf` (empezando en 0) de un mismo ítem: se duplica cada vez — el tope es el precio. */
+export const reforgeStones = (rf: number): number => Math.min(512, 2 ** Math.max(0, Math.floor(rf)));
+export const reforgeGold = (tier: number, rf: number): number => Math.round(100 * Math.max(1, tier) * (Math.max(0, rf) + 1));
 
 /** Materiales que no se aceptan en la repetible: son de las llaves. */
-export const RESERVED_MATS = new Set([...Object.keys(QUEST_MATS), ...Object.keys(KEY_RECIPES), MAT_LLAVE_GASTADA]);
+export const RESERVED_MATS = new Set([...Object.keys(QUEST_MATS), ...Object.keys(KEY_RECIPES), MAT_LLAVE_GASTADA, MAT_REFORJA]);
 
 /** Jefe que cierra cada dungeon del corte: matarlo (vos o tu party cerca) cuenta como completarlo. */
 export type DungeonId = 'd1' | 'd2' | 'd3' | 'd4' | 'd5' | 'd6' | 'd7';

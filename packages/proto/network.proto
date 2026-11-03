@@ -109,6 +109,8 @@ message ClientMessage {
     PickupRequest pickup_request = 97;
     // Mejora de ítems únicos en el herrero (docs/ITEMS.md §7).
     EconUpgradeRequest econ_upgrade_request = 98;
+    // Reforja: re-tira UN stat extra del ítem (docs/ITEMS.md): piedras de reforja de jefes + oro, costo que se duplica por ítem.
+    EconReforgeRequest econ_reforge_request = 99;
     SaveCharacterRequest save_character_request = 80;
     MobHitRequest mob_hit_request = 120;
     PveStatusRequest pve_status_request = 121;
@@ -1411,6 +1413,8 @@ message InvAttr { string id = 1; int32 v = 2; }
 /** Item con identidad: uid único por personaje, base (nombre en la tabla de bases), rareza 0..3 y atributos. */
 message InvItem { int32 uid = 1; string base = 2; int32 rarity = 3; repeated InvAttr attrs = 4; /* nivel de mejora (+N) */ int32 up = 5; }
 message EconUpgradeRequest { string npc_id = 1; int32 uid = 2; }
+/** Reforja del extra número `extra` (0 o 1, contando desde el final de los fijos) del ítem `uid` en el herrero. */
+message EconReforgeRequest { string npc_id = 1; int32 uid = 2; int32 extra = 3; }
 /** Repartir puntos de stats: action = "add" (suma `points` al stat `stat`: str, vit, dex, mag o luk) o "reset" (devuelve todos los puntos). El server valida todo. */
 message StatAllocRequest { string action = 1; string stat = 2; int32 points = 3; }
 message InvEquip { string slot = 1; InvItem item = 2; }
