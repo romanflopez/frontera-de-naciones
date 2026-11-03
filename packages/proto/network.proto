@@ -132,6 +132,8 @@ message ClientMessage {
     ClientChatMessage client_chat_message = 800;
     // Botín de materiales / oro en el suelo (apps/server/src/systems/loot.ts). Rango propio de tags desde 900.
     ClientPickupItem client_pickup_item = 900;
+    // Dar e Intercambiar entre jugadores (ver docs/INTERCAMBIO.md). Rango propio de tags desde 1300.
+    TradeRequest trade_request = 1300;
   }
   // P0-A: el cliente ya no fija números de combate (velocidad de movimiento, de ataque, de casteo, alcance, daño, stun).
   // Los calcula el server. Tags retirados: no reutilizar.
@@ -532,6 +534,9 @@ message ServerMessage {
     BossPhase boss_phase = 1104;
     // Oferta del día de la tienda (docs/ITEMS.md): global, rota por día UTC; la estrella tiene stock 1 en todo el server. Rango desde 1200.
     DailyShopState daily_shop_state = 1200;
+    // Dar e Intercambiar entre jugadores (ver docs/INTERCAMBIO.md). Rango propio de tags desde 1300.
+    TradeState trade_state = 1300;
+    TradeInvite trade_invite = 1301;
   }
 }
 
@@ -1595,6 +1600,52 @@ message DepositState {
   repeated DepositStack stacks = 3;
   int32 capacity = 4;
   int32 stack_max = 5;
+}
+
+// ---------- Dar e Intercambiar entre jugadores (ver docs/INTERCAMBIO.md) ----------
+/**
+ * Pedido de Dar / Intercambiar. Siempre es con un jugador que ves (mismo mapa, a rango); el server valida todo.
+ * action:
+ *   give      = regalo directo a `target_id`: un item de la bolsa (`uid`) o oro (`amount`), uno u otro. El receptor tiene que aceptar.
+ *   offer     = invitar a `target_id` a intercambiar (abre la ventana cuando acepta).
+ *   accept    = aceptar la invitación pendiente (de un regalo o de un intercambio).
+ *   decline   = rechazar la invitación pendiente.
+ *   add       = poner el item `uid` de tu bolsa en tu oferta (la ventana tiene que estar abierta).
+ *   remove    = sacar el item `uid` de tu oferta.
+ *   gold      = fijar el oro de tu oferta en `amount` (0 lo saca).
+ *   confirm   = confirmar la oferta tal como está; cuando confirman los dos, se hace el cambio.
+ *   cancel    = cerrar la ventana (o cancelar el regalo que ofreciste).
+ * op_id: número elegido por el cliente (distinto de 0); si llega dos veces seguidas, la segunda no se aplica.
+ */
+message TradeRequest {
+  string action = 1;
+  int64 target_id = 2;
+  int32 uid = 3;
+  double amount = 4;
+  uint32 op_id = 5;
+}
+/** Invitación pendiente para el receptor. kind = "give" (trae `item` o `gold`) o "exchange". */
+message TradeInvite {
+  string kind = 1;
+  string from_name = 2;
+  int64 from_id = 3;
+  InvItem item = 4;
+  double gold = 5;
+  int64 expires_ms = 6;
+}
+/** Ventana de intercambio, igual de los dos lados (cada uno ve lo suyo como `mine`). open = false la cierra; `reason` dice por qué se cerró. */
+message TradeState {
+  bool open = 1;
+  string partner = 2;
+  repeated InvItem mine = 3;
+  double my_gold = 4;
+  bool my_confirmed = 5;
+  repeated InvItem theirs = 6;
+  double their_gold = 7;
+  bool their_confirmed = 8;
+  /** Uids de `theirs` agregados o cambiados después de la última confirmación del que mira: se marcan como "Nuevo". */
+  repeated int32 theirs_new = 9;
+  string reason = 10;
 }
 
 // Volver a la ciudad (recall estilo MMO clásico): el cliente pide empezar o cancelar; el server lleva el canal (8 s), lo corta si

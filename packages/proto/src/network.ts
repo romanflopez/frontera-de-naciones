@@ -160,6 +160,9 @@ export interface ClientMessage {
     | //
     /** Botín de materiales / oro en el suelo (apps/server/src/systems/loot.ts). Rango propio de tags desde 900. */
     { $case: "clientPickupItem"; value: ClientPickupItem }
+    | //
+    /** Dar e Intercambiar entre jugadores (ver docs/INTERCAMBIO.md). Rango propio de tags desde 1300. */
+    { $case: "tradeRequest"; value: TradeRequest }
     | undefined;
 }
 
@@ -584,6 +587,10 @@ export interface ServerMessage {
     | //
     /** Oferta del día de la tienda (docs/ITEMS.md): global, rota por día UTC; la estrella tiene stock 1 en todo el server. Rango desde 1200. */
     { $case: "dailyShopState"; value: DailyShopState }
+    | //
+    /** Dar e Intercambiar entre jugadores (ver docs/INTERCAMBIO.md). Rango propio de tags desde 1300. */
+    { $case: "tradeState"; value: TradeState }
+    | { $case: "tradeInvite"; value: TradeInvite }
     | undefined;
 }
 
@@ -1864,6 +1871,53 @@ export interface DepositState {
 }
 
 /**
+ * Pedido de Dar / Intercambiar. Siempre es con un jugador que ves (mismo mapa, a rango); el server valida todo.
+ * action:
+ *   give      = regalo directo a `target_id`: un item de la bolsa (`uid`) o oro (`amount`), uno u otro. El receptor tiene que aceptar.
+ *   offer     = invitar a `target_id` a intercambiar (abre la ventana cuando acepta).
+ *   accept    = aceptar la invitación pendiente (de un regalo o de un intercambio).
+ *   decline   = rechazar la invitación pendiente.
+ *   add       = poner el item `uid` de tu bolsa en tu oferta (la ventana tiene que estar abierta).
+ *   remove    = sacar el item `uid` de tu oferta.
+ *   gold      = fijar el oro de tu oferta en `amount` (0 lo saca).
+ *   confirm   = confirmar la oferta tal como está; cuando confirman los dos, se hace el cambio.
+ *   cancel    = cerrar la ventana (o cancelar el regalo que ofreciste).
+ * op_id: número elegido por el cliente (distinto de 0); si llega dos veces seguidas, la segunda no se aplica.
+ */
+export interface TradeRequest {
+  action: string;
+  targetId: bigint;
+  uid: number;
+  amount: number;
+  opId: number;
+}
+
+/** Invitación pendiente para el receptor. kind = "give" (trae `item` o `gold`) o "exchange". */
+export interface TradeInvite {
+  kind: string;
+  fromName: string;
+  fromId: bigint;
+  item: InvItem | undefined;
+  gold: number;
+  expiresMs: bigint;
+}
+
+/** Ventana de intercambio, igual de los dos lados (cada uno ve lo suyo como `mine`). open = false la cierra; `reason` dice por qué se cerró. */
+export interface TradeState {
+  open: boolean;
+  partner: string;
+  mine: InvItem[];
+  myGold: number;
+  myConfirmed: boolean;
+  theirs: InvItem[];
+  theirGold: number;
+  theirConfirmed: boolean;
+  /** Uids de `theirs` agregados o cambiados después de la última confirmación del que mira: se marcan como "Nuevo". */
+  theirsNew: number[];
+  reason: string;
+}
+
+/**
  * Volver a la ciudad (recall estilo MMO clásico): el cliente pide empezar o cancelar; el server lleva el canal (8 s), lo corta si
  * te movés, recibís daño, atacás o lanzás algo, y al terminar te lleva al hogar de tu facción. Enfriamiento de 60 s.
  */
@@ -2145,6 +2199,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         break;
       case "clientPickupItem":
         ClientPickupItem.encode(message.payload.value, writer.uint32(7202).fork()).join();
+        break;
+      case "tradeRequest":
+        TradeRequest.encode(message.payload.value, writer.uint32(10402).fork()).join();
         break;
     }
     return writer;
@@ -2812,6 +2869,14 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "clientPickupItem", value: ClientPickupItem.decode(reader, reader.uint32()) };
             continue;
           }
+          case 1300: {
+            if (tag !== 10402) {
+              break;
+            }
+
+            message.payload = { $case: "tradeRequest", value: TradeRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -3340,6 +3405,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "clientPickupItem": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "clientPickupItem", value: ClientPickupItem.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "tradeRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "tradeRequest", value: TradeRequest.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -7204,6 +7275,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "dailyShopState":
         DailyShopState.encode(message.payload.value, writer.uint32(9602).fork()).join();
         break;
+      case "tradeState":
+        TradeState.encode(message.payload.value, writer.uint32(10402).fork()).join();
+        break;
+      case "tradeInvite":
+        TradeInvite.encode(message.payload.value, writer.uint32(10410).fork()).join();
+        break;
     }
     return writer;
   },
@@ -8127,6 +8204,22 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "dailyShopState", value: DailyShopState.decode(reader, reader.uint32()) };
             continue;
           }
+          case 1300: {
+            if (tag !== 10402) {
+              break;
+            }
+
+            message.payload = { $case: "tradeState", value: TradeState.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 1301: {
+            if (tag !== 10410) {
+              break;
+            }
+
+            message.payload = { $case: "tradeInvite", value: TradeInvite.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -8844,6 +8937,18 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "dailyShopState": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "dailyShopState", value: DailyShopState.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "tradeState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "tradeState", value: TradeState.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "tradeInvite": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "tradeInvite", value: TradeInvite.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -23437,6 +23542,421 @@ export const DepositState: MessageFns<DepositState> = {
     message.stacks = object.stacks?.map((e) => DepositStack.fromPartial(e)) || [];
     message.capacity = object.capacity ?? 0;
     message.stackMax = object.stackMax ?? 0;
+    return message;
+  },
+};
+
+function createBaseTradeRequest(): TradeRequest {
+  return { action: "", targetId: 0n, uid: 0, amount: 0, opId: 0 };
+}
+
+export const TradeRequest: MessageFns<TradeRequest> = {
+  encode(message: TradeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.action !== "") {
+      writer.uint32(10).string(message.action);
+    }
+    if (message.targetId !== 0n) {
+      if (BigInt.asIntN(64, message.targetId) !== message.targetId) {
+        throw new globalThis.Error("value provided for field message.targetId of type int64 too large");
+      }
+      writer.uint32(16).int64(message.targetId);
+    }
+    if (message.uid !== 0) {
+      writer.uint32(24).int32(message.uid);
+    }
+    if (message.amount !== 0) {
+      writer.uint32(33).double(message.amount);
+    }
+    if (message.opId !== 0) {
+      writer.uint32(40).uint32(message.opId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TradeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseTradeRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.action = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.targetId = reader.int64() as bigint;
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.uid = reader.int32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 33) {
+              break;
+            }
+
+            message.amount = reader.double();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.opId = reader.uint32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<TradeRequest>, I>>(base?: I): TradeRequest {
+    return TradeRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<TradeRequest>, I>>(object: I): TradeRequest {
+    const message = createBaseTradeRequest();
+    message.action = object.action ?? "";
+    message.targetId = (object.targetId !== undefined && object.targetId !== null) ? BigInt(object.targetId) : 0n;
+    message.uid = object.uid ?? 0;
+    message.amount = object.amount ?? 0;
+    message.opId = object.opId ?? 0;
+    return message;
+  },
+};
+
+function createBaseTradeInvite(): TradeInvite {
+  return { kind: "", fromName: "", fromId: 0n, item: undefined, gold: 0, expiresMs: 0n };
+}
+
+export const TradeInvite: MessageFns<TradeInvite> = {
+  encode(message: TradeInvite, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.kind !== "") {
+      writer.uint32(10).string(message.kind);
+    }
+    if (message.fromName !== "") {
+      writer.uint32(18).string(message.fromName);
+    }
+    if (message.fromId !== 0n) {
+      if (BigInt.asIntN(64, message.fromId) !== message.fromId) {
+        throw new globalThis.Error("value provided for field message.fromId of type int64 too large");
+      }
+      writer.uint32(24).int64(message.fromId);
+    }
+    if (message.item !== undefined) {
+      InvItem.encode(message.item, writer.uint32(34).fork()).join();
+    }
+    if (message.gold !== 0) {
+      writer.uint32(41).double(message.gold);
+    }
+    if (message.expiresMs !== 0n) {
+      if (BigInt.asIntN(64, message.expiresMs) !== message.expiresMs) {
+        throw new globalThis.Error("value provided for field message.expiresMs of type int64 too large");
+      }
+      writer.uint32(48).int64(message.expiresMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TradeInvite {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseTradeInvite();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.kind = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.fromName = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.fromId = reader.int64() as bigint;
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.item = InvItem.decode(reader, reader.uint32());
+            continue;
+          }
+          case 5: {
+            if (tag !== 41) {
+              break;
+            }
+
+            message.gold = reader.double();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.expiresMs = reader.int64() as bigint;
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<TradeInvite>, I>>(base?: I): TradeInvite {
+    return TradeInvite.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<TradeInvite>, I>>(object: I): TradeInvite {
+    const message = createBaseTradeInvite();
+    message.kind = object.kind ?? "";
+    message.fromName = object.fromName ?? "";
+    message.fromId = (object.fromId !== undefined && object.fromId !== null) ? BigInt(object.fromId) : 0n;
+    message.item = (object.item !== undefined && object.item !== null) ? InvItem.fromPartial(object.item) : undefined;
+    message.gold = object.gold ?? 0;
+    message.expiresMs = (object.expiresMs !== undefined && object.expiresMs !== null) ? BigInt(object.expiresMs) : 0n;
+    return message;
+  },
+};
+
+function createBaseTradeState(): TradeState {
+  return {
+    open: false,
+    partner: "",
+    mine: [],
+    myGold: 0,
+    myConfirmed: false,
+    theirs: [],
+    theirGold: 0,
+    theirConfirmed: false,
+    theirsNew: [],
+    reason: "",
+  };
+}
+
+export const TradeState: MessageFns<TradeState> = {
+  encode(message: TradeState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.open !== false) {
+      writer.uint32(8).bool(message.open);
+    }
+    if (message.partner !== "") {
+      writer.uint32(18).string(message.partner);
+    }
+    for (const v of message.mine) {
+      InvItem.encode(v!, writer.uint32(26).fork()).join();
+    }
+    if (message.myGold !== 0) {
+      writer.uint32(33).double(message.myGold);
+    }
+    if (message.myConfirmed !== false) {
+      writer.uint32(40).bool(message.myConfirmed);
+    }
+    for (const v of message.theirs) {
+      InvItem.encode(v!, writer.uint32(50).fork()).join();
+    }
+    if (message.theirGold !== 0) {
+      writer.uint32(57).double(message.theirGold);
+    }
+    if (message.theirConfirmed !== false) {
+      writer.uint32(64).bool(message.theirConfirmed);
+    }
+    if (message.theirsNew.length !== 0) {
+      writer.uint32(74).fork();
+      for (const v of message.theirsNew) {
+        writer.int32(v);
+      }
+      writer.join();
+    }
+    if (message.reason !== "") {
+      writer.uint32(82).string(message.reason);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TradeState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseTradeState();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.open = reader.bool();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.partner = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.mine.push(InvItem.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 4: {
+            if (tag !== 33) {
+              break;
+            }
+
+            message.myGold = reader.double();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.myConfirmed = reader.bool();
+            continue;
+          }
+          case 6: {
+            if (tag !== 50) {
+              break;
+            }
+
+            message.theirs.push(InvItem.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 7: {
+            if (tag !== 57) {
+              break;
+            }
+
+            message.theirGold = reader.double();
+            continue;
+          }
+          case 8: {
+            if (tag !== 64) {
+              break;
+            }
+
+            message.theirConfirmed = reader.bool();
+            continue;
+          }
+          case 9: {
+            if (tag === 72) {
+              message.theirsNew.push(reader.int32());
+
+              continue;
+            }
+
+            if (tag === 74) {
+              const end2 = reader.uint32() + reader.pos;
+              while (reader.pos < end2) {
+                message.theirsNew.push(reader.int32());
+              }
+
+              continue;
+            }
+
+            break;
+          }
+          case 10: {
+            if (tag !== 82) {
+              break;
+            }
+
+            message.reason = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<TradeState>, I>>(base?: I): TradeState {
+    return TradeState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<TradeState>, I>>(object: I): TradeState {
+    const message = createBaseTradeState();
+    message.open = object.open ?? false;
+    message.partner = object.partner ?? "";
+    message.mine = object.mine?.map((e) => InvItem.fromPartial(e)) || [];
+    message.myGold = object.myGold ?? 0;
+    message.myConfirmed = object.myConfirmed ?? false;
+    message.theirs = object.theirs?.map((e) => InvItem.fromPartial(e)) || [];
+    message.theirGold = object.theirGold ?? 0;
+    message.theirConfirmed = object.theirConfirmed ?? false;
+    message.theirsNew = object.theirsNew?.map((e) => e) || [];
+    message.reason = object.reason ?? "";
     return message;
   },
 };

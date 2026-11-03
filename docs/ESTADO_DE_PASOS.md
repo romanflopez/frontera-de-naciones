@@ -1,6 +1,6 @@
 # Estado de los pasos del plan
 
-Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última actualización: 2/11/2026 (paso 1.5).
+Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última actualización: 3/11/2026 (paso 3.7: Dar e Intercambiar).
 
 | Paso | Estado | Detalle |
 |---|---|---|
@@ -12,6 +12,7 @@ Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última a
 | **1.3 Atributos autoritativos y topes** | **Implementado** (faltan crítico con cargas, topes de absorción y la prueba manual) | Ver abajo |
 | **1.4 Daño en área y habilidades de mobs** | **Implementado** (falta la simulación D del área y la prueba manual) | Ver abajo |
 | **1.5 Tiers de zona** (paso nuevo) | **Implementado** (falta el recorrido E y el balance de jefes) | `TIERS_DE_ZONA.md` §3b: mapas de T1 a T6 (niveles 1-30), jefes en el tope de su tier, banda de ítems por tier, validador y tests |
+| **3.7 Dar e Intercambiar** (parte de 3.7) | **Implementado** (falta la prueba manual con 2 personas en el navegador) | `INTERCAMBIO.md`: Dar (regalo que el otro acepta) e Intercambiar (ventana de 8 + oro por lado), núcleo atómico común, topes de Dar. 17 tests (`trade.test.ts`) + script de red con dos bots (`scripts/test-trade.ts`, 23 verificaciones). Faltan correo, ítems frágiles/ligados y subasta de 1 a 3 días |
 
 ## Paso 1.1: qué quedó
 

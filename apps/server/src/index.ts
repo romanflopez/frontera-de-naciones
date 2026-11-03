@@ -21,6 +21,7 @@ import { Economy, toCharSave } from './economy.ts';
 import { FileStorage, PgStorage, type Storage } from './storage.ts';
 import { AuctionHouse, setAuctionHouse } from './auction.ts';
 import { Depot, setDepot } from './deposit.ts';
+import { TradeService, setTradeService } from './trade.ts';
 import { PartyService, setParties } from './party.ts';
 import { ChatManager } from './systems/chat.ts';
 
@@ -45,6 +46,7 @@ const auction = new AuctionHouse(storage); setAuctionHouse(auction); auction.sta
 auction.notify = (key, ...msgs) => { const s = sessionsByNetworkId.get(`acc:${key}`)?.socket; if (s?.readyState === s?.OPEN) for (const m of msgs) s?.send(encode(m)); };
 // depósito por cuenta (docs/DEPOSITO.md): vive dentro del registro de la cuenta, en el mismo Storage
 setDepot(new Depot(storage));
+const trade = new TradeService(storage); setTradeService(trade); trade.start(); // Dar e Intercambiar (docs/INTERCAMBIO.md)
 
 const worldsListMessage = M.worldsList(worldConfigs);
 

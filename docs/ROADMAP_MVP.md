@@ -139,7 +139,7 @@ Salen de las páginas de Helbreath que pasaste (mecánicas de mobs, personaje y 
 ### Economía
 | Idea | De dónde | Para qué | Cuándo |
 |---|---|---|---|
-| **Intercambio directo entre jugadores**: hasta 8 ítems por lado, ambos confirman, cualquier cambio quita las confirmaciones y lo agregado después aparece como "Nuevo"; los ligados y los frágiles no se pueden intercambiar | Economía | Hoy solo hay subasta; es lo más seguro y lo que más se espera | Beta o Fase 2 |
+| **Dar e Intercambiar entre jugadores** (como en Helbreath: "Dar" es un regalo que el otro acepta; "Intercambiar" es una ventana de hasta 8 ítems y oro por lado, ambos confirman, cualquier cambio quita las confirmaciones y lo agregado después aparece como "Nuevo"). Solo con jugadores que ves, desde clic derecho o la party; los ligados y los frágiles no se pueden pasar. **Hecho (3/11), ver `INTERCAMBIO.md`** | Economía | Hoy solo había subasta; es lo más seguro y lo que más se espera | **Hecho** (faltan correo y frágiles/ligados) |
 | **Ítems frágiles**: duran N días y no se pueden comerciar | Economía | Premios de eventos sin inflar el mercado | Fase 2 |
 | Tienda de eventos con fichas que dan las misiones de caza; se canjean por piedras de mejora y por ítems temporales | Economía | Objetivo diario, sumidero y entrada de materiales | Post-beta |
 | Moneda de la tienda de pago que se puede retirar como ítem y comerciar | Economía | Decisión de monetización: tiene que cuadrar con "sin pay2win" | Decisión pendiente |
