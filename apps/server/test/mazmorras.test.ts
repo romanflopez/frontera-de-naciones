@@ -59,8 +59,8 @@ test('escalado por party: solo ×0,5, trío ×1, cinco ×1,5 de vida; solo reesc
     assert.deepEqual(dungeonPartyScale(1), { hp: 0.5, dmg: 0.85 });
     assert.deepEqual(dungeonPartyScale(3), { hp: 1, dmg: 1 });
     assert.deepEqual(dungeonPartyScale(9), dungeonPartyScale(5), 'tope de 5');
-    // zona de merodeadores: sin mutantes al azar (solo salvajes), así la vida base es fija
-    const { s, p } = sim([zone('skeleton', 3, { name: 'Merodeadores de prueba' })]);
+    // dos zonas lejos (el aggro solo se contagia dentro de la zona) y de merodeadores (sin mutantes al azar): la vida base queda fija
+    const { s, p } = sim([zone('skeleton', 1, { name: 'Merodeadores A', x: 6, r: 1 }), zone('skeleton', 1, { name: 'Merodeadores B', x: 34, r: 1 })]);
     const base = mobDef('skeleton', { lvl: 5, tier: 'dungeon' }).hp, [a, b] = s.detail();
     s.skillHit(p, a.id, 10); // este ya peleó: no se toca
     s.setPartyScale(1);
