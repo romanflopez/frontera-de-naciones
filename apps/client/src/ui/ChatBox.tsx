@@ -10,21 +10,24 @@ const NAME_COLOR: Partial<Record<ChatMessage['channel'], string>> = {
 };
 
 const S: Record<string, CSSProperties> = {
+    // Va arriba de la barra de abajo (--hud-h), no sobre ella: antes tapaba el orbe de vida.
+    // El margen extra deja libre la fila de buffs, que va pegada a los slots.
     box: {
-        position: 'fixed', left: 0, bottom: 0, width: 450, maxWidth: '100vw', height: 250, zIndex: 20,
-        display: 'flex', flexDirection: 'column', background: 'rgba(15,15,15,0.85)',
-        borderTop: '1px solid rgba(214,164,69,.25)', borderRight: '1px solid rgba(214,164,69,.25)', borderTopRightRadius: 6,
-        font: "13px 'Alegreya Sans', system-ui, sans-serif", color: '#eee',
+        position: 'fixed', left: 12, bottom: 'calc(var(--hud-h) + 62px)', width: 430, maxWidth: 'calc(100vw - 24px)', height: 232, zIndex: 20,
+        display: 'flex', flexDirection: 'column',
+        background: 'linear-gradient(180deg, rgba(14,18,24,.86), rgba(8,11,15,.9))',
+        border: '1px solid rgba(255,255,255,.08)', boxShadow: '0 6px 24px rgba(0,0,0,.5)',
+        font: "13px 'Alegreya Sans', system-ui, sans-serif", color: '#dfe7ef',
     },
-    tabs: { display: 'flex', gap: 2, padding: '0 4px', borderBottom: '1px solid rgba(255,255,255,.08)', flex: 'none' },
-    tab: { background: 'none', border: 0, borderBottom: '2px solid transparent', color: '#8a8a8a', font: 'inherit', fontSize: 12, padding: '5px 6px 4px', cursor: 'pointer', whiteSpace: 'nowrap' },
+    tabs: { display: 'flex', gap: 2, padding: '0 4px', borderBottom: '1px solid rgba(138,118,64,.45)', flex: 'none', background: 'linear-gradient(180deg, rgba(255,255,255,.05), rgba(0,0,0,0))' },
+    tab: { background: 'none', border: 0, borderBottom: '2px solid transparent', color: '#8da0b2', font: 'inherit', fontSize: 12, padding: '5px 7px 4px', cursor: 'pointer', whiteSpace: 'nowrap' },
     badge: { display: 'inline-block', minWidth: 14, marginLeft: 4, padding: '0 4px', borderRadius: 8, background: '#b3262f', color: '#fff', fontSize: 10, lineHeight: '14px', textAlign: 'center', verticalAlign: 'top' },
-    tabOn: { color: '#f3e3b5', borderBottomColor: GOLD },
+    tabOn: { color: '#f2dc9e', borderBottomColor: GOLD },
     list: { flex: 1, overflowY: 'auto', padding: '4px 8px', lineHeight: 1.35, overflowWrap: 'anywhere' },
     line: { margin: 0 },
-    ts: { color: '#666', marginRight: 5, fontSize: 11 },
-    sys: { color: '#a0a0a0', fontSize: 12 },
-    input: { flex: 'none', background: 'rgba(0,0,0,.6)', border: 0, borderTop: '1px solid rgba(255,255,255,.08)', color: '#fff', font: 'inherit', padding: '6px 8px', outline: 'none' },
+    ts: { color: '#64748399', marginRight: 5, fontSize: 11 },
+    sys: { color: '#9fb2c4', fontSize: 12 },
+    input: { flex: 'none', background: 'rgba(0,0,0,.55)', border: 0, borderTop: '1px solid rgba(138,118,64,.35)', color: '#fff', font: 'inherit', padding: '7px 9px', outline: 'none' },
 };
 
 function Line({ m }: { m: ChatMessage }) {
