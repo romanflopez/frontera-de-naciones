@@ -112,9 +112,54 @@ for (const u of UNIQUE_BASES) if (!u.uniq.boss) (UNIQUES_BY_TIER[u.uniq.tier] ??
 export const BOSS_UNIQUES: Partial<Record<MobType, UniqueBase[]>> = {};
 for (const u of UNIQUE_BASES) if (u.uniq.boss) (BOSS_UNIQUES[u.uniq.boss] ??= []).push(u);
 
+// ---------- calidad (docs/ITEMS.md): se sortea al caer y define extras y tope de mejora ----------
+/**
+ * La calidad vive en `r` del ítem guardado: 0 Común (tienda/arranque, sin extras), 1 Verde, 2 Azul, 3 Dorado, 4 Violeta.
+ * Define cuántos stats EXTRA al azar trae el ítem (van al final de `a`, después de los fijos del catálogo: los fijos
+ * son `uniq.attrs.length`, así que los extras de un único son `a.slice(uniq.attrs.length)`) y hasta dónde se mejora (+N).
+ * Dorado y Violeta rollean los extras en el rango alto; Violeta es solo de jefes y trae el efecto especial (cuando exista).
+ */
+export const QUALITY_NAMES = ['Común', 'Verde', 'Azul', 'Dorado', 'Violeta'];
+/** Cantidad de stats extra por calidad. */
+export const EXTRAS_BY_QUALITY = [0, 1, 2, 2, 2] as const;
+/** Tope de mejora (+N) por calidad: el +11 queda reservado a los Violeta de jefe. */
+export const UP_MAX_BY_QUALITY = [1, 3, 5, 8, 11] as const;
+/** Desde esta calidad los extras rollean en el rango alto. */
+export const QUALITY_HI_ROLL = 3;
+
+/**
+ * Pool de stats extra (sin `exp`: los bonus de farmeo quedan fuera de los ítems) y escala por ilvl.
+ * Valor = (a + b·ilvl) × ranura × q — fórmula de afijos estilo Dreadmyst, lineal con el nivel del ítem
+ * (los porcentajes crecen poco porque ya tienen tope total en el server: COMBAT_CAP).
+ */
+export const EXTRA_POOL: AttrId[] = ['crit', 'aspd', 'leech', 'hp', 'mp', 'mag', 'poison', 'rpar', 'df', 'rm'];
+const EXTRA_SCALE: Record<AttrId, [number, number]> = {
+    hp: [8, 2.4], mp: [3, 0.9], mag: [1.5, 0.32], df: [1.5, 0.35], rm: [2, 0.45],
+    crit: [2, 0.05], aspd: [4, 0.1], leech: [2, 0.05], poison: [6, 0.15], rpar: [5, 0.12], exp: [0, 0],
+};
+/** Multiplicador por ranura (Dreadmyst: pecho/arma 1×, cabeza y futuros guantes/botas 0,65×, anillos/amuleto 0,5×). */
+export const SLOT_EXTRA_MULT: Record<Slot, number> = { arma: 1, armadura: 1, cabeza: 0.65, anillo: 0.5 };
+/** Un valor de extra ya tirado. */
+export function rollExtra(id: AttrId, ilvl: number, slot: Slot, quality: number, rnd: () => number = Math.random): number {
+    const [a, b] = EXTRA_SCALE[id], q = quality >= QUALITY_HI_ROLL ? 1.15 + rnd() * 0.2 : 0.85 + rnd() * 0.3;
+    return Math.max(1, Math.round((a + b * ilvl) * (SLOT_EXTRA_MULT[slot] ?? 1) * q));
+}
+/** Los extras de un ítem que cae: distintos entre sí y distintos de los fijos (`exclude`). */
+export function rollExtras(slot: Slot, ilvl: number, quality: number, exclude: AttrId[] = [], rnd: () => number = Math.random): [AttrId, number][] {
+    const pool = EXTRA_POOL.filter((id) => !exclude.includes(id)), out: [AttrId, number][] = [];
+    for (let i = 0; i < (EXTRAS_BY_QUALITY[quality] ?? 0) && pool.length; i++) {
+        const j = Math.floor(rnd() * pool.length), id = pool.splice(j, 1)[0];
+        out.push([id, rollExtra(id, ilvl, slot, quality, rnd)]);
+    }
+    return out;
+}
+/** ilvl (nivel de ítem) de un único: el techo de su banda; los de jefe, 5 arriba (tope 40). De él sale la escala de los extras. */
+export const bandIlvl = (tier: number): number => [5, 10, 15, 20, 25, 30][Math.min(6, Math.max(1, Math.round(tier))) - 1];
+export const uniqueIlvl = (u: UniqueBase): number => Math.min(40, bandIlvl(u.uniq.tier) + (u.uniq.boss ? 5 : 0));
+
 // ---------- mejora (+N) de ítems únicos (docs/ITEMS.md §7) ----------
-/** Tope de mejora del MVP (el diseño llega a +11; las probabilidades de fallo viven solo en el server). */
-export const UP_MAX = 5;
+/** Techo absoluto de la mejora; el tope real de cada ítem lo pone su calidad (UP_MAX_BY_QUALITY). Las probabilidades de fallo viven solo en el server. */
+export const UP_MAX = 11;
 /** Cada nivel de mejora suma este porcentaje a los stats base del ítem (daño, defensa, RM y daño mágico). */
 export const UP_PCT = 0.04;
 export const upMult = (up = 0): number => 1 + UP_PCT * Math.max(0, up);

@@ -1,6 +1,7 @@
-/** /gm bis: el set completo del mago (mejores ítems existentes, tiradas máximas y +5). */
+/** /gm bis: el set completo del mago (mejores ítems existentes, tiradas máximas y mejora al tope). */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { UP_MAX } from '@fdn/world';
 import type { ServerMessage } from '@fdn/proto';
 import { loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
@@ -21,14 +22,14 @@ function join(cls: string) {
     return { w, p: w.playerOf('s-1')! };
 }
 
-test('/gm bis: el mago queda con el mejor set, +5, y sube su Magia, maná y resistencia', () => {
+test('/gm bis: el mago queda con el mejor set, mejora al tope, y sube su Magia, maná y resistencia', () => {
     const { w, p } = join('mago');
     const before = { mag: p.combat.mag, mp: p.combat.maxMp, rm: p.combat.rm };
     const out = w.gmCommand('s-1', 'bis', []);
     assert.match(out[0], /Báculo del camposanto/);
     const eq = p.econ!.eq;
     assert.deepEqual([eq.arma?.n, eq.armadura?.n, eq.cabeza?.n, eq.anillo?.n], ['Báculo del camposanto', 'Mortaja bordada', 'Capuchón de duelo', 'Anillo opaco']);
-    for (const s of ['arma', 'armadura', 'cabeza', 'anillo'] as const) assert.equal(eq[s]!.up, 5, s);
+    for (const s of ['arma', 'armadura', 'cabeza', 'anillo'] as const) assert.equal(eq[s]!.up, UP_MAX, s);
     assert.ok(p.combat.mag > before.mag + 40, `Magia ${before.mag} -> ${p.combat.mag}`);
     assert.ok(p.combat.maxMp > before.mp + 50 && p.combat.rm > before.rm, 'más maná y RM');
     assert.equal(p.mp, p.combat.maxMp, 'maná al máximo');

@@ -100,14 +100,23 @@ test('ítems únicos T4-T6 y jefes D4-D7: cada banda supera a la anterior y los 
     assert.equal(tierOfLevel(35), 6); assert.ok(UNIQUES_BY_TIER[tierOfLevel(40)].length === 10);
 });
 
-test('uniqueItem: atributos fijos con variación ±10 %, rareza 2 (común de banda) o 3 (jefe)', async () => {
+test('uniqueItem: fijos con variación ±10 %, calidad sorteada y extras según la calidad al final de `a`', async () => {
     const { uniqueItem, newEcon } = await import('../src/economy.ts');
+    const { EXTRAS_BY_QUALITY } = await import('@fdn/world');
     const st = newEcon('guerrero', 'solmar');
     for (const u of UNIQUE_BASES) {
         const it = uniqueItem(st, u);
-        assert.equal(it.r, u.uniq.boss ? 3 : 2);
-        for (const [id, v] of u.uniq.attrs) { const got = it.a.find((x) => x.id === id)!.v; assert.ok(got >= Math.floor(v * 0.9) && got <= Math.ceil(v * 1.1) + 0, `${u.name} ${id} ${got} vs ${v}`); }
+        // banda sin calidad pedida → Azul (2); jefe → su escalera (D1-D2 Azul+, D3-D5 Dorado+, D6-D7 Violeta)
+        if (!u.uniq.boss) assert.equal(it.r, 2);
+        else assert.ok(it.r >= (u.uniq.tier >= 6 ? 4 : u.uniq.tier >= 3 ? 3 : 2) && it.r <= 4, `${u.name} calidad ${it.r}`);
+        // los fijos primero, con su variación; después los extras que indica la calidad
+        assert.equal(it.a.length, u.uniq.attrs.length + EXTRAS_BY_QUALITY[it.r]);
+        u.uniq.attrs.forEach(([id, v], i) => { const got = it.a[i]; assert.equal(got.id, id); assert.ok(got.v >= Math.floor(v * 0.9) && got.v <= Math.ceil(v * 1.1), `${u.name} ${id} ${got.v} vs ${v}`); });
+        for (const x of it.a.slice(u.uniq.attrs.length)) assert.ok(x.v >= 1 && !u.uniq.attrs.some(([id]) => id === x.id), `${u.name} extra ${x.id}`);
     }
+    // con la calidad pedida explícita, se respeta
+    assert.equal(uniqueItem(st, UNIQUE_BASES[0], 1).r, 1);
+    assert.equal(uniqueItem(st, UNIQUE_BASES[0], 1).a.length, UNIQUE_BASES[0].uniq.attrs.length + 1);
 });
 
 test('ítems únicos: usan solo aspectos (look/off) que ya existen en las bases normales y de tienda', () => {

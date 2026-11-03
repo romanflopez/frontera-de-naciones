@@ -5,7 +5,7 @@
  */
 import { KEY_RECIPES } from '@fdn/world';
 import { hasBuff, type BuffId, type CharacterStatus } from './statusSystem.ts';
-import { isClass, type ClassId, BASE_BY_NAME, CRIT_BASE, MAX_LEVEL, aspdTotal, critTotal, leechTotal, meleeIntervalSecs, statBonus, upMult, type Stats } from '@fdn/world';
+import { isClass, type ClassId, BASE_BY_NAME, CRIT_BASE, MAX_LEVEL, aspdTotal, critTotal, itemDfTotal, itemRmTotal, leechTotal, meleeIntervalSecs, statBonus, upMult, type Stats } from '@fdn/world';
 export type Stat = 'mag' | 'wdmg' | 'melee';
 export interface PvpSpell {
     dmg?: [number, number]; lvlK?: number; stat?: Stat;
@@ -210,13 +210,14 @@ export function statsFromChar(o: StatSource | undefined, uncapCrit = false): Com
     if (!o) return { ...DEFAULT_STATS };
     const cls = isClass(o.cls) ? o.cls : 'guerrero', lvl = Math.max(1, Math.min(MAX_LEVEL, Number(o.lvl) || 1));
     const s: CombatStats = { lvl, cls, meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 0, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 1, maxMp: 0, savedMp: 0, dmgBonus: 0 };
-    let bonusHp = 0, bonusMp = 0, itemCrit = 0, itemAspd = 0, itemLeech = 0;
+    let bonusHp = 0, bonusMp = 0, itemCrit = 0, itemAspd = 0, itemLeech = 0, itemDf = 0, itemRm = 0;
     for (const [slot, it] of Object.entries(o.eq ?? {})) {
         if (!it) continue;
         const b = BASE_BY_NAME.get(it.n);
         if (b && b.slot === slot) { const k = upMult(it.up); if (b.dmg) s.wdmg = k === 1 ? b.dmg : [Math.round(b.dmg[0] * k), Math.round(b.dmg[1] * k)]; if (b.mag) s.mag += Math.round(b.mag * k); if (b.def) s.def += Math.round(b.def * k); if (b.rm) s.rm += Math.round(b.rm * k); }
-        for (const a of it.a ?? []) { if (a.id === 'mag') s.mag += a.v; else if (a.id === 'hp') bonusHp += a.v; else if (a.id === 'mp') bonusMp += a.v; else if (a.id === 'df') s.def += a.v; else if (a.id === 'rm' || a.id === 'fres' || a.id === 'ires') s.rm += a.v; /* fres/ires: atributos viejos, ahora valen RM 1:1 */ else if (a.id === 'rpar') s.rpar += a.v; else if (a.id === 'crit') itemCrit += a.v; else if (a.id === 'aspd') itemAspd += a.v; else if (a.id === 'leech') itemLeech += a.v; else if (a.id === 'poison') s.poison += a.v; }
+        for (const a of it.a ?? []) { if (a.id === 'mag') s.mag += a.v; else if (a.id === 'hp') bonusHp += a.v; else if (a.id === 'mp') bonusMp += a.v; else if (a.id === 'df') itemDf += a.v; else if (a.id === 'rm' || a.id === 'fres' || a.id === 'ires') itemRm += a.v; /* fres/ires: atributos viejos, ahora valen RM 1:1 */ else if (a.id === 'rpar') s.rpar += a.v; else if (a.id === 'crit') itemCrit += a.v; else if (a.id === 'aspd') itemAspd += a.v; else if (a.id === 'leech') itemLeech += a.v; else if (a.id === 'poison') s.poison += a.v; }
     }
+    s.def += itemDfTotal(itemDf); s.rm += itemRmTotal(itemRm); // la DF/RM de ATRIBUTOS se topea; la base de las armaduras no
     s.crit = uncapCrit ? Math.min(100, CRIT_BASE + itemCrit) : critTotal(itemCrit); s.aspd = aspdTotal(itemAspd); s.leech = leechTotal(itemLeech); s.poison = Math.min(100, s.poison); // topes del paso 1.3
     const sb = statBonus(o.stats); // puntos de Fuerza, Vitalidad, Destreza y Magia
     bonusHp += sb.hp; bonusMp += sb.mp; s.def += sb.def; s.meleeMult = sb.meleeMult; s.magicMult = sb.magicMult;

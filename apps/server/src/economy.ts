@@ -11,7 +11,7 @@
 import {
     ATTR_RANGES, traitExpMult, traitDropMult, BAG_MAX, BASE_BY_NAME, BASES, KEY_IDS, KEYDEFS, POT_MAX, POTS, QUESTS, roleOf, SHARDS_PER_KEY, SHOP_SERVER_RANGE,
     SHOPS, SLOTS, TRAINING, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statBonus, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, sellPrice, trainingUnlocked,
-    BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BASES, UP_MAX, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, tierOfLvl, type UniqueBase,
+    BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BASES, UP_MAX, UP_MAX_BY_QUALITY, QUALITY_NAMES, rollExtras, uniqueIlvl, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, tierOfLvl, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
     DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, junkValue, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
     mainComplete, newQuestBook, repeatGold, rewardUniques, rollDailies, type QuestBook, type QuestEvent, type QuestHave, type QuestReward,
@@ -22,7 +22,7 @@ import type { Player } from './player.ts';
 import type { AccountRecord, Storage } from './storage.ts';
 
 /** v3: nivel máximo 40 y curva de exp nueva (migra la exp guardada conservando la fracción del nivel). v4: puntos de stats. */
-export const ECON_VERSION = 4;
+export const ECON_VERSION = 5;
 export const MAX_LVL = MAX_LEVEL;
 /** Sin límite de oro de juego: el único techo es el técnico (entero exacto en JS / double del protocolo). */
 export const MAX_GOLD = Number.MAX_SAFE_INTEGER;
@@ -75,14 +75,33 @@ export const UNIQUE_CHANCE = { loose: 0.005, pit: 0.015, dungeon: 0.04 };
 /** Piedras de forja: chance por muerte según el origen del mob, y cantidad que suelta un jefe. */
 export const FORGE_CHANCE = { loose: 0.05, pit: 0.08, dungeon: 0.18 };
 export const FORGE_BOSS: [number, number] = [3, 5];
-/** Probabilidad de éxito de cada mejora (+1 .. +UP_MAX): arranca en 33 % para que la gente pueda "limar". Solo vive en el server. Al fallar el ítem no baja (hasta +5), se pierden las piedras y el oro. */
-export const UP_RATE = [0.33, 0.33, 0.33, 0.25, 0.2];
+/**
+ * Probabilidad de éxito de cada mejora (+1 .. +11): arranca en 33 % para que la gente pueda "limar". Solo vive en el server.
+ * Hasta +5, al fallar no pasa nada (se pierden piedras y oro); de +6 en adelante es la zona de riesgo: al fallar el ítem BAJA un nivel.
+ */
+export const UP_RATE = [0.33, 0.33, 0.33, 0.25, 0.2, 0.15, 0.12, 0.1, 0.08, 0.06, 0.05];
+/** Desde esta mejora, el fallo baja el ítem un nivel. */
+export const UP_RISK_FROM = 5;
 export const GOLD_CHANCE = 0.45;
 const pick = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
-/** Un ítem único con sus atributos fijos y una variación de ±10 %. Los de jefe son rareza 3 (Épico); los demás, 2 (Raro). */
-export function uniqueItem(st: Econ, u: UniqueBase): SItem {
+
+// ---------- calidad del botín (docs/ITEMS.md: la calidad define extras y tope de mejora) ----------
+/** Calidad de un único de banda al caer de un mob común: casi siempre Verde; Azul con suerte (más en mazmorra). */
+export function rollQuality(origin: 'loose' | 'pit' | 'dungeon'): number {
+    const r = Math.random();
+    return r < (origin === 'dungeon' ? 0.4 : origin === 'pit' ? 0.15 : 0.1) ? 2 : 1;
+}
+/** Escalera de los jefes: cada uno garantiza su escalón y tira la chance del siguiente (D1-D2 Azul+25 % Dorado; D3-D5 Dorado+15 % Violeta; D6-D7 Violeta). */
+export function bossQuality(tier: number): number {
+    const r = Math.random();
+    return tier >= 6 ? 4 : tier >= 3 ? (r < 0.15 ? 4 : 3) : r < 0.25 ? 3 : 2;
+}
+/** Un ítem único: sus fijos del catálogo (±10 %), la calidad en `r` y los extras que la calidad indica, al final de `a`. */
+export function uniqueItem(st: Econ, u: UniqueBase, quality?: number): SItem {
+    const q = quality ?? (u.uniq.boss ? bossQuality(u.uniq.tier) : 2);
     const a = u.uniq.attrs.map(([id, v]) => ({ id, v: Math.max(1, Math.round(v * (1 + (Math.random() * 2 - 1) * UNIQUE_VARIATION))) }));
-    return newItem(st, u.name, u.uniq.boss ? 3 : 2, a);
+    for (const [id, v] of rollExtras(u.slot, uniqueIlvl(u), q, u.uniq.attrs.map(([id]) => id))) a.push({ id, v });
+    return newItem(st, u.name, q, a);
 }
 
 /** Valida un item que dice tener el cliente (solo para la importación única). Devuelve null si la base no existe. */
@@ -95,7 +114,7 @@ function cleanImportItem(st: Econ, v: unknown, clipped: string[], trusted = fals
     if (uniq && !trusted) { // únicos: solo con sus atributos fijos (se aceptan los del cliente si caen en la variación permitida)
         const lim = UNIQUE_VARIATION + 0.05, given = new Map<string, number>(); for (const x of Array.isArray(o.a) ? o.a : []) { const e = (x ?? {}) as Record<string, unknown>; if (typeof e.id === 'string') given.set(e.id, clampInt(e.v, 1, 1e6)); }
         for (const [id, v] of uniq.uniq.attrs) { const g = given.get(id); a.push({ id, v: g !== undefined && g >= Math.floor(v * (1 - lim)) && g <= Math.ceil(v * (1 + lim)) ? g : v }); }
-        const ni = newItem(st, base.name, uniq.uniq.boss ? 3 : 2, a); const upv = clampInt(o.up, 0, UP_MAX); if (upv) ni.up = upv; return ni;
+        const ni = newItem(st, base.name, uniq.uniq.boss ? 4 : 2, a); const upv = clampInt(o.up, 0, UP_MAX); if (upv) ni.up = upv; return ni;
     }
     if (isShop && !trusted) { // bases de tienda: solo existen con los atributos fijos de su línea de stock
         const line = Object.values(SHOPS).flatMap((s) => s.stock).find((x) => x.base === base.name);
@@ -183,6 +202,21 @@ export function migrateEcon(st: Econ): boolean {
     }
     // v4: puntos de stats. Las cuentas viejas arrancan sin repartir y reciben los puntos libres que les corresponden por nivel.
     st.stats = cleanStats(st.stats);
+    // v5: la rareza pasa a ser calidad (docs/ITEMS.md). Únicos de banda → Azul (2), de jefe → Violeta (4), el resto de los
+    // ítems del botín viejo → Común sin atributos. Los únicos viejos quedan sin extras (mala suerte: se re-farmean o reforjan).
+    if (st.v < 5) {
+        const fix = (i: SItem | null): void => {
+            if (!i) return;
+            const u = UNIQUE_BY_NAME.get(i.n);
+            if (u) i.r = u.uniq.boss ? 4 : 2;
+            else if (i.r !== 0 || i.a.length > (Object.values(SHOPS).flatMap((s) => s.stock).find((x) => x.base === i.n)?.attrs?.length ?? 0)) {
+                const line = Object.values(SHOPS).flatMap((s) => s.stock).find((x) => x.base === i.n);
+                i.r = 0; i.a = (line?.attrs ?? []).map(([id, v]) => ({ id, v }));
+            }
+        };
+        for (const i of st.bag) fix(i);
+        for (const sl of SLOTS) fix(st.eq[sl]);
+    }
     st.v = ECON_VERSION;
     refreshUnlocks(st);
     return true;
@@ -302,10 +336,10 @@ export class Economy {
         const st = p.econ; if (!st || (cls !== 'mago' && cls !== 'healer')) return null; // el healer usa el mismo set de Magia
         const top = (name: string, extra: SItem['a'] = []): SItem => {
             const u = UNIQUE_BY_NAME.get(name); if (!u) throw new Error(`BiS: no existe ${name}`);
-            const it = newItem(st, name, u.uniq.boss ? 3 : 2, [...u.uniq.attrs.map(([id, v]) => ({ id, v: Math.round(v * (1 + UNIQUE_VARIATION)) })), ...extra]);
+            const it = newItem(st, name, 4, [...u.uniq.attrs.map(([id, v]) => ({ id, v: Math.round(v * (1 + UNIQUE_VARIATION)) })), ...extra]);
             it.up = UP_MAX; return it;
         };
-        const ring = newItem(st, 'Anillo opaco', 3, [{ id: 'mag', v: ATTR_RANGES.mag[1] }, { id: 'mp', v: ATTR_RANGES.mp[1] }, { id: 'hp', v: ATTR_RANGES.hp[1] }]);
+        const ring = newItem(st, 'Anillo opaco', 4, [{ id: 'mag', v: ATTR_RANGES.mag[1] }, { id: 'mp', v: ATTR_RANGES.mp[1] }, { id: 'hp', v: ATTR_RANGES.hp[1] }]);
         ring.up = UP_MAX;
         const set: Record<Slot, SItem> = { arma: top('Báculo del camposanto'), armadura: top('Mortaja bordada'), cabeza: top('Capuchón de duelo'), anillo: ring };
         for (const slot of SLOTS) { const prev = st.eq[slot]; if (prev && st.bag.length < BAG_MAX) st.bag.push(prev); st.eq[slot] = set[slot]; }
@@ -410,12 +444,15 @@ export class Economy {
             if (!['armero', 'armadurero'].includes(roleOf(npc))) return fail('no_smith', 'Ese NPC no mejora equipo.');
             const it = st.bag.find((x) => x.u === uid) ?? Object.values(st.eq).find((x) => x?.u === uid) ?? undefined; if (!it) return fail('no_item', 'No tenés ese item.');
             const u = UNIQUE_BY_NAME.get(it.n); if (!u) return fail('not_unique', 'Solo se pueden mejorar los ítems únicos.');
-            const up = it.up ?? 0; if (up >= UP_MAX) return fail('max', `Ya está en el máximo (+${UP_MAX}).`);
+            const up = it.up ?? 0, cap = UP_MAX_BY_QUALITY[Math.min(4, Math.max(0, it.r))] ?? UP_MAX;
+            if (up >= cap) return fail('max', `Un ítem ${QUALITY_NAMES[it.r]?.toLowerCase() ?? ''} se mejora hasta +${cap}; ya está ahí.`);
             const stones = upStones(up), gold = upGold(u.uniq.tier, up);
             if ((st.forge ?? 0) < stones) return fail('stones', `Necesitás ${stones} piedra${stones > 1 ? 's' : ''} de forja.`);
             if (st.gold < gold) return fail('gold', `Necesitás ${gold} de oro.`);
             st.forge = (st.forge ?? 0) - stones; addGold(st, -gold);
             if (Math.random() < (UP_RATE[up] ?? 0)) { it.up = up + 1; this.questEvent(p, st, null); return done(`¡${it.n} subió a +${it.up}!`, true); }
+            // la mejora a +6 o más es la zona de riesgo: el fallo baja un nivel
+            if (up >= UP_RISK_FROM) { it.up = up - 1; return done(`La mejora falló y ${it.n} BAJÓ a +${it.up}. Se perdieron ${stones} piedra${stones > 1 ? 's' : ''} y ${gold} de oro.`, true); }
             return done(`La mejora falló: se perdieron ${stones} piedra${stones > 1 ? 's' : ''} y ${gold} de oro. ${it.n} sigue en +${up}.`);
         });
     }
@@ -671,14 +708,14 @@ export class Economy {
         if (boss) {
             // los jefes de mazmorra con ítems propios sueltan uno de ellos (siempre); los jefes de mundo, un único de su banda
             // (si la banda todavía no tiene únicos, el doble de oro hasta que exista el catálogo T4+)
-            item = bossU ? uniqueItem(st, pick(bossU)) : UNIQUES_BY_TIER[tier] ? uniqueItem(st, pick(UNIQUES_BY_TIER[tier])) : undefined;
+            item = bossU ? uniqueItem(st, pick(bossU)) : UNIQUES_BY_TIER[tier] ? uniqueItem(st, pick(UNIQUES_BY_TIER[tier]), Math.random() < 0.25 ? 3 : 2) : undefined;
             gold = rint(boss.gold[0], boss.gold[1]) * (!item ? 2 : 1);
         } else {
             // El ítem solo cae como único de la banda, con poca chance (más en pits y mazmorras); el resto del tiempo, oro.
             // El botín viejo con rareza al azar se eliminó (docs/ITEMS.md): los "comunes" son la basura vendible del suelo (systems/loot.ts).
             // La Suerte sube la chance de cada botín (+0,1 % por punto sobre 10).
             const r = Math.random(), uc = tier <= UNIQUE_TIERS_READY ? UNIQUE_CHANCE[k.origin ?? 'pit'] * dm : 0, gc = GOLD_CHANCE * dm;
-            if (r < uc) item = uniqueItem(st, pick(UNIQUES_BY_TIER[tier]));
+            if (r < uc) item = uniqueItem(st, pick(UNIQUES_BY_TIER[tier]), rollQuality(k.origin ?? 'pit'));
             else if (r < uc + gc) gold = rint(3, 8) * def.lvl;
         }
         if (gold) addGold(st, gold);

@@ -97,9 +97,10 @@ function findPath(sx: number, sy: number, tx: number, ty: number, free: (x: numb
 interface Rarity { n: string; c: string; k: number; p: number }
 const RAR: Rarity[] = [
     { n: 'Común', c: '#e7e2d3', k: 0, p: 0.7 },
-    { n: 'Mágico', c: '#6fa8ff', k: 1, p: 0.22 },
-    { n: 'Raro', c: '#ffd24a', k: 2, p: 0.07 },
-    { n: 'Épico', c: '#c77dff', k: 3, p: 0.01 },
+    { n: 'Verde', c: '#7fd98a', k: 1, p: 0.2 },
+    { n: 'Azul', c: '#6fa8ff', k: 2, p: 0.07 },
+    { n: 'Dorado', c: '#ffd24a', k: 3, p: 0.02 },
+    { n: 'Violeta', c: '#c77dff', k: 4, p: 0.01 },
 ];
 /** Texto de cada atributo; los rangos y las bases viven en @fdn/world (el server valida con las mismas tablas). */
 const ATTR_FMT: Record<AttrId, (v: number) => string> = {
@@ -2610,7 +2611,7 @@ function loadAttrs(a: { id: string; v: number }[]): Item['attrs'] {
 }
 function loadItem(v: SavedItem | null | undefined): Item | null {
     const b = v && ALL_BASES.find((x) => x.name === v.n); if (!v || !b) return null;
-    return { id: uid++, ...b, rar: RAR[Math.min(3, Math.max(0, v.r))], attrs: loadAttrs(v.a) };
+    return { id: uid++, ...b, rar: RAR[Math.min(4, Math.max(0, v.r))], attrs: loadAttrs(v.a) };
 }
 function buildSave(): CharSave {
     return {
@@ -2633,7 +2634,7 @@ function applySave(sv: CharSave) {
 /** Item del server -> item del cliente (la base y la rareza salen de las tablas compartidas). */
 function itemFromInv(v: InvItemMsg): Item {
     const b = ALL_BASES.find((x) => x.name === v.base) ?? ALL_BASES[0];
-    return { ...b, id: v.uid, rar: RAR[Math.min(3, Math.max(0, v.rarity))], attrs: loadAttrs(v.attrs), up: v.up || undefined };
+    return { ...b, id: v.uid, rar: RAR[Math.min(4, Math.max(0, v.rarity))], attrs: loadAttrs(v.attrs), up: v.up || undefined };
 }
 let invApplied = false;
 /** Última foto del server: el save local del login pisa la bolsa con uids locales, así que se vuelve a aplicar al entrar al mundo. */
