@@ -129,6 +129,21 @@ test('corrida: la party entra junta, se escala con los dos y lo muerto no renace
     } finally { setParties(undefined); }
 });
 
+test('cronómetro de corrida: al caer el jefe, los del piso ven cuánto tardaron', () => {
+    const { reg, A, B, arrive, world } = setup();
+    try {
+        const t0 = Date.now();
+        assert.equal(reg.handlePortal(A.session, 'caza_a_mazmorra', save), null); arrive(A); arrive(B);
+        const w = world(A);
+        assert.ok(w.runStart >= t0 && w.runStart <= Date.now(), 'el cronómetro arranca al entrar');
+        A.log.length = 0; B.log.length = 0;
+        const text = w.runCleared('Jefe de prueba', w.runStart + (22 * 60 + 14) * 1000);
+        assert.equal(text, 'Jefe de prueba cayó. Corrida de Mazmorra de prueba: 22:14 (2 jugadores).');
+        for (const P of [A, B]) assert.ok(msgs(P.log).some((m) => (m.message ?? m.text) === text), P.name);
+        assert.equal(world(A).runCleared.call({ runStart: 0 } as unknown as GameWorld, 'x'), undefined, 'sin corrida no hay cronómetro');
+    } finally { setParties(undefined); }
+});
+
 test('una vida por corrida: el que cae vuelve a la superficie y no puede volver mientras la party siga adentro', () => {
     const { reg, A, B, arrive, die, enter, leave, world } = setup();
     try {

@@ -36,7 +36,7 @@ export interface TransferSession { sessionId: string; worldId: string }
 export interface TransferDest { map: string; x: number; y: number; instanceId?: string; direction?: number }
 
 /** Una corrida de mazmorra: los pisos que la forman son los mundos `mapa#id` con este mismo id. */
-interface Run { size: number; dead: Set<string> }
+interface Run { size: number; dead: Set<string>; /** cuándo arrancó (ms): el cronómetro de la corrida, que se muestra al matar al jefe */ start: number }
 
 interface Pending { player: Player; session: TransferSession; map: string; key: string; x: number; y: number; direction?: number; hash: string; since: number }
 
@@ -95,7 +95,7 @@ export class WorldRegistry {
             w.transferHook = (sessionId, dest, why) => this.transferFromWorld(sessionId, dest, why);
             this.worlds.set(key, w);
             const run = instanceId ? this.runs.get(instanceId) : undefined;
-            if (run && w.isDungeonRun) w.setPartyScale(run.size); // otro piso de la misma corrida: misma escala
+            if (run && w.isDungeonRun) { w.setPartyScale(run.size); w.runStart = run.start; } // otro piso de la misma corrida: misma escala y mismo cronómetro
             console.log(`[Registro] Mundo '${key}' creado (${map.size}x${map.size}, ${w.mobCount} mobs). Mundos: ${this.worlds.size}`);
         }
         this.emptySince.delete(key);
@@ -257,7 +257,7 @@ export class WorldRegistry {
             return { id: cur };
         }
         const id = `${base}-${seq + 1}`;
-        this.runSeq.set(base, seq + 1); this.runs.set(id, { size: 1, dead: new Set() });
+        this.runSeq.set(base, seq + 1); this.runs.set(id, { size: 1, dead: new Set(), start: Date.now() });
         return { id, fresh: true };
     }
 

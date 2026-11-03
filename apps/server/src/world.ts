@@ -100,7 +100,10 @@ export class GameWorld {
                     if (f && (f.x !== p.posX || f.y !== p.posY)) { this.moveTo(p, p.posX, p.posY, f.x, f.y, false, true); p.send(M.playerTeleported(f.x, f.y)); }
                 },
                 dispel: (p) => { clearBuffs(p.status); if (p.status.statDirty) { p.status.statDirty = false; this.restat(p); } this.announceStatus(p); this.sendVitals(p, true); },
-                mobDied: (info) => { if (!info.gm) this.dropLoot(info.type, info.def.name, info.def.lvl, info.x, info.y); },
+                mobDied: (info) => {
+                    if (!info.gm) this.dropLoot(info.type, info.def.name, info.def.lvl, info.x, info.y);
+                    if (!info.gm && info.def.boss && this.isDungeonRun) this.runCleared(info.def.name);
+                },
                 reward: (p, info) => {
                     if (!this.econ) return;
                     // party: cada compañero cerca (mismo mundo, vivo) recibe su propio botín y una parte de la exp (docs/PARTY_Y_ARENAS.md §1)
@@ -120,6 +123,21 @@ export class GameWorld {
     get isDungeonRun(): boolean { return this.id.includes('#') && !!this.def?.temporary; }
     /** Jugadores con los que se escaló la instancia (1 por defecto). */
     private partySize = 1;
+    /** Cuándo arrancó la corrida (ms, lo fija el registro; 0 = sin cronómetro). */
+    runStart = 0;
+    /**
+     * Cronómetro de corrida: al caer el jefe, todos los del piso ven cuánto tardaron y queda en el log del server
+     * (`[Corrida] …`), para medir en las pruebas si las mazmorras duran lo buscado (~25 min solo/dúo, ~30 en grupo).
+     */
+    runCleared(bossName: string, now = Date.now()): string | undefined {
+        if (!this.runStart) return undefined;
+        const secs = Math.max(0, Math.round((now - this.runStart) / 1000)), mm = Math.floor(secs / 60), ss = String(secs % 60).padStart(2, '0');
+        const who = this.partySize === 1 ? '1 jugador' : `${this.partySize} jugadores`;
+        const text = `${bossName} cayó. Corrida de ${this.def?.name ?? this.mapId}: ${mm}:${ss} (${who}).`;
+        for (const p of this.players.values()) p.send(M.sendMessage(text));
+        console.log(`[Corrida] ${this.id} jefe=${bossName} duracion_s=${secs} jugadores=${this.partySize}`);
+        return text;
+    }
     /** El registro la fija al crear la corrida, con los que entraron juntos. Devuelve el escalado aplicado. */
     setPartyScale(n: number): { hp: number; dmg: number } | undefined {
         this.partySize = Math.max(1, Math.floor(n) || 1);
