@@ -352,6 +352,40 @@ test('mazmorra: cada party entra junta a su propia instancia; los demás, a la s
     } finally { setParties(undefined); }
 });
 
+test('mazmorra: el primero de la party crea la instancia; el que llega después entra a esa misma y los ajenos no pueden', () => {
+    const { reg, eco } = fresh();
+    const caza = reg.ensure('prueba_caza');
+    const A = join(reg, eco, caza, 'ana', { x: 57, y: 6 }), B = join(reg, eco, caza, 'beto', { x: 10, y: 10 }); // beto está lejos de la puerta
+    const C = join(reg, eco, caza, 'carla', { x: 57, y: 5 });
+    for (const j of [A, B, C]) j.p.prog.lvl = 5;
+    const people = new Map([[A.session.sessionId, 'ana'], [B.session.sessionId, 'beto'], [C.session.sessionId, 'carla']]);
+    const svc = new PartyService({
+        sessionByName: (n) => [...people].find(([, v]) => v === n.toLowerCase())?.[0], send: () => {},
+        info: (sid) => ({ name: people.get(sid)!, faction: 'solmar', level: 5, hp: 100, maxHp: 100, mp: 0, maxMp: 0, map: 'prueba_caza', online: true }),
+    });
+    setParties(svc);
+    reg.sessionHook = (sid) => { const j = [A, B, C].find((x) => x.session.sessionId === sid); return j && { session: j.session, save }; };
+    try {
+        svc.handle(A.session.sessionId, 'invite', 'beto'); svc.handle(B.session.sessionId, 'accept', '');
+        // ana, sola en la puerta, crea la instancia de la party; beto sigue afuera
+        assert.equal(reg.handlePortal(A.session, 'caza_a_mazmorra', save), null);
+        const key = A.session.worldId;
+        assert.match(key, /^prueba_mazmorra#p\d+-\d+$/);
+        assert.equal(B.session.worldId, 'prueba_caza');
+        reg.completeTransfer(A.session.sessionId, 'prueba_mazmorra', reg.hashOf('prueba_mazmorra'));
+        // carla (sin party) no puede entrar a esa instancia: arma la suya
+        assert.equal(reg.handlePortal(C.session, 'caza_a_mazmorra', save), null);
+        assert.match(C.session.worldId, /^prueba_mazmorra#u/); assert.notEqual(C.session.worldId, key);
+        // beto llega después a la puerta y entra a la instancia que ya existía, sin crear otra
+        B.p.setPosition(57, 6);
+        assert.equal(reg.handlePortal(B.session, 'caza_a_mazmorra', save), null);
+        assert.equal(B.session.worldId, key, 'el compañero tardío cae en la misma instancia');
+        reg.completeTransfer(B.session.sessionId, 'prueba_mazmorra', reg.hashOf('prueba_mazmorra'));
+        assert.equal(reg.get(key)!.playerCount, 2);
+        assert.equal(reg.get(key)!.playerOf(C.session.sessionId), undefined, 'ningún ajeno en la instancia de la party');
+    } finally { setParties(undefined); }
+});
+
 test('mazmorra: un compañero que no cumple el requisito no entra y se avisa', () => {
     const { reg, eco } = fresh();
     const caza = reg.ensure('prueba_caza');
