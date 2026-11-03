@@ -406,6 +406,7 @@ function onMobDamaged(v: { mobId: number; attackerId: bigint; dmg: number; crit:
     if (mine && !poisonTick && /goblin/.test(m.sprite ?? '')) sfx('goblin-hit', 0.6); // quejido del goblin (y de sus variantes) al recibir un golpe mío
     if (mine && !poisonTick && CLS.id === 'guerrero' && now() - lastMeleeReq < 0.6) {
         sfx(v.crit ? 'sword-crit' : 'sword-attack', v.crit ? 0.85 : 0.5);
+        efxLocal(v.crit ? 'critico' : 'impacto', m.x, m.y); // chispazo del golpe (solo lo veo yo)
         // crítico con el skin del caballero: golpe desde arriba (arranca con la espada ya levantada para que caiga junto con el número)
         if (v.crit && heroKey() === 'hero_knight') P.one = { anim: 'crit', t: now() - 0.15, until: now() + 0.65 };
     }
@@ -434,12 +435,12 @@ function onSkillEffect(v: { casterId: bigint; skill: string; fromX: number; from
     const fx0 = v.fromX + 0.5, fy0 = v.fromY + 0.5, tx = v.toX + 0.5, ty = v.toY + 0.5;
     switch (v.skill) {
         case 'pasoluz': efxLocal('spread', fx0, fy0); fx.push({ k: 'ring', x: fx0, y: fy0, t: 0, c: '#fff2a8' }); efxLocal('sphere', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#fff2a8' }); break;
-        case 'blink': efxLocal('spread', fx0, fy0); fx.push({ k: 'ring', x: fx0, y: fy0, t: 0, c: '#b9a3ff' }); efxLocal('sphere', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#b9a3ff' }); fx.push({ k: 'burst', x: tx, y: ty, t: 0, c: '#b9a3ff' }); break;
-        case 'carga': efxLocal('crosswind', fx0, fy0, 6); fx.push({ k: 'burst', x: fx0, y: fy0, t: 0, c: '#ff9a4a' }); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 1.2, c: '#ff9a4a' }); if (!reduce && v.casterId === myId) shake = Math.max(shake, 0.2); break;
-        case 'giro': efxLocal('cyclone', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 1.9, c: '#ffd0a0' }); break;
-        case 'nova': efxLocal('spread', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 3, c: '#bfe8ff' }); break;
+        case 'blink': efxLocal('spread', fx0, fy0); fx.push({ k: 'ring', x: fx0, y: fy0, t: 0, c: '#b9a3ff' }); efxLocal('fugaz', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#b9a3ff' }); fx.push({ k: 'burst', x: tx, y: ty, t: 0, c: '#b9a3ff' }); break;
+        case 'carga': efxLocal('polvareda', fx0, fy0); efxLocal('rafaga', tx, ty); fx.push({ k: 'burst', x: fx0, y: fy0, t: 0, c: '#ff9a4a' }); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 1.2, c: '#ff9a4a' }); if (!reduce && v.casterId === myId) shake = Math.max(shake, 0.2); break;
+        case 'giro': efxLocal('cyclone', tx, ty); efxLocal('polvo', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 1.9, c: '#ffd0a0' }); break;
+        case 'nova': efxLocal('picos', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 3, c: '#bfe8ff' }); break;
         case 'aliento': fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#7fe0a0' }); efxLocal('sphere', tx, ty); break;
-        case 'mandato': fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ff7a5a' }); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 6, c: '#ff7a5a' }); break;
+        case 'mandato': efxLocal('provocar', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ff7a5a' }); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 6, c: '#ff7a5a' }); break;
         case 'aura': efxLocal('bendicion', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffe9a0' }); break;
         case 'curacion': case 'renovar': efxLocal('sphere', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#8af0a8' }); break;
         case 'orbe': efxLocal('sphere', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 4, c: '#a8ffd0' }); break;
@@ -447,9 +448,9 @@ function onSkillEffect(v: { casterId: bigint; skill: string; fromX: number; from
         case 'novasagrada': efxLocal('spread', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 4.5, c: '#fff0b0' }); break;
         case 'grito': case 'amparo': case 'intelecto': case 'grupo': { // bendiciones de grupo (14 celdas)
             const c = LIB[v.skill]?.col ?? '#ffe27a'; efxLocal('godsbreath', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c }); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 3, c }); break; }
-        case 'escudomana': case 'escudodivino': case 'guardian': efxLocal('sphere', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: LIB[v.skill]?.col ?? '#bfe8ff' }); break;
-        case 'represalia': efxLocal('flamme', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ff9a6a' }); break;
-        case 'clarividencia': efxLocal('spread', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#d0a8ff' }); break;
+        case 'escudomana': case 'escudodivino': case 'guardian': efxLocal(v.skill === 'escudomana' ? 'cupula' : 'sphere', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: LIB[v.skill]?.col ?? '#bfe8ff' }); break;
+        case 'represalia': efxLocal('represalia', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ff9a6a' }); break;
+        case 'clarividencia': efxLocal('estrella', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#d0a8ff' }); break;
         case 'esfera': efxLocal('sphere', tx, ty); fx.push({ k: 'burst', x: tx, y: ty, t: 0, c: '#fff2a8' }); break;
         case 'despertar': efxLocal('godsbreath', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffffff' }); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#fff2a8' }); break;
     }
@@ -547,13 +548,16 @@ function onBoss(msg: { $case: string; value: unknown }) {
         case 'bossTelegraph': {
             const t = v as unknown as { x: number; y: number; r: number; warnMs: number; name: string };
             bossMarks.push({ x: t.x - 0.5, y: t.y - 0.5, r: t.r, t0: T, dur: t.warnMs / 1000 });
+            later(t.warnMs / 1000, () => efxLocal('explosion', t.x - 0.5, t.y - 0.5)); // el golpe cae donde avisó
             if (m) float(m.x, m.y - 0.4, `¡${t.name}!`, '#ff6a4a', true);
             break;
         }
-        case 'bossZone': { const z = v as unknown as { id: number; x: number; y: number; r: number; durationMs: number }; bossZones.set(z.id, { x: z.x - 0.5, y: z.y - 0.5, r: z.r, until: T + z.durationMs / 1000 }); break; }
+        case 'bossZone': { const z = v as unknown as { id: number; x: number; y: number; r: number; durationMs: number }; bossZones.set(z.id, { x: z.x - 0.5, y: z.y - 0.5, r: z.r, until: T + z.durationMs / 1000 }); efxLocal('charco', z.x - 0.5, z.y - 0.5); break; }
         case 'bossPhase': {
             const ph = v as unknown as { mobId: number; event: string; text: string; enraged: boolean };
             if (ph.enraged) bossRage.add(ph.mobId); else bossRage.delete(ph.mobId);
+            if (m && ph.event === 'adds') efxLocal('invocar', m.x, m.y);
+            if (m && ph.event === 'furia') efxLocal('represalia', m.x, m.y);
             if (ph.event === 'reinicio') bossCasts.delete(ph.mobId);
             if (ph.text) { log(ph.text, true); if (m) float(m.x, m.y - 0.8, ph.text, ph.enraged ? '#ff4a3a' : '#ffd24a', true); }
             break;
@@ -709,31 +713,31 @@ const LIB: Record<string, SpellDef> = {
     esquirla: { name: 'Esquirla de hielo', mp: 24, cd: 0.8, col: '#9fdcff', range: 15, castT: 1, target: true, // Ice Shard (Valdrys): frena 3 s, 2× sobre congelado
         cast(m) { if (!isMob(m)) return false; projs.push({ x: P.x, y: P.y, m, spd: 12, dmg: 0, col: '#9fdcff', sid: 'esquirla' }); } },
     ignicion: { name: 'Ignición', mp: 30, cd: 5, col: '#ff6a2a', range: 15, target: true, instant: true, // Ignite (Valdrys): instantánea + quemadura 3 s
-        cast(m) { if (!isMob(m)) return false; efx('flamme', m.x, m.y, 8); damageMob(m, 'ignicion'); } },
+        cast(m) { if (!isMob(m)) return false; efx('aroigneo', m.x, m.y); damageMob(m, 'ignicion'); } },
     nova: { name: 'Nova de escarcha', mp: 60, cd: 8, col: '#bfe8ff', range: 0, target: false, aoe: 3, instant: true, // Ice Blast (Valdrys): congela 2 s alrededor
         cast() { skillSend('nova'); } },
     juicio: { name: 'Juicio', mp: 15, cd: 1.5, col: '#ffe27a', range: 4, castT: 1, target: true, // Smite (Valdrys): se cura la mitad del daño
         cast(m) { if (!isMob(m)) return false; efx('tajo', m.x, m.y, 8); damageMob(m, 'juicio'); } },
     escudo: { name: 'Escudo vengador', mp: 36, cd: 9, col: '#ffd24a', range: 10, target: true, ctrl: true, instant: true, // Avenger's Shield (Valdrys): aturde 3 s
-        cast(m) { return control(m, 'escudo', 3, 'Aturdiste', 'El aturdimiento', 'turbulence'); } },
+        cast(m) { return control(m, 'escudo', 3, 'Aturdiste', 'El aturdimiento', 'aturde'); } },
     mandato: { name: 'Mandato', mp: 42, cd: 6, col: '#ff7a5a', range: 0, target: false, instant: true, // Righteous Mandate (Valdrys): provoca 7 s
         cast() { skillSend('mandato'); } },
     aura: { name: 'Aura sagrada', mp: 48, cd: 15, col: '#ffe9a0', range: 0, target: false, instant: true, // Sacred Aura (Valdrys): 10 s de pulsos
         cast() { skillSend('aura'); } },
     paralisis: { name: 'Cadenas de hielo', mp: 36, cd: 6, col: '#7fd6ff', range: 15, castT: 1, target: true, ctrl: true, // Chains of Ice (Valdrys)
-        cast(m) { return control(m, 'paralisis', 5, 'Paralizaste', 'La parálisis'); } },
+        cast(m) { return control(m, 'paralisis', 5, 'Paralizaste', 'La parálisis', 'cadenas'); } },
     aturdir: { name: 'Martillo de justicia', mp: 30, cd: 11, col: '#ffd24a', range: 8, target: true, ctrl: true, instant: true, // Hammer of Justice (Valdrys)
-        cast(m) { return control(m, 'aturdir', 3, 'Aturdiste', 'El aturdimiento', 'turbulence'); } },
+        cast(m) { return control(m, 'aturdir', 3, 'Aturdiste', 'El aturdimiento', 'aturde'); } },
     bola: { name: 'Bola de fuego', mp: 72, cd: 10, col: '#ff8a3d', range: 15, castT: 1.5, target: true, // Fireball (Valdrys): un objetivo, 3×
         cast(m) { if (!isMob(m)) return false; const t = totals(), dmg = (rint(14, 21) + P.lvl * 2 + t.mag) * 3; projs.push({ x: P.x, y: P.y, m, spd: 9, dmg, col: '#ff8a3d', sid: 'bola' }); } },
     golpe: { name: 'Golpe brutal', mp: 10, cd: 1, col: '#ffb347', range: 2, target: true, instant: true, // Strike
-        cast(m) { if (!isMob(m)) return false; efx('crosswind', m.x, m.y, 8); damageMob(m, 'golpe'); } },
+        cast(m) { if (!isMob(m)) return false; efx('tajobrutal', m.x, m.y); damageMob(m, 'golpe'); } },
     lluvia: { name: 'Infierno', mp: 90, cd: 18, col: '#ff7a2f', range: 15, castT: 2.4, target: true, aoe: 4.5, // Inferno (Valdrys)
-        cast(m) { if (!m) return false; zone(m.x, m.y, 4.5, 1, 0, () => Math.round((rint(14, 21) + P.lvl * 2 + totals().mag) * 1.2), 'cataclysm', 0, 'lluvia'); } },
+        cast(m) { if (!m) return false; zone(m.x, m.y, 4.5, 1, 0, () => Math.round((rint(14, 21) + P.lvl * 2 + totals().mag) * 1.2), 'meteoro', 0, 'lluvia'); } },
     remover: { name: 'Purga', mp: 30, cd: 24, col: '#9fe8ff', range: 0, target: false, instant: true, // Cleanse (Valdrys): saca congelado, aturdido y frenado
         cast() { if (P.frozenUntil <= now() && P.slowEnd <= now()) { toast('No tenés nada que purgar.'); return false; } net.send({ $case: 'removerRequest', value: {} }); } },
     invisibilidad: { name: 'Invisibilidad', mp: 40, cd: 20, col: '#9fb8ff', range: 0, target: false,
-        cast() { efx('splash', P.x, P.y); net.send({ $case: 'invisibilityRequest', value: {} }); } },
+        cast() { efx('humo', P.x, P.y); net.send({ $case: 'invisibilityRequest', value: {} }); } },
     detectar: { name: 'Detectar invisible', mp: 30, cd: 12, col: '#ffe9a0', range: 0, target: false,
         cast() { efx('spread', P.x, P.y); net.send({ $case: 'detectInvisibleRequest', value: {} }); } },
     blink: { name: 'Parpadeo', mp: 0, cd: 12, col: '#b9a3ff', range: 0, target: false, instant: true,
@@ -773,7 +777,7 @@ const LIB: Record<string, SpellDef> = {
     castigo: { name: 'Castigo', mp: 18, cd: 1, col: '#ffe680', range: 15, castT: 1, target: true, // Smite (Valdrys): devuelve 9 de maná y te cura el 35 % del daño
         cast(m) { if (!isMob(m)) return false; efx('crosswind', m.x, m.y, 8); damageMob(m, 'castigo'); } },
     reprender: { name: 'Reprender', mp: 30, cd: 15, col: '#fff2a8', range: 15, target: true, ctrl: true, instant: true, // Chastise (Valdrys): aturde 3 s
-        cast(m) { return control(m, 'reprender', 3, 'Aturdiste', 'El aturdimiento', 'turbulence'); } },
+        cast(m) { return control(m, 'reprender', 3, 'Aturdiste', 'El aturdimiento', 'aturde'); } },
     curacion: { name: 'Curación', mp: 48, cd: 5, col: '#8af0a8', range: 12, castT: 1.5, target: false, // Generous Heal (Valdrys): 40 % de la vida
         cast() { return healCast('curacion', 12); } },
     renovar: { name: 'Renovar', mp: 26, cd: 3, col: '#b8f5a0', range: 12, target: false, instant: true, // Renew (Valdrys): cura en 6 s; con el cursor sobre un enemigo, lo quema
@@ -1013,10 +1017,17 @@ const SPR: Record<string, SpriteMeta> = {};
 let WORLD: Record<string, number[]> = {};
 const IMG: Record<string, CanvasImageSource> = {};
 // Efectos TOMAS (Miradin, CC-BY-SA) horneados a cuadros; se dibujan en aditivo. Si no cargan, el juego sigue con los efectos simples.
-let FXM: { cell: number; frames: number; rows: Record<string, { row: number; fps: number; scale: number; img?: string }> } | null = null;
+let FXM: { cell: number; frames: number; rows: Record<string, { row: number; fps: number; scale: number; img?: string; /** cuadros del efecto (atlas privado): dura n/fps */ n?: number }> } | null = null;
 /** Efectos del atlas privado (fx_priv, fuera de git por licencia) y con qué se reemplazan si no está. */
-const FX_FALLBACK: Record<string, string> = { pilar: 'flamme', tajo: 'crosswind', bendicion: 'sphere' };
-const efxLocal = (n: string, x: number, y: number, dy = 0) => { const k = FXM?.rows[n] ? n : FX_FALLBACK[n]; if (k && FXM?.rows[k]) fx.push({ k: 'efx', n: k, x, y, t: 0, dy }); };
+const FX_FALLBACK: Record<string, string> = {
+    pilar: 'flamme', tajo: 'crosswind', bendicion: 'sphere',
+    // packs "Pixel Art VFX" de Frostwindz (tools/src/fx/private_packs.py)
+    chispa: 'splash', estallido: 'eruption', meteoro: 'cataclysm', aroigneo: 'flamme', explosion: 'eruption', escarcha: 'splash', picos: 'spread',
+    cadenas: 'stop', estrella: 'spread', fugaz: 'sphere', cupula: 'sphere', humo: 'splash', polvo: 'cyclone', polvareda: 'crosswind', aturde: 'turbulence',
+    rafaga: 'crosswind', tajobrutal: 'crosswind', provocar: 'godsbreath', represalia: 'flamme',
+};
+/** Efectos que no tienen reemplazo: sin el atlas privado no se dibuja nada (golpes cuerpo a cuerpo, jefes). */
+const efxLocal = (n: string, x: number, y: number, dy = 0) => { const k = FXM?.rows[n] ? n : FX_FALLBACK[n]; const r = k ? FXM?.rows[k] : undefined; if (k && r) fx.push({ k: 'efx', n: k, x, y, t: 0, dy, d: r.n ? r.n / r.fps : undefined }); };
 /** Efecto de mis hechizos: lo veo yo y los jugadores cercanos. */
 const efx = (n: string, x: number, y: number, dy = 0) => { efxLocal(n, x, y, dy); if (connected) pvpSend(n, x, y); };
 // ---------- PvP: bandos enemigos (y todos contra todos en la arena) ----------
@@ -1502,7 +1513,7 @@ function update(dt: number) {
         }
         const pm = p.m!;
         if (pm.hp <= 0 || !mobs.includes(pm)) { projs.splice(projs.indexOf(p), 1); continue; }
-        const d = dist(p, pm); if (d < 0.3) { fx.push({ k: 'ring', x: pm.x, y: pm.y, t: 0, c: '#c9b6ff' }); efx('splash', pm.x, pm.y, 10); damageMob(pm, p.sid ?? 'proyectil'); projs.splice(projs.indexOf(p), 1); continue; }
+        const d = dist(p, pm); if (d < 0.3) { fx.push({ k: 'ring', x: pm.x, y: pm.y, t: 0, c: '#c9b6ff' }); efx(p.sid === 'bola' ? 'estallido' : p.sid === 'esquirla' ? 'escarcha' : 'chispa', pm.x, pm.y); damageMob(pm, p.sid ?? 'proyectil'); projs.splice(projs.indexOf(p), 1); continue; }
         p.x += ((pm.x - p.x) / d) * p.spd * dt; p.y += ((pm.y - p.y) / d) * p.spd * dt;
     }
     for (const c of corpses.slice()) if (T - c.t > 3) corpses.splice(corpses.indexOf(c), 1);
