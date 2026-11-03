@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { ELITE_HP_MULT, PRUEBA_MAZMORRA, TRAIT_ELITE, TRAIT_MUTANT, dungeonPartyScale, isEliteSlot, mobDef, traitLabel, type MobType, type WorldMap, type Zone } from '@fdn/world';
+import { ELITE_HP_MULT, PRUEBA_MAZMORRA, getMapDef, TRAIT_ELITE, TRAIT_MUTANT, dungeonPartyScale, isEliteSlot, mobDef, traitLabel, type MobType, type WorldMap, type Zone } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
 import { MobSim, type MobHost } from '../src/mobs.ts';
@@ -169,4 +169,14 @@ test('una corrida vacía (todos sus pisos) se da de baja; con alguien en otro pi
         assert.equal(reg.get(key), undefined, 'vacía: se da de baja');
         assert.equal(reg.runOf(iid), undefined);
     } finally { setParties(undefined); }
+});
+
+test('densidad de D1 y D2: ~25 y ~40 mobs, con el jefe intacto y élites repartidos', () => {
+    const count = (ids: string[]) => ids.reduce((a, id) => a + getMapDef(id)!.build().zones.reduce((s, z) => s + z.n, 0), 0);
+    assert.equal(count(['cueva_goblin', 'minas_goblin']), 25);
+    assert.equal(count(['nido_hormiga_leon', 'ruinas_de_stormrock']), 40);
+    assert.ok(getMapDef('minas_goblin')!.build().zones.some((z) => z.type === 'goblin_jefe' && z.n === 1));
+    assert.ok(getMapDef('ruinas_de_stormrock')!.build().zones.some((z) => z.type === 'antlion_reina' && z.n === 1));
+    const elites = getMapDef('cueva_goblin')!.build().zones.filter((z, i) => z.tier === 'dungeon' && isEliteSlot(i, 0, z.n)).length;
+    assert.equal(elites, 4, 'un élite cada dos packs');
 });
