@@ -580,23 +580,20 @@ canvas:focus{outline:none}
         <div class="acts"><button type="button" class="lbtn ghost" id="selBack">VOLVER</button><button type="button" class="lbtn pri" id="selPlay">JUGAR</button></div>
       </section>
 
-      <section class="scr" id="scrClass" aria-labelledby="hCls" hidden>
-        <h2 id="hCls" class="stitle">ELIGE TU CLASE</h2>
-        <div class="cards" id="clsCards" role="radiogroup" aria-labelledby="hCls"></div>
-        <div class="acts"><button type="button" class="lbtn ghost" id="clsBack">VOLVER</button><button type="button" class="lbtn pri" id="clsOk">SELECCIONAR</button></div>
-      </section>
-
-      <section class="scr" id="scrFaction" aria-labelledby="hFac" hidden>
-        <h2 id="hFac" class="stitle">ELIGE TU FACCIÓN</h2>
-        <div class="cards" id="facCards" role="radiogroup" aria-labelledby="hFac"></div>
-        <div class="acts"><button type="button" class="lbtn ghost" id="facBack">VOLVER</button><button type="button" class="lbtn pri" id="facOk">SELECCIONAR</button></div>
-      </section>
-
       <section class="scr" id="scrCreate" aria-labelledby="hCre" hidden>
-        <h2 id="hCre" class="stitle sr">CREA TU PERSONAJE</h2>
+        <h2 id="hCre" class="stitle">CREA TU PERSONAJE</h2>
+        <div class="crcol">
+          <section class="crgrp"><h3 id="hFac">FACCIÓN</h3><div class="picks" id="facPicks" role="radiogroup" aria-labelledby="hFac"></div><div id="crFacInfo"></div></section>
+          <section class="crgrp"><h3 id="hCls">CLASE</h3><div class="picks" id="clsPicks" role="radiogroup" aria-labelledby="hCls"></div></section>
+        </div>
         <div class="crart" id="crArt" aria-hidden="true"></div>
-        <div class="crbody" id="crBody"></div>
-        <div class="acts"><button type="button" class="lbtn ghost" id="crBack">VOLVER</button><button type="button" class="lbtn pri" id="crOk">CONFIRMAR</button></div>
+        <div class="crside" id="crSide"></div>
+        <div class="crfoot">
+          <label for="crName" class="sr">Nombre del personaje</label>
+          <input id="crName" class="crname" maxlength="16" autocomplete="off" spellcheck="false" placeholder="NOMBRE DEL PERSONAJE" aria-describedby="crErr">
+          <p class="err crerr" id="crErr" role="alert"></p>
+        </div>
+        <div class="acts"><button type="button" class="lbtn ghost" id="crBack">VOLVER</button><button type="button" class="lbtn pri" id="crOk">CREAR</button></div>
       </section>
     </div>
     <footer class="lbar" id="lbar"><p class="alt"><span id="altTxt">¿No tenés una cuenta?</span> <button type="button" id="altBtn" class="lnk">Crear cuenta</button></p></footer>

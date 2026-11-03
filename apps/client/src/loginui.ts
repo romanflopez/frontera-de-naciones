@@ -31,7 +31,7 @@ export interface StartInfo {
     onBack: () => void;
 }
 const NAME_RE = /^[\p{L}\p{N}_\- ]{2,16}$/u;
-export type Screen = 'login' | 'select' | 'class' | 'faction' | 'create';
+export type Screen = 'login' | 'select' | 'create';
 
 const $ = (id: string) => document.getElementById(id)!;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -42,7 +42,7 @@ const CLS_TAG: Record<string, string> = { mago: 'Domina el poder arcano', guerre
 const CLS_LORE: Record<string, string> = {
     mago: 'Los magos canalizan la energía arcana a través de sus hechizos. Pegan de lejos, congelan y queman, pero necesitan maná y poca gente que los toque.',
     healer: 'Los healers canalizan la luz sagrada: curan y bendicen a los suyos, castigan de lejos y cortan los casteos peligrosos. Pueden cazar solos, pero brillan en grupo.',
-    guerrero: 'Los guerreros son maestros del combate cuerpo a cuerpo. Su vida y su resistencia les permiten sostener la línea de frente y frenar a los enemigos.',
+    guerrero: 'Los paladines son maestros del combate cuerpo a cuerpo. Su vida y su resistencia les permiten sostener la línea de frente y frenar a los enemigos.',
 };
 const clsCol = (id: string) => CLS_COL[id] ?? '#d6a445';
 
@@ -68,11 +68,6 @@ function shield(id: string, col: string): string {
         ? `<circle cy="-6" r="7" fill="${col}"/>${[...Array(8)].map((_, i) => `<path d="M0 -6 L${(Math.cos(i * Math.PI / 4) * 15).toFixed(1)} ${(-6 + Math.sin(i * Math.PI / 4) * 15).toFixed(1)}" stroke="${col}" stroke-width="2" stroke-linecap="round"/>`).join('')}<path d="M-16 12 q4 -5 8 0 t8 0 t8 0 t8 0" fill="none" stroke="${col}" stroke-width="2"/>`
         : `<path d="M-12 14 L-8 -4 L-2 4 L0 -16 L4 2 L8 -8 L12 14Z" fill="${col}" fill-opacity=".85"/><path d="M-14 16 H14" stroke="${col}" stroke-width="3" stroke-linecap="round"/>`;
     return `<svg viewBox="-34 -38 68 76" role="presentation"><path d="M-28 -30 H28 V6 C28 22 14 32 0 38 C-14 32 -28 22 -28 6Z" fill="#0c0610" stroke="${col}" stroke-width="2.2" stroke-linejoin="round"/><path d="M-23 -25 H23 V5 C23 18 12 27 0 32 C-12 27 -23 18 -23 5Z" fill="none" stroke="${col}" stroke-opacity=".4"/>${glyph}</svg>`;
-}
-function factionBanner(id: string, col: string): string {
-    // paisaje simbólico de la facción: sol sobre el mar (Solmar) / forja y cenizas entre montañas (Vhar)
-    if (id === 'solmar') return `<svg viewBox="0 0 300 190" preserveAspectRatio="xMidYMid slice" role="presentation"><defs><linearGradient id="fbS" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#10234a"/><stop offset=".6" stop-color="#2a4f8a"/><stop offset="1" stop-color="#0a1428"/></linearGradient><radialGradient id="fbSs"><stop offset="0" stop-color="#fff2b0"/><stop offset=".4" stop-color="#ffc24a"/><stop offset="1" stop-color="#ffc24a" stop-opacity="0"/></radialGradient></defs><rect width="300" height="190" fill="url(#fbS)"/><circle cx="150" cy="104" r="80" fill="url(#fbSs)"/><circle cx="150" cy="104" r="26" fill="#ffe08a"/><path d="M0 112 H300 V190 H0Z" fill="#0b1c3c"/>${[0, 1, 2, 3, 4].map((i) => `<path d="M${40 + i * 10} ${118 + i * 14} H${260 - i * 10}" stroke="${col}" stroke-opacity="${0.55 - i * 0.08}" stroke-width="2" stroke-dasharray="14 9"/>`).join('')}<path d="M110 112 L118 60 L126 112Z M174 112 L182 76 L190 112Z" fill="#071226"/></svg>`;
-    return `<svg viewBox="0 0 300 190" preserveAspectRatio="xMidYMid slice" role="presentation"><defs><linearGradient id="fbV" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a0808"/><stop offset=".7" stop-color="#6a1c10"/><stop offset="1" stop-color="#1a0604"/></linearGradient><radialGradient id="fbVf"><stop offset="0" stop-color="#ffb04a"/><stop offset=".5" stop-color="#ff4a1c" stop-opacity=".6"/><stop offset="1" stop-color="#ff4a1c" stop-opacity="0"/></radialGradient></defs><rect width="300" height="190" fill="url(#fbV)"/><circle cx="150" cy="130" r="90" fill="url(#fbVf)"/><path d="M0 190 V120 L40 80 L70 110 L110 60 L150 112 L190 70 L230 108 L270 76 L300 110 V190Z" fill="#0a0305"/><path d="M130 190 V150 L140 140 H160 L170 150 V190Z" fill="#150608"/><rect x="138" y="132" width="24" height="9" rx="2" fill="#150608"/>${[...Array(14)].map((_, i) => `<circle cx="${60 + i * 14}" cy="${70 + (i * 37) % 80}" r="1.6" fill="#ffb04a" opacity=".8"/>`).join('')}</svg>`;
 }
 
 // ---------- fondo animado (brasas) ----------
@@ -121,7 +116,7 @@ export function initLoginUI(ctx: FlowCtx) {
     new MutationObserver(() => { if (!root.hidden) { fit(); startFx(); } }).observe(root, { attributes: true, attributeFilter: ['hidden'] });
     if (!root.hidden) startFx();
 
-    const screens: Record<Screen, string> = { login: 'scrLogin', select: 'scrSelect', class: 'scrClass', faction: 'scrFaction', create: 'scrCreate' };
+    const screens: Record<Screen, string> = { login: 'scrLogin', select: 'scrSelect', create: 'scrCreate' };
     let info: StartInfo | null = null;
     let cur: Screen = 'login';
     const clsOf = (id: string) => ctx.classes.find((c) => c.id === id) ?? ctx.classes[0];
@@ -135,8 +130,8 @@ export function initLoginUI(ctx: FlowCtx) {
         root.style.setProperty('--ac', s === 'login' ? '#c25bff' : clsCol(cls));
         root.style.setProperty('--fc', facOf(faction).col);
         for (const [k, id] of Object.entries(screens)) $(id).hidden = k !== s;
-        if (s === 'select') renderSelect(); else if (s === 'class') renderClass(); else if (s === 'faction') renderFaction(); else if (s === 'create') renderCreate();
-        const focusId = { login: '', select: 'selPlay', class: 'clsOk', faction: 'facOk', create: 'crOk' }[s];
+        if (s === 'select') renderSelect(); else if (s === 'create') renderCreate();
+        const focusId = { login: '', select: 'selPlay', create: 'crName' }[s];
         if (focusId) ($(focusId) as HTMLElement).focus({ preventScroll: true });
         if (s !== 'select') delBox.hidden = true;
     }
@@ -174,7 +169,7 @@ export function initLoginUI(ctx: FlowCtx) {
         const d = (e.target as HTMLElement).closest<HTMLElement>('.sdel');
         if (d) { selIdx = Number(d.dataset.del); renderSelect(); openDelete(); return; }
         const b = (e.target as HTMLElement).closest<HTMLElement>('.slot'); if (!b || !info) return;
-        if (b.dataset.new) { newName = ''; ($('selErr') as HTMLElement).textContent = ''; show('class'); return; }
+        if (b.dataset.new) { newName = ''; ($('crName') as HTMLInputElement).value = ''; ($('selErr') as HTMLElement).textContent = ''; show('create'); return; }
         selIdx = Number(b.dataset.i); ($('selErr') as HTMLElement).textContent = ''; renderSelect();
     });
     $('slots').addEventListener('dblclick', (e) => { const b = (e.target as HTMLElement).closest<HTMLElement>('.slot[data-i]'); if (b && chars[selIdx]) play(); });
@@ -201,60 +196,65 @@ export function initLoginUI(ctx: FlowCtx) {
         if (c.id === 'guerrero') return [`Cuerpo a cuerpo: ${c.melee[0]}–${c.melee[1]} de daño`, `Resistente: ${c.hp} de vida base, +${c.hpL} por nivel`, `Aturde y barre (${sp('aturdir', 'giro')})`, `Poco maná: ${c.mp} base`];
         return [c.desc];
     }
-    function cardsHtml(kind: 'cls' | 'fac'): string {
-        const sel = kind === 'cls' ? ctx.get().cls : ctx.get().faction;
-        if (kind === 'cls') return ctx.classes.map((c) => { const col = clsCol(c.id), on = c.id === sel; return `<button type="button" role="radio" aria-checked="${on}" class="card${on ? ' on' : ''}" data-id="${c.id}" style="--c:${col}"><span class="tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="cname">${c.name.toUpperCase()}</span><span class="cbadge">${clsIcon(c.id, col)}</span><span class="cart"><i class="halo"></i><i class="floor"></i><i class="spk s1"></i><i class="spk s2"></i><i class="spk s3"></i>${dollCv(c.id)}</span><span class="ctag">${CLS_TAG[c.id] ?? c.desc}</span><ul>${bullets(c).map((b) => `<li>${esc(b)}</li>`).join('')}</ul></button>`; }).join('');
-        return ctx.factions.map((f) => { const on = f.id === sel; return `<button type="button" role="radio" aria-checked="${on}" class="card fcard${on ? ' on' : ''}" data-id="${f.id}" style="--c:${f.col}"><span class="tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="cbadge">${shield(f.id, f.col)}</span><span class="cart fart">${factionBanner(f.id, f.col)}</span><span class="cname">${f.name.toUpperCase()}</span><span class="ctag">${esc(f.desc)}</span><ul><li>Ciudad inicial: ${esc(ctx.cityName(f.id))}</li><li>${f.id === 'solmar' ? 'Tierras costeras del sol y el mar' : 'Tierras secas del hierro y la ceniza'}</li></ul></button>`; }).join('');
+    /** Íconos de facción y de clase: una sola pantalla de creación, como el diseño del pack. */
+    function pickHtml(kind: 'cls' | 'fac'): string {
+        const { cls, faction } = ctx.get();
+        const btn = (id: string, name: string, col: string, on: boolean, glyph: string) =>
+            `<button type="button" role="radio" aria-checked="${on}" class="pk${on ? ' on' : ''}" data-k="${kind}" data-id="${id}" style="--c:${col}" aria-label="${esc(name)}" title="${esc(name)}">${glyph}</button>`;
+        if (kind === 'fac') return ctx.factions.map((f) => btn(f.id, f.name, f.col, f.id === faction, shield(f.id, f.col))).join('');
+        return ctx.classes.map((c) => btn(c.id, c.name, clsCol(c.id), c.id === cls, clsIcon(c.id, clsCol(c.id)))).join('');
     }
-    function renderClass() { $('clsCards').innerHTML = cardsHtml('cls'); mountDolls($('clsCards')); }
-    function renderFaction() { $('facCards').innerHTML = cardsHtml('fac'); }
-    function pick(kind: 'cls' | 'fac', host: HTMLElement, e: Event) {
-        const b = (e.target as HTMLElement).closest<HTMLElement>('.card'); if (!b) return;
-        ctx.set(kind === 'cls' ? { cls: b.dataset.id } : { faction: b.dataset.id });
-        host.querySelectorAll<HTMLElement>('.card').forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-checked', String(on)); });
-        root.dataset.cls = ctx.get().cls; root.style.setProperty('--ac', kind === 'cls' ? clsCol(b.dataset.id!) : clsCol(ctx.get().cls)); root.style.setProperty('--fc', facOf(ctx.get().faction).col);
+    /** Ficha de la clase o la facción elegida (la columna derecha, donde el diseño del pack pone la apariencia). */
+    function fichaCls(c: ClassInfo): string {
+        const col = clsCol(c.id);
+        return `<article class="crcard"><h3 style="color:${col}">${esc(c.name.toUpperCase())}</h3><p class="crtag">${esc(CLS_TAG[c.id] ?? '')}</p>`
+            + `<ul class="crbul">${bullets(c).map((b) => `<li style="--b:${col}">${esc(b)}</li>`).join('')}</ul>`
+            + `<p class="crlore">${esc(CLS_LORE[c.id] ?? c.desc)}</p>`
+            + `<dl class="crnums"><div><dt>Vida</dt><dd>${c.hp} <small>+${c.hpL}/nivel</small></dd></div><div><dt>Maná</dt><dd>${c.mp} <small>+${c.mpL}/nivel</small></dd></div>`
+            + `<div><dt>Cuerpo a cuerpo</dt><dd>${c.melee[0]}–${c.melee[1]}</dd></div><div><dt>Equipo</dt><dd>${esc(c.weapon)}${c.armor ? `, ${esc(c.armor)}` : ''}</dd></div></dl></article>`;
     }
-    $('clsCards').addEventListener('click', (e) => pick('cls', $('clsCards'), e));
-    $('facCards').addEventListener('click', (e) => pick('fac', $('facCards'), e));
-    for (const id of ['clsCards', 'facCards']) $(id).addEventListener('keydown', (e) => {
-        const k = (e as KeyboardEvent).key; if (k !== 'ArrowRight' && k !== 'ArrowLeft') return;
-        const cards = [...$(id).querySelectorAll<HTMLElement>('.card')], i = cards.findIndex((x) => x.classList.contains('on'));
-        const n = cards[(i + (k === 'ArrowRight' ? 1 : cards.length - 1)) % cards.length]; n.click(); n.focus(); e.preventDefault();
-    });
-
-    // --- crear personaje (atributos base de la clase, solo lectura: el juego no tiene puntos asignables) ---
+    function fichaFac(f: FactionInfo): string {
+        return `<article class="crcard sm"><h3 style="color:${f.col}">${esc(f.name.toUpperCase())}</h3><p class="crlore">${esc(f.desc)}</p>`
+            + `<dl class="crnums"><div><dt>Empezás en</dt><dd>${esc(ctx.cityName(f.id))}</dd></div></dl></article>`;
+    }
     function renderCreate() {
         if (!info) return;
-        const { cls, faction } = ctx.get(), c = clsOf(cls), f = facOf(faction), col = clsCol(c.id);
-        const mx = (fn: (x: ClassInfo) => number) => Math.max(...ctx.classes.map(fn));
-        const row = (label: string, val: string, v: number, m: number) => `<li><span class="al">${label}</span><span class="av">${val}</span><span class="bar"><i style="width:${Math.round((v / m) * 100)}%"></i></span></li>`;
-        const mid = (x: ClassInfo) => (x.melee[0] + x.melee[1]) / 2;
+        const { cls, faction } = ctx.get(), c = clsOf(cls), f = facOf(faction);
+        $('facPicks').innerHTML = pickHtml('fac');
+        $('clsPicks').innerHTML = pickHtml('cls');
         $('crArt').innerHTML = dollCv(c.id, 0.66); mountDolls($('crArt'));
-        $('crBody').innerHTML = `
-  <div class="crhead"><span class="cbadge">${clsIcon(c.id, col)}</span><div><h3 style="color:${col}">${c.name.toUpperCase()}</h3><p>${esc(CLS_TAG[c.id] ?? '')}. ${esc(c.desc)}</p></div></div>
-  <div class="crgrid">
-    <section class="pnl"><h4>ATRIBUTOS BASE</h4><ul class="attrs">
-      ${row('Vida', String(c.hp), c.hp, mx((x) => x.hp))}${row('Maná', String(c.mp), c.mp, mx((x) => x.mp))}${row('Cuerpo a cuerpo', `${c.melee[0]}–${c.melee[1]}`, mid(c), mx(mid))}${row('Hechizos', String(c.spells.length), c.spells.length, mx((x) => x.spells.length))}
-    </ul></section>
-    <section class="pnl"><h4>DESCRIPCIÓN</h4><p class="lore">${esc(CLS_LORE[c.id] ?? c.desc)}</p>
-      <h4 class="h4b">BONUS DE CLASE</h4><ul class="bon"><li style="--b:${col}">+${c.hpL} de vida por nivel</li><li style="--b:#5aa0ff">+${c.mpL} de maná por nivel</li><li style="--b:#d6a445">Equipo inicial: ${esc(c.weapon)}${c.armor ? ' y ' + esc(c.armor) : ''}</li></ul></section>
-  </div>
-  <div class="pnl crstrip"><dl><div><dt>Nombre</dt><dd><input id="crName" class="crname" maxlength="16" autocomplete="off" spellcheck="false" placeholder="Nombre del personaje" value="${esc(newName)}" aria-describedby="crErr"></dd></div><div><dt>Clase</dt><dd style="color:${col}">${c.name}</dd></div><div><dt>Facción</dt><dd style="color:${f.col}">${f.name}</dd></div><div><dt>Ciudad inicial</dt><dd>${esc(ctx.cityName(f.id))}</dd></div></dl></div>
-  <p class="err crerr" id="crErr" role="alert"></p>`;
+        $('crFacInfo').innerHTML = fichaFac(f);
+        $('crSide').innerHTML = fichaCls(c);
+        setBusy(false);
+    }
+    function pick(e: Event) {
+        const b = (e.target as HTMLElement).closest<HTMLElement>('.pk'); if (!b) return;
+        const kind = b.dataset.k as 'cls' | 'fac', id = b.dataset.id!;
+        ctx.set(kind === 'cls' ? { cls: id } : { faction: id });
+        renderCreate();
+        root.dataset.cls = ctx.get().cls;
+        root.style.setProperty('--ac', clsCol(ctx.get().cls));
+        root.style.setProperty('--fc', facOf(ctx.get().faction).col);
+        $(kind === 'cls' ? 'clsPicks' : 'facPicks').querySelector<HTMLElement>(`.pk[data-id="${id}"]`)?.focus();
+    }
+    for (const id of ['facPicks', 'clsPicks']) {
+        $(id).addEventListener('click', pick);
+        $(id).addEventListener('keydown', (e) => {
+            const k = (e as KeyboardEvent).key; if (k !== 'ArrowRight' && k !== 'ArrowLeft') return;
+            const pks = [...$(id).querySelectorAll<HTMLElement>('.pk')], i = pks.findIndex((x) => x.classList.contains('on'));
+            pks[(i + (k === 'ArrowRight' ? 1 : pks.length - 1)) % pks.length].click(); e.preventDefault();
+        });
+    }
+    {
         const inp = $('crName') as HTMLInputElement;
         inp.addEventListener('input', () => { newName = inp.value; $('crErr').textContent = ''; });
         inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('crOk').click(); } });
-        setBusy(false);
     }
 
     // --- botones ---
     $('selPlay').addEventListener('click', play);
     $('selBack').addEventListener('click', () => info?.onBack());
-    $('clsBack').addEventListener('click', () => (chars.length ? show('select') : info?.onBack()));
-    $('clsOk').addEventListener('click', () => show('faction'));
-    $('facBack').addEventListener('click', () => show('class'));
-    $('facOk').addEventListener('click', () => show('create'));
-    $('crBack').addEventListener('click', () => show('faction'));
+    $('crBack').addEventListener('click', () => (chars.length ? show('select') : info?.onBack()));
     $('crOk').addEventListener('click', () => {
         if (!info) return;
         const name = newName.trim().replace(/\s+/g, ' '), { cls, faction } = ctx.get();
@@ -262,7 +262,7 @@ export function initLoginUI(ctx: FlowCtx) {
         if (chars.some((c) => sameName(c.name, name))) { $('crErr').textContent = 'Ya tenés un personaje con ese nombre.'; return; }
         creating = true; newName = name; setBusy(true); info.onCreate({ name, cls, faction });
     });
-    root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && cur !== 'login') { e.preventDefault(); ({ select: () => { if (!delBox.hidden) delBox.hidden = true; else info?.onBack(); }, class: () => (chars.length ? show('select') : info?.onBack()), faction: () => show('class'), create: () => show('faction'), login: () => {} })[cur](); } });
+    root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && cur !== 'login') { e.preventDefault(); ({ select: () => { if (!delBox.hidden) delBox.hidden = true; else info?.onBack(); }, create: () => (chars.length ? show('select') : info?.onBack()), login: () => {} })[cur](); } });
 
     // --- login / crear cuenta (el server crea la cuenta si el nombre no existe) ---
     let reg = false;
@@ -290,7 +290,7 @@ export function initLoginUI(ctx: FlowCtx) {
             info = i; chars = i.chars; creating = false; newName = '';
             selIdx = Math.max(0, chars.findIndex((c) => c.name === i.preselect));
             ($('selErr') as HTMLElement).textContent = '';
-            show(chars.length ? 'select' : 'class');
+            show(chars.length ? 'select' : 'create');
         },
         /** El server mandó la lista de nuevo (tras crear o borrar) o rechazó la última acción (`error`). */
         update(list: CharInfo[], error: string) {
@@ -307,7 +307,7 @@ export function initLoginUI(ctx: FlowCtx) {
                 if (nuevo) { selIdx = chars.indexOf(nuevo); setBusy(true); info.onPlay(nuevo.name, true); return; }
             }
             ($('selErr') as HTMLElement).textContent = '';
-            show(chars.length ? 'select' : 'class');
+            show(chars.length ? 'select' : 'create');
         },
     };
 }
