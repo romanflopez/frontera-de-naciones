@@ -1,0 +1,845 @@
+{
+ "_doc": "Íconos de ERIS a partir de los packs de Craftpix. Habilidades: 3 volúmenes '100 Skill Icons' (con fondo propio, se les pone el marco dorado del juego a 128 px). Ítems: PNG sin fondo, recortados y encuadrados al 80 % del slot, el juego pone el fondo/rareza.",
+ "packs": {
+  "v1": "craftpix-net-629015-100-skill-icons-pack-for-rpg (1)/PNG/skill icon {n}.png",
+  "v2": "craftpix-net-550412-100-skill-game-icons (1)/PNG/skill {n}.png",
+  "v3": "craftpix-net-213946-100-rpg-skill-icons (1)/PNG/skill {n}.png",
+  "game": "craftpix-net-606038-100-rpg-game-icons/PNG/without background/{n}.png",
+  "dragon": "craftpix-net-714414-free-rpg-dragon-loot-icons/PNG/without background/{n}.png",
+  "hunt": "craftpix-net-164155-free-rpg-hunting-game-512x512-icons/PNG/without background/{n}.png",
+  "alch": "craftpix-net-176699-50-free-alchemical-ingredient-icons/PNG/without background/{n}.png",
+  "books": "craftpix-net-715454-free-50-rpg-book-icons/PNG/without background/{n}.png",
+  "equip": "craftpix-net-235845-rpg-equipment-icon-pack/PNG/without background/{n}.png",
+  "hallow": "craftpix-net-973988-free-rpg-halloween-icons/PNG/without background/{n}.png"
+ },
+ "spells": {
+  "_paladin": "",
+  "golpe": [
+   "v3",
+   74
+  ],
+  "juicio": [
+   "v1",
+   26
+  ],
+  "giro": [
+   "v3",
+   14
+  ],
+  "escudo": [
+   "v1",
+   27
+  ],
+  "mandato": [
+   "v1",
+   37
+  ],
+  "aturdir": [
+   "v1",
+   25
+  ],
+  "aura": [
+   "v1",
+   18
+  ],
+  "escudodivino": [
+   "v1",
+   68
+  ],
+  "carga": [
+   "v1",
+   80
+  ],
+  "represalia": [
+   "v1",
+   36
+  ],
+  "grito": [
+   "v2",
+   64
+  ],
+  "amparo": [
+   "v2",
+   22
+  ],
+  "_mago": "",
+  "proyectil": [
+   "v3",
+   22
+  ],
+  "esquirla": [
+   "v1",
+   59
+  ],
+  "paralisis": [
+   "v1",
+   69
+  ],
+  "nova": [
+   "v2",
+   79
+  ],
+  "ignicion": [
+   "v1",
+   31
+  ],
+  "bola": [
+   "v2",
+   75
+  ],
+  "lluvia": [
+   "v1",
+   32
+  ],
+  "escudomana": [
+   "v1",
+   1
+  ],
+  "blink": [
+   "v3",
+   15
+  ],
+  "clarividencia": [
+   "v3",
+   72
+  ],
+  "remover": [
+   "v2",
+   98
+  ],
+  "intelecto": [
+   "v2",
+   5
+  ],
+  "_healer": "",
+  "castigo": [
+   "v2",
+   87
+  ],
+  "curacion": [
+   "v2",
+   51
+  ],
+  "renovar": [
+   "v3",
+   62
+  ],
+  "bendicion": [
+   "v1",
+   23
+  ],
+  "novasagrada": [
+   "v3",
+   65
+  ],
+  "reprender": [
+   "v3",
+   18
+  ],
+  "orbe": [
+   "v1",
+   22
+  ],
+  "guardian": [
+   "v2",
+   2
+  ],
+  "pasoluz": [
+   "v2",
+   82
+  ],
+  "despertar": [
+   "v1",
+   90
+  ],
+  "esfera": [
+   "v3",
+   5
+  ],
+  "grupo": [
+   "v1",
+   79
+  ],
+  "_comunes": "",
+  "ataque": [
+   "v3",
+   68
+  ],
+  "furia": [
+   "v1",
+   96
+  ],
+  "aliento": [
+   "v2",
+   32
+  ],
+  "invisibilidad": [
+   "v1",
+   11
+  ],
+  "detectar": [
+   "v1",
+   56
+  ],
+  "recall": [
+   "v2",
+   89
+  ],
+  "_estados": "",
+  "st_quemadura": [
+   "v3",
+   17
+  ],
+  "st_congelado": [
+   "v3",
+   2
+  ],
+  "st_frenado": [
+   "v3",
+   26
+  ],
+  "st_aturdido": [
+   "v3",
+   3
+  ],
+  "st_veneno": [
+   "v3",
+   63
+  ],
+  "st_silencio": [
+   "v3",
+   10
+  ],
+  "st_raiz": [
+   "v1",
+   50
+  ],
+  "st_sangrado": [
+   "v3",
+   21
+  ],
+  "st_escudo": [
+   "v3",
+   86
+  ],
+  "st_provocado": [
+   "v2",
+   20
+  ]
+ },
+ "items": {
+  "_consumibles y monedas (100 RPG Game Icons)": "",
+  "pocion_vida": [
+   "game",
+   62
+  ],
+  "pocion_mana": [
+   "game",
+   66
+  ],
+  "pocion_vida_cuarto": [
+   "game",
+   60
+  ],
+  "pocion_mana_cuarto": [
+   "game",
+   61
+  ],
+  "oro": [
+   "game",
+   4
+  ],
+  "plata": [
+   "game",
+   5
+  ],
+  "moneda_premium": [
+   "game",
+   100
+  ],
+  "cofre": [
+   "game",
+   46
+  ],
+  "bolsa": [
+   "game",
+   28
+  ],
+  "_llaves (una base, tinte por dungeon)": "",
+  "llave_cueva": [
+   "dragon",
+   47,
+   "#9a8a6a"
+  ],
+  "llave_gastada": [
+   "dragon",
+   47,
+   "#6a6a6a"
+  ],
+  "llave_nido": [
+   "dragon",
+   47,
+   "#c08a3a"
+  ],
+  "llave_cripta_olvidada": [
+   "dragon",
+   47,
+   "#7aa0c8"
+  ],
+  "llave_torre": [
+   "dragon",
+   47,
+   "#9a6ad8"
+  ],
+  "llave_templo": [
+   "dragon",
+   47,
+   "#e8c34a"
+  ],
+  "llave_fortaleza": [
+   "dragon",
+   47,
+   "#e0524a"
+  ],
+  "llave_amir": [
+   "dragon",
+   47,
+   "#3a3a3a"
+  ],
+  "_materiales de llave": "",
+  "colmillo": [
+   "game",
+   31
+  ],
+  "esencia": [
+   "game",
+   12
+  ],
+  "hueso_antiguo": [
+   "game",
+   26
+  ],
+  "tinta_arcana": [
+   "game",
+   82
+  ],
+  "pluma_tormenta": [
+   "game",
+   42
+  ],
+  "brasa_infernal": [
+   "game",
+   70
+  ],
+  "eslabon_maldito": [
+   "game",
+   56
+  ],
+  "piedra_reforja": [
+   "game",
+   97
+  ],
+  "_basura por mob": "",
+  "goblin_ear": [
+   "hunt",
+   48
+  ],
+  "rotten_flesh": [
+   "hunt",
+   20
+  ],
+  "old_bone": [
+   "game",
+   91
+  ],
+  "chitin": [
+   "hunt",
+   11
+  ],
+  "spider_silk": [
+   "hallow",
+   29
+  ],
+  "viper_skin": [
+   "game",
+   25
+  ],
+  "stone_core": [
+   "game",
+   76
+  ],
+  "minotaur_horn": [
+   "game",
+   31,
+   "#8a7a6a"
+  ],
+  "demon_ash": [
+   "game",
+   53
+  ],
+  "trophy_default": [
+   "game",
+   95
+  ],
+  "_quests": "",
+  "pergamino_quest": [
+   "game",
+   1
+  ],
+  "pergamino_diaria": [
+   "game",
+   30
+  ],
+  "encargo": [
+   "game",
+   27
+  ],
+  "carta": [
+   "game",
+   81
+  ],
+  "libro_quest": [
+   "game",
+   78
+  ]
+ },
+ "looks": {
+  "shortsword": [
+   "equip",
+   65
+  ],
+  "longsword": [
+   "equip",
+   67
+  ],
+  "zweihander": [
+   "equip",
+   72
+  ],
+  "staff": [
+   "equip",
+   80
+  ],
+  "wand": [
+   "equip",
+   83
+  ],
+  "leather": [
+   "equip",
+   43
+  ],
+  "chain": [
+   "equip",
+   44
+  ],
+  "plate": [
+   "equip",
+   33
+  ],
+  "mage": [
+   "equip",
+   36
+  ],
+  "cloth": [
+   "equip",
+   37
+  ],
+  "leather_hood": [
+   "equip",
+   58
+  ],
+  "chain_coif": [
+   "equip",
+   54
+  ],
+  "plate_helm": [
+   "equip",
+   51
+  ],
+  "mage_hood": [
+   "equip",
+   59
+  ],
+  "glove_leather": [
+   "equip",
+   16
+  ],
+  "glove_plate": [
+   "equip",
+   17
+  ],
+  "glove_mage": [
+   "equip",
+   26
+  ],
+  "boot_leather": [
+   "equip",
+   1
+  ],
+  "boot_plate": [
+   "equip",
+   3
+  ],
+  "boot_mage": [
+   "equip",
+   9
+  ],
+  "ring_ruby": [
+   "equip",
+   97
+  ],
+  "ring_jade": [
+   "equip",
+   101,
+   "#4caf6a"
+  ],
+  "ring_gold": [
+   "equip",
+   95
+  ],
+  "ring_silver": [
+   "equip",
+   96
+  ],
+  "ring_copper": [
+   "equip",
+   95,
+   "#b87333"
+  ],
+  "amulet_bone": [
+   "equip",
+   108
+  ]
+ },
+ "set_bases": {
+  "guerrero": {
+   "arma": [
+    64,
+    65,
+    63,
+    67,
+    71,
+    69,
+    72
+   ],
+   "armadura": [
+    43,
+    32,
+    33,
+    39,
+    45,
+    40,
+    46
+   ],
+   "cabeza": [
+    54,
+    52,
+    51,
+    50,
+    48,
+    57,
+    49
+   ],
+   "guantes": [
+    19,
+    17,
+    18,
+    20,
+    21,
+    22,
+    28
+   ],
+   "botas": [
+    3,
+    4,
+    5,
+    15,
+    13,
+    14,
+    6
+   ],
+   "amuleto": [
+    108,
+    109,
+    108,
+    109,
+    112,
+    110,
+    113
+   ],
+   "anillo": [
+    95,
+    96,
+    91,
+    93,
+    94,
+    98,
+    105
+   ],
+   "anillo2": [
+    96,
+    95,
+    97,
+    92,
+    100,
+    99,
+    106
+   ]
+  },
+  "mago": {
+   "arma": [
+    79,
+    80,
+    81,
+    82,
+    78,
+    83,
+    85
+   ],
+   "armadura": [
+    31,
+    36,
+    41,
+    38,
+    37,
+    42,
+    41
+   ],
+   "cabeza": [
+    62,
+    61,
+    59,
+    58,
+    60,
+    53,
+    55
+   ],
+   "guantes": [
+    26,
+    27,
+    24,
+    25,
+    29,
+    23,
+    16
+   ],
+   "botas": [
+    12,
+    9,
+    11,
+    10,
+    8,
+    7,
+    2
+   ],
+   "amuleto": [
+    107,
+    111,
+    107,
+    113,
+    109,
+    110,
+    112
+   ],
+   "anillo": [
+    102,
+    93,
+    92,
+    101,
+    98,
+    99,
+    100
+   ],
+   "anillo2": [
+    91,
+    101,
+    102,
+    93,
+    97,
+    100,
+    98
+   ]
+  },
+  "healer": {
+   "arma": [
+    81,
+    82,
+    85,
+    83,
+    80,
+    79,
+    78
+   ],
+   "armadura": [
+    37,
+    31,
+    38,
+    36,
+    42,
+    41,
+    36
+   ],
+   "cabeza": [
+    58,
+    59,
+    61,
+    62,
+    56,
+    60,
+    53
+   ],
+   "guantes": [
+    27,
+    26,
+    25,
+    24,
+    16,
+    29,
+    23
+   ],
+   "botas": [
+    2,
+    12,
+    10,
+    9,
+    7,
+    8,
+    11
+   ],
+   "amuleto": [
+    111,
+    107,
+    113,
+    112,
+    108,
+    109,
+    110
+   ],
+   "anillo": [
+    93,
+    102,
+    101,
+    92,
+    99,
+    98,
+    97
+   ],
+   "anillo2": [
+    101,
+    92,
+    93,
+    102,
+    98,
+    97,
+    99
+   ]
+  }
+ },
+ "sets": {
+  "cobre": [
+   "guerrero",
+   1,
+   "#b87333"
+  ],
+  "savia": [
+   "mago",
+   1,
+   "#5aa83c"
+  ],
+  "lino": [
+   "healer",
+   1,
+   "#d9c9a3"
+  ],
+  "hierroviejo": [
+   "guerrero",
+   2,
+   "#8a8f96"
+  ],
+  "ambar": [
+   "mago",
+   2,
+   "#e0a030"
+  ],
+  "musgo": [
+   "healer",
+   2,
+   "#6b8e3a"
+  ],
+  "bruma": [
+   "guerrero",
+   3,
+   "#8fa6b8"
+  ],
+  "escarcha": [
+   "mago",
+   3,
+   "#7fd0ff"
+  ],
+  "rocio": [
+   "healer",
+   3,
+   "#9fe3d0"
+  ],
+  "alba": [
+   "guerrero",
+   4,
+   "#e8c34a"
+  ],
+  "ocaso": [
+   "mago",
+   4,
+   "#e07040"
+  ],
+  "aurora": [
+   "healer",
+   4,
+   "#f0a0c0"
+  ],
+  "cenit": [
+   "guerrero",
+   5,
+   "#ffd24a"
+  ],
+  "zafiro": [
+   "mago",
+   5,
+   "#2f5fd8"
+  ],
+  "santuario": [
+   "healer",
+   5,
+   "#fff2c8"
+  ],
+  "hierronegro": [
+   "guerrero",
+   6,
+   "#3a3a42"
+  ],
+  "ceniza": [
+   "mago",
+   6,
+   "#b03a2a"
+  ],
+  "vela": [
+   "healer",
+   6,
+   "#f2c25a"
+  ],
+  "brasa": [
+   "guerrero",
+   7,
+   "#ff5a1f"
+  ],
+  "ascuaazul": [
+   "mago",
+   7,
+   "#3aa0ff"
+  ],
+  "pira": [
+   "healer",
+   7,
+   "#ffb347"
+  ]
+ }
+}

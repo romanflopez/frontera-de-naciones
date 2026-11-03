@@ -21,14 +21,14 @@ import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
 import { DAILY_BY_ID, DAILY_LIMIT, MAIN_QUESTS, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, dailyGold, rewardUniques, type QuestBookView, type QuestGoal, KEY_RECIPES, KEY_MAT_NAMES, keyMissing, TRAIT_ELITE } from '@fdn/world';
 import { spellIcon } from './icons.ts';
 import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
-import { coinIcon, itemIcon, keyIcon, potionIcon, shardIcon } from './itemicons.ts';
+import { coinIcon, itemIcon, keyIcon, potionIcon, setPieceOf, shardIcon } from './itemicons.ts';
 import { initLoginUI } from './loginui.ts';
 import { createMinimap, type Minimap } from './minimap.ts';
 import { createAuctionUI } from './auction.ts';
 import { createDepositUI } from './deposit.ts';
 import { createTradeUI } from './trade.ts';
 import { createCursor } from './cursor.ts';
-const ico = (it: { look?: string; slot: string; rar: { c: string; k: number } }) => `<img class="iico" alt="" src="${itemIcon(it.look, it.slot, it.rar.c, it.rar.k)}">`;
+const ico = (it: { name: string; look?: string; slot: string; rar: { c: string; k: number } }) => `<img class="iico" alt="" src="${itemIcon(it.look, it.slot, it.rar.c, it.rar.k, UNIQUE_BY_NAME.get(it.name)?.uniq.set, setPieceOf(it.slot, it.name))}">`;
 
 // ---------- utilidades ----------
 const TW = 96, TH = 48;

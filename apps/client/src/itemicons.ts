@@ -419,15 +419,37 @@ function render(key: string, rarCol: string, rarK: number, art: (c: Ctx) => void
     const url = cv.toDataURL('image/png'); cache.set(key, url); return url;
 }
 
-/** Íconos pintados de los sets (assets/icons/<look>.png). Si todavía no cargaron se usa el dibujado por código, y el ícono con arte se arma recién cuando están listos. */
+/** Íconos pintados de los 4 sets originales (assets/icons/<look>.png): tienen prioridad en armadura y cabeza. */
 const ART = new Map<string, HTMLImageElement>();
 if (typeof Image !== 'undefined') for (const l of ['sol_malla', 'sol_placas', 'vhar_malla', 'vhar_placas']) for (const sfx of ['', '_helm']) { const im = new Image(); im.src = `assets/icons/${l}${sfx}.png`; ART.set(l + sfx, im); }
+/**
+ * Íconos de Craftpix (assets/items/, generados con tools/icons): `sets/<set>_<pieza>.png` para las 21 × 8 piezas de set,
+ * `looks/<look>.png` para el resto del equipo por su `look`, `misc/<id>.png` para pociones, monedas, llaves y materiales.
+ * Se cargan a demanda; hasta que están listos se usa el dibujado por código y el ícono con arte se arma recién cuando cargaron.
+ */
+const PNG = new Map<string, HTMLImageElement>();
+const LOOK_ART = new Set(['shortsword', 'longsword', 'zweihander', 'staff', 'wand', 'leather', 'chain', 'plate', 'mage', 'cloth', 'leather_hood', 'chain_coif', 'plate_helm', 'mage_hood', 'glove_leather', 'glove_plate', 'glove_mage', 'boot_leather', 'boot_plate', 'boot_mage', 'ring_ruby', 'ring_jade', 'ring_gold', 'ring_silver', 'ring_copper', 'amulet_bone']);
+function png(path: string): HTMLImageElement | undefined {
+    if (typeof Image === 'undefined') return undefined;
+    let im = PNG.get(path); if (!im) { im = new Image(); im.src = path; PNG.set(path, im); }
+    return im.complete && im.naturalWidth > 0 ? im : undefined;
+}
+// Precarga: los looks y los consumibles se piden al arrancar para que el primer render ya salga con arte; las piezas de set, a demanda.
+if (typeof Image !== 'undefined') { for (const l of LOOK_ART) png(`assets/items/looks/${l}.png`); for (const m of ['pocion_vida', 'pocion_mana', 'oro']) png(`assets/items/misc/${m}.png`); }
+/** Ruta del ícono de un ítem suelto (`assets/items/misc/<id>.png`): pociones, oro, llaves, materiales, pergaminos. */
+export const miscIconUrl = (id: string): string => `assets/items/misc/${id}.png`;
+const drawPng = (c: Ctx, im: HTMLImageElement) => { c.drawImage(im, 8, 8, 112, 112); };
 
-/** Ícono (data URL) del item. `look` es la pieza del paperdoll (shortsword, plate, mage_hood…); `slot` decide el símbolo. */
-export function itemIcon(look: string | undefined, slot: string, rarCol: string, rarK: number): string {
+/** Ícono (data URL) del item. `look` es la pieza del paperdoll (shortsword, plate, mage_hood…); `slot` decide el símbolo; `set` y `piece` eligen el arte de pieza de set. */
+export function itemIcon(look: string | undefined, slot: string, rarCol: string, rarK: number, set?: string, piece?: string): string {
     const artIm = look ? ART.get(look) : undefined, useArt = !!artIm && artIm.complete && artIm.naturalWidth > 0 && (slot === 'armadura' || slot === 'cabeza');
-    return render(`${look}|${slot}|${rarCol}${useArt ? '|art' : ''}`, rarCol, rarK, (c) => {
+    const setIm = !useArt && set && piece ? png(`assets/items/sets/${set}_${piece}.png`) : undefined;
+    const lookIm = !useArt && !setIm && look && LOOK_ART.has(look) ? png(`assets/items/looks/${look}.png`) : undefined;
+    const tag = useArt ? '|art' : setIm ? `|set:${set}:${piece}` : lookIm ? '|look' : '';
+    return render(`${look}|${slot}|${rarCol}|${rarK}${tag}`, rarCol, rarK, (c) => {
         if (useArt) { c.drawImage(artIm!, 10, 10, 108, 108); return; }
+        if (setIm) { drawPng(c, setIm); return; }
+        if (lookIm) { drawPng(c, lookIm); return; }
         const l = look ?? '', m = RAMP[LOOK_RAMP[l] ?? 'iron'];
         if (slot === 'arma') {
             if (l === 'shortsword') sword(c, m, 'short'); else if (l === 'zweihander') sword(c, m, 'two'); else if (/sword/.test(l)) sword(c, m, 'long');
@@ -442,11 +464,13 @@ export function itemIcon(look: string | undefined, slot: string, rarCol: string,
         else shield(c, l || 'buckler');
     });
 }
+/** Pieza de set que es el ítem `name` (anillo = Sello, anillo2 = Aro) para elegir el arte en `itemIcon`. */
+export const setPieceOf = (slot: string, name: string): string => (slot === 'anillo' && /^Aro\b/.test(name) ? 'anillo2' : slot);
 /** Poción de vida o de maná. */
-export function potionIcon(kind: 'hp' | 'mp'): string { return render('pot|' + kind, kind === 'hp' ? '#e0524a' : '#4a8fe0', 1, (c) => potion(c, kind)); }
+export function potionIcon(kind: 'hp' | 'mp'): string { const im = png(miscIconUrl(kind === 'hp' ? 'pocion_vida' : 'pocion_mana')); return render('pot|' + kind + (im ? '|png' : ''), kind === 'hp' ? '#e0524a' : '#4a8fe0', 1, (c) => (im ? drawPng(c, im) : potion(c, kind))); }
 /** Llave terminada ('cripta' | 'foso'). */
 export function keyIcon(id: string): string { const k = id === 'foso' ? 'foso' : 'cripta'; return render('key|' + k, k === 'foso' ? '#6fd9c0' : '#ffd24a', 2, (c) => keyShape(c, k, false)); }
 /** Esquirla de llave (llave rota). */
 export function shardIcon(id: string): string { const k = id === 'foso' ? 'foso' : 'cripta'; return render('shard|' + k, '#b99cff', 1, (c) => keyShape(c, k, true)); }
 /** Moneda de oro. */
-export function coinIcon(): string { return render('coin', '#ffd24a', 1, coin); }
+export function coinIcon(): string { const im = png(miscIconUrl('oro')); return render('coin' + (im ? '|png' : ''), '#ffd24a', 1, (c) => (im ? drawPng(c, im) : coin(c))); }

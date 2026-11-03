@@ -60,8 +60,21 @@ const ART_OF: Record<string, string> = {
     guardian: 'escudo-de-escarcha', esfera: 'explosion-solar', despertar: 'resurreccion', grupo: 'piel-de-roble', pasoluz: 'paso-sombrio',
 };
 
-/** Ícono del hechizo `id`: el pintado si existe, si no uno dibujado (data URL) del color `col`. */
+// Íconos definitivos (assets/skills/<id>.png, 128 px): de los packs "100 Skill Icons" de Craftpix, generados con tools/icons (manifest.json).
+// Cubren los 3 kits, los comunes y los estados (st_*). Lo que no esté acá cae al pack viejo (ART_OF) y después al dibujado por código.
+const SKILL_ART = new Set([
+    'golpe', 'juicio', 'giro', 'escudo', 'mandato', 'aturdir', 'aura', 'escudodivino', 'carga', 'represalia', 'grito', 'amparo',
+    'proyectil', 'esquirla', 'paralisis', 'nova', 'ignicion', 'bola', 'lluvia', 'escudomana', 'blink', 'clarividencia', 'remover', 'intelecto',
+    'castigo', 'curacion', 'renovar', 'bendicion', 'novasagrada', 'reprender', 'orbe', 'guardian', 'pasoluz', 'despertar', 'esfera', 'grupo',
+    'ataque', 'furia', 'aliento', 'invisibilidad', 'detectar', 'recall',
+    'st_quemadura', 'st_congelado', 'st_frenado', 'st_aturdido', 'st_veneno', 'st_silencio', 'st_raiz', 'st_sangrado', 'st_escudo', 'st_provocado',
+]);
+/** Ícono de un estado (quemadura, congelado, frenado, aturdido, veneno, silencio, raiz, sangrado, escudo, provocado). */
+export const statusIcon = (st: string): string => `assets/skills/st_${st}.png`;
+
+/** Ícono del hechizo `id`: el definitivo si existe, si no el del pack viejo, si no uno dibujado (data URL) del color `col`. */
 export function spellIcon(id: string, col: string): string {
+    if (SKILL_ART.has(id)) return `assets/skills/${id}.png`;
     if (ART_OF[id]) return `assets/spells/${ART_OF[id]}.png`;
     const key = id + col, hit = cache.get(key); if (hit) return hit;
     const cv = document.createElement('canvas'); cv.width = cv.height = S; const c = cv.getContext('2d')!;
