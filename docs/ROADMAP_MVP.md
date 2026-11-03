@@ -24,7 +24,7 @@ Lo de los **cooldowns de dungeon**: tiene sentido y no hace falta un CD en tiemp
 |---|---|---|---|
 | Mundo y mapas | Casi hecho | Mapas abiertos de Flare Nv1-11, 6 dungeons de 2 pisos con jefes, portales, mapas sin vacío negro | Nv12 abierto, dungeons D3-D6 con balance de grupo validado, reserva Nv13+ |
 | Party e instancias | Hecho (server) | Party de 4, exp y botín propio por compañero, instancia por party | Invitar con clic derecho, minimapa, volver a la instancia al reconectar, probar con 2 jugadores reales |
-| Ítems | A medias | Únicos T1-T3 + jefes D1-D3, tabla de drops por origen, mejora +1..+5 | Únicos T4-T6 y jefes D4-D6, +6..+11, runas, durabilidad |
+| Ítems | A medias | Únicos T1-T6 + jefes D1-D7, tabla de drops por origen, mejora +1..+5 | Poder por nivel de ítem, ítems de nivel 31-40, +6..+11, runas, durabilidad |
 | Economía | A medias | Server autoritativo, subasta de compra directa, depósito, llaves | Crafteo, pujas, sumideros (durabilidad, llaves), persistir el suelo |
 | Combate y clases | A medias | Defensa física/mágica, parálisis, pociones con delay, arqueros que disparan | Balance de grupo y jefes con 2 habilidades, magos con proyectil propio, test de combate al día |
 | PvP | Falta lo grande | Flag de PvP por mapa, facción contra facción | Arenas con cola 1v1/2v2, ranking, decisión de equipo real vs normalizado |
@@ -52,7 +52,7 @@ Tamaños: S = menos de un día, M = 1-3 días, L = más de 3.
 
 ### Fase 2 — Ítems y economía (el corazón del "chill loop")
 0. **Pasar a nivel 40 antes de seguir con ítems:** `MAX_LVL` 40, nueva curva de kills por nivel, poder de ítems por nivel de ítem, 8 bandas de 5 niveles, topes de atributos, tasas de drop por banda (ver `NIVEL_40_E_ITEMS.md`). (M-L)
-1. Únicos T4-T6 y ítems de los jefes D4-D6 (el arte se reutiliza, es sobre todo dato). (M)
+1. ~~Únicos T4-T6 y ítems de los jefes D4-D6~~ (hecho: únicos T4-T6 de mobs comunes y jefes D4-D7).
 2. Mejora +6..+11 con riesgo alto estilo Merien/Xelima, y piedras como sumidero. (M)
 3. **Runas (sockets)**, con la regla tuya: completar el set no depende de nada carísimo que falle. (L)
 4. Llaves: definir receta (materiales de pit + oro) y asegurar que el farmeo para generarlas sea el CD natural. (M)

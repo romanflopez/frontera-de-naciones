@@ -1,6 +1,6 @@
 # Ítems, runas y mejoras (borrador de diseño)
 
-Estado: **paso 1 del MVP implementado** (ítems únicos de T1 a T3 + ítems de los jefes D1-D3 + tabla de drops). Mejoras +1 a +5 implementadas (§7); las runas siguen en diseño. Los números son puntos de partida para probar, no valores finales.
+Estado: **paso 1 del MVP implementado** (ítems únicos de mobs comunes de T1 a T6 + ítems de los jefes D1-D7 + tabla de drops). Mejoras +1 a +5 implementadas (§7); las runas siguen en diseño. Los números son puntos de partida para probar, no valores finales.
 
 Implementación: `packages/world/src/uniques.ts` (catálogo; cada único es una `Base` más y entra en `ALL_BASES`), `apps/server/src/economy.ts` (`reward`, `uniqueItem`, `UNIQUE_CHANCE`, `COMMON_CHANCE`, `GOLD_CHANCE`). Rareza en el juego: los únicos de banda son rareza 2 (se muestra "Raro") y los de jefe rareza 3 ("Épico"); no se cambiaron los nombres de la interfaz.
 Depende de: `docs/MAPAS_FLARE.md` (mapas, mazmorras y jefes), `docs/ECONOMIA_SERVER.md` (el server valida precios, stock y atributos) y `docs/ZONAS.md` (curvas de vida/exp por nivel).
@@ -67,7 +67,7 @@ Reglas:
 - Los pits dan mejor chance que los mobs sueltos: es el motivo para ir a los pits.
 - Las mazmorras suben la chance de únicos, porque se hacen en grupo y los mobs son más fuertes (`DUNGEON_MULT`).
 - El oro y la exp siguen la curva actual; este cuadro solo cambia equipo y runas.
-- Implementado hoy (bandas T1 a T3, niveles 1-6): 6 % ítem común sin atributos, la chance de único de la tabla, 45 % oro y el resto nada. Los mobs de nivel 7+ y los jefes sin ítems propios (D4-D6, bosses viejos) siguen con el botín viejo hasta que existan sus ítems. Los jefes D1-D3 ya no dan esquirlas de la llave vieja.
+- Implementado hoy (bandas T1 a T6, niveles 1-40; los mobs de T7 sueltan los únicos de T6 porque la banda de ítems topea en 6): 6 % ítem común sin atributos, la chance de único de la tabla, 45 % oro y el resto nada. Los jefes D1-D7 sueltan siempre uno de sus ítems. El botín viejo (62 % ítem con rareza) ya no lo usa ningún mob común; queda para los jefes sin ítems propios.
 - Pendiente: la runa de los jefes y un segundo ítem extra del jefe.
 
 ## 6. Runas
@@ -119,7 +119,7 @@ Probabilidades iniciales (a ajustar):
 
 ## 10. Plan de MVP (en este orden)
 
-1. **Ítems únicos** de T1 a T3 y los ítems de los jefes D1-D3, con la tabla de drops de la sección 5.
+1. **Ítems únicos** de T1 a T6 y los ítems de los jefes D1-D7 (hecho), con la tabla de drops de la sección 5.
 2. **Runas** (3 niveles, 1 socket) con inserción que puede fallar.
 3. **Mejora** de +1 a +5, y recién después +6 a +11 cuando se vean los números reales.
 4. Ajustar probabilidades con partidas de prueba.

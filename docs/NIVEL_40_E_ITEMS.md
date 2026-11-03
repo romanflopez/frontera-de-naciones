@@ -116,7 +116,7 @@ Con el techo en 40 conviene que los **mapas ya no sean 1 por nivel**: a nivel al
 
 ## 5. Ítems: análisis profundo
 
-Estado de los ítems hoy: ítems únicos fijos T1 a T3 (niveles 1-6), ítems de jefes D1-D3, mejora +1 a +5, runas en diseño. A partir del nivel 7 los bichos aún sueltan el botín viejo (62 % ítem con rareza). Cada banda (tier) son 2 niveles: `tier = ceil(nivel / 2)`, máximo 6.
+Estado de los ítems hoy: ítems únicos fijos de mobs comunes T1 a T6 (los mobs de T7 sueltan los de T6), ítems de jefes D1-D7, mejora +1 a +5, runas en diseño. Cada banda (tier) son 2 niveles: `tier = ceil(nivel / 2)`, máximo 6.
 
 ### 5.1 El poder de los ítems no sigue al nivel (grave para 40 niveles)
 
