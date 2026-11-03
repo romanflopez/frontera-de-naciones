@@ -1054,7 +1054,8 @@ function toast(t: string) { const el = $('toast'); el.textContent = t; el.hidden
 
 // ---------- assets ----------
 interface Anim { row: number; n: number; dur: number; type: string }
-interface SpriteMeta { sc?: number; hum?: boolean; cw: number; ch: number; ax: number; ay: number; anims: Record<string, Anim> }
+/** `s` (solo en las hojas a tamaño nativo) = píxeles de atlas por píxel de geometría; se divide al dibujar, así el sprite ocupa lo mismo en pantalla con el doble de detalle. */
+interface SpriteMeta { sc?: number; hum?: boolean; s?: number; cw: number; ch: number; ax: number; ay: number; anims: Record<string, Anim> }
 const SPR: Record<string, SpriteMeta> = {};
 let WORLD: Record<string, number[]> = {};
 const IMG: Record<string, CanvasImageSource> = {};
@@ -1188,7 +1189,7 @@ function refreshLook() {
 }
 function drawSprite(name: string, anim: string, t: number, dir: number, x: number, y: number, tint?: string | null, alpha?: number) {
     const M = SPR[name], A = M?.anims[anim], im = IMG[name]; if (!A || !im) return;
-    const i = frameIndex(A, t), sx = i * M.cw, sy = (A.row + dir) * M.ch, k = SS * (M.sc ?? 1) * (M.hum ? HS : 1), dw = M.cw * k, dh = M.ch * k, dx = x - M.ax * k, dy = y - M.ay * k;
+    const i = frameIndex(A, t), sx = i * M.cw, sy = (A.row + dir) * M.ch, k = SS * (M.sc ?? 1) * (M.hum ? HS : 1) / (M.s ?? 1), dw = M.cw * k, dh = M.ch * k, dx = x - M.ax * k, dy = y - M.ay * k;
     ctx.globalAlpha = alpha ?? 1;
     ctx.drawImage(im, sx, sy, M.cw, M.ch, dx, dy, dw, dh);
     if (tint) {

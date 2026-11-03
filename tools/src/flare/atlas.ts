@@ -20,7 +20,14 @@ const mod = join(flare, 'mods', 'fantasycore');
 const mods = [mod, join(flare, 'mods', 'empyrean_campaign')];
 const at = (rel: string): string => mods.map((m) => join(m, rel)).find((p) => existsSync(p)) ?? join(mod, rel);
 const out = join(root, 'apps', 'client', 'public', 'assets');
-const S = 0.5;
+/**
+ * Escala del arte. 0,5 (por defecto) = media escala, como siempre. Con FLARE_SCALE=1 las hojas salen a tamaño nativo y el meta lleva
+ * `s` = 2 (píxeles de atlas por píxel de geometría): el cliente divide por él al dibujar, así el sprite ocupa en pantalla exactamente
+ * lo mismo que antes pero con el doble de detalle. Ver el doc plan-hd.md (fase B).
+ */
+const S = Number(process.env.FLARE_SCALE ?? 0.5);
+/** Divisor que se aplica al componer: 2 a media escala, 1 a tamaño nativo. */
+const DEF = S >= 1 ? 1 : 2;
 const DIRS = ['W', 'NW', 'N', 'NE', 'E', 'SE', 'S', 'SW'];
 
 if (!existsSync(join(mod, 'engine', 'hero_layers.txt'))) {
@@ -70,14 +77,18 @@ function boundsOf(layers: Layer[], anims: string[]): Bounds {
     return { minx: Math.floor(minx / 2) * 2, miny: Math.floor(miny / 2) * 2, maxx: Math.ceil(maxx / 2) * 2, maxy: Math.ceil(maxy / 2) * 2 };
 }
 
-/** Con `fixed`, todas las piezas salen con el mismo tamaño de celda y filas, para poder apilarlas en el cliente. */
-async function build(name: string, layers: Layer[], anims: string[], fixed?: { b: Bounds; ref: Layer }) {
+/**
+ * Con `fixed`, todas las piezas salen con el mismo tamaño de celda y filas, para poder apilarlas en el cliente.
+ * Con `half`, la pieza se escribe a media escala aunque el resto vaya a tamaño nativo (ver la llamada del muñeco por capas).
+ */
+async function build(name: string, layers: Layer[], anims: string[], fixed?: { b: Bounds; ref: Layer }, forceHalf?: boolean) {
+    const D = forceHalf ? 2 : DEF;
     const { minx, miny, maxx, maxy } = fixed?.b ?? boundsOf(layers, anims);
     const cw = maxx - minx, ch = maxy - miny;
     const first = (fixed?.ref ?? layers[0]).anim.sections;
     const cols = Math.max(...anims.map((a) => first.get(a)!.frames));
     const full = createCanvas(cw * cols, ch * 8 * anims.length), ctx = full.getContext('2d');
-    const meta = { cw: cw / 2, ch: ch / 2, ax: -minx / 2, ay: -miny / 2, cols, anims: {} as Record<string, { row: number; n: number; dur: number; type: string }> };
+    const meta = { cw: cw / D, ch: ch / D, ax: -minx / D, ay: -miny / D, cols, ...(D === 1 ? { s: 2 } : {}), anims: {} as Record<string, { row: number; n: number; dur: number; type: string }> };
     for (const [ai, a] of anims.entries()) {
         const sec = first.get(a)!;
         meta.anims[a] = { row: ai * 8, n: sec.frames, dur: sec.duration, type: sec.type };
@@ -96,6 +107,11 @@ async function build(name: string, layers: Layer[], anims: string[], fixed?: { b
                 }
             }
         }
+    }
+    if (D === 1) { // tamaño nativo: la hoja se escribe tal cual se compuso
+        console.log(`  ${name}: hoja ${full.width}x${full.height} (celda ${cw}x${ch}, ${cols} cuadros, ${anims.length} animaciones)`);
+        writeFileSync(join(out, `${name}.webp`), full.toBuffer('image/webp', 84));
+        return meta;
     }
     const half = createCanvas(full.width / 2, full.height / 2), hctx = half.getContext('2d');
     hctx.imageSmoothingQuality = 'high';
@@ -161,7 +177,10 @@ const loaded = Object.entries(pieces).map(([n, type]) => ({ n, layer: { type, an
 const fixedB = boundsOf(loaded.map((x) => x.layer), HA);
 mkdirSync(join(out, 'paper'), { recursive: true });
 let paper: Record<string, unknown> = {};
-for (const { n, layer } of loaded) paper = { ...paper, ...(await build(`paper/${n}`, [layer], HA, { b: fixedB, ref })) };
+// El muñeco por capas se queda SIEMPRE a media escala, aunque los bichos vayan a tamaño nativo. Dos motivos: es el camino viejo
+// (lo reemplazan los personajes del Character Creator, que ya vienen a 128) y, sobre todo, el repintado de los sets de armadura
+// (tools/src/sets/build_sets.py, numpy con sobremuestreo x4) no entra en memoria con las hojas al doble. Ver plan-hd.md, fase B.
+for (const { n, layer } of loaded) paper = { ...paper, ...(await build(`paper/${n}`, [layer], HA, { b: fixedB, ref }, true)) };
 meta.paper = {
     ...(paper as object), // cw, ch, ax, ay, cols, anims (iguales para todas las piezas)
     order: Object.fromEntries(DIRS.map((d, i) => [i, order.get(d)])),
@@ -176,7 +195,10 @@ for (const l of readFileSync(join(mod, 'tilesetdefs', 'tileset_grassland.txt'), 
 }
 const range = (a: number, b: number) => Array.from({ length: b - a }, (_, i) => a + i);
 const ids = [...range(16, 48), 72, 73, 74, 75, ...range(208, 216), 76, 77, 96, 97, 98, 99, 100, 101, 102, 103, 104, 107, ...range(112, 144), ...range(240, 256), 264, 265, 296];
-const items = ids.map((id) => { const [x, y, w, h, ox, oy] = defs.get(id)!; return { id, x, y, w, h, sw: Math.max(1, Math.round(w * S)), sh: Math.max(1, Math.round(h * S)), ox: ox * S, oy: oy * S }; })
+// El tileset `world` (pasto del mapa viejo, ciudades y mapas armados por código) se queda SIEMPRE a media escala: lo dibuja otro
+// camino del cliente, que no aplica el factor `s`, y las ciudades quedan como están por ahora (ver plan-hd.md §6).
+const SW = 0.5;
+const items = ids.map((id) => { const [x, y, w, h, ox, oy] = defs.get(id)!; return { id, x, y, w, h, sw: Math.max(1, Math.round(w * SW)), sh: Math.max(1, Math.round(h * SW)), ox: ox * SW, oy: oy * SW }; })
     .sort((a, b) => b.sh - a.sh);
 const W = 2048;
 let X = 0, Y = 0, rowH = 0;
