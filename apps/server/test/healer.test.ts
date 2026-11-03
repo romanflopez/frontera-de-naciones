@@ -14,7 +14,7 @@ import { WorldRegistry } from '../src/registry.ts';
 import type { PersistedPlayer, Player } from '../src/player.ts';
 import type { GameWorld } from '../src/world.ts';
 import { MobSim, type MobHost } from '../src/mobs.ts';
-import { POISON_HEAL_TAKEN, BLESS_DMG_TAKEN, CAST_MS, HEAL_THREAT, PVP_SPELLS, PvpLimiter, SKILLS, healAmount, healPower, statsFromChar } from '../src/systems/pvpCombat.ts';
+import { POISON_HEAL_TAKEN, BLESS_DMG_TAKEN, CAST_MS, HEAL_THREAT, PVP_SPELLS, PvpLimiter, SKILLS, healAmount, healPower, skillMpCost, PVP_HEAL_MP_MULT, statsFromChar } from '../src/systems/pvpCombat.ts';
 import { applyParalysis, applyPoison, isBlessed } from '../src/systems/statusSystem.ts';
 
 let clock = 50_000_000;
@@ -140,17 +140,35 @@ test('Curación: sin objetivo se cura a sí mismo; muy lejos no llega', () => {
 });
 
 // ---------- Renovar ----------
-test('Renovar: cura al aliado en 6 pulsos de 1 s; uno nuevo reemplaza al viejo', () => {
+test('Renovar: cura al aliado 12 % en 12 s (4 pulsos de 3 s) y no se reaplica hasta que termina', () => {
     const { w, healer, aliado } = setup();
     setLevel(healer.p, 3); aliado.p.hp = 100;
     const per = healAmount(SKILLS.renovar.hot!.frac, healer.p.combat, aliado.p.combat.maxHp);
     skill(w, healer.sid, 'renovar', aliado.p.playerId);
     assert.equal(aliado.p.hp, 100, 'instantáneo, pero cura en el tiempo');
-    advance(w, 2050);
-    assert.equal(aliado.p.hp, 100 + 2 * per, 'dos pulsos');
-    clock += 1000; skill(w, healer.sid, 'renovar', aliado.p.playerId); // recarga de 3 s cumplida: reemplaza
+    advance(w, 6050);
+    assert.equal(aliado.p.hp, 100 + 2 * per, 'dos pulsos en 6 s');
+    const mp = healer.p.mp;
+    skill(w, healer.sid, 'renovar', aliado.p.playerId); // recarga cumplida, pero todavía tiene Renovar
+    assert.equal(healer.p.mp, mp, 'rechazado: no cobra maná');
     advance(w, 6100);
-    assert.equal(aliado.p.hp, 100 + 2 * per + 6 * per, 'el viejo se cortó; el nuevo dio sus 6 pulsos');
+    assert.equal(aliado.p.hp, 100 + 4 * per, 'el primero dio sus 4 pulsos');
+    skill(w, healer.sid, 'renovar', aliado.p.playerId);
+    assert.ok(healer.p.mp < mp, 'terminado: se puede volver a poner');
+});
+
+test('Curas en PvP: cuestan ×2,5 de maná mientras el healer está en combate contra jugadores', () => {
+    const { w, healer, aliado } = setup();
+    setLevel(healer.p, 3);
+    healer.p.mp = healer.p.combat.maxMp; let mp = healer.p.mp;
+    skill(w, healer.sid, 'renovar', aliado.p.playerId);
+    assert.equal(mp - healer.p.mp, SKILLS.renovar.mp, 'en PvE, el costo de la tabla');
+    advance(w, 12100);
+    healer.p.pvpCombatUntil = Date.now() + 10_000; healer.p.mp = healer.p.combat.maxMp; mp = healer.p.mp;
+    skill(w, healer.sid, 'renovar', aliado.p.playerId);
+    assert.equal(mp - healer.p.mp, skillMpCost('renovar', true));
+    assert.equal(skillMpCost('renovar', true), Math.round(SKILLS.renovar.mp * PVP_HEAL_MP_MULT));
+    assert.equal(skillMpCost('castigo', true), SKILLS.castigo?.mp ?? 0, 'lo que no cura no cambia');
 });
 
 test('Renovar sobre un enemigo: quemadura en vez de cura', () => {

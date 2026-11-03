@@ -105,12 +105,16 @@ Objetivo: 1v1 con mediana de 20-40 s, 2v2 de hasta ~60 s, el ganador no termina 
 | Paladín vs paladín | 39,6 s | 40,8 s | ✓ / justo |
 | Paladín+mago vs paladín+mago | 48 s | 25 s | ✓ |
 | Mago vs mago | 11,9 s | 11,9 s | ✗ muy corta |
-| Cualquiera con healer | 26-180 s, el bando del healer gana con 80-97 % o no termina | igual | ✗ |
+| Cualquiera con healer | 26-180 s, el bando del healer gana con 80-97 % o no termina (cerrado el 3/11, ver abajo) | igual | ✗ → 2v2 ✓ a nivel 12 |
 
 El tope del 25 % casi nunca actúa: ningún golpe solo llega a esa cifra con el equipo de referencia hasta el 40. Se mantiene como seguro.
 
-**Lo que no arreglan estas tres reglas (pendiente de decisión):**
-- **Healer.** Gana o no muere en todos los enfrentamientos. La causa principal es Renovar: hoy cura 6,25 % *por pulso* (37,5 % en 6 s, recarga 3 s, 26 de maná). Con 6,25 % en total, el paladín le gana al healer y los 2v2 con healer bajan a 60-130 s (siguen largos). El veneno, que es la herramienta contra los healers, hoy solo lo pone un atributo de ítem: ninguna de las 3 clases lo tiene en el kit. La sim tiene estas propuestas como opciones (`--renovar-total`, `--veneno juicio,golpe,escudo,quemadura`, `--castigo 0.75`, `--curacd 8`).
+**Lo que no arreglan estas tres reglas:**
+- **Healer: cerrado (3/11).** Antes ganaba o no moría en todos los enfrentamientos. Dos cambios:
+  1. **Renovar** pasa a **1 % de la vida por segundo durante 12 s** (4 pulsos de 3 % cada 3 s, 12 % en total; antes 6 pulsos de 6,25 %, 37,5 % en 6 s) y **no se le puede volver a poner al mismo objetivo hasta que termina** (`renewUntil`; vale también en PvE). Es el orden de Dreadmyst (Rejuvenation ≈ 0,6 %/s, menos en total que un Heal). La recarga sigue en 3 s: sirve para repartirlo entre aliados.
+  2. **Curas en PvP ×2,5 de maná** (`PVP_HEAL_MP_MULT`, `skillMpCost`): Curación, Renovar, Orbe, Esfera y Escudo guardián cuestan ×2,5 mientras el healer está en combate contra jugadores. Solo con el cambio de Renovar no alcanzaba: el piso de 5 de maná por segundo en PvP le pagaba casi una Curación (40 %) cada 10 s. Bajar el piso para todos rompe al paladín (a 2 o 3/s los 12 enfrentamientos quedan fuera) y subir los costos también en PvE deja al healer de nivel 1 sin poder castear una Curación con todo su pozo. La cura en sí no se reduce: contra jugadores sigue valiendo solo el veneno.
+
+  Resultado a nivel 12 (60 peleas): los 4 2v2 con healer cumplen (42-58 s, ganador con 44-59 %; antes 33-180 s y 90-97 %). Paladín vs healer: gana el paladín en 55 s con 43 % (largo, pero ya no gana el healer). Quedan fuera **mago vs healer** (gana el healer con 81 %: el mago se queda sin maná, va con el pendiente del mago), **healer espejo** (~100 s, antes no terminaba) y **mago+healer espejo** (~75 s). A nivel 40 siguen fuera los enfrentamientos con healer: la sim todavía no usa los escudos, el Paso de luz ni las bendiciones de K8, y el costo de maná no escala con el nivel (propuesta 3 de `dreadmyst-referencia-balance.md`). Probado y descartado: veneno en Juicio/Golpe/Escudo y quemaduras, Castigo ×0,75 y recarga de Curación de 8-10 s ayudan poco o rompen otros enfrentamientos.
 - **Mago contra mago** dura ~12 s: la sim supone que todo proyectil pega (no modela esquivar) y el mago tiene la menor vida y el mayor daño sostenido.
 - **El paladín le gana siempre al mago** (100 % de las peleas, terminando con ~60 % de vida): cumple el criterio de vida pero no el espíritu de "gana el que maneja la distancia". A nivel 40, ya con Parpadeo y Carga sagrada, sigue igual.
 - Todos corren a la misma velocidad: sin maná para un control, nadie alcanza a quien se aleja.

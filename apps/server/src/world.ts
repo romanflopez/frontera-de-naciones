@@ -7,7 +7,7 @@
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
 import { PARTY_SHARE_RANGE, partyExpMult, partyMates } from './party.ts';
-import { AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, pvpMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionLockMs, potionMp, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, POTION_LOCK_PVP_MS, PVP_COMBAT_MS, pvpCap, pvpScale, pvpVsCtrl, RECALL_PVP_LOCK_MS, INVIS_CD_MS, DETECT_CD_MS, SECOND_WIND, secondWindHeal, progressFromEcon, PVP_SPELLS, BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, POISON_HEAL_TAKEN, HEAL_THREAT, HEALER_SKILLS, STUN_SPELLS, healAmount, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, K8_SKILLS, SHIELD_MS, BUFF, withBuffs, buffTakenMult, type DmgKind } from './systems/pvpCombat.ts';
+import { AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, pvpMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionLockMs, potionMp, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, POTION_LOCK_PVP_MS, PVP_COMBAT_MS, pvpCap, pvpScale, pvpVsCtrl, RECALL_PVP_LOCK_MS, INVIS_CD_MS, DETECT_CD_MS, SECOND_WIND, secondWindHeal, progressFromEcon, PVP_SPELLS, BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, POISON_HEAL_TAKEN, HEAL_THREAT, HEALER_SKILLS, STUN_SPELLS, healAmount, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, K8_SKILLS, skillMpCost, SHIELD_MS, BUFF, withBuffs, buffTakenMult, type DmgKind } from './systems/pvpCombat.ts';
 import { HUBS, QUESTS, RECALL, TRAINING, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef, checkSkill, skillDeniedText } from '@fdn/world';
 import { applyParalysis, applySlow, applyBless, applyPoison, applyBuff, applyShield, absorbShield, activeBuffs, clearBuffs, hasBuff, shieldOf, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, isBlessed, isPoisoned, isSlowed, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
@@ -767,12 +767,12 @@ export class GameWorld {
         if (!kit.ok) { this.skillDenied(p, id, skillDeniedText(kit)); return false; }
         if (p.isParalyzed(now)) { this.skillDenied(p, id, 'Estás paralizado.'); return false; }
         if (!p.pvp.skillReady(id, now)) { this.skillDenied(p, id, 'Todavía se está recargando.'); return false; }
-        if (p.mp < sp.mp) { this.skillDenied(p, id, 'No te alcanza el maná.'); return false; }
+        if (p.mp < skillMpCost(id, this.inPvp(p, now))) { this.skillDenied(p, id, 'No te alcanza el maná.'); return false; }
         return true;
     }
     /** Cobra el maná, arranca la recarga y rompe la invisibilidad: se llama recién cuando la habilidad es válida. */
     private skillCommit(p: Player, id: string): void {
-        this.payMp(p, SKILLS[id].mp); p.pvp.markSkill(id, Date.now());
+        const now = Date.now(); this.payMp(p, skillMpCost(id, this.inPvp(p, now))); p.pvp.markSkill(id, now);
         this.changeStatus(p, () => breakInvisibility(p.status));
     }
     /** Mueve al jugador de golpe (los cercanos lo ven aparecer en destino) y lo avisa a él. */
@@ -1335,10 +1335,12 @@ export class GameWorld {
         }
         const tgt = this.allyTarget(p, targetId, sp.range);
         if (typeof tgt === 'string') return this.skillDenied(p, skill, tgt);
+        if (skill === 'renovar' && now < tgt.renewUntil) return this.skillDenied(p, skill, 'Ya tiene Renovar: hay que esperar a que termine.');
         this.skillCommit(p, skill);
         if (skill === 'curacion') this.healPlayer(tgt, healAmount(sp.heal!, p.combat, tgt.combat.maxHp), p, skill);
         else if (skill === 'renovar') {
             const seq = ++tgt.renewSeq, hot = sp.hot!, per = healAmount(hot.frac, p.combat, tgt.combat.maxHp);
+            tgt.renewUntil = now + hot.ticks * hot.every * 1000;
             for (let k = 1; k <= hot.ticks; k++) this.playerTimer(tgt, k * hot.every * 1000, (w) => {
                 if (tgt.renewSeq !== seq || tgt.isDead || tgt.disconnected) return;
                 const healer = w.playersById.get(p.playerId);
