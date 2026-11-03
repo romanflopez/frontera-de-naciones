@@ -145,6 +145,7 @@ test('cadena completa en el server: de Campos de Sal a la Reina, con premios, ni
                 }
             }
             assert.equal(st.qb!.m.st, 'ready', q.name);
+            st.bag = st.bag.filter((x) => x.n === prize); // los jefes (ahora los seis) sueltan ítems: que la bolsa no se llene en la prueba
             const gold = st.gold, forge = st.forge ?? 0, bag = st.bag.length;
             if (q.reward.unique?.endsWith('_choice')) {
                 assert.equal(ask('m_turnin').code, 'choose');

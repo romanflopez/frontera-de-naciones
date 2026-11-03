@@ -17,7 +17,7 @@ import { DEFAULT_MAP, RECALL, STAT_CAP, STAT_DESC, STAT_IDS, STAT_NAMES, default
 import { UNIQUE_BY_NAME, UP_MAX, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
-import { DAILY_BY_ID, DAILY_LIMIT, MAIN_QUESTS, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, dailyGold, rewardUniques, type QuestBookView, type QuestGoal, KEY_RECIPES, KEY_MAT_NAMES, keyMissing } from '@fdn/world';
+import { DAILY_BY_ID, DAILY_LIMIT, MAIN_QUESTS, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, dailyGold, rewardUniques, type QuestBookView, type QuestGoal, KEY_RECIPES, KEY_MAT_NAMES, keyMissing, TRAIT_ELITE } from '@fdn/world';
 import { spellIcon } from './icons.ts';
 import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
 import { coinIcon, itemIcon, keyIcon, potionIcon, shardIcon } from './itemicons.ts';
@@ -125,6 +125,8 @@ interface Step { fx: number; fy: number; tx: number; ty: number; t0: number; dur
 
 interface Mob extends Omit<Ent, 'ref'>, MobDef {
     id: number; sprite: MobType; zone: Zone; hpMax: number;
+    /** Élite de mazmorra (rasgo TRAIT_ELITE): marca dorada sobre la cabeza. */
+    elite?: boolean;
     /** Última posición que mandó el server: el mob dibujado la persigue suavemente. */
     sx: number; sy: number;
     /** Fotos recientes del server (hora local de llegada + posición): se dibuja con un pequeño retraso interpolando entre ellas. */
@@ -176,7 +178,7 @@ function syncMobs(list: { id: number; type: number; zone: number; x: number; y: 
             const type = MOB_TYPES[s.type], z = ZONES[s.zone]; if (!type || !z) continue;
             const d = mobDef(type, z);
             const tl = traitLabel(s.traits);
-            m = { ...d, name: tl ? `${tl} ${d.name}` : d.name, sprite: d.sprite ?? type, zone: z, x: s.x, y: s.y, sx: s.x, sy: s.y, buf: [], hpMax: Math.round(d.hp * traitHpMult(s.traits)), hp: s.hp, busy: 0, par: 0, parT: 0, imm: 0, poison: 0, dir: rint(0, 7), moving: false, flash: 0, one: null, t0: R() * 5, id: s.id };
+            m = { ...d, name: tl ? `${tl} ${d.name}` : d.name, sprite: d.sprite ?? type, zone: z, x: s.x, y: s.y, sx: s.x, sy: s.y, buf: [], hpMax: Math.round(d.hp * traitHpMult(s.traits)), hp: s.hp, busy: 0, par: 0, parT: 0, imm: 0, poison: 0, dir: rint(0, 7), moving: false, flash: 0, one: null, t0: R() * 5, id: s.id, elite: !!(s.traits & TRAIT_ELITE) };
             mobs.push(m); mobMap.set(s.id, m);
         }
         m.sx = s.x; m.sy = s.y; m.hp = s.hp;
@@ -1766,6 +1768,12 @@ function drawMob(m: Mob, T: number) {
         nameTag(m.name, p.x, y - 9, bossRage.has(m.id) ? '#ff4a3a' : '#ffd24a', 1, 14);
         ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(p.x - w / 2 - 1, y - 1, w + 2, 8); ctx.fillStyle = '#8c6a1e'; ctx.fillRect(p.x - w / 2, y, w * Math.max(0, m.hp / m.hpMax), 6); ctx.fillStyle = '#e0a82e'; ctx.fillRect(p.x - w / 2, y, w * Math.max(0, m.hp / m.hpMax), 3);
         drawBossCast(m, p.x, y + 10, T);
+    } else if (m.elite) { // élite de mazmorra: rombo dorado y nombre siempre visibles, y su barra
+        const y = p.y - m.head - 6, w = 44;
+        ctx.save(); ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#5a3c08'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(p.x, y - 22); ctx.lineTo(p.x + 5, y - 17); ctx.lineTo(p.x, y - 12); ctx.lineTo(p.x - 5, y - 17); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+        nameTag(m.name, p.x, y - 2, '#ffd24a', 0.9, 11);
+        ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(p.x - w / 2 - 1, y + 3, w + 2, 6); ctx.fillStyle = '#c9a227'; ctx.fillRect(p.x - w / 2, y + 4, w * Math.max(0, m.hp / m.hpMax), 4);
+        drawBossCast(m, p.x, y + 12, T);
     } else if (m.hp < m.hpMax || bossCasts.has(m.id)) { drawBossCast(m, p.x, p.y - m.head + 4, T); const w = 34; ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - w / 2 - 1, p.y - m.head - 5, w + 2, 5); ctx.fillStyle = '#c43e2b'; ctx.fillRect(p.x - w / 2, p.y - m.head - 4, w * Math.max(0, m.hp / m.hpMax), 3); }
 }
 function drawDrop(d: Drop, T: number) {

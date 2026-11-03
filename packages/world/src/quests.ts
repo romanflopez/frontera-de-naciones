@@ -98,7 +98,7 @@ export interface QuestReward {
     gold: number;
     forge?: number;
     /** ítem único: uno T1 de tu clase al azar, uno T1 de tu clase a elección o uno de la Reina a elección */
-    /** `boss_dN_choice`: uno de los ítems del jefe de ese dungeon, a elección (solo los jefes que ya tienen ítems: D1-D3) */
+    /** `boss_dN_choice`: uno de los ítems del jefe de ese dungeon, a elección (los seis jefes tienen sus ítems) */
     unique?: 'class_t1_random' | 'class_t1_choice' | `boss_${DungeonId}_choice`;
 }
 
@@ -210,7 +210,7 @@ export const MAIN_QUESTS: MainQuest[] = [
         say: 'En la torre de la Brecha, un mago mayor sigue con sus experimentos en las cámaras de abajo. Cortalo antes de que termine el hechizo. La puerta pide la llave de la torre: 8 tintas arcanas (pits de nivel 16 a 20, como los de la Brecha) y 300 de oro.',
         done: 'Las cámaras quedaron en silencio.',
         goals: [{ k: 'dungeon', d: 'd4', n: 1, what: 'Completar la Torre del hechicero' }],
-        reward: { expPct: 40, gold: 700, forge: 5 },
+        reward: { expPct: 40, gold: 700, forge: 5, unique: 'boss_d4_choice' },
     },
     {
         id: 'cenizas_i', name: 'Las Cenizas', minLvl: 21,
@@ -231,7 +231,7 @@ export const MAIN_QUESTS: MainQuest[] = [
         say: 'En el salón principal de Mez reina el Wyvern del aire. Llevá un grupo que sepa moverse, y cada uno su llave del templo: 8 plumas de tormenta (pits de nivel 21 a 25, como los de las Cenizas II) y 450 de oro.',
         done: 'El trono del aire quedó vacío.',
         goals: [{ k: 'dungeon', d: 'd5', n: 1, what: 'Completar el Templo de Mez' }],
-        reward: { expPct: 40, gold: 900, forge: 5 },
+        reward: { expPct: 40, gold: 900, forge: 5, unique: 'boss_d5_choice' },
     },
     {
         id: 'cenizas_iii', name: 'Los hornos de wyvern', minLvl: 26,
@@ -245,7 +245,7 @@ export const MAIN_QUESTS: MainQuest[] = [
         say: 'Debajo de la fortaleza infernal está el Foso, y en el foso, su señor. Es lo más hondo que se conoce. Si volvés, sos leyenda. La fortaleza se abre con su llave: 8 brasas infernales (pits de nivel 26 a 30, como los de las Cenizas III) y 650 de oro.',
         done: 'El Señor del Foso cayó. Completaste el camino del aventurero.',
         goals: [{ k: 'dungeon', d: 'd6', n: 1, what: 'Completar el Foso del demonio' }],
-        reward: { expPct: 50, gold: 1500, forge: 10 },
+        reward: { expPct: 50, gold: 1500, forge: 10, unique: 'boss_d6_choice' },
     },
 ];
 

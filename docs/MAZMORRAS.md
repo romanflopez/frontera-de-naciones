@@ -43,9 +43,24 @@ Los números de los mobs y jefes de mazmorra están pensados para **3 jugadores*
 - No se sortea: en las zonas de mazmorra (`tier: 'dungeon'`, o sea los mapas de Flare marcados como mazmorra), **el primer mob de cada zona par, si la zona tiene 2 o más, es élite** (un élite cada dos packs). Un élite nunca es mutante, pero puede traer una habilidad (tóxico, explosivo…).
 - Los jefes no tienen rasgos.
 
+## Checklist de instancia (de los bugs que tuvo Dreadmyst)
+
+- **Sin correa en las corridas:** un mob que persigue no vuelve a su lugar curado por alejarse; si se traba 3 s sin llegar, aparece al lado de su objetivo.
+- **La invisibilidad no saltea mazmorras:** un mob que ya tiene amenaza sobre vos no te pierde por ponerte invisible (afuera sí, para escapar).
+- **No se entra a una corrida en combate:** si los de adentro están peleando, el que llega espera.
+- **Nada reaparece adentro** (ver arriba) y **el botín no depende del líder:** cada uno cobra lo suyo.
+- **Al cambiar de mapa** el cliente suelta el objetivo, el movimiento y lo que tenía en cola.
+- **Los cofres no existen en las mazmorras del MVP** y el pergamino de teleport no se usa: no hay nada que revisar ahí.
+
+## Élites en el cliente
+
+Rombo dorado sobre la cabeza, nombre "Élite …" en dorado y su barra de vida siempre visibles.
+
+## Densidad
+
+Primera pasada automática (`DUNGEON_DENSITY` en `packages/world/src/flare/index.ts`): **D1 25, D2 40, D3 49, D4 49, D5 55 y D6 55** mobs, sin sueltos y con el jefe intacto. La ubicación fina de packs a mano sobre el mapa queda como ajuste.
+
 ## Pendiente
 
-- **Densidad:** primera pasada automática hecha (`DUNGEON_DENSITY` en `packages/world/src/flare/index.ts`): D1 pasó de 75 a **25** mobs (uno de cada dos packs, de 2) y D2 de 141 a **40** (uno de cada tres, de 3), sin sueltos y con el jefe intacto. Falta la ubicación fina de packs y élites a mano sobre el mapa.
-- **Dibujo del élite en el cliente** (marco o color del nombre): hoy solo se ve el prefijo.
-- Llaves por tamaño (solo, dúo, grupo) al estilo Valdrys: hoy el tamaño sale de quién entra junto.
-- Los mobs con aggro no pierden al invisible dentro de las mazmorras.
+- La exp y el botín de cada mob no se escalan por party: hoy un jugador solo gana más exp por minuto que un trío. Se mira en la prueba.
+- D7 (falta el mapa).
