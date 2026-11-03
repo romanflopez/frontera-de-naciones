@@ -22,6 +22,7 @@ async function connect() {
     const st = { x: -1, y: -1, mapName: '', teleports: 0, ready: false };
     ws.on('message', (d: Buffer) => {
         const p = ServerMessage.decode(new Uint8Array(d)).payload;
+        if (p?.$case === 'characterList') { if (p.value.error) throw new Error(p.value.error); send(p.value.characters.some((c) => c.name === NAME) ? { $case: 'selectCharacterRequest', value: { name: NAME } } : { $case: 'createCharacterRequest', value: { name: NAME, cls: 'mago', faction: 'solmar' } }); }
         if (p?.$case === 'initialGameWorldState') { st.x = p.value.playerX; st.y = p.value.playerY; st.mapName = p.value.mapName; st.ready = true; }
         if (p?.$case === 'playerTeleported') { st.x = p.value.x; st.y = p.value.y; st.teleports++; }
     });
