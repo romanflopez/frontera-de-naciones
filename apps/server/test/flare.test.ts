@@ -79,6 +79,27 @@ test('ítems únicos: catálogo coherente, tier por nivel y jefes de D1-D3 con s
     assert.ok(wb.dmg![1] > w.dmg![1]);
 });
 
+test('ítems únicos T4-T6 y jefes D4-D7: cada banda supera a la anterior y los mobs de T7 sueltan T6', () => {
+    assert.equal(UNIQUE_TIERS_READY, 6);
+    for (const b of ['mago_mayor', 'wyvern_aire', 'demonio_foso', 'verdugo'] as const) assert.ok(BOSS_UNIQUES[b]!.length >= 2, b);
+    const arch = (t: number, slot: string, pred: (u: (typeof UNIQUE_BASES)[number]) => boolean) => UNIQUES_BY_TIER[t].filter((u) => u.slot === slot && pred(u));
+    for (let t = 2; t <= 6; t++) {
+        // arma de una mano (la de menor daño sin magia), armadura pesada (la de más defensa) y arma mágica: crecen banda a banda
+        const w = (x: number) => Math.min(...arch(x, 'arma', (u) => !u.mag).map((u) => u.dmg![1]));
+        const a = (x: number) => Math.max(...arch(x, 'armadura', () => true).map((u) => u.def ?? 0));
+        const m = (x: number) => Math.max(...arch(x, 'arma', (u) => !!u.mag).map((u) => u.mag!));
+        assert.ok(w(t) > w(t - 1) && a(t) > a(t - 1) && m(t) > m(t - 1), `banda ${t}`);
+        for (const u of UNIQUES_BY_TIER[t]) assert.ok(u.look, `${u.name} sin aspecto`);
+    }
+    // el ítem de cada jefe de D4-D7 supera al único común de su banda del mismo slot
+    for (const b of ['mago_mayor', 'wyvern_aire', 'demonio_foso', 'verdugo'] as const) for (const bu of BOSS_UNIQUES[b]!) {
+        const peers = UNIQUES_BY_TIER[bu.uniq.tier].filter((u) => u.slot === bu.slot);
+        const score = (u: (typeof UNIQUE_BASES)[number]) => (u.dmg?.[1] ?? 0) + (u.def ?? 0) + (u.rm ?? 0) + (u.mag ?? 0);
+        assert.ok(score(bu) > Math.min(...peers.map(score)), bu.name);
+    }
+    assert.equal(tierOfLevel(35), 6); assert.ok(UNIQUES_BY_TIER[tierOfLevel(40)].length === 10);
+});
+
 test('uniqueItem: atributos fijos con variación ±10 %, rareza 2 (común de banda) o 3 (jefe)', async () => {
     const { uniqueItem, newEcon } = await import('../src/economy.ts');
     const st = newEcon('guerrero', 'solmar');

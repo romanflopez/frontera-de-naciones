@@ -1,15 +1,15 @@
 /**
  * Ítems únicos (docs/ITEMS.md): equipo con nombre y atributos fijos, por banda de nivel (la del tier de zona: niveles 1-5 = 1, 6-10 = 2 … 26-40 = 6) y slot.
  * Cada único es una `Base` más: entra en ALL_BASES, así que subasta, depósito, tiendas y el cliente lo reconocen sin cambios.
- * Sus atributos fijos salen de `uniq.attrs` (el server los tira con una variación de ±10 %). De momento hay T1 a T3 y los
- * ítems de los jefes de las mazmorras D1-D3; los mobs de bandas más altas siguen con el botín viejo hasta que existan sus ítems.
+ * Sus atributos fijos salen de `uniq.attrs` (el server los tira con una variación de ±10 %). Hay únicos de mobs comunes de T1 a T6
+ * (los mobs de T7 sueltan los de T6: la banda de ítems topea en 6) y los ítems de los jefes de las mazmorras D1-D7.
  */
 import { itemBandOfLevel } from './tiers';
 import type { AttrId, Base, Slot } from './economy';
 import type { MobType } from './mobs';
 
 /** Bandas con ítems únicos ya hechos. */
-export const UNIQUE_TIERS_READY = 3;
+export const UNIQUE_TIERS_READY = 6;
 /** Tier de ítem de un mob según su nivel. */
 /** Banda de ítems de un mob de nivel `lvl`: la del tier de su nivel (docs/TIERS_DE_ZONA.md), con tope 6. */
 export const tierOfLevel = (lvl: number): number => itemBandOfLevel(lvl);
@@ -48,21 +48,36 @@ function stats(arch: Arch, t: number, m: number): Pick<Base, 'dmg' | 'def' | 'rm
 }
 
 const DEFS: Def[] = [
-    // T1 (nivel 1-2: Campos de Sal, Bosque de piedra)
+    // T1 (nivel 1-5: Campos de Sal, Bosque de piedra, Cañón goblin)
     { tier: 1, arch: 'arma1', name: 'Hoja de sal' }, { tier: 1, arch: 'arma2', name: 'Mazo del campamento' }, { tier: 1, arch: 'armaM', name: 'Vara de raíz' },
     { tier: 1, arch: 'armPes', name: 'Coraza de bronce viejo' }, { tier: 1, arch: 'armMed', name: 'Malla del explorador' }, { tier: 1, arch: 'armMag', name: 'Manto de lino bordado' },
     { tier: 1, arch: 'cabF', name: 'Casco del vigía' }, { tier: 1, arch: 'cabM', name: 'Capucha de musgo' },
     { tier: 1, arch: 'anilloO', name: 'Anillo de sal' }, { tier: 1, arch: 'anilloD', name: 'Anillo de piedra del bosque' },
-    // T2 (nivel 3-4: Cañón goblin, Pantano de Merrimead)
+    // T2 (nivel 6-10: Pantano de Merrimead, Altas de Nazia)
     { tier: 2, arch: 'arma1', name: 'Espada del Cañón' }, { tier: 2, arch: 'arma2', name: 'Hachón del pantano', look: 'zweihander' }, { tier: 2, arch: 'armaM', name: 'Cayado del cenagal' },
     { tier: 2, arch: 'armPes', name: 'Peto de escamas de cieno' }, { tier: 2, arch: 'armMed', name: 'Cota del pantanero' }, { tier: 2, arch: 'armMag', name: 'Túnica del cenagal' },
     { tier: 2, arch: 'cabF', name: 'Yelmo de caña' }, { tier: 2, arch: 'cabM', name: 'Gorro del brujo del pantano' },
     { tier: 2, arch: 'anilloO', name: 'Anillo de ámbar' }, { tier: 2, arch: 'anilloD', name: 'Sello del cenagal' },
-    // T3 (nivel 5-6: Altas de Nazia, Cementerio de Lochport, Risco del Sur)
+    // T3 (nivel 11-15: Cementerio de Lochport, Risco del Sur)
     { tier: 3, arch: 'arma1', name: 'Colmillo de las altas', look: 'shortsword' }, { tier: 3, arch: 'arma2', name: 'Martillo de Lochport' }, { tier: 3, arch: 'armaM', name: 'Báculo del camposanto' },
     { tier: 3, arch: 'armPes', name: 'Coraza de Nazia' }, { tier: 3, arch: 'armMed', name: 'Malla del sepulturero' }, { tier: 3, arch: 'armMag', name: 'Mortaja bordada' },
     { tier: 3, arch: 'cabF', name: 'Yelmo del risco' }, { tier: 3, arch: 'cabM', name: 'Capuchón de duelo' },
     { tier: 3, arch: 'anilloO', name: 'Anillo de hueso' }, { tier: 3, arch: 'anilloD', name: 'Sello del risco' },
+    // T4 (nivel 16-20: La Brecha, Paso de Stormrock, Torre del hechicero, Cámaras de investigación): aspecto de Solmar en las armaduras de cuerpo a cuerpo
+    { tier: 4, arch: 'arma1', name: 'Maza del minero caído', look: 'mace', off: 'kite_shield' }, { tier: 4, arch: 'arma2', name: 'Hacha de guerra de Stormrock', look: 'battle_axe' }, { tier: 4, arch: 'armaM', name: 'Cayado del investigador' },
+    { tier: 4, arch: 'armPes', name: 'Coraza de la Brecha', look: 'sol_placas' }, { tier: 4, arch: 'armMed', name: 'Malla alada del paso', look: 'sol_malla' }, { tier: 4, arch: 'armMag', name: 'Túnica de la torre' },
+    { tier: 4, arch: 'cabF', name: 'Yelmo del minero caído', look: 'sol_placas_helm' }, { tier: 4, arch: 'cabM', name: 'Capucha del aprendiz de la torre' },
+    { tier: 4, arch: 'anilloO', name: 'Anillo de escama de wyvern', look: 'ring_gold' }, { tier: 4, arch: 'anilloD', name: 'Sello de la Brecha', look: 'ring_silver' },
+    // T5 (nivel 21-25: Cenizas I y II, Templo y Salón de Mez): aparece el aspecto de Vhar (ceniza)
+    { tier: 5, arch: 'arma1', name: 'Espada de las cenizas' }, { tier: 5, arch: 'arma2', name: 'Mandoble de Mez', look: 'zweihander' }, { tier: 5, arch: 'armaM', name: 'Báculo del hechicero de ceniza' },
+    { tier: 5, arch: 'armPes', name: 'Peto de las catacumbas' }, { tier: 5, arch: 'armMed', name: 'Malla del arquero de ceniza', look: 'vhar_malla' }, { tier: 5, arch: 'armMag', name: 'Túnica del templo de Mez' },
+    { tier: 5, arch: 'cabF', name: 'Yelmo astado de las cenizas', look: 'vhar_malla_helm' }, { tier: 5, arch: 'cabM', name: 'Capucha de hollín' },
+    { tier: 5, arch: 'anilloO', name: 'Anillo de brasa' }, { tier: 5, arch: 'anilloD', name: 'Sello de Mez' },
+    // T6 (nivel 26-30: Cenizas III, Granja de Roble Negro, Fortaleza infernal; también lo común de T7 hasta que haya ítems de nivel 31+)
+    { tier: 6, arch: 'arma1', name: 'Hoja de los hornos', off: 'kite_shield' }, { tier: 6, arch: 'arma2', name: 'Hachón de Roble Negro', look: 'battle_axe' }, { tier: 6, arch: 'armaM', name: 'Cetro de la fortaleza infernal' },
+    { tier: 6, arch: 'armPes', name: 'Placas de los hornos', look: 'vhar_placas' }, { tier: 6, arch: 'armMed', name: 'Cota de escamas de fuego', look: 'vhar_malla' }, { tier: 6, arch: 'armMag', name: 'Manto de la fortaleza' },
+    { tier: 6, arch: 'cabF', name: 'Yelmo de brasa viva', look: 'vhar_placas_helm' }, { tier: 6, arch: 'cabM', name: 'Capucha infernal' },
+    { tier: 6, arch: 'anilloO', name: 'Anillo del horno', look: 'ring_ruby' }, { tier: 6, arch: 'anilloD', name: 'Amuleto de Roble Negro', look: 'amulet_bone' },
     // Jefes de mazmorra (D1-D6): mejores que los de su banda y con el aspecto del tier siguiente
     { tier: 2, arch: 'arma1', name: 'Cuchilla del Jefe goblin', look: 'hand_axe', boss: 'goblin_jefe', mult: 1.3 }, { tier: 2, arch: 'armPes', name: 'Peto del Jefe goblin', boss: 'goblin_jefe', mult: 1.3 },
     { tier: 4, arch: 'arma1', name: 'Aguijón de la Reina', look: 'longsword', boss: 'antlion_reina', mult: 1.3 }, { tier: 4, arch: 'armPes', name: 'Caparazón de la Reina', boss: 'antlion_reina', mult: 1.3 },
