@@ -255,7 +255,7 @@ const questHave = (st: Econ): QuestHave => ({ mats: st.mats ?? {}, maxUp: Math.m
 const bonus = (st: Econ, id: AttrId): number => SLOTS.reduce((s, sl) => s + (st.eq[sl]?.a.find((x) => x.id === id)?.v ?? 0), 0);
 
 // ---------- vistas hacia el cliente ----------
-export const toInvItem = (i: SItem) => ({ uid: i.u, base: i.n, rarity: i.r, attrs: i.a.map((a) => ({ id: a.id, v: a.v })), up: i.up ?? 0 });
+export const toInvItem = (i: SItem) => ({ uid: i.u, base: i.n, rarity: i.r, attrs: i.a.map((a) => ({ id: a.id, v: a.v })), up: i.up ?? 0, rf: i.rf ?? 0 });
 
 /** JSON de CharSave v1 que usa el cliente para la pantalla de selección y para armar su espejo inicial. */
 export function toCharSave(st: Econ): string {

@@ -181,7 +181,7 @@ export const mobDied = (mobId: number, killerId: bigint, x: number, y: number, t
     msg({ $case: 'mobDied', value: { mobId, killerId, x, y, type, zone } });
 
 // ---------- economía (ver economy.ts) ----------
-const invItem = (i: SItem) => ({ uid: i.u, base: i.n, rarity: i.r, attrs: i.a.map((a) => ({ id: a.id, v: a.v })), up: i.up ?? 0 });
+const invItem = (i: SItem) => ({ uid: i.u, base: i.n, rarity: i.r, attrs: i.a.map((a) => ({ id: a.id, v: a.v })), up: i.up ?? 0, rf: i.rf ?? 0 });
 export const inventoryState = (st: Econ): ServerMessage => msg({
     $case: 'inventoryState',
     value: {

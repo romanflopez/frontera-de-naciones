@@ -1627,6 +1627,7 @@ export interface InvItem {
   rarity: number;
   attrs: InvAttr[];
   up: number;
+  rf: number;
 }
 
 /** Una línea de la oferta del día: `star` es el único caro con el roll ya tirado (visible); `sold` solo para la estrella. */
@@ -20793,7 +20794,7 @@ export const InvAttr: MessageFns<InvAttr> = {
 };
 
 function createBaseInvItem(): InvItem {
-  return { uid: 0, base: "", rarity: 0, attrs: [], up: 0 };
+  return { uid: 0, base: "", rarity: 0, attrs: [], up: 0, rf: 0 };
 }
 
 export const InvItem: MessageFns<InvItem> = {
@@ -20812,6 +20813,9 @@ export const InvItem: MessageFns<InvItem> = {
     }
     if (message.up !== 0) {
       writer.uint32(40).int32(message.up);
+    }
+    if (message.rf !== 0) {
+      writer.uint32(48).int32(message.rf);
     }
     return writer;
   },
@@ -20869,6 +20873,14 @@ export const InvItem: MessageFns<InvItem> = {
             message.up = reader.int32();
             continue;
           }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.rf = reader.int32();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -20891,6 +20903,7 @@ export const InvItem: MessageFns<InvItem> = {
     message.rarity = object.rarity ?? 0;
     message.attrs = object.attrs?.map((e) => InvAttr.fromPartial(e)) || [];
     message.up = object.up ?? 0;
+    message.rf = object.rf ?? 0;
     return message;
   },
 };

@@ -1413,7 +1413,7 @@ message EconQuestRequest { string npc_id = 1; string action = 2; string key = 3;
 
 message InvAttr { string id = 1; int32 v = 2; }
 /** Item con identidad: uid único por personaje, base (nombre en la tabla de bases), rareza 0..3 y atributos. */
-message InvItem { int32 uid = 1; string base = 2; int32 rarity = 3; repeated InvAttr attrs = 4; /* nivel de mejora (+N) */ int32 up = 5; }
+message InvItem { int32 uid = 1; string base = 2; int32 rarity = 3; repeated InvAttr attrs = 4; /* nivel de mejora (+N) */ int32 up = 5; /* reforjas hechas (el costo de la próxima se duplica con cada una) */ int32 rf = 6; }
 /** Una línea de la oferta del día: `star` es el único caro con el roll ya tirado (visible); `sold` solo para la estrella. */
 message DailyOffer { string base = 1; int32 quality = 2; repeated InvAttr attrs = 3; int32 price = 4; bool star = 5; bool sold = 6; }
 /** La oferta del día completa (igual para todos; se compra con EconBuyRequest y stockIndex = 1000 + índice, en el mercader). */

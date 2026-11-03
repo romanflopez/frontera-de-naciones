@@ -13,8 +13,8 @@ import { spellTypeOf, type SpellType } from './ui/colors';
 import { chatBus, logToChat, type ChatChannel } from './ui/chatStore';
 import { drawPortalFloor, drawPortalFx, PORTAL_CITY, PORTAL_ZONE } from './portal';
 import { checkSkill, skillDeniedText, canUseSkill, skillLevel } from '@fdn/world';
-import { DEFAULT_MAP, RECALL, STAT_CAP, classBaseHp, STAT_DESC, STAT_IDS, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, traitLabel, traitHpMult, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
-import { UNIQUE_BY_NAME, UP_MAX, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, fitsSlot, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Slot, type Stock } from '@fdn/world';
+import { DEFAULT_MAP, RECALL, STAT_CAP, classBaseHp, itemDfTotal, itemRmTotal, STAT_DESC, STAT_IDS, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, traitLabel, traitHpMult, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
+import { UNIQUE_BY_NAME, UP_MAX, UP_MAX_BY_QUALITY, EXTRAS_BY_QUALITY, FX_INFO, JUNK_MATS, MAT_REFORJA, junkValue, reforgeGold, reforgeStones, activeSets, setOfPiece, slotsFor, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, fitsSlot, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
 import { DAILY_BY_ID, DAILY_LIMIT, MAIN_QUESTS, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, dailyGold, rewardUniques, type QuestBookView, type QuestGoal, KEY_RECIPES, KEY_MAT_NAMES, keyMissing, TRAIT_ELITE } from '@fdn/world';
@@ -109,7 +109,7 @@ const ATTR_FMT: Record<AttrId, (v: number) => string> = {
     df: (v) => `+${v} defensa`, rm: (v) => `+${v} resistencia mágica`,
 };
 const ATTRS = ATTR_IDS.map((id) => ({ id, r: ATTR_RANGES[id], f: ATTR_FMT[id] }));
-interface Item extends Base { id: number; rar: Rarity; attrs: { id: AttrId; v: number }[]; /** nivel de mejora (+N) */ up?: number }
+interface Item extends Base { id: number; rar: Rarity; attrs: { id: AttrId; v: number }[]; /** nivel de mejora (+N) */ up?: number; /** reforjas hechas */ rf?: number }
 const itName = (it: { name: string; up?: number }) => (it.up ? `+${it.up} ` : '') + it.name;
 let forgeStones = 0;
 /** Puntos de stats repartidos y libres (los manda el server en InventoryState; el server decide, esto solo se muestra y se refleja en los números). */
@@ -194,13 +194,18 @@ function syncMobs(list: { id: number; type: number; zone: number; x: number; y: 
 // ---------- stats ----------
 function totals() {
     const t = { crit: 0, aspd: 0, leech: 0, hp: 0, mp: 0, mag: 0, exp: 0, poison: 0, rpar: 0, rm: 0, df: 0, def: 0, wdmg: [0, 0] as [number, number] };
+    let rmAttr = 0; const worn: string[] = [];
+    const add = (a: { id: AttrId; v: number }) => { if (a.id === 'rm') rmAttr += a.v; else t[a.id] += a.v; };
     for (const s of SLOTS) {
         const it = P.eq[s]; if (!it) continue;
+        worn.push(it.name);
         const k = upMult(it.up);
         if (it.dmg) t.wdmg = k === 1 ? it.dmg : [Math.round(it.dmg[0] * k), Math.round(it.dmg[1] * k)]; if (it.def) t.def += Math.round(it.def * k); if (it.rm) t.rm += Math.round(it.rm * k); if (it.mag) t.mag += Math.round(it.mag * k);
-        for (const a of it.attrs) t[a.id] += a.v;
+        for (const a of it.attrs) add(a);
     }
-    const sb = statBonus(stats, classBaseHp(CLS.id, P.lvl)); t.hp += sb.hp; t.mp += sb.mp; t.df += sb.def; // los puntos de Vitalidad, Fuerza, Magia y Destreza (mismos números que el server)
+    for (const b of activeSets(worn)) for (const [id, v] of b.stats) add({ id, v }); // bonos de set (mismos números que el server)
+    const sb = statBonus(stats, classBaseHp(CLS.id, P.lvl)); t.hp += sb.hp; t.mp += sb.mp; // los puntos de Vitalidad, Fuerza, Magia y Destreza (mismos números que el server)
+    t.df = itemDfTotal(t.df) + sb.def; t.rm += itemRmTotal(rmAttr); // DF y RM de ATRIBUTOS con su tope (60 y 75); la base de las armaduras no
     t.def += t.df; // el atributo 'df' suma a la defensa
     return t;
 }
@@ -308,6 +313,7 @@ function onServer(m: ServerPayload) {
         case 'bossCast': case 'bossCastEnd': case 'bossTelegraph': case 'bossZone': case 'bossPhase': onBoss(m); break;
         case 'mobDied': onMobDied(m.value); break;
         case 'inventoryState': applyInventory(m.value); break;
+        case 'dailyShopState': daily = m.value.offers.map((o) => ({ base: o.base, quality: Math.min(4, Math.max(0, o.quality)), attrs: loadAttrs(o.attrs), price: o.price, star: o.star, sold: o.sold })); renderShop(); break;
         case 'groundItemSpawned': {
             const v = m.value; if (!v.item) break;
             const nd: Drop = { gid: v.id, x: v.x, y: v.y, item: itemFromInv(v.item), t: 0, lockedUntil: v.locked ? now() + v.freeInMs / 1000 : 0 };
@@ -1970,6 +1976,13 @@ let winT = 0;
 function winTick(T: number) {
     if (charOpen()) { drawPortrait(T); if (T - winT > 0.4) { winT = T; renderChar(); } }
 }
+/** Stats comparables de un ítem (base con la mejora + atributos); la DF/RM/magia de atributos suman a las de la base, como en el server. */
+const CMP_LABEL: Record<string, string> = { dmg: 'daño', def: 'defensa', rm: 'res. mágica', mag: 'daño mágico', hp: 'vida', mp: 'maná', crit: '% crítico', aspd: '% vel. ataque', leech: '% robo de vida', poison: '% veneno', rpar: '% res. parálisis' };
+function itemStats(it: Item): Record<string, number> {
+    const k = upMult(it.up), o: Record<string, number> = { dmg: it.dmg ? ((Math.round(it.dmg[0] * k) + Math.round(it.dmg[1] * k)) / 2) : 0, def: it.def ? Math.round(it.def * k) : 0, rm: it.rm ? Math.round(it.rm * k) : 0, mag: it.mag ? Math.round(it.mag * k) : 0 };
+    for (const a of it.attrs) { const key = a.id === 'df' ? 'def' : a.id; if (key in CMP_LABEL) o[key] = (o[key] ?? 0) + a.v; }
+    return o;
+}
 interface InvEnt { html: string; key: string }
 function renderBag() {
     if (!bagOpen() && !charOpen()) { $('itip').hidden = true; return; }
@@ -1993,6 +2006,13 @@ function renderBag() {
         const n = QB?.mats[id] ?? 0; if (n <= 0) continue;
         const isKey = !!KEY_RECIPES[id] || id === 'llave_gastada';
         mats.push({ key: 'q' + id, html: `<button type="button" class="cl${selX && selX.id === 'q' + id ? ' sel' : ''}" data-mat="q${id}" aria-label="${matName(id)}, ${n}" title="${matName(id)}${keyFor(id) ? ' (clic derecho: armar llave)' : ''}" style="--rc:${isKey ? '#c9a227' : '#6a4aa0'}"><img class="iico" alt="" src="${isKey ? keyIcon('cripta') : shardIcon('cripta')}"><span class="q">${n}</span></button>` });
+    }
+    // piedras de reforja y basura vendible (botín del suelo): se ven en materiales; la basura se vende toda junta en un mercader
+    const rfN = QB?.mats[MAT_REFORJA] ?? 0;
+    if (rfN > 0) mats.push({ key: 'xrf', html: `<button type="button" class="cl${selX && selX.id === 'x' + MAT_REFORJA ? ' sel' : ''}" data-mat="x${MAT_REFORJA}" aria-label="Piedra de reforja, ${rfN}" title="Piedra de reforja" style="--rc:#c77dff"><img class="iico" alt="" src="${shardIcon('foso')}"><span class="q">${rfN}</span></button>` });
+    for (const [id, n] of Object.entries(QB?.mats ?? {})) {
+        if (!(n > 0) || !(id in JUNK_MATS || id.startsWith('trophy_'))) continue;
+        mats.push({ key: 'j' + id, html: `<button type="button" class="cl${selX && selX.id === 'j' + id ? ' sel' : ''}" data-mat="j${id}" aria-label="${matName(id)}, ${n}" title="${matName(id)}" style="--rc:#7a7468"><img class="iico" alt="" src="${shardIcon('cripta')}"><span class="q">${n}</span></button>` });
     }
     const list = invTab === 'gear' ? gear : invTab === 'cons' ? cons : invTab === 'mat' ? mats : [...gear, ...cons, ...mats];
     const total = Math.max(25, Math.ceil(list.length / 5) * 5), cells = list.map((e) => e.html);
@@ -2019,6 +2039,8 @@ function renderTip() {
     d.style.right = `calc(max(12px, env(safe-area-inset-right, 0px)) + ${(n * 356 * wsc).toFixed(1)}px)`; d.hidden = false;
     if (selX) {
         if (selX.k === 'pot') { const k = selX.id; d.innerHTML = `<div><div class="iname" style="color:${POTS[k].col}">${POTS[k].name}</div><div class="sub">Consumible · ×${pots[k]}</div><div>${k === 'hp' ? 'Recupera 40% de la vida máxima: 20% al instante y el resto en 2 s.' : 'Recupera 50% del maná máximo.'}</div><div class="sub">Delay global de 1,75 s entre pociones.</div><div class="row"><button type="button" id="usePot">Usar (${POTS[k].key})</button></div></div>`; $('usePot').onclick = () => { usePotion(k); renderBag(); }; }
+        else if (selX.id[0] === 'x') d.innerHTML = `<div><div class="iname" style="color:#c77dff">Piedra de reforja</div><div class="sub">Material · ×${QB?.mats[MAT_REFORJA] ?? 0}</div><div>Sirve para reforjar UN stat extra de un ítem único en un herrero (la calidad y los atributos fijos no cambian). La sueltan solo los jefes de mazmorra. El costo se duplica con cada reforja del mismo ítem.</div></div>`;
+        else if (selX.id[0] === 'j') { const id = selX.id.slice(1), n = QB?.mats[id] ?? 0; d.innerHTML = `<div><div class="iname" style="color:#b8b2cc">${esc(matName(id))}</div><div class="sub">Basura · ×${n}</div><div>Se vende a ${junkValue(id)} de oro cada una: usá «Vender basura» en cualquier mercader o vendedor.</div></div>`; }
         else if (selX.id[0] === 'q') { d.innerHTML = keyMatTip(selX.id.slice(1)); d.querySelector<HTMLElement>('[data-combine]')?.addEventListener('click', (e) => combineKey((e.currentTarget as HTMLElement).dataset.combine!)); }
         else if (selX.id === 'forge') d.innerHTML = `<div><div class="iname" style="color:#e5a65a">Piedra de forja</div><div class="sub">Material · ×${forgeStones}</div><div>Sirve para mejorar ítems únicos (+1 a +${UP_MAX}) en un herrero. La sueltan los mobs, más en pits y mazmorras, y los jefes.</div></div>`;
         else { const id = selX.id, kid = id.slice(1) as KeyId, kd = KEYDEFS[kid], shard = id[0] === 's'; d.innerHTML = `<div><div class="iname" style="color:${shard ? '#b99cff' : '#ffd24a'}">${shard ? kd.shard : kd.name}</div><div class="sub">Material · ×${shard ? Q.shards[kid] : Q.keys[kid]}</div><div>${shard ? `Con ${SHARDS_PER_KEY} esquirlas y ${kd.gold} de oro el Capitán forja la ${kd.name}.` : 'Abre la escalera sellada del portal correspondiente.'}</div></div>`; }
@@ -2027,12 +2049,44 @@ function renderTip() {
     const it = sel!.it, base: string[] = [];
     const km = upMult(it.up), ru = (n: number) => Math.round(n * km);
     if (it.dmg) base.push(`Daño ${ru(it.dmg[0])}–${ru(it.dmg[1])}`); if (it.def) base.push(`Defensa ${ru(it.def)}`); if (it.rm) base.push(`Res. mágica ${ru(it.rm)}`); if (it.mag) base.push(`+${ru(it.mag)} daño mágico`);
-    const un = UNIQUE_BY_NAME.get(it.name), upLine = un ? ((it.up ?? 0) < UP_MAX ? `<div class="sub">Mejorar a +${(it.up ?? 0) + 1}: ${upStones(it.up ?? 0)} piedra${upStones(it.up ?? 0) > 1 ? 's' : ''} de forja y ${upGold(un.uniq.tier, it.up ?? 0)} de oro (en un herrero)</div>` : '<div class="sub">Mejora máxima</div>') : '';
-    d.innerHTML = `<div style="border-color:${rarCol(it)}"><div class="iname" style="color:${it.rar.c}">${esc(itName(it))}</div><div class="sub">${it.rar.n} · ${it.slot}</div>
+    const un = UNIQUE_BY_NAME.get(it.name), q = Math.min(4, Math.max(0, it.rar.k)), cap = UP_MAX_BY_QUALITY[q] ?? UP_MAX;
+    const upLine = un ? ((it.up ?? 0) < cap ? `<div class="sub">Mejorar a +${(it.up ?? 0) + 1}: ${upStones(it.up ?? 0)} piedra${upStones(it.up ?? 0) > 1 ? 's' : ''} de forja y ${upGold(un.uniq.tier, it.up ?? 0)} de oro (en un herrero)${(it.up ?? 0) >= 5 ? ' · ¡si falla, baja un nivel!' : ''}</div>` : `<div class="sub">Mejora máxima de un ítem ${it.rar.n.toLowerCase()} (+${cap})</div>`) : '';
+    // los atributos fijos del catálogo van primero y los extras al azar después (se distinguen: los extras son los que se reforjan)
+    const nFixed = un ? un.uniq.attrs.length : it.attrs.length, nExtra = un ? Math.min(EXTRAS_BY_QUALITY[q] ?? 0, Math.max(0, it.attrs.length - nFixed)) : 0;
+    const attrList = it.attrs.length
+        ? `<ul>${it.attrs.map((a, k) => (k < nFixed ? `<li style="color:#8fb6f0">${attrText(a)}</li>` : `<li style="color:#ffd27f">${attrText(a)} <small>(extra)</small></li>`)).join('')}</ul>`
+        : `<div class="sub">Sin atributos extra</div>`;
+    const fxLine = un?.uniq.fx ? `<div class="sub" style="color:${q >= 4 ? '#c77dff' : '#6f6a80'}">${q >= 4 ? '✦' : '✧ (solo en Violeta)'} ${esc(FX_INFO[un.uniq.fx].name)}: ${esc(FX_INFO[un.uniq.fx].text)}</div>` : '';
+    // set: cuántas piezas llevás y los bonos (verde los activos, gris los que faltan)
+    const set = setOfPiece(it.name);
+    let setBlock = '';
+    if (set) {
+        const worn = SLOTS.map((sl) => P.eq[sl]?.name), have = activeSets(worn).find((a) => a.set.id === set.id)?.count ?? 0;
+        setBlock = `<div class="sub" style="color:#ffd27f;margin-top:4px">${esc(set.name)} (${have}/${set.pieces.length})</div>` + set.bonuses.map((b) => `<div class="sub" style="color:${have >= b.n ? '#7fd98a' : '#6f6a80'}">(${b.n}) ${b.stats.map(([id, v]) => attrText({ id, v })).join(', ')}</div>`).join('');
+    }
+    // comparación con lo que reemplazaría: verde lo que ganás, rojo lo que perdés
+    let cmp = '';
+    if (sel!.from === 'bag') {
+        const cands = slotsFor(it.slot), target = cands.find((sl) => !P.eq[sl]) ?? cands[0], cur = P.eq[target] ?? null;
+        const a = itemStats(it), b = cur ? itemStats(cur) : {} as Record<string, number>, rows: string[] = [];
+        for (const key of Object.keys(CMP_LABEL)) {
+            const d = Math.round(((a[key] ?? 0) - (b[key] ?? 0)) * 10) / 10; if (!d) continue;
+            rows.push(`<div class="sub" style="color:${d > 0 ? '#7fd98a' : '#e07a6f'}">${d > 0 ? '+' : '−'}${Math.abs(d)} ${CMP_LABEL[key]}</div>`);
+        }
+        cmp = `<div class="sub" style="margin-top:4px;color:#b8b2cc">${cur ? `Contra ${esc(itName(cur))}` : 'Slot vacío'}:</div>${rows.join('') || '<div class="sub">Sin cambios.</div>'}`;
+    }
+    const ilvlTxt = un ? ` · ilvl ${un.uniq.ilvl}` : '';
+    const reforgeLine = un && nExtra > 0 ? `<div class="sub">Reforjar un extra: ${reforgeStones(it.rf ?? 0)} piedra${reforgeStones(it.rf ?? 0) > 1 ? 's' : ''} de reforja (tenés ${QB?.mats[MAT_REFORJA] ?? 0}) y ${reforgeGold(un.uniq.tier, it.rf ?? 0)} de oro · se duplica en cada reforja</div>` : '';
+    d.innerHTML = `<div style="border-color:${rarCol(it)}"><div class="iname" style="color:${it.rar.c}">${esc(itName(it))}</div><div class="sub">${it.rar.n} · ${it.slot}${ilvlTxt}</div>
     ${base.length ? `<div>${base.join(' · ')}</div>` : ''}
-    ${it.attrs.length ? `<ul>${it.attrs.map((a) => `<li style="color:#8fb6f0">${attrText(a)}</li>`).join('')}</ul>` : `<div class="sub">Sin atributos extra</div>`}
-    ${upLine}
-    <div class="row">${sel!.from === 'bag' ? `<button type="button" id="eqBtn">Equipar</button>` : `<button type="button" id="uneqBtn">Sacar</button>`}${un && (it.up ?? 0) < UP_MAX ? `<button type="button" id="upBtn">Mejorar</button>` : ''}</div></div>`;
+    ${attrList}${fxLine}${setBlock}
+    ${upLine}${reforgeLine}${cmp}
+    <div class="row">${sel!.from === 'bag' ? `<button type="button" id="eqBtn">Equipar</button>` : `<button type="button" id="uneqBtn">Sacar</button>`}${un && (it.up ?? 0) < cap ? `<button type="button" id="upBtn">Mejorar</button>` : ''}${Array.from({ length: nExtra }, (_, k) => `<button type="button" class="rfBtn" data-rf="${k}">Reforjar ${k + 1}</button>`).join('')}</div></div>`;
+    d.querySelectorAll<HTMLElement>('.rfBtn').forEach((btn) => (btn.onclick = () => {
+        const smith = MAP.npcs.find((n) => ['armero', 'armadurero'].includes(roleOf(n)) && Math.hypot(n.x - P.x, n.y - P.y) <= TALK_RANGE);
+        if (!smith) { log('Acercate a un herrero (armero o armadurero) para reforjar el equipo.'); return; }
+        net.send({ $case: 'econReforgeRequest', value: { npcId: smith.id, uid: it.id, extra: +btn.dataset.rf! } });
+    }));
     const eqBtn = document.getElementById('eqBtn'), uneqBtn = document.getElementById('uneqBtn');
     if (eqBtn) eqBtn.onclick = () => net.send({ $case: 'econEquipRequest', value: { uid: it.id } }); // el server valida y manda el estado nuevo
     const upBtn = document.getElementById('upBtn');
@@ -2158,7 +2212,7 @@ function renderQuest() {
 // ---------- libro de misiones del corte (cadena de 5, encargos del día, repetible): el server decide todo, acá solo se muestra ----------
 let QB: QuestBookView | null = null;
 /** Nombres de los materiales (los del suelo los aprende al levantarlos; los de las llaves vienen de @fdn/world). */
-const MAT_NAMES: Record<string, string> = { ...Object.fromEntries(Object.entries(QUEST_MATS).map(([id, m]) => [id, m.name])), ...KEY_MAT_NAMES };
+const MAT_NAMES: Record<string, string> = { ...Object.fromEntries(Object.entries(QUEST_MATS).map(([id, m]) => [id, m.name])), ...Object.fromEntries(Object.entries(JUNK_MATS).map(([id, m]) => [id, m.name])), ...KEY_MAT_NAMES, [MAT_REFORJA]: 'Piedra de reforja' };
 const matName = (id: string) => MAT_NAMES[id] ?? id.replace(/^trophy_/, 'trofeo ').replace(/_/g, ' ');
 // ---------- llaves de las mazmorras (docs/LLAVES.md) ----------
 const KEY_CHAIN_MATS = [...Object.keys(QUEST_MATS), 'llave_gastada', ...Object.keys(KEY_RECIPES)];
@@ -2309,6 +2363,17 @@ function openTalk(n: Npc) {
     $('qdBody').innerHTML = `<small>${(SHOPS[role] ?? SHOPS.guardia).label}</small><br>${lines[Math.floor(R() * lines.length)]}`;
 }
 function closeShop() { shopNpc = null; $('shop').hidden = true; $('qdlg').hidden = true; auction.close(); deposit.close(); }
+/** Oferta del día (global, la manda el server): líneas comunes con descuento y, cada tanto, la estrella con el roll ya tirado (stock 1 de todo el server). */
+let daily: { base: string; quality: number; attrs: Item['attrs']; price: number; star: boolean; sold: boolean }[] = [];
+const dailyItem = (o: (typeof daily)[number]): Item => ({ ...(ALL_BASES.find((x) => x.name === o.base) ?? ALL_BASES[0]), id: -1, rar: RAR[o.quality], attrs: o.attrs });
+function dailyRows(): string {
+    return daily.map((o, i) => {
+        const it = dailyItem(o), poor = P.gold < o.price, info = o.attrs.length ? o.attrs.map(attrText).join(' · ') : 'Sin atributos extra';
+        const tag = o.star ? (o.sold ? ' — VENDIDA' : ' ★ ESTRELLA') : '';
+        return `<button type="button" class="srow${poor || o.sold ? ' poor' : ''}" data-daily="${i}" ${o.sold ? 'disabled' : ''} title="${esc(info)}">${ico(it)}<span style="color:${it.rar.c}">${esc(it.name)}${tag}<small>${it.rar.n} · ${it.slot} · ${esc(info)}</small></span><em>${o.price} oro</em></button>`;
+    }).join('');
+}
+const junkTotal = (): { n: number; gold: number } => { let n = 0, gold = 0; for (const [id, q] of Object.entries(QB?.mats ?? {})) { const v = junkValue(id); if (v > 0 && q > 0) { n += q; gold += v * q; } } return { n, gold }; };
 function renderShop() {
     if ($('shop').hidden || !shopNpc) return;
     const def = SHOPS[roleOf(shopNpc)];
@@ -2318,10 +2383,18 @@ function renderShop() {
         const icon = it ? ico(it) : `<img class="iico" alt="" src="${potionIcon(st.pot!)}">`;
         return `<button type="button" class="srow${poor ? ' poor' : ''}" data-buy="${i}" title="${esc(stockInfo(st))}">${icon}<span style="color:${it ? '#e7e2d3' : POTS[st.pot!].col}">${esc(stockLabel(st))}<small>${esc(stockInfo(st))}</small></span><em>${st.price} oro</em></button>`;
     }).join('');
-    $('shopList').innerHTML = `<div class="label">Comprar</div>${buy}<div class="label">Tu bolsa · tocá un item para venderlo</div>` + (P.bag.length
+    const junk = junkTotal(), dailyBlock = roleOf(shopNpc) === 'mercader' && daily.length ? `<div class="label">Oferta del día (cambia a diario, igual para todos)</div>${dailyRows()}` : '';
+    const junkBtn = junk.n ? `<button type="button" class="srow" id="sellJunk"><span>Vender toda la basura<small>${junk.n} material${junk.n > 1 ? 'es' : ''} del botín</small></span><em>${junk.gold} oro</em></button>` : '';
+    $('shopList').innerHTML = `${dailyBlock}<div class="label">Comprar</div>${buy}<div class="label">Tu bolsa · tocá un item para venderlo</div>${junkBtn}` + (P.bag.length
         ? P.bag.map((it, i) => `<button type="button" class="srow" data-sell="${i}">${ico(it)}<span style="color:${it.rar.c}">${esc(it.name)}<small>${it.rar.n} · ${it.slot}</small></span><em>${sellPrice(it.name, it.rar.k)} oro</em></button>`).join('')
         : `<div class="label">La bolsa está vacía</div>`);
     document.querySelectorAll<HTMLElement>('[data-buy]').forEach((b) => (b.onclick = () => buyStock(def.stock[+b.dataset.buy!])));
+    document.querySelectorAll<HTMLElement>('[data-daily]').forEach((b) => (b.onclick = () => {
+        const i = +b.dataset.daily!, o = daily[i]; if (!o || !shopNpc) return;
+        if (P.gold < o.price) { toast('No te alcanza el oro.'); return; } // aviso rápido; la decisión es del server
+        net.send({ $case: 'econBuyRequest', value: { npcId: shopNpc.id, stockIndex: 1000 + i } });
+    }));
+    document.getElementById('sellJunk')?.addEventListener('click', () => { if (shopNpc) net.send({ $case: 'econSellRequest', value: { npcId: shopNpc.id, uid: 0 } }); });
     document.querySelectorAll<HTMLElement>('[data-sell]').forEach((b) => (b.onclick = () => sellItem(+b.dataset.sell!)));
 }
 function buyStock(st: Stock) {
@@ -2634,7 +2707,7 @@ function applySave(sv: CharSave) {
 /** Item del server -> item del cliente (la base y la rareza salen de las tablas compartidas). */
 function itemFromInv(v: InvItemMsg): Item {
     const b = ALL_BASES.find((x) => x.name === v.base) ?? ALL_BASES[0];
-    return { ...b, id: v.uid, rar: RAR[Math.min(4, Math.max(0, v.rarity))], attrs: loadAttrs(v.attrs), up: v.up || undefined };
+    return { ...b, id: v.uid, rar: RAR[Math.min(4, Math.max(0, v.rarity))], attrs: loadAttrs(v.attrs), up: v.up || undefined, rf: v.rf || undefined };
 }
 let invApplied = false;
 /** Última foto del server: el save local del login pisa la bolsa con uids locales, así que se vuelve a aplicar al entrar al mundo. */
