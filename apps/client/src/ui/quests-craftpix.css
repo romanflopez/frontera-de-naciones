@@ -1,0 +1,68 @@
+/* Diálogo de misión (#qdlg, el Capitán) y ventana de Misiones (#qlog, tecla L) con el diseño del pack Craftpix
+   "RPG MMO Game User Interface" (screens DIALOG y QUESTS). Usan el marco .cw de char-craftpix.css. */
+
+/* ===== bloques comunes: título con "!", texto, objetivos "0 / 20  Qué", recompensas ===== */
+.qw-title{display:flex;align-items:baseline;gap:12px;margin:0 0 14px;font:400 19px/1.2 "Alegreya",Georgia,serif;color:#f0e6cf;text-shadow:0 1px 2px #000}
+.qw-title::before{content:"!";font:700 26px/1 "Alegreya SC",Georgia,serif;color:#f4efe2;transform:translateY(2px)}
+.qw-title.done::before{content:"?";color:#8fd4ff}
+.qw-text{margin:0 0 14px;font-size:13.5px;line-height:1.55;color:#bdb4a2}
+.qw-text + .qw-text{margin-top:-4px}
+.qw-goals{display:grid;grid-template-columns:auto 1fr;gap:5px 18px;margin:4px 0 18px 14px;font-size:13px}
+.qw-goals i{font-style:normal;color:#9c9683;font-variant-numeric:tabular-nums;white-space:nowrap}
+.qw-goals i b{color:#d9ccaa;font-weight:400}
+.qw-goals span{color:#e2d9c4;font-weight:600}
+.qw-goals .ok span{color:#8fd4ff}
+.qw-rwh{margin:6px 0 0;padding-bottom:8px;text-align:center;font:700 16px/1 "Alegreya SC",Georgia,serif;letter-spacing:.04em;color:#e9dcc0;
+  background:url(/assets/ui/craftpix/sep-h.png) 50% 100%/100% 3px no-repeat}
+.qw-rws{display:flex;flex-wrap:wrap;justify-content:center;gap:22px;padding:22px 8px 10px}
+.qw-rw{display:grid;justify-items:center;gap:5px;width:64px}
+.qw-rw .ic{position:relative;width:46px;height:46px;box-sizing:border-box;padding:3px;border:2px solid var(--rc,#7a6a3e);border-radius:2px;background:#0b0d10;box-shadow:0 0 0 1px #000,0 0 10px #000}
+.qw-rw .ic img{width:100%;height:100%;object-fit:contain;display:block;image-rendering:auto}
+.qw-rw .ic em{position:absolute;right:2px;bottom:0;font:700 12px/1 "Inter",system-ui,sans-serif;font-style:normal;color:#fff;text-shadow:0 0 3px #000,0 1px 2px #000,1px 0 2px #000}
+.qw-rw small{font-size:11px;line-height:1.15;text-align:center;color:#a9a08c}
+.qw-rw.pick{cursor:pointer}
+.qw-rw.pick:hover .ic{border-color:#8fd4ff;box-shadow:0 0 0 1px #000,0 0 14px #3c9fe0aa}
+.qw-note{margin:8px 0 0;padding:8px 10px;font-size:12px;line-height:1.45;color:#9c9683;background:#101214;border:1px solid #2b2f35;border-radius:2px}
+.qw-note b{color:#d9ccaa;font-weight:600}
+.qw-row{display:flex;align-items:center;gap:8px;padding:5px 10px;font-size:12.5px;color:#d9ccaa;background:#101214;border:1px solid #2b2f35;border-radius:2px;margin-top:4px}
+.qw-row small{color:#9c9683}
+.qw-row button,.qw-btn{margin-left:auto;height:26px;padding:0 12px;font:400 12px/1 "Alegreya SC",Georgia,serif;letter-spacing:.06em;text-transform:uppercase;color:#d9ccaa;
+  background:linear-gradient(#262a2f,#15181b);border:1px solid #3a3f46;border-radius:1px;box-shadow:inset 0 0 0 1px #000,0 1px 4px #000a;cursor:pointer}
+.qw-row button + button{margin-left:0}
+.qw-row button:hover:not(:disabled),.qw-btn:hover:not(:disabled){border-color:#8a7640;color:#f0e6cf}
+.qw-row button:disabled,.qw-btn:disabled{opacity:.45;cursor:default}
+/* botón grande azul (ACEPTAR / ENTREGAR), montado sobre el borde inferior como en el diseño */
+.qw-accept{position:relative;align-self:center;flex:none;width:200px;height:50px;margin:8px 0 -34px;padding:0;white-space:nowrap;border:0;border-radius:2px;box-shadow:0 2px 10px #000a;z-index:2;
+  font:500 19px "Alegreya SC",Georgia,serif;letter-spacing:.08em;color:#eef6fc;text-shadow:0 1px 2px #06223c,0 0 8px #06223c;cursor:pointer;
+  background:url(/assets/ui/craftpix/lg-btn-ov.png) center/100% 100% no-repeat,url(/assets/ui/craftpix/lg-btn-bg.png) center/100% 100% no-repeat,linear-gradient(180deg,#5fa8e0,#2e72b4 55%,#245e98);
+  background-blend-mode:soft-light,multiply,normal;background-color:#3a86c8}
+.qw-accept::before,.qw-accept::after{content:"";position:absolute;top:-4px;bottom:-4px;width:40px;pointer-events:none;background:url(/assets/ui/craftpix/lg-btn-border.png) center/100% 100% no-repeat}
+.qw-accept::before{left:-26px}.qw-accept::after{right:-26px;transform:scaleX(-1)}
+.qw-accept:hover:not(:disabled){filter:brightness(1.12) saturate(1.1)}
+.qw-accept:active:not(:disabled){filter:brightness(.92);transform:translateY(1px)}
+.qw-accept:disabled{filter:grayscale(.7) brightness(.7);cursor:default}
+.qw-accept[hidden]{display:none}
+
+/* ===== DIÁLOGO del NPC ===== */
+#qdlg.cw{top:calc(84px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(548px,calc(100vw - 24px));max-height:calc(100vh - 120px);padding-bottom:0}
+#qdlg .cw-body{display:block;flex:1;min-height:0;overflow:auto;padding:22px 26px 14px;scrollbar-width:thin;scrollbar-color:#3a3f46 #15181b}
+#qdlg .cw-body::after{content:"";display:block;height:4px}
+#qdlg:has(.qw-accept:not([hidden])){padding-bottom:0;margin-bottom:34px}
+
+/* ===== ventana de MISIONES ===== */
+#qlog.cw{top:calc(84px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(910px,calc(100vw - 24px));height:min(560px,calc(100vh - 120px));z-index:4}
+#qlog .cw-body{display:grid;grid-template-columns:296px 1fr;gap:0;padding:14px 10px 12px 10px;min-height:0}
+#qlog .ql-list{display:flex;flex-direction:column;gap:6px;overflow:auto;padding:8px 14px 8px 8px;scrollbar-width:thin;scrollbar-color:#3a3f46 #15181b;
+  background:url(/assets/ui/craftpix/sep-v.png) 100% 50%/4px 100% no-repeat}
+#qlog .ql-it{display:block;width:100%;text-align:left;height:40px;padding:0 14px;font:400 14px/1 "Alegreya",Georgia,serif;color:#a9a08c;
+  background:linear-gradient(#171a1e,#101214);border:1px solid #1f2328;border-radius:2px;box-shadow:inset 0 0 0 1px #000;cursor:pointer}
+#qlog .ql-it:hover{color:#d9ccaa;border-color:#3a3f46}
+#qlog .ql-it[aria-selected=true]{color:#f0e6cf;border-color:#7a6a3e;box-shadow:inset 0 0 0 1px #000,0 0 10px #000}
+#qlog .ql-it.done{color:#8fd4ff}
+#qlog .ql-sep{margin:8px 2px 2px;font:400 11px/1 "Alegreya SC",Georgia,serif;letter-spacing:.14em;text-transform:uppercase;color:#6f6a5c}
+#qlog .ql-detail{display:flex;flex-direction:column;min-height:0;overflow:auto;padding:8px 20px 4px 28px;scrollbar-width:thin;scrollbar-color:#3a3f46 #15181b}
+#qlog .ql-detail .qw-text{max-width:560px}
+#qlog .ql-empty{margin:auto;color:#6f6a5c;font-size:14px}
+#qlog .ql-foot{margin-top:auto;display:flex;gap:12px;padding-top:12px}
+#qlog .ql-foot .qw-btn{margin-left:0;height:34px;padding:0 20px;font-size:13px}
+#qlog .ql-foot .qw-btn.r{margin-left:auto}

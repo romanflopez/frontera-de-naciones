@@ -2,10 +2,11 @@
    marco oscuro con borde dorado (win-bg.png en 9 partes), cabecera con filigrana azul y la flecha dorada,
    el muñeco al centro con los 8 slots alrededor (4 izq, 3 der, arma abajo) y, a la derecha, nivel, atributos
    y estadísticas en lugar de la lista de títulos del PSD. Las texturas se instalan con tools/src/ui/install_craftpix.py. */
-#char.cw{--W:516px;--H:580px;z-index:4;top:calc(80px + env(safe-area-inset-top,0px));right:calc(max(12px,env(safe-area-inset-right,0px)) + (340px + 16px) * var(--win-scale));
-  width:var(--W);height:var(--H);box-sizing:border-box;padding:0;display:flex;flex-direction:column;transform-origin:top right;transform:scale(var(--win-scale));
-  font-family:"Alegreya Sans",system-ui,sans-serif;color:#c9bfae;
+/* marco común de las ventanas del pack (Personaje, Diálogo, Misiones): win-bg.png en 9 partes */
+.cw{box-sizing:border-box;padding:0;display:flex;flex-direction:column;font-family:"Alegreya Sans",system-ui,sans-serif;color:#c9bfae;
   border:12px solid transparent;border-image:url(/assets/ui/craftpix/win-bg.png) 12 fill/12px stretch;background:#15181b;box-shadow:0 14px 44px #000c}
+#char.cw{--W:516px;--H:580px;z-index:4;top:calc(80px + env(safe-area-inset-top,0px));right:calc(max(12px,env(safe-area-inset-right,0px)) + (340px + 16px) * var(--win-scale));
+  width:var(--W);height:var(--H);transform-origin:top right;transform:scale(var(--win-scale))}
 /* cabecera */
 .cw-head{position:relative;flex:none;height:48px;margin:-4px -4px 0;display:grid;place-items:center;
   background:url(/assets/ui/craftpix/win-hdr-bg.png) 0 0/64px 64px repeat;overflow:visible}

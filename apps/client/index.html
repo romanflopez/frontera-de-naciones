@@ -267,10 +267,6 @@ button.sl:not(.dis):hover,.cl:hover{border-color:#e0b765;filter:brightness(1.15)
 .wprow.locked{opacity:.62;border-left-color:#4a4f55}
 .wprow.locked .wpn{color:#7d848c}
 .wprow.locked .req{color:#e0a070}
-#qdlg{top:calc(84px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(340px,calc(100vw - 24px));padding:12px;display:grid;gap:10px}
-#qdlg h2{margin:0;font-family:var(--f-display);font-size:15px;color:var(--brass);display:flex;align-items:center;gap:8px} #qdlg h2 button{margin-left:auto;padding:0 8px;line-height:22px}
-#qdForges{display:grid;gap:6px} #qdBody{line-height:1.35} #qdBody small{color:var(--muted)}
-#qdBook{display:grid;gap:8px;max-height:46vh;overflow:auto} #qdBook .qbk{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font-size:12px} #qdBook .qbk .qtx{flex-basis:100%} #qdBook .qbk b{color:var(--brass)} #qdBook .qbk button{padding:0 8px;line-height:22px}
 #quest{top:calc(10px + env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));padding:8px 10px;display:grid;gap:2px;max-width:230px;font-size:12px}
 #quest b{font-family:var(--f-display);color:var(--brass);font-size:13px} #quest em{font-style:normal;color:#bfe6ff}
 #buffs{top:calc(10px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);display:flex;gap:5px;pointer-events:none}
@@ -353,7 +349,7 @@ canvas:focus{outline:none}
     <div class="bar hp"><i id="fHpI"></i><span id="fHpT"></span></div>
   </div>
 
-  <div id="bagBtn" class="hud"><button id="openChar" type="button">Personaje (C)</button> <button id="openBag" type="button">Bolsa (I)</button> <button id="exitBtn" type="button">Salir</button></div>
+  <div id="bagBtn" class="hud"><button id="openChar" type="button">Personaje (C)</button> <button id="openBag" type="button">Bolsa (I)</button> <button id="openQuests" type="button">Misiones (L)</button> <button id="exitBtn" type="button">Salir</button></div>
 
   <div id="char" class="hud cw" role="dialog" aria-label="Personaje" hidden>
     <header class="cw-head"><h2>PERSONAJE</h2><button class="cw-x" id="charClose" type="button" aria-label="Cerrar Personaje">&times;</button></header>
@@ -409,12 +405,22 @@ canvas:focus{outline:none}
 
   <div id="gmmenu" class="hud box" hidden role="dialog" aria-label="Menú GM"></div>
 
-  <div id="qdlg" class="hud box" hidden>
-    <h2><span id="qdName">Capitán</span><button id="qdClose" type="button" aria-label="Cerrar">×</button></h2>
-    <div id="qdBody"></div>
-    <button id="qdBtn" type="button">Aceptar</button>
-    <div id="qdForges"></div>
-    <div id="qdBook"></div>
+  <div id="qdlg" class="hud cw" role="dialog" aria-label="Diálogo" hidden>
+    <header class="cw-head"><h2 id="qdName">Capitán</h2><button class="cw-x" id="qdClose" type="button" aria-label="Cerrar">&times;</button></header>
+    <div class="cw-body">
+      <div id="qdMain"></div>
+      <div id="qdBody" class="qw-note"></div>
+      <div id="qdForges"></div>
+      <div id="qdBook"></div>
+    </div>
+    <button id="qdBtn" class="qw-accept" type="button" hidden>Aceptar</button>
+  </div>
+  <div id="qlog" class="hud cw" role="dialog" aria-label="Misiones" hidden>
+    <header class="cw-head"><h2>MISIONES</h2><button class="cw-x" id="qlClose" type="button" aria-label="Cerrar Misiones">&times;</button></header>
+    <div class="cw-body">
+      <div class="ql-list" id="qlList" role="listbox" aria-label="Misiones"></div>
+      <div class="ql-detail" id="qlDetail"></div>
+    </div>
   </div>
   <div id="quest" class="hud box" hidden></div>
 

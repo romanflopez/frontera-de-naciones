@@ -10,6 +10,7 @@ import './ui/craftpix.css';
 import './ui/loading-craftpix.css';
 import './ui/hud-craftpix.css';
 import './ui/char-craftpix.css';
+import './ui/quests-craftpix.css';
 import { levelCard, notify } from './ui/notices';
 import { mountChat } from './ui/mountChat';
 import { mountCastBar } from './ui/CastBar';
@@ -22,10 +23,10 @@ import { DEFAULT_MAP, RECALL, STAT_CAP, classBaseHp, itemDfTotal, itemRmTotal, S
 import { UNIQUE_BY_NAME, UP_MAX, UP_MAX_BY_QUALITY, EXTRAS_BY_QUALITY, FX_INFO, JUNK_MATS, MAT_REFORJA, junkValue, reforgeGold, reforgeStones, activeSets, setOfPiece, slotsFor, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, fitsSlot, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
-import { DAILY_BY_ID, DAILY_LIMIT, MAIN_QUESTS, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, dailyGold, rewardUniques, type QuestBookView, type QuestGoal, KEY_RECIPES, KEY_MAT_NAMES, keyMissing, TRAIT_ELITE } from '@fdn/world';
+import { DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, MAIN_QUESTS, type MainQuest, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, dailyGold, rewardUniques, type QuestBookView, type QuestGoal, KEY_RECIPES, KEY_MAT_NAMES, keyMissing, TRAIT_ELITE } from '@fdn/world';
 import { spellIcon } from './icons.ts';
 import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
-import { coinIcon, itemIcon, keyIcon, potionIcon, setPieceOf, shardIcon } from './itemicons.ts';
+import { coinIcon, itemIcon, keyIcon, miscIconUrl, potionIcon, setPieceOf, shardIcon } from './itemicons.ts';
 import { initLoginUI } from './loginui.ts';
 import { createMinimap, type Minimap } from './minimap.ts';
 import { createAuctionUI } from './auction.ts';
@@ -1462,6 +1463,7 @@ window.addEventListener('keydown', (e) => {
     }
     if (e.key === 'i' || e.key === 'I') toggleBag();
     if (e.key === 'c' || e.key === 'C') toggleChar();
+    if (e.key === 'l' || e.key === 'L') toggleQuestLog();
     if (e.key === 'Escape') { if (P.casting || P.ready) cancelCast('Hechizo cancelado.'); else P.target = null; }
 });
 
@@ -1979,13 +1981,13 @@ const bagOpen = () => !$('bag').hidden, charOpen = () => !$('char').hidden;
 function toggleBag() { const open = bagOpen(); $('bag').hidden = open; $('char').hidden = open; renderBag(); }
 /** C: solo la ventana de Personaje. */
 function toggleChar() { $('char').hidden = charOpen(); renderBag(); }
-function closeWins() { $('bag').hidden = true; $('char').hidden = true; $('itip').hidden = true; }
+function closeWins() { $('bag').hidden = true; $('char').hidden = true; $('itip').hidden = true; $('qlog').hidden = true; }
 $('openBag').addEventListener('click', toggleBag);
 $('openChar').addEventListener('click', toggleChar);
 $('bagClose').addEventListener('click', () => { $('bag').hidden = true; renderBag(); });
 $('charClose').addEventListener('click', () => { $('char').hidden = true; renderBag(); });
 $('charBagBtn').addEventListener('click', () => { $('bag').hidden = bagOpen(); renderBag(); });
-window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && (bagOpen() || charOpen()) && !(e.target instanceof HTMLInputElement)) closeWins(); });
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && (bagOpen() || charOpen() || qlOpen()) && !(e.target instanceof HTMLInputElement)) closeWins(); });
 document.querySelectorAll<HTMLElement>('#invTabs [data-tab]').forEach((b) => b.addEventListener('click', () => { invTab = b.dataset.tab as typeof invTab; renderBag(); }));
 $('focus').addEventListener('click', () => { if (focus) { focus = null; toast('Foco suelto.'); } });
 $('sortBtn').addEventListener('click', () => net.send({ $case: 'econSortRequest', value: {} }));
@@ -2296,6 +2298,7 @@ function renderQuest() {
     const el = $('quest'), book = bookLines();
     el.hidden = !hasKeyStuff() && !book;
     el.innerHTML = `${book}${hasKeyStuff() ? `<b>Mazmorras</b>${keyLines()}` : ''}`;
+    renderQuestLog();
 }
 // ---------- libro de misiones del corte (cadena de 5, encargos del día, repetible): el server decide todo, acá solo se muestra ----------
 let QB: QuestBookView | null = null;
@@ -2327,43 +2330,93 @@ const fmtReset = (ms: number) => { const h = Math.floor(ms / 3_600_000), m = Mat
 function bookLines(): string {
     if (!QB) return '';
     const q = MAIN_QUESTS[QB.m.i]; let out = '';
-    if (q && QB.m.st !== 'new') out += `<b>${q.name}</b>` + (QB.m.st === 'ready' ? '<span>Volvé con el Capitán</span>' : q.goals.map((g, j) => `<span>${goalLine(g, QB!.m.prog[j] ?? 0)}</span>`).join(''));
+    if (q && QB.m.st !== 'new' && !qlHidden.has('main')) out += `<b>${q.name}</b>` + (QB.m.st === 'ready' ? '<span>Volvé con el Capitán</span>' : q.goals.map((g, j) => `<span>${goalLine(g, QB!.m.prog[j] ?? 0)}</span>`).join(''));
     // encargos del día: avanzan y se cobran solos (sin NPC), hasta DAILY_LIMIT por día
     const done = QB.d.done.length, full = done >= DAILY_LIMIT, open = full ? [] : QB.d.ids.filter((id) => !QB!.d.done.includes(id));
-    if (QB.d.ids.length) out += `<b>Encargos del día ${done}/${DAILY_LIMIT}</b>` + (full ? `<span>Listo por hoy · se renuevan en ${fmtReset(QB.d.resetMs)}</span>` : open.map((id) => `<span>${goalLine(DAILY_BY_ID.get(id)!.goal, QB!.d.prog[id] ?? 0)}</span>`).join(''));
+    if (QB.d.ids.length) out += `<b>Encargos del día ${done}/${DAILY_LIMIT}</b>` + (full ? `<span>Listo por hoy · se renuevan en ${fmtReset(QB.d.resetMs)}</span>` : open.filter((id) => !qlHidden.has('d:' + id)).map((id) => `<span>${goalLine(DAILY_BY_ID.get(id)!.goal, QB!.d.prog[id] ?? 0)}</span>`).join(''));
     return out;
 }
 const bookSend = (n: Npc, action: string, key = '') => net.send({ $case: 'econQuestRequest', value: { npcId: n.id, action, key } });
 /** Sección del libro en el diálogo del Capitán. */
 function renderBook(n: Npc) {
     const el = $('qdBook'); el.innerHTML = ''; if (!QB) return;
-    const add = (html: string, btns: [string, () => void, boolean?][] = []) => {
-        const div = document.createElement('div'); div.className = 'qbk'; div.innerHTML = `<div class="qtx">${html}</div>`;
+    const add = (html: string, btns: [string, () => void, boolean?][] = [], row = false) => {
+        const div = document.createElement('div'); div.className = row ? 'qw-row' : 'qw-note'; div.innerHTML = row ? `<span>${html}</span>` : html;
         for (const [label, fn, off] of btns) { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.disabled = !!off; b.onclick = fn; div.appendChild(b); }
         el.appendChild(div);
     };
-    // cadena
-    const q = MAIN_QUESTS[QB.m.i];
-    if (!q) add('<b>Camino del aventurero</b><br><small>Completaste el camino. Seguí con los encargos del día.</small>');
+    // cadena: tarjeta con el diseño del pack (título, texto, objetivos, recompensas) y el botón grande abajo
+    const q = MAIN_QUESTS[QB.m.i], main = $('qdMain'), btn = $('qdBtn') as HTMLButtonElement;
+    btn.hidden = true; btn.disabled = false; btn.onclick = null;
+    if (!q) main.innerHTML = `<h3 class="qw-title done">Camino del aventurero</h3><p class="qw-text">Completaste el camino. Seguí con los encargos del día.</p>`;
     else {
-        const rw = q.reward, prize = rw.unique === 'class_t1_random' ? ' · un único de tu clase' : rw.unique ? ' · un único a elección' : '';
-        const rtxt = `<small>Recompensa: ${rw.expPct} % de tu nivel en exp · ${rw.gold} oro${rw.forge ? ` · ${rw.forge} piedras de forja` : ''}${prize}</small>`;
-        const head = `<b>Camino del aventurero ${QB.m.i + 1}/${MAIN_QUESTS.length}: ${q.name}</b>`;
-        if (QB.m.st === 'new') add(`${head}<br>${q.say}<br>${rtxt}${P.lvl < q.minLvl ? `<br><small>Pide nivel ${q.minLvl}.</small>` : ''}`, [['Aceptar', () => bookSend(n, 'm_accept'), P.lvl < q.minLvl]]);
-        else if (QB.m.st === 'active') add(`${head}<br>${q.goals.map((g, j) => goalLine(g, QB!.m.prog[j] ?? 0)).join('<br>')}`);
-        else if (rw.unique?.endsWith('_choice')) add(`${head}<br>${q.done}<br><small>Elegí tu premio:</small>`, rewardUniques(rw.unique, CLS.id).map((u) => [u.name, () => bookSend(n, 'm_turnin', u.name)] as [string, () => void]));
-        else add(`${head}<br>${q.done}<br>${rtxt}`, [['Entregar', () => bookSend(n, 'm_turnin')]]);
+        const rw = q.reward, st = QB.m.st, head = `<h3 class="qw-title${st === 'ready' ? ' done' : ''}">${esc(q.name)}</h3><p class="qw-text"><small>Camino del aventurero ${QB.m.i + 1}/${MAIN_QUESTS.length}</small></p>`;
+        const goals = questGoalsHtml(q.goals, st === 'new' ? [] : QB.m.prog);
+        if (st === 'ready' && rw.unique?.endsWith('_choice')) {
+            // premio a elección: se elige tocando el ícono
+            main.innerHTML = `${head}<p class="qw-text">${esc(q.done)}</p>${goals}<div class="qw-rwh">RECOMPENSAS</div><p class="qw-text" style="text-align:center;margin-top:10px">Elegí tu premio:</p><div class="qw-rws">${rewardUniques(rw.unique, CLS.id).map((u) => `<button type="button" class="qw-rw pick" data-pick="${esc(u.name)}" style="--rc:#d8a53c"><span class="ic">${ico({ name: u.name, look: u.look, slot: u.slot, rar: { c: '#d8a53c', k: 3 } })}</span><small>${esc(u.name)}</small></button>`).join('')}</div>`;
+            main.querySelectorAll<HTMLElement>('[data-pick]').forEach((b) => (b.onclick = () => bookSend(n, 'm_turnin', b.dataset.pick)));
+        } else {
+            main.innerHTML = `${head}<p class="qw-text">${esc(st === 'ready' ? q.done : q.say)}</p>${goals}<div class="qw-rwh">RECOMPENSAS</div><div class="qw-rws">${mainRewardsHtml(rw)}</div>${st === 'new' && P.lvl < q.minLvl ? `<p class="qw-text" style="text-align:center">Pide nivel ${q.minLvl}.</p>` : ''}`;
+            if (st === 'new') { btn.hidden = false; btn.textContent = 'Aceptar'; btn.disabled = P.lvl < q.minLvl; btn.onclick = () => bookSend(n, 'm_accept'); }
+            else if (st === 'ready') { btn.hidden = false; btn.textContent = 'Entregar'; btn.onclick = () => bookSend(n, 'm_turnin'); }
+        }
     }
     // los encargos del día no pasan por el Capitán: se ven en el HUD y se cobran solos
     const ess = QB.d.ess ? '' : ' El primero del día paga además una Esencia.';
-    add(`<small>Encargos del día: se cobran solos al cumplirlos, hasta ${DAILY_LIMIT} por día (${dailyGold(P.lvl)} oro y 10 % de tu nivel cada uno).${ess}</small>`);
+    add(`<b>Encargos del día</b>: se cobran solos al cumplirlos, hasta ${DAILY_LIMIT} por día (${dailyGold(P.lvl)} oro y 10 % de tu nivel cada uno).${ess}`);
     // repetible
     const extra = Object.entries(QB.mats).filter(([id, c]) => c >= REPEAT_MATS && !RESERVED_MATS.has(id));
-    add(`<b>Sobrantes</b><br><small>${REPEAT_MATS} materiales iguales por oro o una piedra de forja.${extra.length ? '' : ' Todavía no juntaste suficientes.'}</small>`);
-    for (const [id, c] of extra) add(`${matName(id)} <small>×${c}</small>`, [['Oro', () => bookSend(n, 'r_turnin', `${id}|gold`)], ['Piedra', () => bookSend(n, 'r_turnin', `${id}|forge`)]]);
+    add(`<b>Sobrantes</b>: ${REPEAT_MATS} materiales iguales por oro o una piedra de forja.${extra.length ? '' : ' Todavía no juntaste suficientes.'}`);
+    for (const [id, c] of extra) add(`${matName(id)} <small>×${c}</small>`, [['Oro', () => bookSend(n, 'r_turnin', `${id}|gold`)], ['Piedra', () => bookSend(n, 'r_turnin', `${id}|forge`)]], true);
     const keyMats = Object.keys(QUEST_MATS).filter((id) => QB!.mats[id]).map((id) => `${matName(id)}: ${QB!.mats[id]}`);
-    if (keyMats.length) add(`<small>Para las llaves: ${keyMats.join(' · ')}</small>`);
+    if (keyMats.length) add(`<b>Para las llaves</b>: ${keyMats.join(' · ')}`);
 }
+/** Objetivos "0 / 20  Qué" del diseño. */
+function questGoalsHtml(goals: QuestGoal[], prog: number[]): string {
+    return `<div class="qw-goals">${goals.map((g, j) => { const n = Math.min(prog[j] ?? 0, g.n); return `<i class="${n >= g.n ? 'ok' : ''}"><b>${n}</b> / ${g.n}</i><span class="${n >= g.n ? 'ok' : ''}">${esc(g.what)}</span>`; }).join('')}</div>`;
+}
+const rewardTile = (src: string, n: string, label: string, col = '#7a6a3e') => `<div class="qw-rw" style="--rc:${col}"><span class="ic"><img alt="" src="${src}">${n ? `<em>${n}</em>` : ''}</span><small>${label}</small></div>`;
+/** Recompensas de la cadena: exp, oro, piedras de forja y el único (si hay). */
+function mainRewardsHtml(rw: MainQuest['reward']): string {
+    let h = rewardTile(miscIconUrl('pergamino_quest'), `${rw.expPct}%`, 'Exp. de tu nivel', '#8fd4ff') + rewardTile(miscIconUrl('oro'), String(rw.gold), 'Oro', '#d8a53c');
+    if (rw.forge) h += rewardTile(miscIconUrl('piedra_reforja'), String(rw.forge), 'Piedras de forja', '#b99cff');
+    if (rw.unique) h += rewardTile(miscIconUrl('cofre'), '', rw.unique === 'class_t1_random' ? 'Un único de tu clase' : 'Un único a elección', '#d8a53c');
+    return h;
+}
+// ---------- ventana de Misiones (L): lista a la izquierda, detalle a la derecha ----------
+let qlSel = '';
+const qlOpen = () => !$('qlog').hidden;
+/** Misiones que no se muestran en el seguimiento del HUD (botón Seguir); se guarda en el navegador. */
+const qlHidden = new Set<string>(JSON.parse(localStorage.getItem('fdn.qhide') ?? '[]') as string[]);
+function toggleQuestLog() { $('qlog').hidden = qlOpen(); renderQuestLog(); }
+function renderQuestLog() {
+    if (!qlOpen()) return;
+    const list = $('qlList'), det = $('qlDetail');
+    if (!QB) { list.innerHTML = ''; det.innerHTML = '<div class="ql-empty">Todavía no tenés misiones.</div>'; return; }
+    const q = MAIN_QUESTS[QB.m.i], items: { id: string; name: string; done?: boolean }[] = [];
+    if (q && QB.m.st !== 'new') items.push({ id: 'main', name: q.name, done: QB.m.st === 'ready' });
+    const dailies = QB.d.ids.map((id) => ({ id: 'd:' + id, name: DAILY_BY_ID.get(id)?.name ?? id, done: QB!.d.done.includes(id) }));
+    if (!items.some((i) => i.id === qlSel) && !dailies.some((i) => i.id === qlSel)) qlSel = (items[0] ?? dailies[0])?.id ?? '';
+    const li = (i: { id: string; name: string; done?: boolean }) => `<button type="button" role="option" class="ql-it${i.done ? ' done' : ''}" data-id="${i.id}" aria-selected="${i.id === qlSel}">${esc(i.name)}</button>`;
+    list.innerHTML = `${items.length ? '<div class="ql-sep">Camino del aventurero</div>' + items.map(li).join('') : ''}${dailies.length ? `<div class="ql-sep">Encargos del día ${QB.d.done.length}/${DAILY_LIMIT}</div>` + dailies.map(li).join('') : ''}`;
+    list.querySelectorAll<HTMLElement>('[data-id]').forEach((b) => (b.onclick = () => { qlSel = b.dataset.id!; renderQuestLog(); }));
+    if (!qlSel) { det.innerHTML = '<div class="ql-empty">Todavía no tenés misiones. Hablá con el Capitán.</div>'; return; }
+    let h = '';
+    if (qlSel === 'main' && q) {
+        const ready = QB.m.st === 'ready';
+        h = `<h3 class="qw-title${ready ? ' done' : ''}">${esc(q.name)}</h3><p class="qw-text">${esc(ready ? q.done : q.say)}</p>${ready ? '<p class="qw-text">Volvé con el Capitán para entregarla.</p>' : ''}${questGoalsHtml(q.goals, QB.m.prog)}<div class="qw-rwh">RECOMPENSAS</div><div class="qw-rws">${mainRewardsHtml(q.reward)}</div>`;
+    } else {
+        const id = qlSel.slice(2), d = DAILY_BY_ID.get(id); if (!d) { det.innerHTML = ''; return; }
+        const done = QB.d.done.includes(id), full = QB.d.done.length >= DAILY_LIMIT;
+        h = `<h3 class="qw-title${done ? ' done' : ''}">${esc(d.name)}</h3><p class="qw-text">Encargo del día. Se cobra solo al cumplirlo, sin volver a ningún NPC.${done ? ' Ya lo cobraste hoy.' : full ? ` Hoy ya cobraste ${DAILY_LIMIT}: se renueva en ${fmtReset(QB.d.resetMs)}.` : ''}</p>${questGoalsHtml([d.goal], [done ? d.goal.n : QB.d.prog[id] ?? 0])}<div class="qw-rwh">RECOMPENSAS</div><div class="qw-rws">${rewardTile(miscIconUrl('pergamino_diaria'), `${DAILY_EXP_PCT}%`, 'Exp. de tu nivel', '#8fd4ff')}${rewardTile(miscIconUrl('oro'), String(dailyGold(P.lvl)), 'Oro', '#d8a53c')}${QB.d.ess ? '' : rewardTile(miscIconUrl('esencia'), '1', 'Esencia (el 1.º del día)', '#b99cff')}</div>`;
+    }
+    const hid = qlHidden.has(qlSel);
+    det.innerHTML = h + `<div class="ql-foot"><button type="button" class="qw-btn" id="qlTrack">${hid ? 'Seguir' : 'Dejar de seguir'}</button><button type="button" class="qw-btn r" disabled title="Próximamente">Abandonar</button></div>`;
+    $('qlTrack').onclick = () => { if (hid) qlHidden.delete(qlSel); else qlHidden.add(qlSel); localStorage.setItem('fdn.qhide', JSON.stringify([...qlHidden])); renderQuest(); renderQuestLog(); };
+}
+$('qlClose').addEventListener('click', toggleQuestLog);
+$('openQuests').addEventListener('click', toggleQuestLog);
 /** Al abrir la charla con un NPC: si la misión actual pide hablar con ese rol, se avisa al server. */
 function bookTalk(n: Npc) {
     const q = QB && QB.m.st === 'active' ? MAIN_QUESTS[QB.m.i] : undefined;
@@ -2373,7 +2426,7 @@ function openQuestDlg(n: Npc) {
     const d = $('qdlg'); shopNpc = n; talkNpc = null;
     $('qdName').textContent = n.name; d.hidden = false;
     // la cadena vieja de 10 quedó jubilada: el Capitán da el Camino del aventurero y los encargos del día (renderBook), y sigue forjando las llaves viejas
-    $('qdBody').innerHTML = `<small>Forja: ${SHARDS_PER_KEY} esquirlas (las sueltan los jefes) + oro = 1 llave.</small>`;
+    $('qdBody').innerHTML = `<b>Forja</b>: ${SHARDS_PER_KEY} esquirlas (las sueltan los jefes) + oro = 1 llave.`;
     $('qdBtn').hidden = true;
     const fg = $('qdForges'); fg.innerHTML = '';
     for (const k of KEY_IDS) {
@@ -2961,7 +3014,7 @@ async function boot() {
     loadBuildingImages();
     refreshLook(); void initKnight();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, toScreen, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, perf: () => ({ ...perf }), mobCount: () => mobs.length, arrows: () => arrows.length });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, perf: () => ({ ...perf }), setQb: (v: QuestBookView | null) => { QB = v; renderQuest(); }, questDlg: (name: string) => openQuestDlg({ id: 'capitan_s', name, x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), questLog: toggleQuestLog, mobCount: () => mobs.length, arrows: () => arrows.length });
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5), recall: () => ({ on: !!recall, k: recallK(now()), cd: Math.max(0, recallCdEnd - now()) }) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();
