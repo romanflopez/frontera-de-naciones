@@ -165,6 +165,21 @@ const DEFS: Def[] = [
     { tier: 7, ilvl: 40, arch: 'guanM', name: 'Guantes del suplicio', boss: 'verdugo', mult: 1.35 }, { tier: 7, ilvl: 40, arch: 'botaF', name: 'Botas del Gran Verdugo', boss: 'verdugo', mult: 1.36 },
     { tier: 7, ilvl: 40, arch: 'amuD', name: 'Amuleto del Gran Verdugo', boss: 'verdugo', mult: 1.36 },
     // Piezas de set (docs/ITEMS.md): 8 por set (arma, armadura, cabeza, guantes, botas, amuleto y dos anillos distintos). Solo caen en mazmorras, nunca en la tienda. Los bonos viven en SETS.
+    // Cobre de Solmar (T1, cuero liviano): el primer set, para empezar
+    { tier: 1, arch: 'arma1', name: 'Daga de cobre', set: 'cobre' },
+    { tier: 1, arch: 'armMed', name: 'Jubón de cobre', set: 'cobre' }, { tier: 1, arch: 'cabF', name: 'Gorro de cobre', set: 'cobre' },
+    { tier: 1, arch: 'guanF', name: 'Manoplas de cobre', set: 'cobre' }, { tier: 1, arch: 'botaF', name: 'Botines de cobre', set: 'cobre' },
+    { tier: 1, arch: 'amuO', name: 'Amuleto de cobre', set: 'cobre' }, { tier: 1, arch: 'anilloO', name: 'Sello de cobre', set: 'cobre' }, { tier: 1, arch: 'anilloD', name: 'Aro de cobre', set: 'cobre' },
+    // Ámbar de Vhar (T2): magia
+    { tier: 2, arch: 'armaM', name: 'Vara de ámbar', set: 'ambar' },
+    { tier: 2, arch: 'armMed', name: 'Túnica de ámbar', set: 'ambar' }, { tier: 2, arch: 'cabF', name: 'Capucha de ámbar', set: 'ambar' },
+    { tier: 2, arch: 'guanM', name: 'Guantes de ámbar', set: 'ambar' }, { tier: 2, arch: 'botaM', name: 'Sandalias de ámbar', set: 'ambar' },
+    { tier: 2, arch: 'amuO', name: 'Talismán de ámbar', set: 'ambar' }, { tier: 2, arch: 'anilloO', name: 'Sello de ámbar', set: 'ambar' }, { tier: 2, arch: 'anilloD', name: 'Aro de ámbar', set: 'ambar' },
+    // Bruma de Solmar (T3, pesado): aguante
+    { tier: 3, arch: 'arma1', name: 'Maza de bruma', set: 'bruma' },
+    { tier: 3, arch: 'armPes', name: 'Cota de bruma', set: 'bruma' }, { tier: 3, arch: 'cabF', name: 'Yelmo de bruma', set: 'bruma' },
+    { tier: 3, arch: 'guanF', name: 'Guanteletes de bruma', set: 'bruma' }, { tier: 3, arch: 'botaF', name: 'Grebas de bruma', set: 'bruma' },
+    { tier: 3, arch: 'amuD', name: 'Amuleto de bruma', set: 'bruma' }, { tier: 3, arch: 'anilloD', name: 'Sello de bruma', set: 'bruma' }, { tier: 3, arch: 'anilloO', name: 'Aro de bruma', set: 'bruma' },
     // Alba de Solmar (T4, malla): ágil
     { tier: 4, arch: 'arma1', name: 'Espada del Alba', look: 'longsword', set: 'alba' },
     { tier: 4, arch: 'armMed', name: 'Malla del Alba', look: 'sol_malla', set: 'alba' }, { tier: 4, arch: 'cabF', name: 'Yelmo del Alba', look: 'sol_malla_helm', set: 'alba' },
@@ -248,8 +263,11 @@ const mkSet = (id: string, name: string, tier: number, faction: 'solmar' | 'vhar
     id, name, tier, faction, pieces: UNIQUE_BASES.filter((u) => u.uniq.set === id).map((u) => u.name),
     bonuses: SET_STEPS.map(([n, k], i) => ({ n, stats: stats[i].map((a) => setStat(a, tier, k)) })),
 });
-/** Los 4 sets de nación (arte de Solmar y Vhar): uno por banda desde la T4; 8 piezas (todos los slots) con bonos a 2, 4, 6 y 8 piezas distintas. */
+/** Los 7 sets de nación (arte de Solmar y Vhar): uno por banda de la T1 a la T7; 8 piezas (todos los slots) con bonos a 2, 4, 6 y 8 piezas distintas. */
 export const SETS: SetDef[] = [
+    mkSet('cobre', 'Cobre de Solmar', 1, 'solmar', ['hp', 'aspd'], ['crit', 'hp'], ['hp', 'leech'], ['aspd', 'crit', 'hp']),
+    mkSet('ambar', 'Ámbar de Vhar', 2, 'vhar', ['mp', 'mag'], ['mag', 'hp'], ['mp', 'crit'], ['mag', 'mp', 'leech']),
+    mkSet('bruma', 'Bruma de Solmar', 3, 'solmar', ['hp', 'df'], ['df', 'rm'], ['hp', 'rpar'], ['df', 'rm', 'hp']),
     mkSet('alba', 'Alba de Solmar', 4, 'solmar', ['hp', 'aspd'], ['crit', 'leech'], ['hp', 'crit'], ['aspd', 'crit', 'leech']),
     mkSet('cenit', 'Cenit de Solmar', 5, 'solmar', ['hp', 'df'], ['df', 'rm'], ['hp', 'rpar'], ['df', 'rm', 'hp']),
     mkSet('ceniza', 'Ceniza de Vhar', 6, 'vhar', ['mp', 'mag'], ['mag', 'crit'], ['mp', 'hp'], ['mag', 'mp', 'leech']),

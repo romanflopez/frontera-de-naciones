@@ -33,7 +33,7 @@ test('cada set tiene 4 piezas de cuerpo + cabeza, del tamaño de la hoja base y 
 
 test('cada set de nación tiene 8 piezas (todos los slots, con aspecto e ícono), que se farmean (nunca en la tienda), y sus bonos suman por cantidad', () => {
     const stock = new Set(Object.values(SHOPS).flatMap((sh) => sh.stock.map((x) => x.base)));
-    assert.equal(SETS.length, 4);
+    assert.equal(SETS.length, 7);
     for (const set of SETS) {
         assert.equal(set.pieces.length, 8, `${set.id}: 8 piezas`);
         const slots = set.pieces.map((n) => ALL_BASES.find((b) => b.name === n)!.slot).sort();
@@ -42,7 +42,7 @@ test('cada set de nación tiene 8 piezas (todos los slots, con aspecto e ícono)
         assert.deepEqual(set.bonuses.map((b) => b.n), [2, 4, 6, 8]);
         assert.ok(SET_PIECES_BY_TIER[set.tier]?.filter((u) => u.uniq.set === set.id).length === 8, `${set.id}: cae en su banda`);
     }
-    // el arte de las 4 armaduras de set sigue ahí, pero ya no se compran: se consiguen en mazmorras
+    // el arte de las armaduras de set sigue ahí, pero ya no se compran: se consiguen en mazmorras
     for (const look of LOOKS) {
         const arm = ALL_BASES.find((b) => b.look === look), helm = ALL_BASES.find((b) => b.look === `${look}_helm`);
         assert.ok(arm && arm.slot === 'armadura' && helm && helm.slot === 'cabeza', `${look}: ítems`);
