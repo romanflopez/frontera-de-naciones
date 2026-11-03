@@ -15,7 +15,6 @@ from pathlib import Path
 # (nombre de salida, ruta de capas dentro del PSD)
 PIECES = [
     ("lg-bg.webp", ["BG"]),
-    ("lg-logo-frame.png", ["1 - LOGIN", "LOGO", "logo frame"]),
     ("lg-logo-tribal.png", ["1 - LOGIN", "LOGO", "gt_COLOR"]),
     ("sel-header.png", ["2 - Character Select v2", "Side Bar", "Header", "h"]),
     ("sel-delete.png", ["2 - Character Select v2", "Side Bar", "Delete - On Hover"]),

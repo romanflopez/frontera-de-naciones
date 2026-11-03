@@ -7,13 +7,12 @@
 #login[data-screen=login] .lbg::after{content:"";position:absolute;inset:0;
   background:url(/assets/ui/craftpix/lg-bg.webp) center/cover no-repeat}
 
-/* marca: la filigrana del pack y el marco del logo como "slot" (adentro va el logo del juego) */
+/* marca: la filigrana del pack detrás del logo del juego (el logo ya trae su propio marco) */
 #login[data-screen=login] .brand{top:0;height:300px}
 #login[data-screen=login] .brand::before{content:"";position:absolute;left:50%;top:8px;width:672px;height:295px;margin-left:-336px;
   background:url(/assets/ui/craftpix/lg-logo-tribal.png) center/100% 100% no-repeat}
-#login[data-screen=login] .gname{position:absolute;left:50%;top:103px;width:345px;height:123px;margin-left:-172px;display:grid;place-items:center;
-  background:url(/assets/ui/craftpix/lg-logo-frame.png) center/100% 100% no-repeat}
-#login[data-screen=login] .gname img{position:relative;width:auto;height:94px;margin-top:10px;
+#login[data-screen=login] .gname{position:absolute;left:50%;top:58px;width:345px;height:190px;margin-left:-172px;display:grid;place-items:center}
+#login[data-screen=login] .gname img{position:relative;width:auto;height:190px;margin-top:0;
   filter:drop-shadow(0 2px 6px rgba(0,0,0,.7)) drop-shadow(0 0 18px rgba(120,170,220,.3))}
 #login[data-screen=login] .tagl{display:none}
 
@@ -72,9 +71,8 @@
 
 /* logo arriba a la izquierda, en el mismo slot del login */
 #login[data-screen=select] .brand{left:46px;right:auto;top:21px;width:287px;text-align:left}
-#login[data-screen=select] .gname{width:287px;height:103px;display:grid;place-items:center;
-  background:url(/assets/ui/craftpix/lg-logo-frame.png) center/100% 100% no-repeat}
-#login[data-screen=select] .gname img{width:auto;height:88px;margin-top:8px;
+#login[data-screen=select] .gname{width:287px;height:118px;display:grid;place-items:center}
+#login[data-screen=select] .gname img{width:auto;height:118px;
   filter:drop-shadow(0 2px 6px rgba(0,0,0,.7))}
 
 /* el muñeco, corrido al centro del hueco que deja la barra lateral */
