@@ -5,6 +5,7 @@
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import { MOB_AGGRO, MOB_ASSIST, MOB_TYPES, mobDef, zoneRespawnSecs, type MobDef, type MobType, type WorldMap, type Zone } from '@fdn/world';
 import * as M from './messages.ts';
+import { bossInterrupt, bossRage, bossReset, bossStateFor, bossTick, type BossHost, type BossState } from './bosses.ts';
 import type { Player } from './player.ts';
 import { hasBuff } from './systems/statusSystem.ts';
 import { BUFF, BURN_EVERY, BURN_TICKS, PVP_SPELLS, SKILLS, aoeMult, burnTickDmg, rollSpellDamage, spellDmgKind, threatOf } from './systems/pvpCombat.ts';
@@ -32,6 +33,8 @@ export interface MobHost {
     refundMp?(p: Player, n: number): void;
     /** Envenena al jugador (mob tóxico): −30 % de curación mientras dura. Opcional (tests). */
     poison?(p: Player, secs: number): void;
+    /** Frena al jugador (jefes). Opcional (tests). */
+    slow?(p: Player, secs: number): void;
     reward(killer: Player, info: { mobId: number; type: MobType; def: MobDef; zoneName: string; origin: 'loose' | 'pit' | 'dungeon'; x: number; y: number; shard?: 'cripta' | 'foso'; /** rasgos del mob (mobTraits.ts): multiplican la exp y el botín */ traits: number }): void;
     /** Murió un mob con dueño del golpe final: el mundo tira el botín de suelo (systems/loot.ts). Opcional (tests). */
     mobDied?(info: { type: MobType; def: MobDef; x: number; y: number; gm: boolean }): void;
@@ -53,6 +56,10 @@ interface SimMob {
     traits: number; fled: boolean; fleeUntil: number;
     /** Invocado con /gm mob: no reaparece al morir. */
     gm?: boolean;
+    /** Add de un jefe: no reaparece al morir. */
+    add?: boolean;
+    /** Motor de jefes (bosses.ts): jefes con kit y adds lanzadores. */
+    bs?: BossState;
     /** Amenaza por jugador (K4): el mob persigue al que más amenaza le generó, salvo que esté provocado. */
     threat: Map<bigint, number>; tauntBy: bigint | null; tauntUntil: number;
     /** Quemadura: hasta cuándo, próximo pulso, daño por pulso y quién la puso. */
@@ -81,6 +88,7 @@ export class MobSim {
     private readonly spawnCells: Int32Array[] = [];
     /** Escalado por party de la instancia (vida y daño); ×1 fuera de las mazmorras. */
     private scale = { hp: 1, dmg: 1 };
+    private partyN = 1;
 
     constructor(private readonly map: WorldMap, private readonly host: MobHost, private readonly opts: MobSimOptions = {}) {
         this.N = map.size;
@@ -99,7 +107,7 @@ export class MobSim {
      * los mobs que todavía no pelearon (quietos y con la vida llena) y el daño de todos de acá en adelante.
      */
     setPartyScale(n: number): { hp: number; dmg: number } {
-        const next = dungeonPartyScale(n);
+        const next = dungeonPartyScale(n); this.partyN = Math.max(1, Math.floor(n) || 1);
         for (const m of this.mobs.values()) {
             if (m.dead || m.gm || m.state !== 'idle' || m.hp < m.hpMax) continue;
             m.hpMax = Math.max(1, Math.round(m.def.hp * traitHpMult(m.traits) * next.hp)); m.hp = m.hpMax; // siempre desde la vida base: sin arrastrar redondeos
@@ -109,7 +117,7 @@ export class MobSim {
     }
     get partyScale(): { hp: number; dmg: number } { return this.scale; }
     /** Multiplicador de daño de un mob: rasgos × escalado por party. */
-    private dmgMult(m: SimMob): number { return traitDmgMult(m.traits) * this.scale.dmg; }
+    private dmgMult(m: SimMob): number { return traitDmgMult(m.traits) * this.scale.dmg * bossRage(m); }
     private aggroOf(m: SimMob): number { return (m.zone.aggro ?? MOB_AGGRO) + (m.traits & TRAIT_ELITE ? ELITE_AGGRO_BONUS : 0); }
 
     get count(): number { return this.mobs.size; }
@@ -117,7 +125,7 @@ export class MobSim {
     awake = 0;
     /** Cantidad de mobs vivos de cada zona (por índice en map.zones): para los tests y las mediciones. */
     /** Mobs vivos con sus rasgos y vida máxima (tests). */
-    detail(): { id: number; zoneIdx: number; traits: number; hp: number; hpMax: number; boss: boolean }[] { return [...this.mobs.values()].filter((m) => !m.dead).map((m) => ({ id: m.id, zoneIdx: m.zoneIdx, traits: m.traits, hp: m.hp, hpMax: m.hpMax, boss: !!m.def.boss })); }
+    detail(): { id: number; zoneIdx: number; traits: number; hp: number; hpMax: number; boss: boolean; par: number; x: number; y: number; type: MobType; add: boolean }[] { return [...this.mobs.values()].filter((m) => !m.dead).map((m) => ({ id: m.id, zoneIdx: m.zoneIdx, traits: m.traits, hp: m.hp, hpMax: m.hpMax, boss: !!m.def.boss, par: m.par, x: m.x, y: m.y, type: m.type, add: !!m.add })); }
     countByZone(): number[] { const out = this.map.zones.map(() => 0); for (const m of this.mobs.values()) if (!m.dead) out[m.zoneIdx]++; return out; }
     /** Mobs vivos con posición (tests). */
     list(): { id: number; zoneIdx: number; x: number; y: number; hp: number }[] { return [...this.mobs.values()].filter((m) => !m.dead).map((m) => ({ id: m.id, zoneIdx: m.zoneIdx, x: m.x, y: m.y, hp: m.hp })); }
@@ -144,6 +152,7 @@ export class MobSim {
                 state: 'idle', target: null, lastAttacker: null, wx: x + 0.5, wy: y + 0.5, wait: Math.random() * 2, nextAtk: 0, nextSp: T + 4, busy: 0,
                 par: 0, imm: 0, slow: 0, poison: 0, poisonTick: 0, moving: false, dead: false, traits, fled: false, fleeUntil: 0,
                 threat: new Map(), tauntBy: null, tauntUntil: 0, burn: 0, burnTick: 0, burnDmg: 0, burnBy: null,
+                bs: d.boss ? bossStateFor(z.type) : undefined,
             });
         }
     }
@@ -319,11 +328,14 @@ export class MobSim {
                 let tgt = this.pickTarget(m, T);
                 if (!this.eligible(tgt)) { tgt = this.nearestPlayer(m, 6) ?? undefined; }
                 m.target = tgt ? tgt.playerId : null;
-                if (!tgt || Math.hypot(m.x - home.x, m.y - home.y) > 17) { m.state = 'return'; m.target = null; this.clearThreat(m); continue; }
+                if (!tgt || Math.hypot(m.x - home.x, m.y - home.y) > 17) { m.state = 'return'; m.target = null; this.clearThreat(m); if (m.bs) bossReset(this.bh, m); continue; }
                 const px = tgt.posX + 0.5, py = tgt.posY + 0.5, dp = Math.hypot(m.x - px, m.y - py);
-                if (T < m.busy) continue; // cargando la habilidad: se queda quieto
-                const sp = d.boss?.special;
-                if (sp && T >= m.nextSp && dp <= sp.range) { this.special(m, T); continue; }
+                if (m.bs) { if (bossTick(this.bh, m, tgt)) { m.moving = false; continue; } } // motor de jefes: casteando o cargando, se queda quieto
+                else {
+                    if (T < m.busy) continue; // cargando la habilidad: se queda quieto
+                    const sp = d.boss?.special;
+                    if (sp && T >= m.nextSp && dp <= sp.range) { this.special(m, T); continue; }
+                }
                 const rg = d.ranged;
                 const los = rg ? this.clearShot(m.x, m.y, px, py) : false;
                 if (rg) {
@@ -422,6 +434,54 @@ export class MobSim {
         });
     }
 
+    /** Los jefes con motor son inmunes al aturdir: el control les corta el casteo pero no los deja quietos. Los adds sí se aturden. */
+    private bossImmune(m: SimMob): boolean { return !!m.bs && !!m.def.boss; }
+
+    /** Lo que el motor de jefes necesita del simulador. */
+    private readonly bh: BossHost = {
+        now: () => this.now(),
+        alive: (id) => { const m = this.mobs.get(id); return !!m && !m.dead; },
+        playersNear: (x, y, r) => this.host.nearby(x, y).filter((p): p is Player => this.eligible(p) && Math.hypot(x - (p.posX + 0.5), y - (p.posY + 0.5)) <= r),
+        playerById: (id) => this.host.playerById(id),
+        eligible: (p): p is Player => this.eligible(p),
+        roll: (bm) => { const m = bm as SimMob; return Math.round(rint(m.def.dmg[0], m.def.dmg[1]) * this.dmgMult(m)); },
+        hurt: (p, raw, source, bm) => { p.send(M.mobHitPlayer(bm.id, raw, 0)); this.host.hurt(p, raw, source, M.mid(bm.id), bm.id); },
+        stun: (p, secs) => this.host.stun(p, secs),
+        slow: (p, secs) => this.host.slow?.(p, secs),
+        poison: (p, secs) => this.host.poison?.(p, secs),
+        after: (ms, fn) => this.host.after(ms, fn),
+        broadcast: (m, msg) => this.broadcastNear(m, msg),
+        spawnAdd: (bm, type, lvl, kit) => this.spawnAdd(bm as SimMob, type, lvl, kit),
+        despawn: (id) => { this.mobs.delete(id); },
+        dashTo: (bm, x, y) => {
+            const m = bm as SimMob, dx = m.x - x, dy = m.y - y, d = Math.hypot(dx, dy) || 1;
+            for (const k of [1, 1.5, 0.7, 2]) { const nx = x + (dx / d) * k, ny = y + (dy / d) * k; if (this.walk(Math.floor(nx), Math.floor(ny)) && !this.isSafe(nx, ny)) { m.x = nx; m.y = ny; return; } }
+        },
+        partySize: () => this.partyN,
+    };
+
+    /** Add de un jefe: nace al lado, con la escala de la party, y sale peleando contra el objetivo del jefe. No reaparece. */
+    private spawnAdd(boss: SimMob, type: MobType, lvl: number | undefined, kit: string | undefined): number | undefined {
+        const zone: Zone = { ...boss.zone, type, lvl: lvl ?? boss.zone.lvl, n: 0 };
+        for (let i = 0; i < 40; i++) {
+            const a = Math.random() * Math.PI * 2, r = 1.5 + i / 15, x = Math.floor(boss.x + Math.cos(a) * r), y = Math.floor(boss.y + Math.sin(a) * r);
+            if (!this.walk(x, y) || this.map.safe[y]?.[x]) continue;
+            const d = mobDef(type, { lvl: zone.lvl }), T = this.now(), id = this.nextId++, hpMax = Math.round(d.hp * this.scale.hp);
+            const m: SimMob = {
+                id, type, def: d, typeIdx: MOB_TYPES.indexOf(type), zone, zoneIdx: boss.zoneIdx, x: x + 0.5, y: y + 0.5, hp: hpMax, hpMax,
+                state: 'chase', target: boss.target, lastAttacker: null, wx: x + 0.5, wy: y + 0.5, wait: 0, nextAtk: T + 0.8, nextSp: T + 4, busy: 0,
+                par: 0, imm: 0, slow: 0, poison: 0, poisonTick: 0, moving: false, dead: false, add: true, traits: 0, fled: true, fleeUntil: 0,
+                threat: new Map(boss.threat), tauntBy: null, tauntUntil: 0, burn: 0, burnTick: 0, burnDmg: 0, burnBy: null,
+                bs: kit ? bossStateFor(type, kit) : undefined,
+            };
+            this.mobs.set(id, m);
+            return id;
+        }
+        return undefined;
+    }
+    /** Estado del motor de un mob (tests y depuración). */
+    bossOf(id: number): BossState | undefined { return this.mobs.get(id)?.bs; }
+
     private broadcastNear(m: { x: number; y: number }, msg: ServerMessage) { for (const p of this.host.nearby(m.x, m.y)) p.send(msg); }
 
     private kill(m: SimMob, killer: Player | null) {
@@ -434,7 +494,7 @@ export class MobSim {
         this.broadcastNear(m, M.mobDied(m.id, killer ? killer.playerId : 0n, m.x, m.y, m.typeIdx, m.zoneIdx));
         if (killer) this.host.mobDied?.({ type: m.type, def: m.def, x: m.x, y: m.y, gm: !!m.gm }); // después del mobDied: el cliente ya sacó al mob cuando aparece el botín
         // en una instancia de mazmorra lo que muere queda muerto (jefe incluido); para repetir hay que entrar a una corrida nueva
-        if (!m.gm && !this.opts.noRespawn) this.host.after(zoneRespawnSecs(m.type, m.zone) * 1000, () => this.spawn(m.zone, m.zoneIdx, !!(m.traits & TRAIT_ELITE))); // un élite renace élite
+        if (!m.gm && !m.add && !this.opts.noRespawn) this.host.after(zoneRespawnSecs(m.type, m.zone) * 1000, () => this.spawn(m.zone, m.zoneIdx, !!(m.traits & TRAIT_ELITE))); // un élite renace élite
     }
 
     private sendSnapshots() {
@@ -463,7 +523,8 @@ export class MobSim {
         const m = this.mobs.get(id); if (!m || m.dead) return;
         const T = this.now();
         if (slowSecs > 0) m.slow = T + slowSecs;
-        if (stunSecs > 0 && m.imm <= T) { m.par = T + stunSecs; m.imm = T + stunSecs + 8; m.moving = false; } // aturdido (corta la carga de un jefe)
+        if (stunSecs > 0 && m.imm <= T && !this.bossImmune(m)) { m.par = T + stunSecs; m.imm = T + stunSecs + 8; m.moving = false; } // aturdido (corta la carga de un jefe)
+        if (m.bs) bossInterrupt(this.bh, m, skill, p); // motor de jefes: Carga, Nova, Giro... cortan el casteo
         const phys = (SKILLS[skill] ?? PVP_SPELLS[skill])?.stat !== 'mag'; // Nova de escarcha y Nova sagrada son mágicas; las del paladín, físicas
         if (m.traits & (phys ? TRAIT_ANTI_PHYS : TRAIT_ANTI_MAGIC)) dmg = Math.max(1, Math.round(dmg * ANTI_DAMAGE_MULT));
         m.lastAttacker = p.playerId; m.hp -= dmg; this.addThreat(m, p, dmg * threatOf(skill));
@@ -517,7 +578,8 @@ export class MobSim {
         const parSecs = wantsSecs && sp.secs && p.pvp.allowSecs(spell, BigInt(m.id), nowMs) ? sp.secs : 0;
         const poisonSecs = dmg > 0 && phys && p.combat.poison > 0 && Math.random() * 100 < p.combat.poison ? POISON_SECS : 0;
         if (dmg <= 0 && parSecs <= 0) return;
-        if (parSecs > 0 && m.imm <= T) { m.par = T + parSecs; m.imm = T + parSecs + 8; m.moving = false; }
+        if (parSecs > 0 && m.imm <= T && !this.bossImmune(m)) { m.par = T + parSecs; m.imm = T + parSecs + 8; m.moving = false; }
+        if (m.bs && (dmg > 0 || parSecs > 0 || sp.taunt)) bossInterrupt(this.bh, m, spell, p); // corte duro o blando (en la ventana)
         if (dmg > 0 && sp.slow) m.slow = T + sp.slow;                                  // Esquirla: frena
         if (dmg > 0 && sp.burn) { m.burn = T + BURN_TICKS * BURN_EVERY + 0.05; m.burnTick = T + BURN_EVERY; m.burnDmg = burnTickDmg(p.combat); m.burnBy = p.playerId; } // una sola por mob: la nueva reemplaza
         if (sp.taunt) this.taunt(m, p, sp.taunt);                                       // Martillo: provoca
