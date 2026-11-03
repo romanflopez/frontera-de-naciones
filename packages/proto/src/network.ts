@@ -581,6 +581,9 @@ export interface ServerMessage {
     | { $case: "bossTelegraph"; value: BossTelegraph }
     | { $case: "bossZone"; value: BossZone }
     | { $case: "bossPhase"; value: BossPhase }
+    | //
+    /** Oferta del día de la tienda (docs/ITEMS.md): global, rota por día UTC; la estrella tiene stock 1 en todo el server. Rango desde 1200. */
+    { $case: "dailyShopState"; value: DailyShopState }
     | undefined;
 }
 
@@ -1624,6 +1627,21 @@ export interface InvItem {
   rarity: number;
   attrs: InvAttr[];
   up: number;
+}
+
+/** Una línea de la oferta del día: `star` es el único caro con el roll ya tirado (visible); `sold` solo para la estrella. */
+export interface DailyOffer {
+  base: string;
+  quality: number;
+  attrs: InvAttr[];
+  price: number;
+  star: boolean;
+  sold: boolean;
+}
+
+/** La oferta del día completa (igual para todos; se compra con EconBuyRequest y stockIndex = 1000 + índice, en el mercader). */
+export interface DailyShopState {
+  offers: DailyOffer[];
 }
 
 export interface EconUpgradeRequest {
@@ -7182,6 +7200,9 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "bossPhase":
         BossPhase.encode(message.payload.value, writer.uint32(8834).fork()).join();
         break;
+      case "dailyShopState":
+        DailyShopState.encode(message.payload.value, writer.uint32(9602).fork()).join();
+        break;
     }
     return writer;
   },
@@ -8097,6 +8118,14 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "bossPhase", value: BossPhase.decode(reader, reader.uint32()) };
             continue;
           }
+          case 1200: {
+            if (tag !== 9602) {
+              break;
+            }
+
+            message.payload = { $case: "dailyShopState", value: DailyShopState.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -8808,6 +8837,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "bossPhase": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "bossPhase", value: BossPhase.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "dailyShopState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "dailyShopState", value: DailyShopState.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -20856,6 +20891,176 @@ export const InvItem: MessageFns<InvItem> = {
     message.rarity = object.rarity ?? 0;
     message.attrs = object.attrs?.map((e) => InvAttr.fromPartial(e)) || [];
     message.up = object.up ?? 0;
+    return message;
+  },
+};
+
+function createBaseDailyOffer(): DailyOffer {
+  return { base: "", quality: 0, attrs: [], price: 0, star: false, sold: false };
+}
+
+export const DailyOffer: MessageFns<DailyOffer> = {
+  encode(message: DailyOffer, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.base !== "") {
+      writer.uint32(10).string(message.base);
+    }
+    if (message.quality !== 0) {
+      writer.uint32(16).int32(message.quality);
+    }
+    for (const v of message.attrs) {
+      InvAttr.encode(v!, writer.uint32(26).fork()).join();
+    }
+    if (message.price !== 0) {
+      writer.uint32(32).int32(message.price);
+    }
+    if (message.star !== false) {
+      writer.uint32(40).bool(message.star);
+    }
+    if (message.sold !== false) {
+      writer.uint32(48).bool(message.sold);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DailyOffer {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseDailyOffer();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.base = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.quality = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.attrs.push(InvAttr.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.price = reader.int32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.star = reader.bool();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.sold = reader.bool();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<DailyOffer>, I>>(base?: I): DailyOffer {
+    return DailyOffer.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<DailyOffer>, I>>(object: I): DailyOffer {
+    const message = createBaseDailyOffer();
+    message.base = object.base ?? "";
+    message.quality = object.quality ?? 0;
+    message.attrs = object.attrs?.map((e) => InvAttr.fromPartial(e)) || [];
+    message.price = object.price ?? 0;
+    message.star = object.star ?? false;
+    message.sold = object.sold ?? false;
+    return message;
+  },
+};
+
+function createBaseDailyShopState(): DailyShopState {
+  return { offers: [] };
+}
+
+export const DailyShopState: MessageFns<DailyShopState> = {
+  encode(message: DailyShopState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.offers) {
+      DailyOffer.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DailyShopState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseDailyShopState();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.offers.push(DailyOffer.decode(reader, reader.uint32()));
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<DailyShopState>, I>>(base?: I): DailyShopState {
+    return DailyShopState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<DailyShopState>, I>>(object: I): DailyShopState {
+    const message = createBaseDailyShopState();
+    message.offers = object.offers?.map((e) => DailyOffer.fromPartial(e)) || [];
     return message;
   },
 };

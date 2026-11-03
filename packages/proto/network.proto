@@ -530,6 +530,8 @@ message ServerMessage {
     BossTelegraph boss_telegraph = 1102;
     BossZone boss_zone = 1103;
     BossPhase boss_phase = 1104;
+    // Oferta del día de la tienda (docs/ITEMS.md): global, rota por día UTC; la estrella tiene stock 1 en todo el server. Rango desde 1200.
+    DailyShopState daily_shop_state = 1200;
   }
 }
 
@@ -1412,6 +1414,10 @@ message EconQuestRequest { string npc_id = 1; string action = 2; string key = 3;
 message InvAttr { string id = 1; int32 v = 2; }
 /** Item con identidad: uid único por personaje, base (nombre en la tabla de bases), rareza 0..3 y atributos. */
 message InvItem { int32 uid = 1; string base = 2; int32 rarity = 3; repeated InvAttr attrs = 4; /* nivel de mejora (+N) */ int32 up = 5; }
+/** Una línea de la oferta del día: `star` es el único caro con el roll ya tirado (visible); `sold` solo para la estrella. */
+message DailyOffer { string base = 1; int32 quality = 2; repeated InvAttr attrs = 3; int32 price = 4; bool star = 5; bool sold = 6; }
+/** La oferta del día completa (igual para todos; se compra con EconBuyRequest y stockIndex = 1000 + índice, en el mercader). */
+message DailyShopState { repeated DailyOffer offers = 1; }
 message EconUpgradeRequest { string npc_id = 1; int32 uid = 2; }
 /** Reforja del extra número `extra` (0 o 1, contando desde el final de los fijos) del ítem `uid` en el herrero. */
 message EconReforgeRequest { string npc_id = 1; int32 uid = 2; int32 extra = 3; }

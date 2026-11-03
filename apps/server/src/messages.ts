@@ -196,6 +196,9 @@ export const inventoryState = (st: Econ): ServerMessage => msg({
     },
 });
 export const econResult = (ok: boolean, code: string, text: string): ServerMessage => msg({ $case: 'econResult', value: { ok, code, text } });
+/** La oferta del día (global): se manda al entrar; `sold` marca la estrella ya vendida hoy. */
+export const dailyShopState = (offers: { base: string; quality: number; attrs: { id: string; v: number }[]; price: number; star?: boolean }[], sold: boolean): ServerMessage =>
+    msg({ $case: 'dailyShopState', value: { offers: offers.map((o) => ({ base: o.base, quality: o.quality, attrs: o.attrs.map((a) => ({ id: a.id, v: a.v })), price: o.price, star: !!o.star, sold: !!o.star && sold })) } });
 export const killReward = (v: { mobId: number; x: number; y: number; exp: number; gold: number; goldD?: number; item?: ReturnType<typeof invItem>; bagFull: boolean; potion: string; shard: string; forge?: number; newLvl: number; questReady: boolean; questProg: number }): ServerMessage =>
     msg({ $case: 'killReward', value: { ...v, gold: Math.min(2147483647, v.gold), goldD: v.gold } });
 export const groundItemSpawned = (g: { id: number; item: SItem; x: number; y: number }, locked: boolean, freeInMs: number, expiresInMs: number): ServerMessage =>

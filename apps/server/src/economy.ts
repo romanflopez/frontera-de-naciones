@@ -16,6 +16,7 @@ import {
     DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, junkValue, MAT_REFORJA, reforgeGold, reforgeStones, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
     mainComplete, newQuestBook, repeatGold, rewardUniques, rollDailies, type QuestBook, type QuestEvent, type QuestHave, type QuestReward,
 } from '@fdn/world';
+import { DAILY_INDEX_BASE, dailyOffers, dayKey } from './dailyShop.ts';
 import { canPickup, GROUND_MAX_PER_OWNER, PICKUP_RANGE, type GroundApi } from './ground.ts';
 import * as M from './messages.ts';
 import type { Player } from './player.ts';
@@ -394,10 +395,25 @@ export class Economy {
     }
 
     // ---------- tiendas ----------
+    /** Día UTC en el que ya se vendió la estrella de la oferta (stock 1 global; en memoria: pre-beta alcanza). */
+    private starSoldDay = -1;
+    starSoldToday(): boolean { return this.starSoldDay === dayKey(); }
+
     buy(p: Player, ctx: EconCtx, npcId: string, index: number): void {
         this.run(p, ctx, (st) => {
             if (p.isDead) return fail('dead', 'Estás muerto.');
             const npc = this.near(p, ctx, npcId); if (!npc) return fail('far', 'Estás muy lejos del vendedor.');
+            if (index >= DAILY_INDEX_BASE) { // oferta del día (docs/ITEMS.md §3.9): solo en el mercader, igual para todos
+                if (roleOf(npc) !== 'mercader') return fail('no_stock', 'La oferta del día está en el mercader.');
+                const o = dailyOffers()[index - DAILY_INDEX_BASE]; if (!o) return fail('no_stock', 'Esa oferta ya no está (cambió el día).');
+                if (o.star && this.starSoldToday()) return fail('sold', 'La oferta estrella de hoy ya se vendió. Mañana rota.');
+                if (st.gold < o.price) return fail('gold', `Necesitás ${o.price} de oro.`);
+                if (st.bag.length >= BAG_MAX) return fail('bag_full', 'La bolsa está llena.');
+                addGold(st, -o.price);
+                st.bag.push(newItem(st, o.base, o.quality, o.attrs.map((a) => ({ ...a }))));
+                if (o.star) this.starSoldDay = dayKey(); // el primero se la lleva; el resto ve 'sold'
+                return done(`Compraste ${o.base} por ${o.price} de oro.${o.star ? ' ¡Era la oferta estrella de hoy!' : ''}`);
+            }
             const line = SHOPS[roleOf(npc)]?.stock[index]; if (!line) return fail('no_stock', 'Ese vendedor no vende eso.');
             if (st.gold < line.price) return fail('gold', 'No te alcanza el oro.');
             if (line.pot) {

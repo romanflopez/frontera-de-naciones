@@ -7,6 +7,7 @@
  * cada mundo puede ir a su propio worker_thread sin cambiar esta lógica.
  */
 import { PARTY_SHARE_RANGE, partyExpMult, partyMates } from './party.ts';
+import { dailyOffers } from './dailyShop.ts';
 /** Hasta dónde llega el botín personal de un élite o jefe de mundo para los que participaron (celdas desde donde murió). */
 const BOSS_SHARE_RANGE = 30;
 import { AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, pvpMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionLockMs, potionMp, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, POTION_LOCK_PVP_MS, PVP_COMBAT_MS, pvpCap, pvpScale, pvpVsCtrl, RECALL_PVP_LOCK_MS, INVIS_CD_MS, DETECT_CD_MS, SECOND_WIND, secondWindHeal, progressFromEcon, PVP_SPELLS, BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, POISON_HEAL_TAKEN, HEAL_THREAT, HEALER_SKILLS, STUN_SPELLS, healAmount, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, K8_SKILLS, skillMpCost, SHIELD_MS, BUFF, withBuffs, buffTakenMult, type DmgKind } from './systems/pvpCombat.ts';
@@ -202,7 +203,7 @@ export class GameWorld {
         const p = this.players.get(sessionId); if (!p || !this.econ) return;
         if (process.env.FDN_DEBUG_TRUST_SAVE === '1') { if (this.econ.debugReplace(p, raw)) this.restat(p, true); this.econ.snapshot(p); return; }
         if (!p.econ && this.econ.createFromSave(p, raw)) { this.restat(p, true); p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; this.sendVitals(p, true); }
-        if (p.econ) { this.econ.persistVitals(p); if (!p.econSynced) { this.econ.snapshot(p); p.econSynced = true; } }
+        if (p.econ) { this.econ.persistVitals(p); if (!p.econSynced) { this.econ.snapshot(p); p.econSynced = true; p.send(M.dailyShopState(dailyOffers(), this.econ.starSoldToday())); } }
     }
     /** Reconexión dentro de la gracia: mismo jugador, socket nuevo; se le manda de nuevo el estado. */
     resendEconomy(sessionId: string): void { const p = this.players.get(sessionId); if (p?.econ) { this.econ?.snapshot(p); p.econSynced = true; } }

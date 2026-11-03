@@ -170,3 +170,51 @@ test('reforja: re-tira un extra elegido, cobra piedras + oro y duplica el costo 
     eco.reforge(p, cx, 'armero_s', comun.u, 0);
     assert.equal(lastResult(log)?.code, 'no_extras');
 });
+
+// ---------- oferta del día ----------
+test('oferta del día: determinística por día UTC, estrella con roll visible y stock 1 global', async () => {
+    const { dailyOffers, dailyStar, dayKey, STAR_CHANCE, DAILY_INDEX_BASE } = await import('../src/dailyShop.ts');
+    const d0 = Date.UTC(2026, 10, 3, 12), rnd = Math.random;
+    try {
+        Math.random = () => { throw new Error('la oferta no puede depender de Math.random'); };
+        assert.deepEqual(dailyOffers(d0), dailyOffers(d0), 'mismo día, misma oferta');
+        assert.notEqual(dayKey(d0), dayKey(d0 + 86_400_000));
+    } finally { Math.random = rnd; }
+    // la estrella aparece más o menos STAR_CHANCE de los días, nunca es de jefe y su precio es caro
+    let stars = 0;
+    for (let d = 0; d < 400; d++) {
+        const s = dailyStar(d0 + d * 86_400_000);
+        if (!s) continue;
+        stars++;
+        assert.ok(!s.u.uniq.boss, 'los de jefe no se venden');
+        assert.ok([2, 3].includes(s.offer.quality));
+        assert.ok(s.offer.price >= 1000, `precio ${s.offer.price}`);
+        assert.ok(s.offer.attrs.length === s.u.uniq.attrs.length + (s.offer.quality >= 2 ? 2 : 1), 'roll visible completo');
+    }
+    assert.ok(Math.abs(stars / 400 - STAR_CHANCE) < 0.08, `estrellas ${stars}/400`);
+    // compra: el primero se la lleva, el segundo ve 'sold'; comprar en otro NPC falla
+    const { eco, reg, join } = setup();
+    const world = reg.ensure('solmar_legacy');
+    const A = join(world, 'Uno'), B = join(world, 'Dos');
+    const cx = ctx([{ id: 'mercader_s', x: 11, y: 11 }, { id: 'armero_s', x: 11, y: 11 }]);
+    // busco un día con estrella para que el índice exista siempre
+    let now = Date.now();
+    while (!(await import('../src/dailyShop.ts')).dailyStar(now)) now += 86_400_000;
+    const realNow = Date.now; Date.now = () => now;
+    try {
+        const offers = dailyOffers(now), starIdx = offers.findIndex((o) => o.star);
+        A.p.econ!.gold = 10 ** 9; B.p.econ!.gold = 10 ** 9;
+        eco.buy(A.p, cx, 'armero_s', DAILY_INDEX_BASE + starIdx);
+        assert.equal(lastResult(A.log)?.code, 'no_stock', 'solo el mercader');
+        eco.buy(A.p, cx, 'mercader_s', DAILY_INDEX_BASE + starIdx);
+        assert.equal(lastResult(A.log)?.ok, true);
+        const bought = A.p.econ!.bag.at(-1)!;
+        assert.deepEqual(bought.a, offers[starIdx].attrs, 'el roll comprado es el publicado');
+        assert.equal(bought.r, offers[starIdx].quality);
+        eco.buy(B.p, cx, 'mercader_s', DAILY_INDEX_BASE + starIdx);
+        assert.equal(lastResult(B.log)?.code, 'sold', 'stock 1 de todo el server');
+        // las líneas comunes no se agotan
+        eco.buy(B.p, cx, 'mercader_s', DAILY_INDEX_BASE);
+        assert.equal(lastResult(B.log)?.ok, true);
+    } finally { Date.now = realNow; }
+});
