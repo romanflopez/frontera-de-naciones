@@ -217,4 +217,26 @@ export const BOSS_KITS: Partial<Record<MobType, BossKit>> = {
         enrage: { atHp: 0.25, dmg: 1.5, castSpeed: 0.7 },
         hardEnrage: { secs: 480, dmg: 3 },
     },
+    // Jefe de mundo (T4, nivel 20): pelea abierta para varias parties y, en mapa de facción, con la otra nación cerca. Mecánicas de sala
+    // simples de leer (piso que tiembla, derrumbe cortable, puño al tanque) y adds que obligan a repartirse.
+    coloso: {
+        abilities: [
+            { kind: 'telegraph', id: 'temblor', name: 'Temblor', every: 9, first: 4, warnMs: 1300, at: 'random', r: 3.2, dmgK: 1.2, stun: 1 },
+            { kind: 'cast', id: 'derrumbe', name: 'Derrumbe', school: 'fis', castMs: 2500, every: 14, first: 9, effect: { r: 14, pctHp: 0.5 } },
+            { kind: 'tankHit', id: 'puno', name: 'Puño de roca', every: 11, first: 8, warnMs: 900, mult: 3, bleed: { pct: 0.03, ticks: 5, maxStacks: 3 } },
+            { kind: 'pull', id: 'avalancha', name: 'Avalancha', every: 24, first: 18, r: 12, blastR: 3.2, warnMs: 1600, dmgK: 2.5 },
+        ],
+        adds: [
+            { atHp: 0.6, text: 'Del suelo se levantan guardianes de piedra.', spawn: [{ type: 'minotaur', n: 2, lvl: 20 }] },
+            { atHp: 0.3, text: 'Del suelo se levantan guardianes de piedra.', spawn: [{ type: 'minotaur', n: 2, lvl: 20 }, { type: 'skeleton_mage', n: 1, lvl: 20, kit: 'hechicero', name: 'Brujo de las rocas' }] },
+        ],
+        enrage: { atHp: 0.25, dmg: 1.5, castSpeed: 0.7 },
+        hardEnrage: { secs: 600, dmg: 3 },
+    },
 };
+
+/**
+ * Jefe de mundo del MVP (docs/JEFE_DE_MUNDO.md): uno solo, sale una vez por día a una hora al azar (para que no lo campeen) en uno de los
+ * mapas abiertos de su tier, también al azar. Si nadie lo mata en `lifeMin` minutos, se va.
+ */
+export const WORLD_BOSS = { type: 'coloso' as MobType, tier: 4, lifeMin: 40, /** ventana del día (hora de Argentina) en la que puede salir */ fromHour: 10, toHour: 23 };

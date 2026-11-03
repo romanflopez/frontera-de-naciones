@@ -39,6 +39,7 @@ test('tiers: los jefes de mazmorra quedan en el tope de su tier y conservan ~11 
     for (const [t, L] of Object.entries(BOSS_LEVELS)) {
         const b = MOBS[t as keyof typeof MOBS];
         assert.equal(b.lvl, L, t);
+        if (t === 'coloso') { assert.ok(b.hp > 2.5 * MOBS.mago_mayor.hp, 'el jefe de mundo es para varias parties: ~3 veces el jefe de mazmorra de su nivel'); continue; }
         const k = b.hp / mobHpCurve(L); assert.ok(k > 8 && k < 18, `${t}: ${k.toFixed(1)} veces la curva`);
     }
 });

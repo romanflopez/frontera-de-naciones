@@ -7,11 +7,12 @@ export type MobType = 'goblin' | 'zombie' | 'skeleton' | 'barbaro' | 'goblin_eli
     // jefes de mazmorra de grupo (docs/MAPAS_FLARE.md §5)
     | 'goblin_jefe' | 'antlion_reina' | 'caballero_cripta' | 'mago_mayor' | 'wyvern_aire' | 'demonio_foso'
     // jefe de la mazmorra del T7 (D7)
-    | 'verdugo';
+    | 'verdugo'
+    | 'coloso';
 /** Orden fijo: el protocolo manda el índice del tipo. */
 export const MOB_TYPES: MobType[] = ['goblin', 'zombie', 'skeleton', 'barbaro', 'goblin_elite', 'antlion', 'skeleton_mage', 'fire_ant', 'wyvern', 'minotaur', 'arana', 'golem', 'demonio',
     'hobgoblin', 'hobgoblin_archer', 'skeleton_archer', 'zombie_dark', 'cursed_grave', 'ice_ant', 'antlion_small', 'wyvern_fire', 'wyvern_ice',
-    'goblin_jefe', 'antlion_reina', 'caballero_cripta', 'mago_mayor', 'wyvern_aire', 'demonio_foso', 'verdugo'];
+    'goblin_jefe', 'antlion_reina', 'caballero_cripta', 'mago_mayor', 'wyvern_aire', 'demonio_foso', 'verdugo', 'coloso'];
 /** Habilidad de boss: cada `every` s, si el jugador está a menos de `range`, carga un golpe y lo lanza a los 0,8 s. Alcanza a quien esté a menos de `r`. */
 export interface BossSpecial { name: string; every: number; range: number; r: number; dmg?: [number, number]; stun?: number; col: string }
 export interface BossDef { respawn: number; minRar: number; gold: [number, number]; special: BossSpecial }
@@ -60,6 +61,9 @@ export const MOBS: Record<MobType, MobDef> = {
     // sprite del minotauro de Flare. Sus mecánicas están en bosses.ts (BOSS_KITS); `special` queda de respaldo.
     verdugo: { name: 'Gran Verdugo', lvl: 40, hp: 70000, dmg: [92, 138], spd: 1.5, ref: 2.4, exp: 9000, hitR: 40, head: 130, atk: 1.8, sprite: 'minotaur', boss: { respawn: 420, minRar: 3, gold: [700, 1100], special: { name: 'Hachazo', every: 10, range: 4, r: 3.4, dmg: [120, 170], stun: 1.2, col: '#c0392b' } } },
     demonio_foso: { name: 'Señor del Foso', lvl: 12, hp: 6200, dmg: [40, 60], spd: 1.5, ref: 2.4, exp: 2000, hitR: 44, head: 120, atk: 1.7, sprite: 'demonio', boss: { respawn: 360, minRar: 3, gold: [220, 340], special: { name: 'Salto sísmico', every: 10, range: 4.5, r: 3.4, dmg: [50, 70], stun: 1.2, col: '#ff5a3c' } } },
+    // jefe de mundo (docs/JEFE_DE_MUNDO.md): uno por día, a hora al azar, en un mapa abierto al azar del T4. Pensado para varias parties: ~3 veces
+    // la vida del Mago mayor. Usa el sprite del gólem; sus mecánicas están en bosses.ts.
+    coloso: { name: 'Coloso de piedra', lvl: 11, hp: 13800, dmg: [32, 48], spd: 1.1, ref: 2.4, exp: 2400, hitR: 50, head: 112, atk: 2.0, sprite: 'golem', boss: { respawn: 86400, minRar: 3, gold: [280, 460], special: { name: 'Temblor', every: 10, range: 4, r: 3.4, dmg: [30, 44], stun: 1, col: '#c9a26b' } } },
 };
 
 /** Segundos hasta que reaparece un mob muerto. */
@@ -79,7 +83,7 @@ export const mobExpCurve = (l: number): number => (60 * Math.pow(l, 1.5)) / 11;
  * D2 = 10 … D6 = 30). Los números de arriba son los de diseño a su nivel viejo; acá se llevan al nuevo con las mismas curvas que los mobs
  * comunes (vida, daño, exp, daño de la habilidad y oro), así que conservan su peso relativo (~11 veces un mob común de su nivel).
  */
-export const BOSS_LEVELS: Partial<Record<MobType, number>> = { goblin_jefe: 5, antlion_reina: 10, caballero_cripta: 15, mago_mayor: 20, wyvern_aire: 25, demonio_foso: 30, verdugo: 40 };
+export const BOSS_LEVELS: Partial<Record<MobType, number>> = { goblin_jefe: 5, antlion_reina: 10, caballero_cripta: 15, mago_mayor: 20, wyvern_aire: 25, demonio_foso: 30, verdugo: 40, coloso: 20 };
 for (const [t, L] of Object.entries(BOSS_LEVELS) as [MobType, number][]) {
     const b = MOBS[t], o = b.lvl; if (o === L || !b.boss) continue;
     const kh = mobHpCurve(L) / mobHpCurve(o), kd = mobDmgCurve(L) / mobDmgCurve(o), ke = mobExpCurve(L) / mobExpCurve(o), kg = L / o, sp = b.boss.special;
