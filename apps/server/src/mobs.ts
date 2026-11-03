@@ -8,7 +8,7 @@ import * as M from './messages.ts';
 import type { Player } from './player.ts';
 import { hasBuff } from './systems/statusSystem.ts';
 import { BUFF, BURN_EVERY, BURN_TICKS, PVP_SPELLS, SKILLS, aoeMult, burnTickDmg, rollSpellDamage, spellDmgKind, threatOf } from './systems/pvpCombat.ts';
-import { ANTI_DAMAGE_MULT, CRIT_MULT, EXPLOSION_MULT, EXPLOSION_RADIUS, FLEE_HP_FRAC, FLEE_SECS, FLEE_SPEED_MULT, MUTANT_CHANCE, POISON_SECS, SKILL_CHANCE, SKILL_TRAITS, TOXIC_FRACTION, TOXIC_TICKS, TRAIT_ANTI_MAGIC, TRAIT_ANTI_PHYS, TRAIT_EXPLOSIVE, TRAIT_MUTANT, TRAIT_TOXIC, TRAIT_WILD, fleeChance, traitDmgMult, traitHpMult } from '@fdn/world';
+import { ELITE_AGGRO_BONUS, TRAIT_ELITE, dungeonPartyScale, isEliteSlot, ANTI_DAMAGE_MULT, CRIT_MULT, EXPLOSION_MULT, EXPLOSION_RADIUS, FLEE_HP_FRAC, FLEE_SECS, FLEE_SPEED_MULT, MUTANT_CHANCE, POISON_SECS, SKILL_CHANCE, SKILL_TRAITS, TOXIC_FRACTION, TOXIC_TICKS, TRAIT_ANTI_MAGIC, TRAIT_ANTI_PHYS, TRAIT_EXPLOSIVE, TRAIT_MUTANT, TRAIT_TOXIC, TRAIT_WILD, fleeChance, traitDmgMult, traitHpMult } from '@fdn/world';
 
 type Pkt<K extends string> = Extract<NonNullable<ClientMessage['payload']>, { $case: K }>['value'];
 
@@ -36,6 +36,12 @@ export interface MobHost {
     /** Murió un mob con dueño del golpe final: el mundo tira el botín de suelo (systems/loot.ts). Opcional (tests). */
     mobDied?(info: { type: MobType; def: MobDef; x: number; y: number; gm: boolean }): void;
 }
+
+/**
+ * Reglas de mazmorra (docs/MAZMORRAS.md). En una instancia de mazmorra: lo que muere queda muerto (jefe incluido) y las zonas de mazmorra
+ * (`tier: 'dungeon'`) tienen élites fijos. El escalado por party se aplica después con `setPartyScale`.
+ */
+export interface MobSimOptions { noRespawn?: boolean; elites?: boolean }
 
 interface SimMob {
     id: number; type: MobType; def: MobDef; typeIdx: number; zone: Zone; zoneIdx: number;
@@ -73,8 +79,10 @@ export class MobSim {
     private readonly budget = new WeakMap<Player, Budget>();
     /** Celdas donde puede nacer un mob de cada zona (caminables, fuera de la zona segura, dentro del cuadrado ±r): se calculan una vez. */
     private readonly spawnCells: Int32Array[] = [];
+    /** Escalado por party de la instancia (vida y daño); ×1 fuera de las mazmorras. */
+    private scale = { hp: 1, dmg: 1 };
 
-    constructor(private readonly map: WorldMap, private readonly host: MobHost) {
+    constructor(private readonly map: WorldMap, private readonly host: MobHost, private readonly opts: MobSimOptions = {}) {
         this.N = map.size;
         map.zones.forEach((z, zi) => {
             const cells: number[] = [];
@@ -83,13 +91,33 @@ export class MobSim {
                     if (this.walk(x, y) && !map.safe[y]?.[x]) cells.push(y * this.N + x);
             this.spawnCells[zi] = Int32Array.from(cells);
         });
-        map.zones.forEach((z, zi) => { for (let i = 0; i < z.n; i++) this.spawn(z, zi); });
+        map.zones.forEach((z, zi) => { for (let i = 0; i < z.n; i++) this.spawn(z, zi, !!opts.elites && z.tier === 'dungeon' && isEliteSlot(zi, i, z.n)); });
     }
+
+    /**
+     * Escalado por party (`dungeonPartyScale`): la instancia lo fija con la cantidad de jugadores que entraron juntos. Reescala la vida de
+     * los mobs que todavía no pelearon (quietos y con la vida llena) y el daño de todos de acá en adelante.
+     */
+    setPartyScale(n: number): { hp: number; dmg: number } {
+        const next = dungeonPartyScale(n);
+        for (const m of this.mobs.values()) {
+            if (m.dead || m.gm || m.state !== 'idle' || m.hp < m.hpMax) continue;
+            m.hpMax = Math.max(1, Math.round(m.def.hp * traitHpMult(m.traits) * next.hp)); m.hp = m.hpMax; // siempre desde la vida base: sin arrastrar redondeos
+        }
+        this.scale = next;
+        return next;
+    }
+    get partyScale(): { hp: number; dmg: number } { return this.scale; }
+    /** Multiplicador de daño de un mob: rasgos × escalado por party. */
+    private dmgMult(m: SimMob): number { return traitDmgMult(m.traits) * this.scale.dmg; }
+    private aggroOf(m: SimMob): number { return (m.zone.aggro ?? MOB_AGGRO) + (m.traits & TRAIT_ELITE ? ELITE_AGGRO_BONUS : 0); }
 
     get count(): number { return this.mobs.size; }
     /** Mobs que se simularon en el último update (los quietos lejos de todo jugador duermen). */
     awake = 0;
     /** Cantidad de mobs vivos de cada zona (por índice en map.zones): para los tests y las mediciones. */
+    /** Mobs vivos con sus rasgos y vida máxima (tests). */
+    detail(): { id: number; zoneIdx: number; traits: number; hp: number; hpMax: number; boss: boolean }[] { return [...this.mobs.values()].filter((m) => !m.dead).map((m) => ({ id: m.id, zoneIdx: m.zoneIdx, traits: m.traits, hp: m.hp, hpMax: m.hpMax, boss: !!m.def.boss })); }
     countByZone(): number[] { const out = this.map.zones.map(() => 0); for (const m of this.mobs.values()) if (!m.dead) out[m.zoneIdx]++; return out; }
     /** Mobs vivos con posición (tests). */
     list(): { id: number; zoneIdx: number; x: number; y: number; hp: number }[] { return [...this.mobs.values()].filter((m) => !m.dead).map((m) => ({ id: m.id, zoneIdx: m.zoneIdx, x: m.x, y: m.y, hp: m.hp })); }
@@ -98,7 +126,7 @@ export class MobSim {
     private isSafe(gx: number, gy: number) { const x = Math.floor(gx), y = Math.floor(gy); return x >= 0 && y >= 0 && x < this.N && y < this.N && this.map.safe[y][x]; }
     private now() { return Date.now() / 1000; }
 
-    private spawn(z: Zone, zi: number) {
+    private spawn(z: Zone, zi: number, elite = false) {
         const cells = this.spawnCells[zi]; if (!cells?.length) return;
         // celda al azar entre las válidas; en los pits densos se prueba un par de veces para no nacer encima de otro mob
         let x = 0, y = 0;
@@ -109,8 +137,8 @@ export class MobSim {
             if (!crowded) break;
         }
         {
-            const d = mobDef(z.type, z), T = this.now(), id = this.nextId++, traits = this.rollTraits(z, d);
-            const hpMax = Math.round(d.hp * traitHpMult(traits));
+            const d = mobDef(z.type, z), T = this.now(), id = this.nextId++, traits = this.rollTraits(z, d, elite);
+            const hpMax = Math.round(d.hp * traitHpMult(traits) * this.scale.hp);
             this.mobs.set(id, {
                 id, type: z.type, def: d, typeIdx: MOB_TYPES.indexOf(z.type), zone: z, zoneIdx: zi, x: x + 0.5, y: y + 0.5, hp: hpMax, hpMax,
                 state: 'idle', target: null, lastAttacker: null, wx: x + 0.5, wy: y + 0.5, wait: Math.random() * 2, nextAtk: 0, nextSp: T + 4, busy: 0,
@@ -121,12 +149,12 @@ export class MobSim {
     }
 
     /** Rasgos al nacer: los jefes no tienen; los mobs sueltos son salvajes (+25 % de exp); en pozos y mazmorras puede salir un mutante y/o una habilidad. */
-    private rollTraits(z: Zone, d: MobDef): number {
+    private rollTraits(z: Zone, d: MobDef, elite = false): number {
         if (d.boss) return 0;
-        let t = 0;
+        let t = elite ? TRAIT_ELITE : 0;
         if (z.name.startsWith('Merodeadores')) t |= TRAIT_WILD;
         else {
-            if (Math.random() < MUTANT_CHANCE) t |= TRAIT_MUTANT;
+            if (!elite && Math.random() < MUTANT_CHANCE) t |= TRAIT_MUTANT; // un élite nunca es mutante
             if (Math.random() < SKILL_CHANCE) t |= SKILL_TRAITS[Math.floor(Math.random() * SKILL_TRAITS.length)];
         }
         return t;
@@ -180,7 +208,7 @@ export class MobSim {
         if (target) m.target = target.playerId;
         if (m.state === 'chase') return;
         m.state = 'chase';
-        const T = this.now(), assist = Math.min(MOB_ASSIST, (m.zone.aggro ?? MOB_AGGRO) * 0.7);
+        const T = this.now(), assist = Math.min(MOB_ASSIST, this.aggroOf(m) * 0.7);
         for (const o of this.mobs.values()) if (o !== m && o.state === 'idle' && o.zone === m.zone && Math.hypot(o.x - m.x, o.y - m.y) < assist) { o.state = 'chase'; o.target = m.target; o.nextAtk = T + 0.4 + Math.random() * 0.6; }
     }
 
@@ -275,7 +303,7 @@ export class MobSim {
             if (m.par > T) continue;
             const d = m.def, home = { x: m.zone.x + 0.5, y: m.zone.y + 0.5 };
             if (m.state === 'idle') {
-                const near = this.nearestPlayer(m, m.zone.aggro ?? MOB_AGGRO);
+                const near = this.nearestPlayer(m, this.aggroOf(m));
                 if (near) this.aggro(m, near);
                 else {
                     m.wait -= dt;
@@ -316,7 +344,7 @@ export class MobSim {
                 } else if (dp <= 1.5 && T >= m.nextAtk) {
                     m.nextAtk = T + d.atk;
                     this.broadcastNear(m, M.mobAttack(m.id, px, py));
-                    const dmg = Math.round(rint(d.dmg[0], d.dmg[1]) * traitDmgMult(m.traits)), tid = tgt.playerId;
+                    const dmg = Math.round(rint(d.dmg[0], d.dmg[1]) * this.dmgMult(m)), tid = tgt.playerId;
                     this.host.after(200, () => {
                         const p = this.host.playerById(tid);
                         if (!this.mobs.has(m.id) || m.par > this.now() || !this.eligible(p)) return;
@@ -354,7 +382,7 @@ export class MobSim {
         const travel = Math.max(120, Math.round((dp / rg.speed) * 1000));
         this.broadcastNear(m, M.mobAttack(m.id, px, py));
         this.broadcastNear(m, M.mobProjectile(m.id, m.x, m.y, px, py, travel, rg.kind));
-        const dmg = Math.round(rint(d.dmg[0], d.dmg[1]) * traitDmgMult(m.traits)), tid = tgt.playerId;
+        const dmg = Math.round(rint(d.dmg[0], d.dmg[1]) * this.dmgMult(m)), tid = tgt.playerId;
         this.host.after(travel, () => {
             const p = this.host.playerById(tid);
             if (!this.mobs.has(m.id) || !this.eligible(p)) return;
@@ -388,7 +416,7 @@ export class MobSim {
             this.broadcastNear(m, M.mobSpecialEvent(m.id, 1, m.x, m.y));
             for (const p of this.host.nearby(m.x, m.y)) {
                 if (!this.eligible(p) || Math.hypot(m.x - (p.posX + 0.5), m.y - (p.posY + 0.5)) > sp.r) continue;
-                const dmg = sp.dmg ? rint(sp.dmg[0], sp.dmg[1]) : 0, stun = sp.stun ? this.host.stun(p, sp.stun) : 0;
+                const dmg = sp.dmg ? Math.round(rint(sp.dmg[0], sp.dmg[1]) * this.scale.dmg) : 0, stun = sp.stun ? this.host.stun(p, sp.stun) : 0;
                 p.send(M.mobHitPlayer(m.id, dmg, stun)); if (dmg > 0) this.host.hurt(p, dmg, m.def.name, M.mid(m.id), m.id);
             }
         });
@@ -400,12 +428,13 @@ export class MobSim {
         m.dead = true; this.mobs.delete(m.id);
         if (killer) this.host.reward(killer, { mobId: m.id, type: m.type, def: m.def, zoneName: m.zone.name, origin: m.zone.tier === 'dungeon' ? 'dungeon' : m.zone.name.startsWith('Merodeadores') ? 'loose' : 'pit', x: m.x, y: m.y, shard: m.zone.drops?.shard, traits: m.traits }); // una sola vez: el mob ya salió del mapa
         if (m.traits & TRAIT_EXPLOSIVE) { // explosivo: al morir pega a todos los jugadores cercanos (aunque no sea el que lo mató)
-            const dmg = Math.round(((m.def.dmg[0] + m.def.dmg[1]) / 2) * EXPLOSION_MULT * traitDmgMult(m.traits));
+            const dmg = Math.round(((m.def.dmg[0] + m.def.dmg[1]) / 2) * EXPLOSION_MULT * this.dmgMult(m));
             for (const q of this.host.nearby(m.x, m.y)) if (this.eligible(q) && Math.hypot(m.x - (q.posX + 0.5), m.y - (q.posY + 0.5)) <= EXPLOSION_RADIUS) { q.send(M.mobHitPlayer(m.id, dmg, 0)); this.host.hurt(q, dmg, `${m.def.name} (explosión)`, M.mid(m.id), m.id); }
         }
         this.broadcastNear(m, M.mobDied(m.id, killer ? killer.playerId : 0n, m.x, m.y, m.typeIdx, m.zoneIdx));
         if (killer) this.host.mobDied?.({ type: m.type, def: m.def, x: m.x, y: m.y, gm: !!m.gm }); // después del mobDied: el cliente ya sacó al mob cuando aparece el botín
-        if (!m.gm) this.host.after(zoneRespawnSecs(m.type, m.zone) * 1000, () => this.spawn(m.zone, m.zoneIdx));
+        // en una instancia de mazmorra lo que muere queda muerto (jefe incluido); para repetir hay que entrar a una corrida nueva
+        if (!m.gm && !this.opts.noRespawn) this.host.after(zoneRespawnSecs(m.type, m.zone) * 1000, () => this.spawn(m.zone, m.zoneIdx, !!(m.traits & TRAIT_ELITE))); // un élite renace élite
     }
 
     private sendSnapshots() {
@@ -415,7 +444,7 @@ export class MobSim {
             const list = [];
             for (const m of this.mobs.values()) {
                 if (Math.abs(m.x - p.posX) > VIEW_X || Math.abs(m.y - p.posY) > VIEW_Y) continue;
-                list.push({ id: m.id, type: m.typeIdx, zone: m.zoneIdx, x: m.x, y: m.y, hp: Math.max(0, Math.round(m.hp)), par: Math.max(0, m.par - T), imm: Math.max(0, m.imm - T), poison: m.poison > T, moving: m.moving, traits: m.traits });
+                list.push({ id: m.id, type: m.typeIdx, zone: m.zoneIdx, x: m.x, y: m.y, hp: Math.max(0, Math.round(m.hp)), par: Math.max(0, m.par - T), imm: Math.max(0, m.imm - T), poison: m.poison > T, moving: m.moving, traits: m.traits, hpMax: m.hpMax });
             }
             p.send(M.mobsSnapshot(list));
         }
