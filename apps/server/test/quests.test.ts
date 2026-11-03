@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
 import {
     DAILY_LIMIT, DAILY_QUESTS, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, MAPS, REPEAT_MATS, applyQuestEvent, buildMap, cleanQuestBook, dailyEligible, mobDef, msToReset,
-    newQuestBook, questDay, expToLevel, rewardUniques, roleOf, rollDailies, TRAIT_MUTANT, type MobType,
+    newQuestBook, questDay, expToLevel, DUNGEON_KEY, KEY_MAT_NAMES, rewardUniques, roleOf, rollDailies, TRAIT_MUTANT, type MobType,
 } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { Economy, type EconCtx, type KillInfo } from '../src/economy.ts';
@@ -309,4 +309,16 @@ test('quests en party: el encargo PvP le cuenta a cada compañero cerca con sus 
         assert.ok(B.econ!.qb!.d.done.includes('frontera'), 'el compañero cerca también');
         assert.equal(C.econ!.qb!.d.prog.frontera, 0, 'a cada uno con su regla de nivel');
     } finally { setParties(undefined); }
+});
+
+test('encargo de dungeon: al cumplirlo devuelve una llave de ese dungeon, una sola vez por día', () => {
+    const { st, kill } = setup();
+    st.lvl = 15; st.mats = {};
+    st.qb!.d = { day: questDay(Date.now()), ids: ['dia_d3'], prog: { dia_d3: 0 }, done: [], ess: true, pvp: [] };
+    kill('caballero_cripta', { origin: 'dungeon', map: DUNGEON_MAP.d3 });
+    assert.ok(st.qb!.d.done.includes('dia_d3'));
+    assert.equal(st.mats[DUNGEON_KEY.d3], 1, 'una llave para volver a entrar');
+    kill('caballero_cripta', { origin: 'dungeon', map: DUNGEON_MAP.d3 });
+    assert.equal(st.mats[DUNGEON_KEY.d3], 1, 'la segunda corrida del día no da otra');
+    for (const d of DUNGEON_IDS) assert.ok(DUNGEON_KEY[d] && KEY_MAT_NAMES[DUNGEON_KEY[d]], `${d} tiene llave`);
 });

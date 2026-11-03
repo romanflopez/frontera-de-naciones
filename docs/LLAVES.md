@@ -35,3 +35,7 @@ Estado: **implementado para los seis dungeons** (2/11/2026). D7 no existe todav�
 - D7 (cuando exista el mapa).
 - Íconos propios (hoy usan los de la llave y la esquirla viejas).
 - Si en la prueba se ven más de ~2 corridas por hora sostenidas: "botín del jefe 1 vez cada 20 h".
+
+
+## Encargo del día de dungeon: una llave de vuelta
+Cada encargo del día de dungeon (D1 a D7, el de tu tramo) se puede cumplir una vez por día y, al cobrarse, además del oro y la exp **devuelve una llave de ese dungeon** (`DUNGEON_KEY` en `quests.ts`). El ciclo: farmeás los materiales, armás la llave, matás al jefe, el encargo te da otra y repetís la corrida gratis; para una tercera, a farmear. En party le toca a cada uno (las quests cuentan para todos los cercanos). Entra dentro del tope de 3 encargos por día.

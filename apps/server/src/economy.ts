@@ -13,7 +13,7 @@ import {
     MAPS, SHOPS, SLOTS, SRV_ATTR, TRAINING, buildMap, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statBonus, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, mobDef, sellPrice, trainingUnlocked,
     BOSS_UNIQUES, UNIQUES_BY_TIER, UNIQUE_BASES, UP_MAX, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, tierOfLvl, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
-    DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
+    DAILY_BY_ID, DAILY_EXP_PCT, DUNGEON_KEY, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
     mainComplete, newQuestBook, repeatGold, rewardUniques, rollDailies, type QuestBook, type QuestEvent, type QuestHave, type QuestReward,
 } from '@fdn/world';
 import { RARITY_INDEX, rollMobDrop, type GeneratedItem } from './loot/itemGenerator.ts';
@@ -566,6 +566,9 @@ export class Economy {
         const r = this.payReward(st, { expPct: DAILY_EXP_PCT, gold: dailyGold(st.lvl) }, ''); if (!r.ok) return;
         let ess = '';
         if (!b.d.ess) { b.d.ess = true; const mats = (st.mats ??= {}); mats.esencia = Math.min(9999, (mats.esencia ?? 0) + 1); ess = ' Y por ser el primero del día, una Esencia.'; }
+        // encargo de dungeon: devuelve una llave de ese dungeon, así la corrida que armaste con materiales se repite una vez gratis
+        const key = dq.goal.k === 'dungeon' ? DUNGEON_KEY[dq.goal.d] : undefined;
+        if (key) { const mats = (st.mats ??= {}); mats[key] = Math.min(99, (mats[key] ?? 0) + 1); ess += ` Y una ${keyMatName(key)} para volver a entrar.`; }
         const left = DAILY_LIMIT - b.d.done.length;
         p.send(M.econResult(true, r.ups ? 'level_up' : 'daily_done', `Encargo cumplido: «${dq.name}»: ${r.text}${ess}${left > 0 ? ` (te quedan ${left} hoy)` : ' Ya cobraste los 3 de hoy.'}`));
 

@@ -56,6 +56,10 @@ export const DUNGEON_ENTRY_KEYS: Record<string, string> = {
     cueva_goblin: MAT_LLAVE_CUEVA, nido_hormiga_leon: MAT_LLAVE_NIDO,
     cripta_olvidada: MAT_LLAVE_CRIPTA, torre_del_hechicero: MAT_LLAVE_TORRE, templo_de_mez: MAT_LLAVE_TEMPLO, fortaleza_infernal: MAT_LLAVE_FORTALEZA, fuerte_amir: MAT_LLAVE_AMIR,
 };
+/** Llave de cada dungeon: la que pide su puerta. El encargo del día de ese dungeon devuelve una (una vez por día). */
+export const DUNGEON_KEY: Record<string, string> = {
+    d1: MAT_LLAVE_CUEVA, d2: MAT_LLAVE_NIDO, d3: MAT_LLAVE_CRIPTA, d4: MAT_LLAVE_TORRE, d5: MAT_LLAVE_TEMPLO, d6: MAT_LLAVE_FORTALEZA, d7: MAT_LLAVE_AMIR,
+};
 /** Lo que falta para armar `key` con `mats` y `gold`, o null si alcanza. */
 export function keyMissing(key: string, mats: Record<string, number>, gold: number): string | null {
     const r = KEY_RECIPES[key]; if (!r) return 'Esa llave no se arma.';
