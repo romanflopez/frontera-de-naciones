@@ -30,6 +30,8 @@ export interface BossHost {
     roll(m: BossMob): number;
     hurt(p: Player, raw: number, source: string, m: BossMob): void;
     stun(p: Player, secs: number): number;
+    /** ¿Ya está aturdido o congelado? (el terror no mueve a alguien que no se puede mover). */
+    held(p: Player): boolean;
     slow(p: Player, secs: number): void;
     poison(p: Player, secs: number): void;
     after(ms: number, fn: () => void): void;
@@ -190,11 +192,16 @@ function telegraph(h: BossHost, m: BossMob, s: BossState, a: BossTelegraphDef, t
     });
 }
 
-/** Terror: el jugador sale despedido unas celdas lejos del jefe y queda aterrado (sin poder actuar). */
+/**
+ * Terror: el jugador sale despedido unas celdas lejos del jefe y queda aterrado (sin poder actuar).
+ * Respeta el control (tabla de ataque, docs/COMBATE.md): si ya estaba aturdido o congelado no se mueve, y si es inmune
+ * (Bendición sagrada, Purga o rendimiento decreciente) no pasa nada: ni empujón ni aterrado.
+ */
 function terrify(h: BossHost, m: BossMob, p: Player, secs: number): void {
+    const held = h.held(p);
+    if (h.stun(p, secs) <= 0 || held) return;
     const px = p.posX + 0.5, py = p.posY + 0.5, dx = px - m.x, dy = py - m.y, d = Math.hypot(dx, dy) || 1;
     h.push(p, px + (dx / d) * 4, py + (dy / d) * 4);
-    h.stun(p, secs);
 }
 
 function pull(h: BossHost, m: BossMob, s: BossState, a: BossPullDef, T: number): void {

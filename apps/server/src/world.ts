@@ -87,7 +87,12 @@ export class GameWorld {
                         this.setTimeout(1, () => { if (!p.disconnected && p.world === this) this.mobSim?.skillHit(p, mobId, back, 0, 'represalia'); });
                     }
                 },
-                stun: (p, secs) => { const ms = applyParalysis(p.status, Date.now(), paralysisSecs(secs, p.combat) * 1000, 'aturdir'); return ms / 1000; },
+                stun: (p, secs) => {
+                    const ms = applyParalysis(p.status, Date.now(), paralysisSecs(secs, p.combat) * 1000, 'aturdir');
+                    if (secs > 0 && ms <= 0) p.send(M.pvpHit(p.playerId, { fx: 'resist', x: p.posX, y: p.posY, targetId: 0n, dmg: 0, secs: 0, r: 0 })); // inmune: "Inmune" sobre uno
+                    return ms / 1000;
+                },
+                held: (p) => p.isParalyzed(Date.now()),
                 pay: (p, c) => this.payMp(p, c),
                 heal: (p, n) => this.healPlayer(p, n), // robo de vida, Juicio y Castigo
                 refundMp: (p, n) => this.refundMp(p, n), // Castigo
@@ -554,11 +559,15 @@ export class GameWorld {
                             secs = applyParalysis(tgt.status, now, secs * 1000, STUN_SPELLS.has(spell) ? 'aturdir' : 'paralisis') / 1000;
                             if (secs <= 0) { p.send(M.pvpHit(tgt.playerId, { fx: 'resist', x: tgt.posX, y: tgt.posY, targetId: 0n, dmg: 0, secs: 0, r: 0 })); if (dmg <= 0) break; }
                         }
+                        // Tabla de ataque (docs/COMBATE.md): el escudo va último y no cambia si el golpe "entró". Un golpe que se comió entero
+                        // el escudo igual frena, quema, envenena y devuelve maná; lo que sale de la vida (robo de vida) usa solo lo que pasó.
+                        const shBefore = shieldOf(tgt.status, now);
                         if (dmg > 0) dmg = this.damagePlayer(tgt, dmg, spellDmgKind(spell), p, '', spell === 'ataque' ? '' : spell);              // la vida del que recibe la lleva el server
-                        if (dmg > 0) { // efectos de K3: frenar, quemar, curarse
+                        const landed = dmg > 0 || shieldOf(tgt.status, now) < shBefore;
+                        if (landed) { // efectos de K3: frenar, quemar, curarse
                             if (sp.slow && applySlow(tgt.status, now, sp.slow * 1000) > 0) this.announceStatus(tgt);
                             if (sp.burn) this.burnPlayer(tgt, p);
-                            if (sp.lifesteal) this.healPlayer(p, Math.round(dmg * sp.lifesteal));
+                            if (sp.lifesteal && dmg > 0) this.healPlayer(p, Math.round(dmg * sp.lifesteal));
                             if (sp.refund) this.refundMp(p, sp.refund);
                             if (spellDmgKind(spell) === 'phys' && p.combat.poison > 0 && Math.random() * 100 < p.combat.poison) this.poisonPlayer(tgt, POISON_SECS); // chance de veneno del equipo, como contra los mobs
                         }

@@ -69,6 +69,22 @@ Reglas:
 - Un combo completo saca 40–55% de la barra, no 100%.
 - Duración objetivo de pelea PvP: 1v1 de 20-40 s y 2v2 de hasta ~60 s (kits-de-clase §3). Se mide con `sim:pvp` (K7).
 
+## Tabla de ataque (orden fijo)
+
+Sale de los bugs de la primera semana de Dreadmyst (crítico antes del parry, efectos que no tiraban resistencia, daño en el tiempo que se salteaba los escudos, miedo que ignoraba el aturdido). Vale para PvE y PvP; lo cuida `test/tabla-de-ataque.test.ts` (y el terror, `test/jefes.test.ts`).
+
+| Paso | Qué se decide | Hoy en ERIS | Dónde |
+|---|---|---|---|
+| 1. ¿Pega? | esquiva, parada, bloqueo | **No existe**: todo golpe que llega, entra. Cuando se sume (parada activa, bloqueo con escudo según hacia dónde mirás), va **acá**, antes que todo lo demás | — |
+| 2. Control y efectos secundarios | cada uno tira su propia resistencia/inmunidad | Congelado y aturdido: la RM y la resistencia a parálisis acortan, y la Bendición sagrada, la Purga y el rendimiento decreciente los anulan. Mobs: 8 s de inmunidad después de un control; jefes con motor, inmunes (solo se les corta el casteo). Si no entra, se ve **"Inmune"** | `paralysisSecs`, `applyParalysis`, `MobSim.control` |
+| 3. Crítico | ×1,8 | Solo contra monstruos (golpe básico y Clarividencia); en PvP no hay | `MobSim.hit` |
+| 4. Mitigación y escudo | DF o RM, y después el escudo | El escudo se come el golpe ya mitigado (y ya topeado en PvP), **incluido el daño en el tiempo** (quemaduras, sangrados, charcos de jefe). Un golpe que el escudo se come entero igual **entró**: frena, quema, envenena y devuelve maná; el robo de vida sale solo de lo que pasó a la vida | `damagePlayer`, `pvpHitRequest` |
+
+Reglas que van con la tabla:
+- **El miedo respeta el control.** El terror de los jefes no mueve a quien ya está aturdido o congelado, y si el jugador es inmune no pasa nada (ni empujón ni aterrado). La huida de los mobs (7 % de vida) no arranca ni avanza congelado y corre a la mitad frenado.
+- **El daño en el tiempo propio no rompe el control propio.** Quemaduras y veneno nunca sacan el congelado de un mob; solo un golpe directo de 45 % de su vida o más lo rompe. Contra jugadores el daño no rompe el control.
+- **Un mob que huye no arrastra a otros.** Huyendo no contagia la agresión, y la ayuda entre mobs es solo dentro de su propio pit; el que lo persigue sí puede agarrar otro pit por cercanía.
+
 ## Reglas de PvP (K6, solo jugador contra jugador)
 
 El PvE no cambia. Todo esto vive en `apps/server/src/systems/pvpCombat.ts` (constantes) y `world.ts` (dónde se aplica). Los valores de daño, pociones y maná salen de la calibración con `sim:pvp` (K7, sección siguiente).

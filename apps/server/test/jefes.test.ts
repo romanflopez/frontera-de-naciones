@@ -195,6 +195,18 @@ test('terror real: el Grito saca al jugador despedido lejos del jefe además de 
     assert.ok(Math.hypot(push.x - B.boss().x, push.y - B.boss().y) >= 3.5, 'quedó lejos del jefe');
 });
 
+test('terror respeta el control: si ya estaba aturdido o congelado no lo mueve; si es inmune, ni lo mueve ni lo aterra', () => {
+    const held = arena('goblin_jefe');
+    (held.s as unknown as { host: MobHost }).host.held = () => true;
+    held.run(14, held.casting('Grito de terror')); held.run(2.5);
+    assert.ok(held.hurts.some((h) => /Grito de terror/.test(h.source)), 'el grito pegó');
+    assert.equal(held.pushes.length, 0, 'aturdido: no sale despedido');
+    const imm = arena('goblin_jefe');
+    (imm.s as unknown as { host: MobHost }).host.stun = () => 0; // Bendición sagrada, Purga o rendimiento decreciente
+    imm.run(14, imm.casting('Grito de terror')); imm.run(2.5);
+    assert.equal(imm.pushes.length, 0, 'inmune: tampoco');
+});
+
 test('tirón y explosión: el Vórtice arrastra a todos al jefe y estalla; el que sale del círculo no recibe daño', () => {
     const A = arena('mago_mayor', [{ x: 20, y: 21 }, { x: 26, y: 26 }]);
     assert.ok(A.run(45, () => A.of('bossTelegraph').some((v) => v.name === 'Vórtice')));

@@ -275,11 +275,12 @@ function onServer(m: ServerPayload) {
             break;
         case 'pvpHit': {
             const v = m.value;
+            // control sobre alguien inmune (jefe, Bendición, Purga o rendimiento decreciente): lo avisa el server, venga de quien venga
+            if (v.fx === 'resist') { float(v.x, v.y - 0.5, 'Inmune', '#9fe8ff'); break; }
             if (v.casterId === myId) { // el server me confirma mi golpe con el daño que calculó
                 if (v.secs > 0) float(v.x, v.y - 0.6, 'Paralizado', '#7fd6ff'); break;
             }
             if (v.fx === 'blizz') fx.push({ k: 'blizz', x: v.x, y: v.y, t: 0, r: v.r || 2.7, d: 3.2 }); else if (v.fx) efxLocal(v.fx, v.x, v.y, v.targetId ? 8 : 0);
-            if (v.fx === 'resist') { float(v.x, v.y - 0.5, '¡Resistió!', '#9fe8ff'); break; }
             if (v.targetId === myId && v.secs < 0) { P.frozenUntil = 0; P.immEnd = now() + 8; log('¡Removiste la parálisis! Sos inmune 8 s.', true); break; }
             if (v.targetId === myId && !P.dead) {
                 {
