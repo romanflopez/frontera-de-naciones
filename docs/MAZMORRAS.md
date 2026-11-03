@@ -45,7 +45,7 @@ Los números de los mobs y jefes de mazmorra están pensados para **3 jugadores*
 
 ## Pendiente
 
-- **Densidad:** D1 tiene ~71 mobs y D2 ~125. Sin reaparición alcanza, pero la corrida queda larga. La propuesta (D1 ~25-30, D2 ~40) va con la ubicación de packs y élites sobre el mapa.
+- **Densidad:** primera pasada automática hecha (`DUNGEON_DENSITY` en `packages/world/src/flare/index.ts`): D1 pasó de 75 a **25** mobs (uno de cada dos packs, de 2) y D2 de 141 a **40** (uno de cada tres, de 3), sin sueltos y con el jefe intacto. Falta la ubicación fina de packs y élites a mano sobre el mapa.
 - **Dibujo del élite en el cliente** (marco o color del nombre): hoy solo se ve el prefijo.
 - Llaves por tamaño (solo, dúo, grupo) al estilo Valdrys: hoy el tamaño sale de quién entra junto.
 - Los mobs con aggro no pierden al invisible dentro de las mazmorras.
