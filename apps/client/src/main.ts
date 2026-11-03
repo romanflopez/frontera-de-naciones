@@ -1301,9 +1301,9 @@ cv.addEventListener('pointermove', (e) => { const r = cv.getBoundingClientRect()
 cv.addEventListener('pointerleave', () => { mouse = { x: -1, y: -1 }; });
 
 // ---------- chat por canales: Global, Nación (tu facción), Party; Guild llega más adelante ----------
-const CHAT_NET = new Set<ChatChannel>(['global', 'area', 'party', 'guild', 'nacion']);
+const CHAT_NET = new Set<ChatChannel>(['global', 'comercio', 'area', 'party', 'guild', 'nacion']);
 function chatChannel(c: string): ChatChannel { const k = (c || 'global') as ChatChannel; return CHAT_NET.has(k) ? k : 'global'; }
-const CHAT_HELP = () => `Comandos: /meditar${DEBUG ? ', /look' : ''}; chat: /g global, /a área, /n nación, /p party, /gu guild (pronto); party: /invitar /aceptar /rechazar /salir /expulsar /lider`;
+const CHAT_HELP = () => `Comandos: /meditar${DEBUG ? ', /look' : ''}; chat: /g global, /c comercio, /a área, /n nación, /p party, /gu guild (pronto); party: /invitar /aceptar /rechazar /salir /expulsar /lider`;
 /** Lo que se escribe en el ChatBox: comandos locales, o mensaje al server por el canal de la pestaña (o el del prefijo). */
 chatBus.on('chat:send', ({ text, channel }) => {
     cv.focus({ preventScroll: true });
@@ -1312,8 +1312,8 @@ chatBus.on('chat:send', ({ text, channel }) => {
     if (DEBUG && /^\/look(\s|$)/i.test(text)) { lookCommand(text); return; }
     if (partyCommand(text)) return;
     if (/^\/gm(\s|$)/i.test(text)) { net.send({ $case: 'chatMessageSendRequest', value: { message: text } }); return; } // comandos de GM: los resuelve el server (FDN_GM)
-    const pre = /^\/(gu|g|n|p|a)\s+/i.exec(text);
-    if (pre) { const ch = ({ gu: 'guild', g: 'global', n: 'nacion', p: 'party', a: 'area' } as Record<string, string>)[pre[1].toLowerCase()]; net.send({ $case: 'clientChatMessage', value: { channel: ch, text: text.slice(pre[0].length) } }); return; }
+    const pre = /^\/(gu|g|n|p|a|c)\s+/i.exec(text);
+    if (pre) { const ch = ({ gu: 'guild', g: 'global', n: 'nacion', p: 'party', a: 'area', c: 'comercio' } as Record<string, string>)[pre[1].toLowerCase()]; net.send({ $case: 'clientChatMessage', value: { channel: ch, text: text.slice(pre[0].length) } }); return; }
     if (text.startsWith('/')) { log(CHAT_HELP()); return; }
     if (channel === 'private') { log('Los mensajes privados llegan próximamente.'); return; }
     net.send({ $case: 'clientChatMessage', value: { channel: channel === 'all' || channel === 'system' ? 'global' : channel, text } });

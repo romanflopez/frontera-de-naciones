@@ -1,13 +1,16 @@
 /**
- * Chat por canales: global (todos los conectados), area (los que te ven), party (tu party) y nacion (tu facción).
- * Anti-spam: como mucho 1 mensaje por segundo por jugador.
+ * Chat por canales: global (todos los conectados), comercio (todos, para compraventa), area (los que te ven), party (tu party) y nacion (tu facción).
+ * Anti-spam: como mucho 1 mensaje por segundo y `CHAT_PER_MINUTE` por minuto por jugador.
  */
 import type { ServerMessage } from '@fdn/proto';
 import * as M from '../messages.ts';
 
-export type ChatChannel = 'global' | 'area' | 'party' | 'nacion' | 'guild';
-const CHANNELS = new Set<ChatChannel>(['global', 'area', 'party', 'nacion', 'guild']);
+export type ChatChannel = 'global' | 'comercio' | 'area' | 'party' | 'nacion' | 'guild';
+const CHANNELS = new Set<ChatChannel>(['global', 'comercio', 'area', 'party', 'nacion', 'guild']);
 export const CHAT_THROTTLE_MS = 1000;
+/** Tope de mensajes por minuto (ventana deslizante de 60 s) sumando todos los canales. */
+export const CHAT_PER_MINUTE = 12;
+const MINUTE_MS = 60_000;
 
 export interface ChatDeps {
     maxLength: number;
@@ -26,6 +29,8 @@ export interface ChatSender { sessionId: string; name: string; playerId: string 
 
 export class ChatManager {
     private last = new Map<string, number>();
+    /** Instantes de los últimos mensajes de cada jugador (solo los de los últimos 60 s). */
+    private recent = new Map<string, number[]>();
     constructor(private d: ChatDeps, private now: () => number = Date.now) {}
 
     /** Procesa un ClientChatMessage. Devuelve un texto de error para el que lo mandó, o null si salió. */
@@ -37,10 +42,12 @@ export class ChatManager {
         if (text.length > this.d.maxLength) return `El mensaje no puede pasar los ${this.d.maxLength} caracteres.`;
         const t = this.now(), prev = this.last.get(from.sessionId) ?? -Infinity;
         if (t - prev < CHAT_THROTTLE_MS) return 'Estás escribiendo muy rápido.';
+        const win = (this.recent.get(from.sessionId) ?? []).filter((x) => t - x < MINUTE_MS);
+        if (win.length >= CHAT_PER_MINUTE) { this.recent.set(from.sessionId, win); return `Llegaste al límite de ${CHAT_PER_MINUTE} mensajes por minuto.`; }
 
         let to: Iterable<string>;
         switch (channel) {
-            case 'global': to = this.d.allSessions(); break;
+            case 'global': case 'comercio': to = this.d.allSessions(); break;
             case 'area': to = this.d.viewersOf(from.sessionId); break;
             case 'party': { const ms = this.d.partyOf(from.sessionId); if (!ms.length) return 'No estás en una party.'; to = ms; break; }
             case 'nacion': {
@@ -50,11 +57,12 @@ export class ChatManager {
             case 'guild': return 'Las guilds llegan próximamente.';
         }
         this.last.set(from.sessionId, t);
+        win.push(t); this.recent.set(from.sessionId, win);
         const m = M.serverChat(channel, from.name, text, from.playerId);
         for (const sid of to) this.d.send(sid, m);
         return null;
     }
 
     /** Al desconectarse: libera el estado del throttle. */
-    forget(sid: string): void { this.last.delete(sid); }
+    forget(sid: string): void { this.last.delete(sid); this.recent.delete(sid); }
 }

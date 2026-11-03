@@ -2,11 +2,11 @@
  * Chat + log de combate: abajo a la izquierda, pestañas arriba, mensajes con scroll y el input abajo.
  */
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
-import { CHAT_TABS, chatBus, tabShows, useChatStore, type ChatMessage } from './chatStore';
+import { CHAT_TABS, chatBus, tabShows, useChatStore, type ChatMessage, type ChatTab } from './chatStore';
 
 const GOLD = '#d6a445';
 const NAME_COLOR: Partial<Record<ChatMessage['channel'], string>> = {
-    global: '#5fd3e6', area: '#7be07b', party: '#7fb6ff', guild: '#7fe0b0', nacion: '#e0b04a', private: '#e58fe0',
+    global: '#5fd3e6', comercio: '#e0a96b', area: '#7be07b', party: '#7fb6ff', guild: '#7fe0b0', nacion: '#e0b04a', private: '#e58fe0',
 };
 
 const S: Record<string, CSSProperties> = {
@@ -17,7 +17,8 @@ const S: Record<string, CSSProperties> = {
         font: "13px 'Alegreya Sans', system-ui, sans-serif", color: '#eee',
     },
     tabs: { display: 'flex', gap: 2, padding: '0 4px', borderBottom: '1px solid rgba(255,255,255,.08)', flex: 'none' },
-    tab: { background: 'none', border: 0, borderBottom: '2px solid transparent', color: '#8a8a8a', font: 'inherit', fontSize: 12, padding: '5px 7px 4px', cursor: 'pointer' },
+    tab: { background: 'none', border: 0, borderBottom: '2px solid transparent', color: '#8a8a8a', font: 'inherit', fontSize: 12, padding: '5px 6px 4px', cursor: 'pointer', whiteSpace: 'nowrap' },
+    badge: { display: 'inline-block', minWidth: 14, marginLeft: 4, padding: '0 4px', borderRadius: 8, background: '#b3262f', color: '#fff', fontSize: 10, lineHeight: '14px', textAlign: 'center', verticalAlign: 'top' },
     tabOn: { color: '#f3e3b5', borderBottomColor: GOLD },
     list: { flex: 1, overflowY: 'auto', padding: '4px 8px', lineHeight: 1.35, overflowWrap: 'anywhere' },
     line: { margin: 0 },
@@ -41,8 +42,13 @@ function Line({ m }: { m: ChatMessage }) {
     );
 }
 
+/** A qué canal sale lo que escribís según la pestaña (All y System mandan a Global). */
+const TAB_SAY: Record<ChatTab, string> = {
+    all: 'Global', system: 'Global', global: 'Global', nacion: 'Nación', area: 'Área', comercio: 'Comercio', party: 'Party', guild: 'Guild', private: 'Privado',
+};
+
 export function ChatBox() {
-    const messages = useChatStore((s) => s.messages), tab = useChatStore((s) => s.activeTab), setTab = useChatStore((s) => s.setActiveTab);
+    const messages = useChatStore((s) => s.messages), tab = useChatStore((s) => s.activeTab), setTab = useChatStore((s) => s.setActiveTab), unread = useChatStore((s) => s.unread);
     const shown = useMemo(() => messages.filter((m) => tabShows(tab, m.channel)), [messages, tab]);
     const listRef = useRef<HTMLDivElement>(null);
     const [text, setText] = useState('');
@@ -69,13 +75,15 @@ export function ChatBox() {
         <div style={S.box} className="hud" onMouseDown={(e) => e.stopPropagation()}>
             <div style={S.tabs} role="tablist">
                 {CHAT_TABS.map((t) => (
-                    <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} style={{ ...S.tab, ...(tab === t.id ? S.tabOn : null) }} onClick={() => setTab(t.id)}>{t.label}</button>
+                    <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} style={{ ...S.tab, ...(tab === t.id ? S.tabOn : null) }} onClick={() => setTab(t.id)}>
+                        {t.label}{tab !== t.id && unread[t.id] ? <span style={S.badge} aria-label={`${unread[t.id]} sin leer`}>{unread[t.id]! > 99 ? '99+' : unread[t.id]}</span> : null}
+                    </button>
                 ))}
             </div>
             <div ref={listRef} style={S.list} aria-live="polite">
                 {shown.map((m) => <Line key={m.id} m={m} />)}
             </div>
-            <input id="chatIn" style={S.input} maxLength={200} autoComplete="off" placeholder="Decir:" aria-label="Chat"
+            <input id="chatIn" style={S.input} maxLength={200} autoComplete="off" placeholder={`Decir en ${TAB_SAY[tab]}:`} aria-label={`Chat (${TAB_SAY[tab]})`}
                 value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} />
         </div>
     );

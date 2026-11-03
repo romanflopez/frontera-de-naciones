@@ -257,7 +257,7 @@ wss.on('connection', (ws, req) => {
         saveChar(session.networkId, world?.snapshot(session.sessionId));
         storage.flush(); // la economía se guarda ya al desconectar
         world?.playerDisconnected(session.sessionId, remainsActive);
-        if (!remainsActive) { parties.leave(session.sessionId); sessionsByNetworkId.delete(session.networkId); sessionsById.delete(session.sessionId); }
+        if (!remainsActive) { parties.leave(session.sessionId); chat.forget(session.sessionId); sessionsByNetworkId.delete(session.networkId); sessionsById.delete(session.sessionId); }
     });
 
     ws.on('error', (err) => console.error(`[Server] Error de WebSocket (${remote}):`, err.message));
@@ -348,14 +348,14 @@ function handleGm(s: Session, text: string, reply: (m: ServerMessage) => void): 
 
 /** Chat global: le llega a todos los conectados. Port de GlobalWorld.HandleChatMessageSendRequest. */
 /**
- * Chat por canales (docs/PARTY_Y_ARENAS.md §3): global (por defecto, o `/g `), nación (`/n `, la facción), party (`/p `) y guild (`/gu `, todavía no existe).
+ * Chat por canales (docs/PARTY_Y_ARENAS.md §3): global (por defecto, o `/g `), comercio (`/c `), nación (`/n `, la facción), party (`/p `) y guild (`/gu `, todavía no existe).
  * El canal manda en el mensaje (`channel`) para que el cliente lo pinte distinto.
  */
 function handleChat(sender: Session, raw: string, reply: (m: ServerMessage) => void): void {
     let text = raw.trim(), channel = 'global';
     if (/^\/gm(\s|$)/i.test(text)) { handleGm(sender, text, reply); return; } // comandos de GM (modo GM)
-    const pre = /^\/(gu|g|n|p|a)\s+/i.exec(text);
-    if (pre) { channel = ({ gu: 'guild', g: 'global', n: 'nacion', p: 'party', a: 'area' } as Record<string, string>)[pre[1].toLowerCase()]; text = text.slice(pre[0].length); }
+    const pre = /^\/(gu|g|n|p|a|c)\s+/i.exec(text);
+    if (pre) { channel = ({ gu: 'guild', g: 'global', n: 'nacion', p: 'party', a: 'area', c: 'comercio' } as Record<string, string>)[pre[1].toLowerCase()]; text = text.slice(pre[0].length); }
     const err = chat.handle(chatSender(sender), channel, text);
     if (err) reply(M.sendMessage(err));
 }
