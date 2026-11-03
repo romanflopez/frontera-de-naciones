@@ -293,5 +293,5 @@ export const UP_MAX = 11;
 export const UP_PCT = 0.04;
 export const upMult = (up = 0): number => 1 + UP_PCT * Math.max(0, up);
 /** Piedras de forja y oro que cuesta pasar de +up a +up+1 un ítem de la banda `tier`. */
-export const upStones = (up: number): number => up + 1;
+export const upStones = (up: number): number => 3 * (up + 1);
 export const upGold = (tier: number, up: number): number => Math.round(40 * tier * (up + 1));

@@ -2050,7 +2050,7 @@ function renderTip() {
     const km = upMult(it.up), ru = (n: number) => Math.round(n * km);
     if (it.dmg) base.push(`Daño ${ru(it.dmg[0])}–${ru(it.dmg[1])}`); if (it.def) base.push(`Defensa ${ru(it.def)}`); if (it.rm) base.push(`Res. mágica ${ru(it.rm)}`); if (it.mag) base.push(`+${ru(it.mag)} daño mágico`);
     const un = UNIQUE_BY_NAME.get(it.name), q = Math.min(4, Math.max(0, it.rar.k)), cap = UP_MAX_BY_QUALITY[q] ?? UP_MAX;
-    const upLine = un ? ((it.up ?? 0) < cap ? `<div class="sub">Mejorar a +${(it.up ?? 0) + 1}: ${upStones(it.up ?? 0)} piedra${upStones(it.up ?? 0) > 1 ? 's' : ''} de forja y ${upGold(un.uniq.tier, it.up ?? 0)} de oro (en un herrero)${(it.up ?? 0) >= 5 ? ' · ¡si falla, baja un nivel!' : ''}</div>` : `<div class="sub">Mejora máxima de un ítem ${it.rar.n.toLowerCase()} (+${cap})</div>`) : '';
+    const upLine = un ? ((it.up ?? 0) < cap ? `<div class="sub">Mejorar a +${(it.up ?? 0) + 1}: ${upStones(it.up ?? 0)} piedra${upStones(it.up ?? 0) > 1 ? 's' : ''} de forja y ${upGold(un.uniq.tier, it.up ?? 0)} de oro (en un herrero)${}</div>` : `<div class="sub">Mejora máxima de un ítem ${it.rar.n.toLowerCase()} (+${cap})</div>`) : '';
     // los atributos fijos del catálogo van primero y los extras al azar después (se distinguen: los extras son los que se reforjan)
     const nFixed = un ? un.uniq.attrs.length : it.attrs.length, nExtra = un ? Math.min(EXTRAS_BY_QUALITY[q] ?? 0, Math.max(0, it.attrs.length - nFixed)) : 0;
     const attrList = it.attrs.length

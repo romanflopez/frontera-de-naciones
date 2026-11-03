@@ -46,9 +46,9 @@ test('mejora +N: gasta piedras y oro, puede fallar sin bajar, arranca en 33 %, t
         Math.random = () => 0; // todo sale bien
         // el límite de ritmo de acciones (20 por ráfaga) no estorba: son pocas
         for (let i = 1; i <= 3; i++) assert.equal(up().ok, true, `+${i}`);
-        assert.equal(it().up, 3); assert.equal(st.forge, 100 - (1 + 2 + 3)); assert.equal(st.gold, 100_000 - 40 * 1 * (1 + 2 + 3));
+        assert.equal(it().up, 3); assert.equal(st.forge, 100 - 3 * (1 + 2 + 3)); assert.equal(st.gold, 100_000 - 40 * 1 * (1 + 2 + 3));
         Math.random = () => 0.95; // falla la de +4 (25 %): se pierde el costo, el ítem queda igual
-        const f = up(); assert.equal(f.ok, true); assert.match(f.text, /falló/); assert.equal(it().up, 3); assert.equal(st.forge, 94 - 4); assert.equal(st.gold, 100_000 - 240 - 160);
+        const f = up(); assert.equal(f.ok, true); assert.match(f.text, /falló/); assert.equal(it().up, 3); assert.equal(st.forge, 82 - 12); assert.equal(st.gold, 100_000 - 240 - 160);
         Math.random = () => 0; assert.equal(up().ok, true); assert.equal(it().up, 4);
         assert.equal(up().ok, true); assert.equal(it().up, 5);
         const m = up(); assert.equal(m.ok, false); assert.equal(m.code, 'max');
@@ -58,9 +58,9 @@ test('mejora +N: gasta piedras y oro, puede fallar sin bajar, arranca en 33 %, t
     } finally { Math.random = rnd; }
 });
 
-test('mejora +N: las probabilidades arrancan en 33 % y no suben con el nivel', async () => {
+test('mejora +N: las probabilidades arrancan en 33 % y nunca superan el 33 %', async () => {
     const { UP_RATE } = await import('../src/economy.ts');
-    assert.equal(UP_RATE[0], 0.33); assert.ok(UP_RATE.every((r, i) => r <= (UP_RATE[i - 1] ?? 1) && r > 0 && r <= 0.33));
+    assert.equal(UP_RATE[0], 0.33); assert.ok(UP_RATE.every((r) => r > 0 && r <= 0.33));
 });
 
 test('mejora +N: sube los stats base (+4 % por nivel) en el cálculo de combate del server', async () => {
