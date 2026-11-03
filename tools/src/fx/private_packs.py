@@ -14,7 +14,8 @@ from PIL import Image
 S, N = 160, 14
 OUT = os.path.join(os.path.dirname(__file__), '../../../apps/client/public/assets')
 
-# nombre (a-z, lo valida el server), carpeta de cuadros relativa a los packs, modo, tamaño en pantalla, fps[, brillo]
+# nombre (a-z, lo valida el server), carpeta de cuadros relativa a los packs, modo, tamaño en pantalla, fps[, brillo[, escala fija]]
+# escala fija: para packs de alta resolución (los cuadros de 640 px del Magic Buff) el 'tamaño' relativo al original no sirve; se da la escala final de la celda directo
 # brillo: se dibujan en aditivo, así que los efectos oscuros (vampiro, nigromante) casi no se ven sin levantarlos
 EFECTOS = [
     ('chispa',     'Pixel Art VFX - Fire Explosions - FREE Version/VFX3/Frames',  'centro', 1.1, 16),  # Saeta ígnea (impacto)
@@ -40,11 +41,28 @@ EFECTOS = [
     ('represalia', 'Pixel Art VFX - Vampire - FREE Version/VFX1/Frames',          'centro', 1.5, 14, 2.2),  # Aura de represalia / furia de jefe
     ('invocar',    'Pixel Art VFX - Necromancer - FREE Version/VFX 1/Frames',     'pie',    1.8, 12, 2.2),  # adds de jefe
     ('charco',     'Pixel Art VFX Impacts - FREE Version/VFX2/COLOR/Frames',      'pie',    2.4, 12),  # charco de jefe (ácido)
+    # pack "Magic Buff Effects for Top Down Games" de Craftpix (anillos en el piso): healer y bendiciones
+    ('curar',      'craftpix-net-207889-magic-buff-effects-pack-for-top-down-games/Life Recovery/PNG',  'pie', 1.0, 14, 1.0, 1.8),  # Curación, Renovar, Orbe, Esfera
+    ('mana',       'craftpix-net-207889-magic-buff-effects-pack-for-top-down-games/Mana Recovery/PNG',  'pie', 1.0, 14, 1.0, 1.8),  # Segundo aliento, Intelecto arcano
+    ('revivir',    'craftpix-net-207889-magic-buff-effects-pack-for-top-down-games/Revival/PNG',        'pie', 1.0, 14, 1.0, 1.9),  # Despertar
+    ('inmune',     'craftpix-net-207889-magic-buff-effects-pack-for-top-down-games/Immunity/PNG',       'pie', 1.0, 14, 1.0, 1.8),  # Bendición sagrada, Bendición de amparo
+    ('poder',      'craftpix-net-207889-magic-buff-effects-pack-for-top-down-games/Strength Buff/PNG',  'pie', 1.0, 14, 1.0, 1.8),  # Bendición de poder, Bendición de grupo
+    ('maldicion',  'craftpix-net-207889-magic-buff-effects-pack-for-top-down-games/Debuff/PNG',         'pie', 1.0, 14, 1.0, 1.7),  # veneno / debuffs (reservado)
+    # pack "10 Magic Sprite Sheet Effects Pixel Art" de Craftpix (hojas de 72 px): lo sagrado
+    ('solar',      'craftpix-671189-10-magic-sprite-sheet-effects-pixel-art/4 Sun strike/Sun-strike.png', 'pie',    1.7, 16),  # Castigo, Reprender (pilar chico) y Nova sagrada (grande)
+    ('anillo',     'craftpix-671189-10-magic-sprite-sheet-effects-pixel-art/8 Shield/Shield.png',        'centro', 1.0, 14, 1.0, 1.35),  # Escudo divino, Escudo guardián
+    ('solargrande', 'craftpix-671189-10-magic-sprite-sheet-effects-pixel-art/4 Sun strike/Sun-strike.png', 'pie',   2.6, 16),  # Nova sagrada
+    ('bolafuego',  'craftpix-671189-10-magic-sprite-sheet-effects-pixel-art/10 Fire ball/Fire-ball.png', 'centro', 1.2, 16),  # proyectil de la Saeta (reservado)
 ]
 LIFT = 30  # px de celda entre los pies y el centro de un impacto
 
 
 def frames(d: str) -> list[Image.Image]:
+    if os.path.isfile(d):  # hoja horizontal de celdas cuadradas (packs de sprite sheets)
+        sh = Image.open(d).convert('RGBA'); c = sh.height; ims = [sh.crop((i * c, 0, (i + 1) * c, c)) for i in range(sh.width // c)]
+        ims = [im for im in ims if im.getbbox()]
+        if len(ims) > N: ims = [ims[round(i * (len(ims) - 1) / (N - 1))] for i in range(N)]
+        return ims
     fs = sorted((f for f in os.listdir(d) if f.lower().endswith('.png')), key=lambda f: int(re.findall(r'\d+', f)[-1]))
     if len(fs) > N: fs = [fs[round(i * (len(fs) - 1) / (N - 1))] for i in range(N)]
     return [Image.open(os.path.join(d, f)).convert('RGBA') for f in fs]
@@ -79,7 +97,10 @@ def main(base: str) -> None:
     meta = json.load(open(jpath)) if os.path.exists(jpath) else {'cell': S, 'frames': N, 'rows': {}}
     sheet = Image.open(ipath).convert('RGB') if os.path.exists(ipath) else Image.new('RGB', (S * N, 0))
     for name, rel, mode, size, fps, *rest in EFECTOS:
+        if not os.path.exists(os.path.join(base, rel)):  # pack no descargado: se conserva lo que ya está en el atlas
+            print(f'{name:11s} (sin carpeta, se deja como está)'); continue
         cells, f = bake(frames(os.path.join(base, rel)), mode, rest[0] if rest else 1.0)
+        if len(rest) > 1: size = rest[1] * f  # escala fija
         row = meta['rows'][name]['row'] if name in meta['rows'] else sheet.height // S
         if (row + 1) * S > sheet.height:
             grown = Image.new('RGB', (S * N, (row + 1) * S)); grown.paste(sheet, (0, 0)); sheet = grown

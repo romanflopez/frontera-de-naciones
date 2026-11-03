@@ -457,20 +457,21 @@ function onSkillEffect(v: { casterId: bigint; skill: string; fromX: number; from
         case 'carga': efxLocal('polvareda', fx0, fy0); efxLocal('rafaga', tx, ty); fx.push({ k: 'burst', x: fx0, y: fy0, t: 0, c: '#ff9a4a' }); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 1.2, c: '#ff9a4a' }); if (!reduce && v.casterId === myId) shake = Math.max(shake, 0.2); break;
         case 'giro': efxLocal('cyclone', tx, ty); efxLocal('polvo', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 1.9, c: '#ffd0a0' }); break;
         case 'nova': efxLocal('picos', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 3, c: '#bfe8ff' }); break;
-        case 'aliento': fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#7fe0a0' }); efxLocal('sphere', tx, ty); break;
+        case 'aliento': fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#7fe0a0' }); efxLocal('mana', tx, ty); break;
         case 'mandato': efxLocal('provocar', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ff7a5a' }); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 6, c: '#ff7a5a' }); break;
         case 'aura': efxLocal('bendicion', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffe9a0' }); break;
-        case 'curacion': case 'renovar': efxLocal('sphere', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#8af0a8' }); break;
-        case 'orbe': efxLocal('sphere', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 4, c: '#a8ffd0' }); break;
-        case 'bendicion': efxLocal('spread', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffe9a0' }); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#fff6d0' }); break;
-        case 'novasagrada': efxLocal('spread', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 4.5, c: '#fff0b0' }); break;
+        case 'curacion': case 'renovar': efxLocal('curar', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#8af0a8' }); break;
+        case 'orbe': efxLocal('curar', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 4, c: '#a8ffd0' }); break;
+        case 'bendicion': efxLocal('inmune', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffe9a0' }); break;
+        case 'novasagrada': efxLocal('solargrande', tx, ty); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 4.5, c: '#fff0b0' }); break;
+        case 'reprender': efxLocal('solar', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#fff0b0' }); break;
         case 'grito': case 'amparo': case 'intelecto': case 'grupo': { // bendiciones de grupo (14 celdas)
-            const c = LIB[v.skill]?.col ?? '#ffe27a'; efxLocal('godsbreath', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c }); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 3, c }); break; }
-        case 'escudomana': case 'escudodivino': case 'guardian': efxLocal(v.skill === 'escudomana' ? 'cupula' : 'sphere', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: LIB[v.skill]?.col ?? '#bfe8ff' }); break;
+            const c = LIB[v.skill]?.col ?? '#ffe27a'; efxLocal(v.skill === 'amparo' ? 'inmune' : v.skill === 'intelecto' ? 'mana' : 'poder', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c }); fx.push({ k: 'boom', x: tx, y: ty, t: 0, r: 3, c }); break; }
+        case 'escudomana': case 'escudodivino': case 'guardian': efxLocal(v.skill === 'escudomana' ? 'cupula' : 'anillo', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: LIB[v.skill]?.col ?? '#bfe8ff' }); break;
         case 'represalia': efxLocal('represalia', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ff9a6a' }); break;
         case 'clarividencia': efxLocal('estrella', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#d0a8ff' }); break;
-        case 'esfera': efxLocal('sphere', tx, ty); fx.push({ k: 'burst', x: tx, y: ty, t: 0, c: '#fff2a8' }); break;
-        case 'despertar': efxLocal('godsbreath', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffffff' }); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#fff2a8' }); break;
+        case 'esfera': efxLocal('curar', tx, ty); fx.push({ k: 'burst', x: tx, y: ty, t: 0, c: '#fff2a8' }); break;
+        case 'despertar': efxLocal('revivir', tx, ty); fx.push({ k: 'ring', x: tx, y: ty, t: 0, c: '#ffffff' }); break;
     }
     if ((v.skill === 'blink' || v.skill === 'pasoluz') && v.casterId === myId) { const pt = iso(P.x, P.y); if (Math.hypot(pt.x - cam.x, pt.y - cam.y) > 500) { cam.x = pt.x; cam.y = pt.y; } }
 }
@@ -793,9 +794,9 @@ const LIB: Record<string, SpellDef> = {
         cast() { if (P.hp >= maxHp() && P.mp >= maxMp()) { toast('Ya tenés la vida y el maná llenos.'); return false; } P.path = []; P.target = null; P.engage = false; P.pickup = null; P.queued = null; cancelCast(); skillSend('aliento'); } },
     // Healer (K5): el server cura, cobra y valida. Las curas van al aliado elegido (click en alguien de tu nación) o a vos.
     castigo: { name: 'Castigo', mp: 18, cd: 1, col: '#ffe680', range: 15, castT: 1, target: true, // Smite (Valdrys): devuelve 9 de maná y te cura el 35 % del daño
-        cast(m) { if (!isMob(m)) return false; efx('crosswind', m.x, m.y, 8); damageMob(m, 'castigo'); } },
+        cast(m) { if (!isMob(m)) return false; efx('solar', m.x, m.y, 8); damageMob(m, 'castigo'); } },
     reprender: { name: 'Reprender', mp: 30, cd: 15, col: '#fff2a8', range: 15, target: true, ctrl: true, instant: true, // Chastise (Valdrys): aturde 3 s
-        cast(m) { return control(m, 'reprender', 3, 'Aturdiste', 'El aturdimiento', 'aturde'); } },
+        cast(m) { return control(m, 'reprender', 3, 'Aturdiste', 'El aturdimiento', 'solar'); } },
     curacion: { name: 'Curación', mp: 48, cd: 5, col: '#8af0a8', range: 12, castT: 1.5, target: false, // Generous Heal (Valdrys): 40 % de la vida
         cast() { return healCast('curacion', 12); } },
     renovar: { name: 'Renovar', mp: 26, cd: 3, col: '#b8f5a0', range: 12, target: false, instant: true, // Renew (Valdrys): cura en 6 s; con el cursor sobre un enemigo, lo quema
@@ -1066,6 +1067,8 @@ const FX_FALLBACK: Record<string, string> = {
     chispa: 'splash', estallido: 'eruption', meteoro: 'cataclysm', aroigneo: 'flamme', explosion: 'eruption', escarcha: 'splash', picos: 'spread',
     cadenas: 'stop', estrella: 'spread', fugaz: 'sphere', cupula: 'sphere', humo: 'splash', polvo: 'cyclone', polvareda: 'crosswind', aturde: 'turbulence',
     rafaga: 'crosswind', tajobrutal: 'crosswind', provocar: 'godsbreath', represalia: 'flamme',
+    // packs "Magic Buff Effects" y "10 Magic Sprite Sheet Effects" de Craftpix (mismo script)
+    curar: 'sphere', mana: 'sphere', revivir: 'godsbreath', inmune: 'spread', poder: 'godsbreath', maldicion: 'spread', solar: 'crosswind', solargrande: 'spread', anillo: 'sphere', bolafuego: 'splash',
 };
 /** Efectos que no tienen reemplazo: sin el atlas privado no se dibuja nada (golpes cuerpo a cuerpo, jefes). */
 const efxLocal = (n: string, x: number, y: number, dy = 0) => { const k = FXM?.rows[n] ? n : FX_FALLBACK[n]; const r = k ? FXM?.rows[k] : undefined; if (k && r) fx.push({ k: 'efx', n: k, x, y, t: 0, dy, d: r.n ? r.n / r.fps : undefined }); };
