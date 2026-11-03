@@ -8,6 +8,8 @@
 import { CombatTextManager, type CombatTextEvent } from './systems/CombatTextManager';
 import './ui/craftpix.css';
 import './ui/loading-craftpix.css';
+import './ui/hud-craftpix.css';
+import { levelCard, notify } from './ui/notices';
 import { mountChat } from './ui/mountChat';
 import { mountCastBar } from './ui/CastBar';
 import { useCastStore } from './ui/castStore';
@@ -336,7 +338,7 @@ function onServer(m: ServerPayload) {
         case 'combatTextEvent': onCombatText(m.value); break;
         case 'partyStatsUpdate': updatePartyStats(m.value.name, m.value.hp, m.value.mp); break;
         case 'partyInvited': showPartyInvite(m.value.fromName, Number(m.value.expiresMs)); break;
-        case 'econResult': deposit.onResult(m.value.ok, m.value.text); if (m.value.ok) { log(esc(m.value.text), ['daily_done', 'quest_ready'].includes(m.value.code)); if (['daily_done', 'quest_ready'].includes(m.value.code)) toast(m.value.text); } else { toast(m.value.text); log(esc(m.value.text)); } break;
+        case 'econResult': deposit.onResult(m.value.ok, m.value.text); if (m.value.ok) { log(esc(m.value.text), ['daily_done', 'quest_ready'].includes(m.value.code)); if (m.value.code === 'daily_done') notify('Encargo cumplido', m.value.text); else if (m.value.code === 'quest_ready') notify('Misión', m.value.text); } else { toast(m.value.text); log(esc(m.value.text)); } break;
         case 'killReward': onKillReward(m.value); break;
         case 'statusUpdate': onStatusUpdate(m.value); break;
         case 'skillEffect': onSkillEffect(m.value); break;
@@ -432,7 +434,7 @@ function sfx(name: string, vol = 0.6) {
     try { const a = (SFX[name] ??= new Audio(`assets/sfx/${name}.ogg`)); a.volume = vol; a.currentTime = 0; void a.play().catch(() => { /* sin interacción previa o sin archivo */ }); } catch { /* sin audio */ }
 }
 function onLevelUp() {
-    sfx('level-up'); P.hp = maxHp(); P.mp = maxMp(); float(P.x, P.y - 0.5, `¡Nivel ${P.lvl}!`, '#ffd24a', true); log(`Subiste a nivel ${P.lvl}.`, true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd24a' });
+    sfx('level-up'); P.hp = maxHp(); P.mp = maxMp(); float(P.x, P.y - 0.5, `¡Nivel ${P.lvl}!`, '#ffd24a', true); log(`Subiste a nivel ${P.lvl}.`, true); levelCard(P.lvl); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd24a' });
 }
 /** El server avisó que un mob murió: lo saca del espejo, deja el cadáver y, si el golpe final fue mío, cobro el botín. */
 /** El server avisa quién está invisible y si yo veo invisibles. */

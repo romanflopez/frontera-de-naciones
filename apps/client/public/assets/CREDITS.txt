@@ -69,9 +69,10 @@ Mapas abiertos Nv7-11 (Paso de Stormrock, Cenizas I-III): mapas "stormrock_pass"
 === Interfaz: pack de Craftpix (licencia sin verificar) ===
 
   - assets/ui/craftpix/*: pack "RPG MMO Game User Interface" de Craftpix (craftpix.net), producto craftpix-net-745192.
-    Piezas usadas en el login (fondo, marco del logo, filigrana, campos, checkbox, botón, barra inferior) y en las ventanas
-    Personaje/Inventario (cabecera, botón de cerrar, ranuras, tooltips). El fondo, el marco del logo y la filigrana se extraen
-    de PSD Files/rnm_6.psd con tools/src/ui/extract_login_psd.py; el resto se copia con tools/src/ui/install_craftpix.py.
+    Piezas usadas en el lobby (fondo, filigrana, campos, checkbox, botón, barra inferior, cabecera y botón de borrar de la
+    pantalla de personajes), en las ventanas Personaje/Inventario (cabecera, botón de cerrar, ranuras, tooltips) y en los
+    avisos del HUD. Las que no vienen sueltas en Textures/ se extraen de PSD Files/ con tools/src/ui/extract_psd.py;
+    el resto se copia con tools/src/ui/install_craftpix.py.
     Licencia: PENDIENTE DE CONFIRMAR. El license.txt del pack solo trae el enlace https://craftpix.net/file-licenses/ y ese texto
     todavía no se leyó. Respuestas del propio vendedor en itch.io dicen que el uso comercial está permitido pero que revender o
     redistribuir los archivos originales sueltos no; si eso vale, tenerlos en un repo público los deja descargables sueltos.

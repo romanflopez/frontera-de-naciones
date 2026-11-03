@@ -1,0 +1,54 @@
+/* HUD con las piezas del pack Craftpix "RPG MMO Game User Interface".
+   Por ahora: los avisos del medio de la pantalla (notificación y subida de nivel).
+   notif-top.png no está en Textures/: sale del PSD con tools/src/ui/extract_psd.py. */
+
+#notif{
+  position:absolute;left:50%;top:26%;transform:translateX(-50%);
+  width:min(620px,86vw);display:grid;gap:16px;justify-items:center;
+  pointer-events:none;z-index:6;text-align:center;
+}
+#notif:empty{display:none}
+
+.nt{
+  position:relative;width:100%;box-sizing:border-box;padding:26px 34px 22px;
+  opacity:0;transform:translateY(-10px);transition:opacity .35s ease,transform .35s ease;
+  background:radial-gradient(ellipse 62% 130% at 50% 50%,#0a0d12e8 0%,#0a0d12b8 42%,#0a0d1200 74%);
+}
+.nt.in{opacity:1;transform:none}
+
+/* filete dorado arriba y abajo, con la punta del diseño */
+.nt::before,.nt::after{
+  content:"";position:absolute;left:6%;right:6%;height:1px;
+  background:linear-gradient(90deg,#0000,#8a7640 14%,#c9a44a 50%,#8a7640 86%,#0000);
+}
+.nt::before{top:0}
+.nt::after{bottom:0}
+
+.nt h2{
+  margin:0;position:relative;
+  font:500 26px/1.1 "Alegreya SC",Georgia,serif;letter-spacing:.16em;text-transform:uppercase;
+  color:#eaf2fa;text-shadow:0 2px 6px #000,0 0 18px #3c8fd04d;
+}
+/* el adorno azul del pack, detrás del título */
+.nt h2::before{
+  content:"";position:absolute;left:50%;top:50%;width:420px;height:70px;margin:-40px 0 0 -210px;
+  background:url(/assets/ui/craftpix/notif-top.png) center/100% 100% no-repeat;
+  opacity:.9;pointer-events:none;
+}
+.nt p{
+  margin:14px 0 0;font:400 14px/1.6 "Alegreya Sans",system-ui,sans-serif;color:#c4d2de;
+  text-shadow:0 1px 4px #000;
+}
+
+/* subida de nivel: más chico y sin el adorno */
+.nt.lv{padding:18px 34px 16px;display:grid;gap:2px}
+.nt.lv span{
+  font:400 13px/1 "Alegreya Sans",system-ui,sans-serif;letter-spacing:.2em;text-transform:uppercase;
+  color:#9fb2c4;text-shadow:0 1px 4px #000;
+}
+.nt.lv b{
+  font:500 34px/1.2 "Alegreya SC",Georgia,serif;letter-spacing:.1em;
+  color:#f2dc9e;text-shadow:0 2px 8px #000,0 0 22px #c9a44a66;
+}
+
+@media (prefers-reduced-motion:reduce){.nt{transition:none}}

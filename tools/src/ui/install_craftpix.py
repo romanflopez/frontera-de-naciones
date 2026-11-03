@@ -2,7 +2,7 @@
 """Copia a apps/client/public/assets/ui/craftpix/ las texturas que usan craftpix.css y login-craftpix.css.
 
 Tres piezas del login (fondo, marco del logo y filigrana) no están sueltas en Textures/: salen de
-PSD Files/rnm_6.psd. Para extraerlas: python3 tools/src/ui/extract_login_psd.py "<pack>/PSD Files/rnm_6.psd"
+PSD Files/rnm_6.psd. Para extraerlas: python3 tools/src/ui/extract_psd.py "<pack>/PSD Files"
 
 Pack: "RPG MMO Game User Interface" de Craftpix (craftpix-net-745192). Su licencia permite usarlo
 en el juego pero no redistribuir los archivos, así que NO se suben a git (están en .gitignore).
