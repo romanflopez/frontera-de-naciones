@@ -93,6 +93,13 @@ export class GameWorld {
                 refundMp: (p, n) => this.refundMp(p, n), // Castigo
                 poison: (p, secs) => this.poisonPlayer(p, secs), // mobs tóxicos
                 slow: (p, secs) => { if (applySlow(p.status, Date.now(), secs * 1000) > 0) this.announceStatus(p); }, // jefes (Carga y desjarrete)
+                push: (p, x, y) => { // terror y tirón: el server mueve al jugador (es autoritativo) a la celda libre más cercana
+                    if (p.isDead) return;
+                    const tx = Math.max(0, Math.round(x - 0.5)), ty = Math.max(0, Math.round(y - 0.5));
+                    const f = this.occupancy.isFree(tx, ty) ? { x: tx, y: ty } : findNearestFreeLocation((cx, cy) => this.occupancy.isFree(cx, cy), tx, ty, 4);
+                    if (f && (f.x !== p.posX || f.y !== p.posY)) { this.moveTo(p, p.posX, p.posY, f.x, f.y, false, true); p.send(M.playerTeleported(f.x, f.y)); }
+                },
+                dispel: (p) => { clearBuffs(p.status); if (p.status.statDirty) { p.status.statDirty = false; this.restat(p); } this.announceStatus(p); this.sendVitals(p, true); },
                 mobDied: (info) => { if (!info.gm) this.dropLoot(info.type, info.def.name, info.def.lvl, info.x, info.y); },
                 reward: (p, info) => {
                     if (!this.econ) return;

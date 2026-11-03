@@ -20,23 +20,38 @@ import { BOSS_UNIQUES, UNIQUES_BY_TIER, type UniqueBase } from './uniques';
 export const MAT_COLMILLO = 'colmillo';
 /** Esencia: 3 % en los pits T2 (nivel 6-10) o 1 por día con el primer encargo entregado. Va en la llave del nido (D2). */
 export const MAT_ESENCIA = 'esencia';
+/** Materiales de las llaves de D3 a D6: 6 % en los pits de su tramo (8 ≈ 130 kills, más o menos lo que dura la corrida). */
+export const MAT_HUESO = 'hueso_antiguo', MAT_TINTA = 'tinta_arcana', MAT_PLUMA = 'pluma_tormenta', MAT_BRASA = 'brasa_infernal';
 export const QUEST_MATS: Record<string, { name: string; tier: number; chance: number }> = {
     [MAT_COLMILLO]: { name: 'Colmillo', tier: 1, chance: 0.08 },
     [MAT_ESENCIA]: { name: 'Esencia', tier: 2, chance: 0.03 },
+    [MAT_HUESO]: { name: 'Hueso antiguo', tier: 3, chance: 0.06 },
+    [MAT_TINTA]: { name: 'Tinta arcana', tier: 4, chance: 0.06 },
+    [MAT_PLUMA]: { name: 'Pluma de tormenta', tier: 5, chance: 0.06 },
+    [MAT_BRASA]: { name: 'Brasa infernal', tier: 6, chance: 0.06 },
 };
 // ---------- llaves de las mazmorras (docs/LLAVES.md) ----------
 /** Llave de la cueva (D1), llave gastada (la suelta el jefe de D1, una por jugador) y llave del nido (D2). Viven en los materiales del personaje. */
 export const MAT_LLAVE_CUEVA = 'llave_cueva', MAT_LLAVE_GASTADA = 'llave_gastada', MAT_LLAVE_NIDO = 'llave_nido';
+export const MAT_LLAVE_CRIPTA = 'llave_cripta_olvidada', MAT_LLAVE_TORRE = 'llave_torre', MAT_LLAVE_TEMPLO = 'llave_templo', MAT_LLAVE_FORTALEZA = 'llave_fortaleza';
 /** Receta de cada llave: materiales + oro. Se arma en cualquier lado (clic derecho sobre la llave o el material en la bolsa). */
 export const KEY_RECIPES: Record<string, { name: string; dungeon: string; mats: Record<string, number>; gold: number }> = {
     [MAT_LLAVE_CUEVA]: { name: 'Llave de la cueva', dungeon: 'la Cueva goblin', mats: { [MAT_COLMILLO]: 8 }, gold: 60 },
     [MAT_LLAVE_NIDO]: { name: 'Llave del nido', dungeon: 'el Nido de hormiga león', mats: { [MAT_LLAVE_GASTADA]: 1, [MAT_ESENCIA]: 1 }, gold: 120 },
+    // de D3 en adelante, sin cadena: el material cae en los pits del mismo tramo, así un alto nunca vuelve a contenido bajo por una llave
+    [MAT_LLAVE_CRIPTA]: { name: 'Llave de la cripta olvidada', dungeon: 'la Cripta olvidada', mats: { [MAT_HUESO]: 8 }, gold: 200 },
+    [MAT_LLAVE_TORRE]: { name: 'Llave de la torre', dungeon: 'la Torre del hechicero', mats: { [MAT_TINTA]: 8 }, gold: 300 },
+    [MAT_LLAVE_TEMPLO]: { name: 'Llave del templo', dungeon: 'el Templo de Mez', mats: { [MAT_PLUMA]: 8 }, gold: 450 },
+    [MAT_LLAVE_FORTALEZA]: { name: 'Llave de la fortaleza', dungeon: 'el Foso del demonio', mats: { [MAT_BRASA]: 8 }, gold: 650 },
 };
-export const KEY_MAT_NAMES: Record<string, string> = { [MAT_LLAVE_CUEVA]: 'Llave de la cueva', [MAT_LLAVE_GASTADA]: 'Llave gastada', [MAT_LLAVE_NIDO]: 'Llave del nido' };
+export const KEY_MAT_NAMES: Record<string, string> = { [MAT_LLAVE_GASTADA]: 'Llave gastada', ...Object.fromEntries(Object.entries(KEY_RECIPES).map(([id, r]) => [id, r.name])) };
 /** Qué jefe suelta qué llave (al 100 %, una para cada jugador que lo mata o está cerca en la party). */
 export const BOSS_KEY_DROPS: Partial<Record<MobType, string>> = { goblin_jefe: MAT_LLAVE_GASTADA };
 /** Puerta de entrada (desde la superficie) de cada mazmorra con llave: el mapa del primer piso → la llave que pide. */
-export const DUNGEON_ENTRY_KEYS: Record<string, string> = { cueva_goblin: MAT_LLAVE_CUEVA, nido_hormiga_leon: MAT_LLAVE_NIDO };
+export const DUNGEON_ENTRY_KEYS: Record<string, string> = {
+    cueva_goblin: MAT_LLAVE_CUEVA, nido_hormiga_leon: MAT_LLAVE_NIDO,
+    cripta_olvidada: MAT_LLAVE_CRIPTA, torre_del_hechicero: MAT_LLAVE_TORRE, templo_de_mez: MAT_LLAVE_TEMPLO, fortaleza_infernal: MAT_LLAVE_FORTALEZA,
+};
 /** Lo que falta para armar `key` con `mats` y `gold`, o null si alcanza. */
 export function keyMissing(key: string, mats: Record<string, number>, gold: number): string | null {
     const r = KEY_RECIPES[key]; if (!r) return 'Esa llave no se arma.';
@@ -49,7 +64,7 @@ export function keyMissing(key: string, mats: Record<string, number>, gold: numb
 export const keyMatName = (id: string): string => KEY_MAT_NAMES[id] ?? QUEST_MATS[id]?.name ?? id;
 
 /** Materiales que no se aceptan en la repetible: son de las llaves. */
-export const RESERVED_MATS = new Set([MAT_COLMILLO, MAT_ESENCIA, MAT_LLAVE_CUEVA, MAT_LLAVE_GASTADA, MAT_LLAVE_NIDO]);
+export const RESERVED_MATS = new Set([...Object.keys(QUEST_MATS), ...Object.keys(KEY_RECIPES), MAT_LLAVE_GASTADA]);
 
 /** Jefe que cierra cada dungeon del corte: matarlo (vos o tu party cerca) cuenta como completarlo. */
 export type DungeonId = 'd1' | 'd2' | 'd3' | 'd4' | 'd5' | 'd6';
@@ -171,7 +186,7 @@ export const MAIN_QUESTS: MainQuest[] = [
     },
     {
         id: 'cripta', name: 'La Cripta olvidada', minLvl: 14,
-        say: 'Debajo de Lochport hay una cripta que no se quedó dormida. En el sepulcro del fondo vela un caballero que no sabe que está muerto. Bajá con gente.',
+        say: 'Debajo de Lochport hay una cripta que no se quedó dormida. En el sepulcro del fondo vela un caballero que no sabe que está muerto. Para entrar, cada uno arma su llave de la cripta olvidada: 8 huesos antiguos (caen en los pits de nivel 11 a 15, como los del cementerio) y 200 de oro. Bajá con gente.',
         done: 'El caballero descansa. Elegí una de sus piezas.',
         goals: [{ k: 'dungeon', d: 'd3', n: 1, what: 'Completar la Cripta olvidada' }],
         reward: { expPct: 40, gold: 500, unique: 'boss_d3_choice' },
@@ -192,7 +207,7 @@ export const MAIN_QUESTS: MainQuest[] = [
     },
     {
         id: 'torre', name: 'La Torre del hechicero', minLvl: 19,
-        say: 'En la torre de la Brecha, un mago mayor sigue con sus experimentos en las cámaras de abajo. Cortalo antes de que termine el hechizo.',
+        say: 'En la torre de la Brecha, un mago mayor sigue con sus experimentos en las cámaras de abajo. Cortalo antes de que termine el hechizo. La puerta pide la llave de la torre: 8 tintas arcanas (pits de nivel 16 a 20, como los de la Brecha) y 300 de oro.',
         done: 'Las cámaras quedaron en silencio.',
         goals: [{ k: 'dungeon', d: 'd4', n: 1, what: 'Completar la Torre del hechicero' }],
         reward: { expPct: 40, gold: 700, forge: 5 },
@@ -213,7 +228,7 @@ export const MAIN_QUESTS: MainQuest[] = [
     },
     {
         id: 'templo_de_mez', name: 'El Templo de Mez', minLvl: 24,
-        say: 'En el salón principal de Mez reina el Wyvern del aire. Llevá un grupo que sepa moverse.',
+        say: 'En el salón principal de Mez reina el Wyvern del aire. Llevá un grupo que sepa moverse, y cada uno su llave del templo: 8 plumas de tormenta (pits de nivel 21 a 25, como los de las Cenizas II) y 450 de oro.',
         done: 'El trono del aire quedó vacío.',
         goals: [{ k: 'dungeon', d: 'd5', n: 1, what: 'Completar el Templo de Mez' }],
         reward: { expPct: 40, gold: 900, forge: 5 },
@@ -227,7 +242,7 @@ export const MAIN_QUESTS: MainQuest[] = [
     },
     {
         id: 'foso', name: 'El Señor del Foso', minLvl: 29,
-        say: 'Debajo de la fortaleza infernal está el Foso, y en el foso, su señor. Es lo más hondo que se conoce. Si volvés, sos leyenda.',
+        say: 'Debajo de la fortaleza infernal está el Foso, y en el foso, su señor. Es lo más hondo que se conoce. Si volvés, sos leyenda. La fortaleza se abre con su llave: 8 brasas infernales (pits de nivel 26 a 30, como los de las Cenizas III) y 650 de oro.',
         done: 'El Señor del Foso cayó. Completaste el camino del aventurero.',
         goals: [{ k: 'dungeon', d: 'd6', n: 1, what: 'Completar el Foso del demonio' }],
         reward: { expPct: 50, gold: 1500, forge: 10 },

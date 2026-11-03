@@ -9,7 +9,7 @@
  */
 import {
     ADD_KITS, BOSS_CUT_PAUSE, BOSS_GAP_DEFAULT, BOSS_KITS, BOSS_SCHOOL_LOCK, HARD_INTERRUPTS, SOFT_INTERRUPTS, castWindowFrom,
-    type BossAbilityDef, type BossCastDef, type BossKit, type BossSchool, type BossTankHitDef, type BossTelegraphDef, type MobType,
+    type BossAbilityDef, type BossCastDef, type BossKit, type BossPullDef, type BossSchool, type BossTankHitDef, type BossTelegraphDef, type MobType,
 } from '@fdn/world';
 import type { ServerMessage } from '@fdn/proto';
 import * as M from './messages.ts';
@@ -40,6 +40,10 @@ export interface BossHost {
     /** Mueve al mob a una celda libre junto a (x, y) (la carga de la salida alternativa). */
     dashTo(m: BossMob, x: number, y: number): void;
     partySize(): number;
+    /** Mueve al jugador a la celda libre más cercana a (x, y) (terror, tirón). */
+    push(p: Player, x: number, y: number): void;
+    /** Le saca los buffs y escudos. */
+    dispel(p: Player): void;
 }
 
 interface Cast { def: BossCastDef; start: number; end: number; windowAt: number; target: bigint | null }
@@ -57,6 +61,8 @@ export interface BossState {
     addsDone: Set<number>;
     adds: Set<number>;
     rage: number; enraged: boolean; hard: boolean;
+    /** Pilas de furia apilable ya aplicadas. */
+    stacks: number;
     zones: Zone[];
     /** Sangrados activos por jugador: vencimientos. */
     bleeds: Map<bigint, number[]>;
@@ -70,7 +76,7 @@ let zoneSeq = 1;
 export function bossStateFor(type: MobType, kitId?: string): BossState | undefined {
     const kit = kitId ? ADD_KITS[kitId] : BOSS_KITS[type];
     if (!kit) return undefined;
-    return { kit, next: new Map(), global: 0, pauseUntil: 0, locks: new Map(), busyUntil: 0, startedAt: 0, addsDone: new Set(), adds: new Set(), rage: 1, enraged: false, hard: false, zones: [], bleeds: new Map(), stats: { done: new Map(), cut: 0 } };
+    return { kit, next: new Map(), global: 0, pauseUntil: 0, locks: new Map(), busyUntil: 0, startedAt: 0, addsDone: new Set(), adds: new Set(), rage: 1, enraged: false, hard: false, stacks: 0, zones: [], bleeds: new Map(), stats: { done: new Map(), cut: 0 } };
 }
 
 const dist = (ax: number, ay: number, b: Player) => Math.hypot(ax - (b.posX + 0.5), ay - (b.posY + 0.5));
@@ -95,22 +101,27 @@ export function bossTick(h: BossHost, m: BossMob, tgt: Player | undefined): bool
     }
     if (T < s.busyUntil) return true;
     if (!tgt || T < s.global || T < s.pauseUntil) return false;
+    // de las listas, la que más espera (así ninguna se queda sin salir porque otra más frecuente está antes en la lista)
+    let pick: BossAbilityDef | undefined, due = Infinity;
     for (const a of kit.abilities) {
-        if ((s.next.get(a.id) ?? 0) > T) continue;
+        const at = s.next.get(a.id) ?? 0;
+        if (at > T || at >= due) continue;
         if (a.kind === 'cast' && (s.locks.get(a.school) ?? 0) > T) continue; // escuela bloqueada por un corte: espera
         if (!inRange(m, a, tgt)) continue;
-        start(h, m, s, a, tgt, T);
-        s.next.set(a.id, T + a.every);
-        s.global = T + (kit.gap ?? BOSS_GAP_DEFAULT);
-        return true;
+        pick = a; due = at;
     }
-    return false;
+    if (!pick) return false;
+    start(h, m, s, pick, tgt, T);
+    s.next.set(pick.id, T + pick.every);
+    s.global = T + (kit.gap ?? BOSS_GAP_DEFAULT);
+    return true;
 }
 
 function inRange(m: BossMob, a: BossAbilityDef, tgt: Player): boolean {
     const d = dist(m.x, m.y, tgt);
     if (a.kind === 'tankHit') return d <= 2.2;
     if (a.kind === 'telegraph') return a.at === 'self' ? d <= a.r + 1 : d <= 14;
+    if (a.kind === 'pull') return d <= a.r;
     return d <= 15;
 }
 
@@ -124,6 +135,7 @@ function start(h: BossHost, m: BossMob, s: BossState, a: BossAbilityDef, tgt: Pl
         return;
     }
     if (a.kind === 'telegraph') return telegraph(h, m, s, a, tgt, T);
+    if (a.kind === 'pull') return pull(h, m, s, a, T);
     return tankHit(h, m, s, a, tgt, T);
 }
 
@@ -151,7 +163,8 @@ function resolveCast(h: BossHost, m: BossMob, s: BossState, c: Cast): void {
         const raw = Math.round((e.dmgK ? h.roll(m) * e.dmgK : 0) + (e.pctHp ? p.combat.maxHp * e.pctHp * s.rage : 0));
         if (raw > 0) h.hurt(p, raw, `${m.def.name} (${a.name})`, m);
         if (e.stun) h.stun(p, e.stun);
-        if (e.terror) h.stun(p, e.terror);
+        if (e.terror) terrify(h, m, p, e.terror);
+        if (e.dispel) h.dispel(p);
         if (e.slow) h.slow(p, e.slow);
         if (e.antiHeal) h.poison(p, e.antiHeal);
     }
@@ -174,6 +187,25 @@ function telegraph(h: BossHost, m: BossMob, s: BossState, a: BossTelegraphDef, t
             s.zones.push(z);
             h.broadcast(m, M.bossZone(z.id, m.id, z.name, z.x, z.y, z.r, a.pool.secs * 1000));
         }
+    });
+}
+
+/** Terror: el jugador sale despedido unas celdas lejos del jefe y queda aterrado (sin poder actuar). */
+function terrify(h: BossHost, m: BossMob, p: Player, secs: number): void {
+    const px = p.posX + 0.5, py = p.posY + 0.5, dx = px - m.x, dy = py - m.y, d = Math.hypot(dx, dy) || 1;
+    h.push(p, px + (dx / d) * 4, py + (dy / d) * 4);
+    h.stun(p, secs);
+}
+
+function pull(h: BossHost, m: BossMob, s: BossState, a: BossPullDef, T: number): void {
+    const at = { x: m.x, y: m.y };
+    for (const p of h.playersNear(m.x, m.y, a.r)) h.push(p, m.x + (Math.random() * 2 - 1), m.y + (Math.random() * 2 - 1));
+    h.broadcast(m, M.bossTelegraph(m.id, a.name, at.x, at.y, a.blastR, a.warnMs));
+    s.busyUntil = T + a.warnMs / 1000;
+    h.after(a.warnMs, () => {
+        if (!h.alive(m.id) || m.bs !== s) return;
+        count(s, a.id);
+        for (const p of h.playersNear(at.x, at.y, a.blastR)) h.hurt(p, Math.round(h.roll(m) * a.dmgK), `${m.def.name} (${a.name})`, m);
     });
 }
 
@@ -218,6 +250,10 @@ function phases(h: BossHost, m: BossMob, s: BossState, T: number): void {
         s.enraged = true; s.rage = Math.max(s.rage, kit.enrage.dmg);
         h.broadcast(m, M.bossPhase(m.id, 'furia', `${m.def.name} entra en furia.`, true));
     }
+    if (kit.stackFury) {
+        const n = Math.floor((T - s.startedAt) / kit.stackFury.every);
+        if (n > s.stacks) { s.stacks = n; if (n % 5 === 0) h.broadcast(m, M.bossPhase(m.id, 'furia_apilada', `${m.def.name} se enfurece (+${Math.round(n * kit.stackFury.pct * 100)} % de daño).`, s.enraged)); }
+    }
     if (kit.hardEnrage && !s.hard && T - s.startedAt >= kit.hardEnrage.secs) {
         s.hard = true; s.enraged = true; s.rage = Math.max(s.rage, kit.hardEnrage.dmg);
         h.broadcast(m, M.bossPhase(m.id, 'furia_final', `${m.def.name} pierde la paciencia.`, true));
@@ -258,8 +294,8 @@ export function bossReset(h: BossHost, m: BossMob): void {
     if (s.cast) h.broadcast(m, M.bossCastEnd(m.id, 2));
     for (const id of s.adds) h.despawn(id);
     if (s.startedAt) h.broadcast(m, M.bossPhase(m.id, 'reinicio', '', false));
-    Object.assign(s, { next: new Map(), global: 0, pauseUntil: 0, locks: new Map(), cast: undefined, busyUntil: 0, startedAt: 0, addsDone: new Set(), adds: new Set(), rage: 1, enraged: false, hard: false, zones: [], bleeds: new Map() });
+    Object.assign(s, { next: new Map(), global: 0, pauseUntil: 0, locks: new Map(), cast: undefined, busyUntil: 0, startedAt: 0, addsDone: new Set(), adds: new Set(), rage: 1, enraged: false, hard: false, stacks: 0, zones: [], bleeds: new Map() });
 }
 
 /** Multiplicador de daño por furia (1 si no tiene motor o no está en furia). */
-export const bossRage = (m: { bs?: BossState }): number => m.bs?.rage ?? 1;
+export const bossRage = (m: { bs?: BossState }): number => (m.bs ? m.bs.rage * (1 + (m.bs.kit.stackFury?.pct ?? 0) * m.bs.stacks) : 1);

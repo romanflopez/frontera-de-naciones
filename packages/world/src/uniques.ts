@@ -63,10 +63,14 @@ const DEFS: Def[] = [
     { tier: 3, arch: 'armPes', name: 'Coraza de Nazia' }, { tier: 3, arch: 'armMed', name: 'Malla del sepulturero' }, { tier: 3, arch: 'armMag', name: 'Mortaja bordada' },
     { tier: 3, arch: 'cabF', name: 'Yelmo del risco' }, { tier: 3, arch: 'cabM', name: 'Capuchón de duelo' },
     { tier: 3, arch: 'anilloO', name: 'Anillo de hueso' }, { tier: 3, arch: 'anilloD', name: 'Sello del risco' },
-    // Jefes de mazmorra (D1-D3): mejores que los de su banda y con el aspecto del tier siguiente
+    // Jefes de mazmorra (D1-D6): mejores que los de su banda y con el aspecto del tier siguiente
     { tier: 2, arch: 'arma1', name: 'Cuchilla del Jefe goblin', look: 'hand_axe', boss: 'goblin_jefe', mult: 1.3 }, { tier: 2, arch: 'armPes', name: 'Peto del Jefe goblin', boss: 'goblin_jefe', mult: 1.3 },
     { tier: 4, arch: 'arma1', name: 'Aguijón de la Reina', look: 'longsword', boss: 'antlion_reina', mult: 1.3 }, { tier: 4, arch: 'armPes', name: 'Caparazón de la Reina', boss: 'antlion_reina', mult: 1.3 },
     { tier: 5, arch: 'arma2', name: 'Mandoble del Caballero de la cripta', look: 'zweihander', boss: 'caballero_cripta', mult: 1.3 }, { tier: 5, arch: 'cabF', name: 'Yelmo del Caballero de la cripta', boss: 'caballero_cripta', mult: 1.3 },
+    // D4-D6 (docs/LLAVES.md): en la banda más alta (T6), cada jefe un poco por encima del anterior
+    { tier: 6, arch: 'armaM', name: 'Báculo del Mago mayor', boss: 'mago_mayor', mult: 1.3 }, { tier: 6, arch: 'armMag', name: 'Túnica del Mago mayor', boss: 'mago_mayor', mult: 1.3 },
+    { tier: 6, arch: 'arma1', name: 'Garra del Wyvern del aire', look: 'longsword', boss: 'wyvern_aire', mult: 1.4 }, { tier: 6, arch: 'armMed', name: 'Cota de escamas del viento', boss: 'wyvern_aire', mult: 1.4 },
+    { tier: 6, arch: 'arma2', name: 'Hoja del Señor del Foso', look: 'zweihander', boss: 'demonio_foso', mult: 1.5 }, { tier: 6, arch: 'armPes', name: 'Coraza del Foso', boss: 'demonio_foso', mult: 1.5 },
 ];
 
 export interface UniqueInfo { tier: number; attrs: [AttrId, number][]; boss?: MobType }

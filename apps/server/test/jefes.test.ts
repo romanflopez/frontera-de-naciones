@@ -5,7 +5,8 @@
 import { mock, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { BOSS_KITS, castWindowFrom, type MobType, type WorldMap, type Zone } from '@fdn/world';
+import { BOSS_KITS, BOSS_UNIQUES, DUNGEON_BOSS, DUNGEON_IDS, castWindowFrom, type MobType, type WorldMap, type Zone } from '@fdn/world';
+import { bossRage } from '../src/bosses.ts';
 import { MobSim, type MobHost } from '../src/mobs.ts';
 import type { Player } from '../src/player.ts';
 import { PvpLimiter, statsFromChar } from '../src/systems/pvpCombat.ts';
@@ -16,7 +17,7 @@ mock.method(Date, 'now', () => clock);
 const N = 40;
 function arena(type: MobType, at: { x: number; y: number }[] = [{ x: 20, y: 21 }]) {
     clock += 1_000_000;
-    const sent: ServerMessage[] = [], hurts: { who: number; raw: number; source: string }[] = [], stuns: number[] = [], slows: number[] = [], poisons: number[] = [];
+    const sent: ServerMessage[] = [], hurts: { who: number; raw: number; source: string }[] = [], stuns: number[] = [], slows: number[] = [], poisons: number[] = [], pushes: { who: number; x: number; y: number }[] = [], dispels: number[] = [];
     const timers: { at: number; fn: () => void }[] = [];
     const players = at.map((c, i) => ({
         playerId: BigInt(10 + i), characterName: `p${i}`, posX: c.x, posY: c.y, disconnected: false, isDead: false, status: { isInvisible: false },
@@ -30,6 +31,8 @@ function arena(type: MobType, at: { x: number; y: number }[] = [{ x: 20, y: 21 }
         after: (ms, fn) => { timers.push({ at: clock + ms, fn }); },
         hurt: (p, raw, source) => { hurts.push({ who: players.indexOf(p), raw, source }); },
         stun: (_p, secs) => { stuns.push(secs); return secs; }, slow: (_p, secs) => { slows.push(secs); }, poison: (_p, secs) => { poisons.push(secs); },
+        push: (p, x, y) => { pushes.push({ who: players.indexOf(p), x, y }); (p as { posX: number; posY: number }).posX = Math.floor(x); (p as { posX: number; posY: number }).posY = Math.floor(y); },
+        dispel: (p) => { dispels.push(players.indexOf(p)); },
         pay: () => true, heal: () => {}, reward: () => {},
     };
     const s = new MobSim(map, host, { noRespawn: true });
@@ -41,7 +44,7 @@ function arena(type: MobType, at: { x: number; y: number }[] = [{ x: 20, y: 21 }
     const run = (secs: number, until?: () => boolean) => { for (let i = 0; i < secs * 10; i++) { step(); if (until?.()) return true; } return false; };
     const of = <K extends string>(k: K) => sent.filter((m) => m.payload?.$case === k).map((m) => (m.payload as unknown as { value: Record<string, unknown> }).value);
     const casting = (name: string) => () => of('bossCast').some((v) => v.name === name);
-    return { s, players, sent, hurts, stuns, slows, poisons, boss, step, run, of, casting };
+    return { s, players, sent, hurts, stuns, slows, poisons, pushes, dispels, boss, step, run, of, casting };
 }
 
 test('barra de casteo: nombre, escuela, duración y ventana; si nadie corta, sale el efecto (Lluvia de ácido saca ~70 % a todos)', () => {
@@ -181,4 +184,55 @@ test('reinicio: si nadie lo sigue, vuelve a su lugar, se van los adds y la pelea
     assert.equal(A.s.detail().filter((m) => m.add).length, 0, 'adds fuera');
     assert.ok(A.of('bossPhase').some((v) => v.event === 'reinicio'));
     assert.equal(A.s.bossOf(b.id)!.startedAt, 0);
+});
+
+test('terror real: el Grito saca al jugador despedido lejos del jefe además de aterrarlo', () => {
+    const B = arena('goblin_jefe');
+    B.run(14, B.casting('Grito de terror')); B.run(2.5);
+    assert.ok(B.stuns.includes(3));
+    const push = B.pushes.at(-1)!;
+    assert.ok(push, 'lo empujó');
+    assert.ok(Math.hypot(push.x - B.boss().x, push.y - B.boss().y) >= 3.5, 'quedó lejos del jefe');
+});
+
+test('tirón y explosión: el Vórtice arrastra a todos al jefe y estalla; el que sale del círculo no recibe daño', () => {
+    const A = arena('mago_mayor', [{ x: 20, y: 21 }, { x: 26, y: 26 }]);
+    assert.ok(A.run(45, () => A.of('bossTelegraph').some((v) => v.name === 'Vórtice')));
+    assert.equal(A.pushes.length >= 2, true, 'arrastra a los dos');
+    A.players[1].posX = 32; A.players[1].posY = 32; // uno sale corriendo
+    A.run(2);
+    const hit = A.hurts.filter((h) => /Vórtice/.test(h.source)).map((h) => h.who);
+    assert.ok(hit.includes(0) && !hit.includes(1), `alcanzados: ${hit}`);
+});
+
+test('disipar: el Mago mayor les saca los buffs a todos, con candado (no se corta)', () => {
+    const A = arena('mago_mayor', [{ x: 20, y: 21 }, { x: 22, y: 22 }]);
+    assert.ok(A.run(45, A.casting('Disipar magia')));
+    assert.equal(A.of('bossCast').find((v) => v.name === 'Disipar magia')!.interruptible, false);
+    A.s.skillHit(A.players[0], A.boss().id, 1, 0, 'carga'); // no corta
+    A.run(2.5);
+    assert.ok(A.dispels.includes(0) && A.dispels.includes(1));
+});
+
+test('autocura y furia apilable: si nadie corta el Juramento, el Caballero se cura; y pega más cuanto más dura', () => {
+    const A = arena('caballero_cripta');
+    A.run(0.5);
+    const b = A.boss();
+    A.s.skillHit(A.players[0], b.id, Math.round(b.hpMax * 0.3), 0, 'golpe');
+    const hp0 = A.boss().hp;
+    assert.ok(A.run(20, A.casting('Juramento oscuro')));
+    A.run(3);
+    assert.ok(A.boss().hp > hp0, 'se curó');
+    A.run(25);
+    assert.ok(bossRage(A.s.bossOf(b.id) ? { bs: A.s.bossOf(b.id) } : {}) > 1.1, 'furia apilada');
+});
+
+test('los seis jefes de mazmorra tienen motor y sus ítems propios', () => {
+    for (const d of DUNGEON_IDS) {
+        const t = DUNGEON_BOSS[d];
+        assert.ok(BOSS_KITS[t], `${d}: ${t} sin kit`);
+        assert.ok((BOSS_UNIQUES[t]?.length ?? 0) >= 2, `${d}: ${t} sin ítems de jefe`);
+        const A = arena(t);
+        assert.ok(A.run(25, () => A.of('bossCast').length + A.of('bossTelegraph').length > 0), `${t} usa sus mecánicas`);
+    }
 });

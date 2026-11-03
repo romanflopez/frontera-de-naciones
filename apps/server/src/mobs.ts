@@ -35,6 +35,10 @@ export interface MobHost {
     poison?(p: Player, secs: number): void;
     /** Frena al jugador (jefes). Opcional (tests). */
     slow?(p: Player, secs: number): void;
+    /** Mueve al jugador a la celda libre más cercana a (x, y) (terror y tirón de los jefes). Opcional (tests). */
+    push?(p: Player, x: number, y: number): void;
+    /** Le saca los buffs y escudos (jefes que disipan). Opcional (tests). */
+    dispel?(p: Player): void;
     reward(killer: Player, info: { mobId: number; type: MobType; def: MobDef; zoneName: string; origin: 'loose' | 'pit' | 'dungeon'; x: number; y: number; shard?: 'cripta' | 'foso'; /** rasgos del mob (mobTraits.ts): multiplican la exp y el botín */ traits: number }): void;
     /** Murió un mob con dueño del golpe final: el mundo tira el botín de suelo (systems/loot.ts). Opcional (tests). */
     mobDied?(info: { type: MobType; def: MobDef; x: number; y: number; gm: boolean }): void;
@@ -489,6 +493,8 @@ export class MobSim {
             for (const k of [1, 1.5, 0.7, 2]) { const nx = x + (dx / d) * k, ny = y + (dy / d) * k; if (this.walk(Math.floor(nx), Math.floor(ny)) && !this.isSafe(nx, ny)) { m.x = nx; m.y = ny; return; } }
         },
         partySize: () => this.partyN,
+        push: (p, x, y) => this.host.push?.(p, x, y),
+        dispel: (p) => this.host.dispel?.(p),
     };
 
     /** Add de un jefe: nace al lado, con la escala de la party, y sale peleando contra el objetivo del jefe. No reaparece. */

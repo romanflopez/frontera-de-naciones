@@ -205,3 +205,12 @@ test('checklist de instancia: no se entra a una corrida mientras los de adentro 
         assert.equal(B.session.worldId, 'prueba_caza');
     } finally { setParties(undefined); }
 });
+
+test('densidad de D3 a D6: 49, 49, 55 y 55 mobs, con el jefe intacto', () => {
+    const count = (ids: string[]) => ids.reduce((a, id) => a + getMapDef(id)!.build().zones.reduce((s, z) => s + z.n, 0), 0);
+    assert.equal(count(['cripta_olvidada', 'sepulcro_profundo']), 49);
+    assert.equal(count(['torre_del_hechicero', 'camaras_de_investigacion']), 49);
+    assert.equal(count(['templo_de_mez', 'salon_de_mez']), 55);
+    assert.equal(count(['fortaleza_infernal', 'foso_del_demonio']), 55);
+    for (const [map, boss] of [['sepulcro_profundo', 'caballero_cripta'], ['camaras_de_investigacion', 'mago_mayor'], ['salon_de_mez', 'wyvern_aire'], ['foso_del_demonio', 'demonio_foso']]) assert.ok(getMapDef(map)!.build().zones.some((z) => z.type === boss && z.n === 1), boss);
+});

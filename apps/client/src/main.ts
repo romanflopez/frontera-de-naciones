@@ -2141,7 +2141,7 @@ let QB: QuestBookView | null = null;
 const MAT_NAMES: Record<string, string> = { ...Object.fromEntries(Object.entries(QUEST_MATS).map(([id, m]) => [id, m.name])), ...KEY_MAT_NAMES };
 const matName = (id: string) => MAT_NAMES[id] ?? id.replace(/^trophy_/, 'trofeo ').replace(/_/g, ' ');
 // ---------- llaves de las mazmorras (docs/LLAVES.md) ----------
-const KEY_CHAIN_MATS = ['colmillo', 'esencia', 'llave_gastada', 'llave_cueva', 'llave_nido'];
+const KEY_CHAIN_MATS = [...Object.keys(QUEST_MATS), 'llave_gastada', ...Object.keys(KEY_RECIPES)];
 /** La llave que se arma con este material (o la propia llave, si es una). */
 const keyFor = (id: string): string | undefined => (KEY_RECIPES[id] ? id : Object.keys(KEY_RECIPES).find((k) => id in KEY_RECIPES[k].mats));
 function combineKey(k: string) {
@@ -2151,7 +2151,7 @@ function combineKey(k: string) {
 }
 function keyMatTip(id: string): string {
     const n = QB?.mats[id] ?? 0, k = keyFor(id), r = k ? KEY_RECIPES[k] : undefined;
-    const what = KEY_RECIPES[id] ? `Abre ${KEY_RECIPES[id].dungeon}. Cada jugador gasta la suya al entrar.` : id === 'llave_gastada' ? 'La suelta el jefe de la Cueva goblin, una para cada uno.' : `Material de llave: cae en los pits de nivel ${QUEST_MATS[id]?.tier === 1 ? '1-5' : '6-10'}.`;
+    const what = KEY_RECIPES[id] ? `Abre ${KEY_RECIPES[id].dungeon}. Cada jugador gasta la suya al entrar.` : id === 'llave_gastada' ? 'La suelta el jefe de la Cueva goblin, una para cada uno.' : `Material de llave: cae en los pits del tramo T${QUEST_MATS[id]?.tier ?? '?'} (niveles ${(QUEST_MATS[id]?.tier ?? 1) * 5 - 4}-${(QUEST_MATS[id]?.tier ?? 1) * 5}).`;
     let recipe = '';
     if (r && k) {
         const parts = Object.entries(r.mats).map(([m, c]) => `${c} ${matName(m).toLowerCase()} (${QB?.mats[m] ?? 0}/${c})`).concat(`${r.gold} de oro`);

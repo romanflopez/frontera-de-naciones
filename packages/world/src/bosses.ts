@@ -18,7 +18,7 @@ export interface BossEffect {
     pctHp?: number;
     /** Segundos de aturdido. */
     stun?: number;
-    /** Segundos de terror: el jugador no puede actuar (hoy es un aturdido con otro nombre). */
+    /** Segundos de terror: el jugador sale despedido lejos del jefe y queda aterrado (no puede actuar) ese tiempo. */
     terror?: number;
     /** Segundos de frenado. */
     slow?: number;
@@ -26,6 +26,8 @@ export interface BossEffect {
     antiHeal?: number;
     /** El lanzador se cura esta fracción de su vida máxima. */
     heal?: number;
+    /** Les saca a los alcanzados los buffs y escudos (bendiciones, escudo de maná, divino, guardián): hay que volver a ponerlos. */
+    dispel?: boolean;
 }
 
 /** Casteo con barra. `window` = fracción final de la barra en la que entra un corte blando (por defecto 0,4, mínimo 0,8 s). */
@@ -58,7 +60,13 @@ export interface BossTankHitDef {
     bleed?: { pct: number; ticks: number; maxStacks: number };
 }
 
-export type BossAbilityDef = BossCastDef | BossTelegraphDef | BossTankHitDef;
+/**
+ * Tirón y explosión (Vortex → Apocalypse de Dreadmyst): arrastra a todos los que estén a `r` celdas o menos hasta el lado del jefe y marca
+ * un círculo de `blastR` alrededor suyo que estalla a los `warnMs`. Hay que salir corriendo del círculo.
+ */
+export interface BossPullDef { kind: 'pull'; id: string; name: string; every: number; first?: number; r: number; blastR: number; warnMs: number; dmgK: number }
+
+export type BossAbilityDef = BossCastDef | BossTelegraphDef | BossTankHitDef | BossPullDef;
 
 /** Adds al cruzar un umbral de vida (una sola vez). `minParty`: solo si la corrida es de esa cantidad o más. `kit`: el add tiene sus propias mecánicas. */
 export interface BossAddsDef { atHp: number; text: string; spawn: { type: MobType; n: number; lvl?: number; minParty?: number; kit?: string; name?: string }[] }
@@ -72,6 +80,8 @@ export interface BossKit {
     hardEnrage?: { secs: number; dmg: number };
     /** Respiro mínimo entre dos mecánicas (s): dos fuertes nunca caen juntas. Por defecto 4. */
     gap?: number;
+    /** Furia que se apila (Duke's Fury de Dreadmyst): cada `every` s de pelea, +`pct` de daño. Castiga las peleas largas sin un reloj que mate. */
+    stackFury?: { every: number; pct: number };
 }
 
 /** Bloqueo de escuela después de un corte (s) y tiempo sin castear (s): la Antimagia de Dreadmyst. */
@@ -98,6 +108,8 @@ export const ADD_KITS: Record<string, BossKit> = {
     chaman: { gap: 2, abilities: [{ kind: 'cast', id: 'fogonazo', name: 'Fogonazo', school: 'fuego', castMs: 2000, every: 8, first: 3, target: 'random', effect: { r: 0, dmgK: 2 } }] },
     // obrera escupidora de la Reina (D2, al 30 %): el Lord Zargan en chico, anti-cura a uno al azar
     escupidora: { gap: 2, abilities: [{ kind: 'cast', id: 'saliva', name: 'Saliva ácida', school: 'acido', castMs: 1800, every: 9, first: 2, target: 'random', effect: { r: 0, dmgK: 0.5, antiHeal: 8 } }] },
+    // hechicero de la cripta y de la torre: una saeta sombría a uno al azar, que se corta (los Hechiceros deshonrados de Kandorys)
+    hechicero: { gap: 2, abilities: [{ kind: 'cast', id: 'saeta', name: 'Saeta sombría', school: 'sombra', castMs: 2000, every: 8, first: 3, target: 'random', effect: { r: 0, dmgK: 2 } }] },
 };
 
 /** Jefes con el motor nuevo. Los que no están acá siguen con su `special` de siempre. */
@@ -128,5 +140,59 @@ export const BOSS_KITS: Partial<Record<MobType, BossKit>> = {
         ],
         enrage: { atHp: 0.25, dmg: 1.5, castSpeed: 0.7 },
         hardEnrage: { secs: 300, dmg: 3 },
+    },
+    // D3 (11-20): tanque con autocura. Si nadie corta el Juramento, la pelea se alarga y la furia apilable la vuelve peligrosa
+    caballero_cripta: {
+        abilities: [
+            { kind: 'tankHit', id: 'escudazo', name: 'Golpe de escudo', every: 9, first: 6, warnMs: 900, mult: 2.5 },
+            { kind: 'cast', id: 'juramento', name: 'Juramento oscuro', school: 'sombra', castMs: 2500, every: 16, first: 10, target: 'tank', effect: { r: 0, heal: 0.12 } },
+            { kind: 'telegraph', id: 'tajo', name: 'Tajo sombrío', every: 11, first: 4, warnMs: 1300, at: 'random', r: 2.5, dmgK: 1.2 },
+        ],
+        adds: [
+            { atHp: 0.6, text: 'Los muertos de la cripta se levantan.', spawn: [{ type: 'skeleton', n: 2 }] },
+            { atHp: 0.3, text: 'Los muertos de la cripta se levantan.', spawn: [{ type: 'skeleton', n: 1 }, { type: 'skeleton_mage', n: 1, kit: 'hechicero', name: 'Hechicero de la cripta' }] },
+        ],
+        stackFury: { every: 10, pct: 0.03 },
+        enrage: { atHp: 0.25, dmg: 1.5, castSpeed: 0.7 },
+    },
+    // D4: lanzador. Mucho para cortar, un tirón que hay que salir corriendo y un disipar que no se corta (hay que volver a ponerse los escudos)
+    mago_mayor: {
+        abilities: [
+            { kind: 'cast', id: 'bola', name: 'Bola arcana', school: 'fuego', castMs: 2000, every: 7, first: 3, target: 'random', effect: { r: 0, dmgK: 2.5 } },
+            { kind: 'cast', id: 'lluviafuego', name: 'Lluvia de fuego', school: 'fuego', castMs: 3000, every: 14, first: 9, effect: { r: 14, pctHp: 0.6 } },
+            { kind: 'pull', id: 'vortice', name: 'Vórtice', every: 20, first: 15, r: 12, blastR: 3, warnMs: 1600, dmgK: 2.5 },
+            { kind: 'cast', id: 'disipar', name: 'Disipar magia', school: 'sombra', castMs: 1500, every: 18, first: 12, lock: true, effect: { r: 14, dispel: true } },
+        ],
+        adds: [{ atHp: 0.5, text: 'El Mago mayor llama a sus aprendices.', spawn: [{ type: 'skeleton_mage', n: 2, kit: 'hechicero', name: 'Aprendiz' }] }],
+        enrage: { atHp: 0.25, dmg: 1.5, castSpeed: 0.7 },
+    },
+    // D5 (21-30): el aire. Un rugido de sala que aterra (cortable) y una tormenta con candado (escudos y curas)
+    wyvern_aire: {
+        abilities: [
+            { kind: 'telegraph', id: 'rafaga', name: 'Ráfaga', every: 9, first: 4, warnMs: 1200, at: 'random', r: 3, dmgK: 1.2, pool: { name: 'Remolino', r: 3, secs: 5, dpsK: 0.3 } },
+            { kind: 'cast', id: 'rugido', name: 'Rugido', school: 'sombra', castMs: 2000, every: 15, first: 8, effect: { r: 14, dmgK: 0.3, terror: 3 } },
+            { kind: 'cast', id: 'tormenta', name: 'Tormenta de viento', school: 'fis', castMs: 2500, every: 18, first: 13, lock: true, effect: { r: 14, pctHp: 0.4 } },
+            { kind: 'tankHit', id: 'zarpazo', name: 'Zarpazo', every: 11, first: 10, warnMs: 800, mult: 3, bleed: { pct: 0.03, ticks: 5, maxStacks: 3 } },
+        ],
+        adds: [{ atHp: 0.5, text: 'Las crías de la tormenta bajan del cielo.', spawn: [{ type: 'wyvern_ice', n: 1 }, { type: 'wyvern_fire', n: 1 }] }],
+        enrage: { atHp: 0.25, dmg: 1.5, castSpeed: 0.7 },
+        hardEnrage: { secs: 360, dmg: 3 },
+    },
+    // D6 (el Foso): todo junto. Tirón, llamas de sala para cortar, grito que aterra y disipa, golpe al tanque con sangrado y furia apilable
+    demonio_foso: {
+        abilities: [
+            { kind: 'telegraph', id: 'salto', name: 'Salto sísmico', every: 10, first: 5, warnMs: 1300, at: 'tank', r: 3.4, dmgK: 1.5, stun: 1 },
+            { kind: 'cast', id: 'llamas', name: 'Llamas del foso', school: 'fuego', castMs: 2500, every: 13, first: 8, effect: { r: 14, pctHp: 0.65 } },
+            { kind: 'pull', id: 'vortice', name: 'Vórtice infernal', every: 22, first: 16, r: 12, blastR: 3, warnMs: 1500, dmgK: 3 },
+            { kind: 'tankHit', id: 'desgarro', name: 'Desgarro', every: 11, first: 11, warnMs: 800, mult: 3, bleed: { pct: 0.03, ticks: 5, maxStacks: 3 } },
+            { kind: 'cast', id: 'grito', name: 'Grito del foso', school: 'sombra', castMs: 1800, every: 24, first: 20, effect: { r: 14, terror: 2, dispel: true } },
+        ],
+        adds: [
+            { atHp: 0.6, text: 'Del foso salen llamas con alas.', spawn: [{ type: 'wyvern_fire', n: 2 }] },
+            { atHp: 0.3, text: 'Del foso salen llamas con alas.', spawn: [{ type: 'wyvern_fire', n: 1 }, { type: 'skeleton_mage', n: 1, kit: 'hechicero', name: 'Brujo del foso' }] },
+        ],
+        stackFury: { every: 10, pct: 0.03 },
+        enrage: { atHp: 0.25, dmg: 1.5, castSpeed: 0.7 },
+        hardEnrage: { secs: 420, dmg: 3 },
     },
 };
