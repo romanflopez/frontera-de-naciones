@@ -45,12 +45,24 @@ def tint(im, hexcol, strength=0.75):
             px[x, y] = (int(nr * 255), int(ng * 255), int(nb * 255), pa)
     return im
 
-def item(pack, n, dst, size=96, fill=0.95, col=None, strength=0.75):
+def item_bg(size):
+    """Fondo oscuro como el de la variante "background" de Craftpix: radial marrón-gris que se apaga hacia los bordes."""
+    bg = Image.new('RGBA', (size, size), (0, 0, 0, 0)); px = bg.load(); c = (size - 1) / 2
+    for y in range(size):
+        for x in range(size):
+            d = min(1, (((x - c) ** 2 + (y - c) ** 2) ** 0.5) / (c * 1.25)); t = d * d
+            px[x, y] = (int(58 - 28 * t), int(46 - 22 * t), int(44 - 20 * t), 255)
+    return bg
+
+def item(pack, n, dst, size=96, fill=0.95, col=None, strength=0.75, bg=False):
+    """`bg=True` (equipo: looks y sets): como lo compone Craftpix en su versión con fondo, el objeto GRANDE (fill > 1 → lo que
+    sobra se corta, como la punta de una espada en diagonal) sobre el fondo oscuro; entero y con aire, en una celda de 44 px no se
+    entendía. Sin `bg` (pociones, oro, materiales): transparente, porque se usan sueltos en el HUD y en los pies de ventana."""
     im = Image.open(src(pack, n)).convert('RGBA')
     bbox = im.getbbox(); im = im.crop(bbox) if bbox else im
     if col: im = tint(im, col, strength)
     w, h = im.size; k = (size * fill) / max(w, h); im = im.resize((max(1, int(w * k)), max(1, int(h * k))), Image.LANCZOS)
-    base = Image.new('RGBA', (size, size), (0, 0, 0, 0)); base.alpha_composite(im, ((size - im.width) // 2, (size - im.height) // 2))
+    base = item_bg(size) if bg else Image.new('RGBA', (size, size), (0, 0, 0, 0)); base.alpha_composite(im, ((size - im.width) // 2, (size - im.height) // 2))
     base.save(dst)
 
 n_s = n_i = 0
@@ -63,8 +75,8 @@ for iid, v in M['items'].items():
 os.makedirs(os.path.join(out, 'looks'), exist_ok=True); os.makedirs(os.path.join(out, 'sets'), exist_ok=True)
 n_l = n_set = 0
 for lk, v in M.get('looks', {}).items():
-    item(v[0], v[1], os.path.join(out, 'looks', lk + '.png'), col=v[2] if len(v) > 2 else None); n_l += 1
+    item(v[0], v[1], os.path.join(out, 'looks', lk + '.png'), fill=1.12, col=v[2] if len(v) > 2 else None, bg=True); n_l += 1
 for sid, (cls, tier, col) in M.get('sets', {}).items():
     for piece, bases in M['set_bases'][cls].items():
-        item('equip', bases[tier - 1], os.path.join(out, 'sets', f'{sid}_{piece}.png'), col=col, strength=0.6); n_set += 1
+        item('equip', bases[tier - 1], os.path.join(out, 'sets', f'{sid}_{piece}.png'), fill=1.12, col=col, strength=0.6, bg=True); n_set += 1
 print(f'{n_s} hechizos, {n_i} ítems, {n_l} looks y {n_set} piezas de set en {out}')
