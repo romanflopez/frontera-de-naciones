@@ -2533,18 +2533,22 @@ function loadMap(def: MapDef): string {
     return h;
 }
 const loadEl = () => $('maploading');
+/** Barra de la pantalla de viaje: 0.1 al mostrarla, 0.7 con el mapa armado (esperando al server), 1 al entrar. */
+const setMapLoading = (k: number) => { ($('mlFill') as HTMLElement).style.width = `${Math.round(k * 100)}%`; };
 function showMapLoading(name: string, lvl: [number, number] | null, tier?: number) {
     const el = loadEl(); el.classList.remove('err'); el.dataset.since = String(performance.now());
-    $('mlName').textContent = name; $('mlLvl').textContent = lvl ? `${tier ? `Zona T${tier} · ` : ''}Nivel recomendado ${lvl[0]}–${lvl[1]}` : ''; $('mlMsg').textContent = 'Cargando…';
+    $('mlName').textContent = name; $('mlLvl').textContent = lvl ? `${tier ? `Zona T${tier} · ` : ''}Nivel recomendado ${lvl[0]}–${lvl[1]}` : ''; $('mlMsg').textContent = 'Loading...';
+    setMapLoading(0.1);
     el.hidden = false; requestAnimationFrame(() => el.classList.add('on'));
 }
 function hideMapLoading() {
     const el = loadEl(); if (el.hidden) return;
+    setMapLoading(1);
     const wait = Math.max(0, 600 - (performance.now() - Number(el.dataset.since ?? 0)));
     setTimeout(() => { el.classList.remove('on'); setTimeout(() => { el.hidden = true; }, 350); mapLoading = false; }, wait);
 }
 function failMapLoading(msg: string) {
-    mapLoading = true; const el = loadEl(); el.classList.add('err', 'on'); el.hidden = false; $('mlMsg').textContent = msg;
+    mapLoading = true; const el = loadEl(); el.classList.add('err', 'on'); el.hidden = false; $('mlMsg').textContent = msg; setMapLoading(1);
     net.close();
 }
 /** El server me sacó del mundo anterior: pantalla de carga, armo el mapa, verifico el hash y aviso MapReady (recién ahí me mete en el nuevo). */
@@ -2563,7 +2567,7 @@ function onMapTransfer(v: { mapId: string; name: string; x: number; y: number; d
         const [dx, dy] = GRID_VEC[v.direction] ?? [0, 1]; turnTo(P, dx, dy, 0, true);
         const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
         net.send({ $case: 'mapReady', value: { mapId: def.id, mapHash: h } });
-        $('mlMsg').textContent = 'Entrando…';
+        $('mlMsg').textContent = 'Entrando...'; setMapLoading(0.7);
     }, 30));
 }
 /** Cruce de un vínculo entre mapas: el cliente solo pide por id; el server valida distancia, requisitos y estado. */

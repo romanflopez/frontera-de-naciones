@@ -1,17 +1,28 @@
-/* Pantalla de carga con el diseño del pack Craftpix "RPG MMO Game User Interface" (screen LOADING):
-   el fondo desenfocado del login (lg-bg.webp), "LOADING..." centrado abajo y una barra de progreso azul
-   de borde a borde. El progreso lo empuja boot() en main.ts (setLoading). Sin la textura queda el fondo oscuro. */
-#loading{position:fixed;inset:0;z-index:30;display:block;place-items:unset;font-size:0;color:#dfe6ea;background:#1a2028 url(/assets/ui/craftpix/lg-bg.webp) center/cover no-repeat;overflow:hidden}
-#loading::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 50% 60%,#0000 40%,#0008 100%)}
-#loading .ldbox{position:absolute;left:4.4%;right:4.4%;bottom:calc(60px + env(safe-area-inset-bottom,0px));display:grid;gap:14px;justify-items:center}
-#loading .ldt{font:500 16px/1 "Alegreya SC",Georgia,serif;letter-spacing:.06em;text-transform:uppercase;color:#d9e2e8;text-shadow:0 1px 3px #000,0 0 10px #0009}
-#loading .ldbar{position:relative;width:100%;height:10px;box-sizing:border-box;background:#0c1319;border:1px solid #243441;border-radius:2px;box-shadow:0 0 0 1px #000a,0 2px 8px #000c,inset 0 1px 2px #000}
-#loading .ldbar i{position:absolute;inset:1px auto 1px 1px;display:block;width:0;border-radius:1px;transition:width .25s ease-out;
+/* Pantallas de carga con el diseño del pack Craftpix "RPG MMO Game User Interface" (screen LOADING):
+   el fondo desenfocado del login (lg-bg.webp), "LOADING..." centrado abajo y una barra de progreso azul de borde a borde.
+   Las usan #loading (arranque: boot() empuja el progreso con setLoading) y #maploading (viaje entre mapas: etapas en
+   showMapLoading/onMapTransfer). Sin la textura queda el fondo oscuro. */
+.ldscreen{position:fixed;inset:0;z-index:30;display:block;color:#dfe6ea;background:#1a2028 url(/assets/ui/craftpix/lg-bg.webp) center/cover no-repeat;overflow:hidden;font-size:0;text-align:center}
+.ldscreen::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 50% 60%,#0000 40%,#0008 100%)}
+.ldscreen[hidden]{display:none}
+.ldscreen .ldbox{position:absolute;left:4.4%;right:4.4%;bottom:calc(60px + env(safe-area-inset-bottom,0px));display:grid;gap:14px;justify-items:center}
+.ldscreen .ldt{font:500 16px/1 "Alegreya SC",Georgia,serif;letter-spacing:.06em;text-transform:uppercase;color:#d9e2e8;text-shadow:0 1px 3px #000,0 0 10px #0009}
+.ldscreen .ldbar{position:relative;width:100%;height:10px;box-sizing:border-box;background:#0c1319;border:1px solid #243441;border-radius:2px;box-shadow:0 0 0 1px #000a,0 2px 8px #000c,inset 0 1px 2px #000}
+.ldscreen .ldbar i{position:absolute;inset:1px auto 1px 1px;display:block;width:0;border-radius:1px;transition:width .35s ease-out;
   background:linear-gradient(180deg,#6cc3f2 0%,#3b9ad8 45%,#2c7fbd 100%);box-shadow:0 0 8px #3c9fe0aa,inset 0 0 0 1px #8fd4ff44}
-#loading .ldbar i::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#fff0,#fff5,#fff0);width:30%;animation:ldshine 1.6s linear infinite}
-#loading.err .ldt{color:#f0907a;text-transform:none;letter-spacing:.02em}
-#loading.err .ldbar i{background:#8a2e2e;box-shadow:none}
-#loading.err .ldbar i::after{animation:none}
+.ldscreen .ldbar i::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#fff0,#fff5,#fff0);width:30%;animation:ldshine 1.6s linear infinite}
+.ldscreen.err .ldt{color:#f0907a;text-transform:none;letter-spacing:.02em}
+.ldscreen.err .ldbar i{background:#8a2e2e;box-shadow:none}
+.ldscreen.err .ldbar i::after{animation:none}
 @keyframes ldshine{0%{left:-30%}100%{left:130%}}
-@media (prefers-reduced-motion:reduce){#loading .ldbar i::after{animation:none}#loading .ldbar i{transition:none}}
-body:has(#loading:not([hidden])) #chatRoot{display:none}
+@media (prefers-reduced-motion:reduce){.ldscreen .ldbar i::after{animation:none}.ldscreen .ldbar i{transition:none}}
+body:has(.ldscreen:not([hidden])) #chatRoot{display:none}
+
+/* viaje entre mapas: el destino arriba del LOADING, con fundido de entrada/salida */
+#maploading{opacity:0;transition:opacity .3s}
+#maploading.on{opacity:1}
+#maploading .ldbox{gap:10px}
+#maploading .ldk{font:500 12px/1 "Alegreya SC",Georgia,serif;letter-spacing:.34em;text-transform:uppercase;color:#9fb6c8;text-shadow:0 1px 3px #000}
+#maploading .ldname{margin:0;font:500 30px/1.1 "Alegreya SC",Georgia,serif;letter-spacing:.12em;text-transform:uppercase;color:#eef4f8;text-shadow:0 2px 6px #000,0 0 18px rgba(90,160,230,.45)}
+#maploading .ldsub{font:400 13px/1.2 "Alegreya Sans",system-ui,sans-serif;letter-spacing:.04em;color:#b9c8d4;min-height:1.2em;text-shadow:0 1px 3px #000}
+#maploading .ldt{margin-top:6px}
