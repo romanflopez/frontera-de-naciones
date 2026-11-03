@@ -4,6 +4,7 @@
  */
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { AccountRecord, Storage } from './storage.ts';
+import type { Econ } from './economy.ts';
 import { TRAINING, trainingUnlocked } from '@fdn/world';
 
 const NAME_RE = /^[\p{L}\p{N}_\- ]{2,16}$/u;
@@ -43,6 +44,69 @@ export function authenticate(storage: Storage, rawName: string, password: string
     }
     acc.lastLogin = now; storage.put(key, acc);
     return { ok: true, key, created: false, account: acc };
+}
+
+// ---------- personajes de la cuenta ----------
+// Una cuenta (usuario + contraseña) tiene hasta MAX_CHARS personajes. Cada personaje es un registro propio (`c_<hex del nombre>`)
+// con su economía y su posición; el depósito sigue siendo de la cuenta (ver deposit.ts). Los nombres de personaje son únicos en todo el server.
+// Las cuentas viejas tienen su único personaje dentro del propio registro de la cuenta: se migra en el primer login (clave del personaje = clave de la cuenta).
+export const MAX_CHARS = 3;
+/** Clave del registro de un personaje nuevo. El prefijo `c_` no puede chocar con las claves de cuenta (hexadecimales). */
+export const charKey = (name: string): string => `c_${accountKey(name)}`;
+export const normalizeName = (raw: string): string => raw.trim().replace(/\s+/g, ' ');
+export const NAME_ERROR = 'El nombre tiene que tener entre 2 y 16 letras, números, espacios, guiones o _.';
+
+const hasLegacyChar = (r: AccountRecord): boolean => !r.charDeleted && !r.owner && !!(r.econ || r.character);
+
+/** Claves de los personajes vivos de la cuenta, en orden. Migra la cuenta vieja la primera vez. */
+export function charKeysOf(storage: Storage, accKey: string): string[] {
+    const acc = storage.get(accKey); if (!acc) return [];
+    if (!acc.chars) { acc.chars = hasLegacyChar(acc) ? [accKey] : []; storage.put(accKey, acc); }
+    return acc.chars.filter((k) => { const r = storage.get(k); return !!r && !r.charDeleted; });
+}
+/** ¿Ya existe un personaje vivo con ese nombre (en cualquier cuenta)? Sin distinguir mayúsculas. */
+export function charNameTaken(storage: Storage, name: string): boolean {
+    const c = storage.get(charKey(name));
+    if (c && !c.charDeleted) return true;
+    const legacy = storage.get(accountKey(name));
+    return !!legacy && hasLegacyChar(legacy);
+}
+/** ¿El personaje (por clave) es de esa cuenta? */
+export const ownsChar = (storage: Storage, accKey: string, key: string): boolean => charKeysOf(storage, accKey).includes(key);
+/** Busca entre los personajes de la cuenta por nombre (sin distinguir mayúsculas). */
+export function findChar(storage: Storage, accKey: string, rawName: string): { key: string; rec: AccountRecord } | undefined {
+    const n = normalizeName(rawName).normalize('NFC').toLowerCase();
+    for (const key of charKeysOf(storage, accKey)) { const rec = storage.get(key); if (rec && rec.name.normalize('NFC').toLowerCase() === n) return { key, rec }; }
+    return undefined;
+}
+
+export type CharResult = { ok: true; key: string; name: string } | { ok: false; error: string };
+
+/** Crea un personaje (con su economía ya armada) en la cuenta. Valida nombre, tope y unicidad. */
+export function createCharacter(storage: Storage, accKey: string, rawName: string, econ: Econ, now = Date.now()): CharResult {
+    const name = normalizeName(rawName);
+    if (!NAME_RE.test(name)) return { ok: false, error: NAME_ERROR };
+    const acc = storage.get(accKey); if (!acc) return { ok: false, error: 'La cuenta no existe.' };
+    if (charKeysOf(storage, accKey).length >= MAX_CHARS) return { ok: false, error: `Ya tenés ${MAX_CHARS} personajes: borrá uno para crear otro.` };
+    if (charNameTaken(storage, name)) return { ok: false, error: 'Ese nombre ya está en uso. Elegí otro.' };
+    const key = charKey(name);
+    storage.put(key, { name, salt: '', hash: '', created: now, lastLogin: now, owner: accKey, econ });
+    acc.chars = [...(acc.chars ?? []), key]; storage.put(accKey, acc);
+    storage.flush();
+    return { ok: true, key, name };
+}
+
+/**
+ * Borra un personaje de la cuenta (borrado lógico: el nombre queda libre, el dato no se destruye). El depósito no se toca: es de la cuenta.
+ * El que llama tiene que haber verificado antes que no está conectado y que no tiene nada en la casa de subastas.
+ */
+export function deleteCharacter(storage: Storage, accKey: string, rawName: string, now = Date.now()): CharResult {
+    const f = findChar(storage, accKey, rawName); if (!f) return { ok: false, error: 'Ese personaje no existe.' };
+    const acc = storage.get(accKey)!;
+    f.rec.charDeleted = now; storage.put(f.key, f.rec);
+    acc.chars = (acc.chars ?? []).filter((k) => k !== f.key); storage.put(accKey, acc);
+    storage.flush();
+    return { ok: true, key: f.key, name: f.rec.name };
 }
 
 // ---------- progreso del personaje ----------

@@ -57,6 +57,9 @@ message ClientMessage {
     MakeServerCellOccupiedRequest make_server_cell_occupied_request = 3;
     PlayerMovementStateChangeRequest player_movement_state_change_request = 5;
     AuthenticateRequest authenticate_request = 6;
+    CreateCharacterRequest create_character_request = 1000;
+    SelectCharacterRequest select_character_request = 1001;
+    DeleteCharacterRequest delete_character_request = 1002;
     LogoutRequest logout_request = 7;
     LogoutCancelledRequest logout_cancelled_request = 8;
     // En desuso (reservado): el cambio de mapa va por PortalRequest / MapTransfer / MapReady.
@@ -300,9 +303,25 @@ message LogoutCancelledRequest {
 
 message AuthenticateRequest {
   string id = 1;
+  /** Nombre de la CUENTA (usuario). Los personajes se eligen después con SelectCharacterRequest. */
   string character_name = 2;
   /** Cuenta: si el nombre no existe se crea con esta contraseña; si existe tiene que coincidir. */
   string password = 3;
+}
+
+/** Crea un personaje en la cuenta (máximo 3). El server responde con CharacterList (con `error` si no se pudo). */
+message CreateCharacterRequest {
+  string name = 1;
+  string cls = 2;
+  string faction = 3;
+}
+/** Entra al mundo con uno de los personajes de la cuenta. */
+message SelectCharacterRequest {
+  string name = 1;
+}
+/** Borra un personaje de la cuenta. `name` tiene que coincidir con el del personaje. */
+message DeleteCharacterRequest {
+  string name = 1;
 }
 
 message LogoutRequest {
@@ -485,6 +504,7 @@ message ServerMessage {
     PvpHit pvp_hit = 65;
     SkillEffect skill_effect = 66;
     CharacterLoaded character_loaded = 80;
+    CharacterList character_list = 1400;
     MobsSnapshot mobs_snapshot = 120;
     MobDamaged mob_damaged = 121;
     MobAttack mob_attack = 122;
@@ -723,6 +743,20 @@ message SaveCharacterRequest {
 message CharacterLoaded {
   bool exists = 1;
   string data = 2;
+}
+message CharacterSummary {
+  string name = 1;
+  string cls = 2;
+  string faction = 3;
+  int32 level = 4;
+  /** Nombre del mapa donde quedó (vacío si nunca entró). */
+  string zone = 5;
+}
+/** Personajes de la cuenta. Se manda tras autenticar y después de cada crear/borrar; `error` no vacío = la última acción falló (la lista sigue vigente). */
+message CharacterList {
+  repeated CharacterSummary characters = 1;
+  int32 max = 2;
+  string error = 3;
 }
 message ChangePlayerProfileRequest {
   string profile = 1;

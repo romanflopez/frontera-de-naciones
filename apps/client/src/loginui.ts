@@ -8,7 +8,8 @@ import { mountDoll } from './paperdoll.ts';
 
 export interface ClassInfo { id: string; name: string; desc: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; armor?: string; spells: string[] }
 export interface FactionInfo { id: string; name: string; col: string; desc: string }
-export interface SaveInfo { cls: string; faction: string; lvl: number }
+/** Un personaje de la cuenta, como lo manda el server. */
+export interface CharInfo { name: string; cls: string; faction: string; lvl: number; zone: string }
 export interface FlowCtx {
     classes: ClassInfo[];
     factions: FactionInfo[];
@@ -18,7 +19,17 @@ export interface FlowCtx {
     get: () => { cls: string; faction: string };
     set: (p: { cls?: string; faction?: string }) => void;
 }
-export interface StartInfo { name: string; saved: SaveInfo | null; zone: string; onPlay: () => void; onBack: () => void }
+export interface StartInfo {
+    account: string; chars: CharInfo[]; max: number;
+    /** Personaje que se marca al abrir la selección (el último que se jugó). */
+    preselect?: string;
+    /** `isNew`: el personaje se acaba de crear (arranca en su ciudad). */
+    onPlay: (name: string, isNew: boolean) => void;
+    onCreate: (p: { name: string; cls: string; faction: string }) => void;
+    onDelete: (name: string) => void;
+    onBack: () => void;
+}
+const NAME_RE = /^[\p{L}\p{N}_\- ]{2,16}$/u;
 export type Screen = 'login' | 'select' | 'class' | 'faction' | 'create';
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -126,20 +137,59 @@ export function initLoginUI(ctx: FlowCtx) {
         if (s === 'select') renderSelect(); else if (s === 'class') renderClass(); else if (s === 'faction') renderFaction(); else if (s === 'create') renderCreate();
         const focusId = { login: '', select: 'selPlay', class: 'clsOk', faction: 'facOk', create: 'crOk' }[s];
         if (focusId) ($(focusId) as HTMLElement).focus({ preventScroll: true });
+        if (s !== 'select') delBox.hidden = true;
     }
 
-    // --- selección de personaje (un personaje por cuenta; el resto de los slots aún no existen) ---
+    // --- selección de personaje (hasta `info.max` por cuenta: elegir, crear uno nuevo o borrar) ---
+    let chars: CharInfo[] = [], selIdx = 0, newName = '', creating = false;
+    const setBusy = (on: boolean) => {
+        ($('crOk') as HTMLButtonElement).disabled = on;
+        ($('selPlay') as HTMLButtonElement).disabled = on || !chars.length;
+        ($('selDel') as HTMLButtonElement).disabled = on || !chars.length;
+    };
     function renderSelect() {
-        const sv = info?.saved; if (!info || !sv) return;
-        const c = clsOf(sv.cls), f = facOf(sv.faction), col = clsCol(c.id);
-        const hpMax = c.hp + (sv.lvl - 1) * c.hpL, mpMax = c.mp + (sv.lvl - 1) * c.mpL;
+        if (!info) return;
+        selIdx = Math.min(selIdx, Math.max(0, chars.length - 1));
         const top = (fn: (x: ClassInfo) => number) => Math.max(...ctx.classes.map((x) => fn(x)));
         const bar = (label: string, v: number, m: number) => `<li><span class="al">${label}</span><span class="av">${v}</span><span class="bar"><i style="width:${Math.round((v / m) * 100)}%"></i></span></li>`;
-        $('slots').innerHTML = `<li><button type="button" class="slot on" aria-pressed="true"><span class="sbadge">${clsIcon(c.id, col)}</span><span class="stxt"><b>${esc(info.name)}</b><small>${c.name} · ${f.name}</small></span><span class="lvl">Nv. ${sv.lvl}</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button></li>`
-            + [1, 2, 3].map(() => `<li><button type="button" class="slot empty" disabled aria-label="Slot vacío, próximamente"><span class="sbadge dim"><svg viewBox="-34 -34 68 68" role="presentation"><circle r="32" fill="none" stroke="#6a5a90" stroke-width="2" stroke-dasharray="5 4"/><path d="M0 -9 V9 M-9 0 H9" stroke="#8a78b0" stroke-width="2.4" stroke-linecap="round"/></svg></span><span class="stxt"><b>Vacío</b><small>Próximamente</small></span></button></li>`).join('');
+        const slotHtml = (i: number): string => {
+            const sv = chars[i];
+            if (!sv) return `<li><button type="button" class="slot empty" data-new="1" aria-label="Crear personaje nuevo"><span class="sbadge dim"><svg viewBox="-34 -34 68 68" role="presentation"><circle r="32" fill="none" stroke="#a78ad8" stroke-width="2" stroke-dasharray="5 4"/><path d="M0 -9 V9 M-9 0 H9" stroke="#d9c4ff" stroke-width="2.4" stroke-linecap="round"/></svg></span><span class="stxt"><b>Crear personaje</b><small>Slot libre</small></span></button></li>`;
+            const c = clsOf(sv.cls), f = facOf(sv.faction), on = i === selIdx;
+            return `<li><button type="button" class="slot${on ? ' on' : ''}" data-i="${i}" aria-pressed="${on}"><span class="sbadge">${clsIcon(c.id, clsCol(c.id))}</span><span class="stxt"><b>${esc(sv.name)}</b><small>${c.name} · ${f.name}</small></span><span class="lvl">Nv. ${sv.lvl}</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button></li>`;
+        };
+        $('slots').innerHTML = Array.from({ length: info.max }, (_, i) => slotHtml(i)).join('');
+        const sv = chars[selIdx];
+        if (!sv) { $('selArt').innerHTML = ''; $('selDetail').innerHTML = ''; setBusy(false); return; }
+        const c = clsOf(sv.cls), f = facOf(sv.faction), col = clsCol(c.id);
+        root.dataset.cls = c.id; root.style.setProperty('--ac', col); root.style.setProperty('--fc', f.col);
+        const hpMax = c.hp + (sv.lvl - 1) * c.hpL, mpMax = c.mp + (sv.lvl - 1) * c.mpL;
         $('selArt').innerHTML = dollCv(c.id, 0.66); mountDolls($('selArt'));
-        $('selDetail').innerHTML = `<h3>${esc(info.name)}</h3><p class="dsub"><b style="color:${col}">${c.name}</b> · <b style="color:${f.col}">${f.name}</b></p><ul class="attrs">${bar('Vida', hpMax, top((x) => x.hp + (sv.lvl - 1) * x.hpL))}${bar('Maná', mpMax, top((x) => x.mp + (sv.lvl - 1) * x.mpL))}</ul><dl><dt>Nivel</dt><dd>${sv.lvl}</dd><dt>Zona</dt><dd>${esc(info.zone)}</dd></dl>`;
+        $('selDetail').innerHTML = `<h3>${esc(sv.name)}</h3><p class="dsub"><b style="color:${col}">${c.name}</b> · <b style="color:${f.col}">${f.name}</b></p><ul class="attrs">${bar('Vida', hpMax, top((x) => x.hp + (sv.lvl - 1) * x.hpL))}${bar('Maná', mpMax, top((x) => x.mp + (sv.lvl - 1) * x.mpL))}</ul><dl><dt>Nivel</dt><dd>${sv.lvl}</dd><dt>Zona</dt><dd>${esc(sv.zone || ciudadInicial(f.id))}</dd></dl>`;
+        setBusy(false);
     }
+    const ciudadInicial = (fid: string) => ctx.cityName(fid);
+    $('slots').addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest<HTMLElement>('.slot'); if (!b || !info) return;
+        if (b.dataset.new) { newName = ''; ($('selErr') as HTMLElement).textContent = ''; show('class'); return; }
+        selIdx = Number(b.dataset.i); ($('selErr') as HTMLElement).textContent = ''; renderSelect();
+    });
+    $('slots').addEventListener('dblclick', (e) => { const b = (e.target as HTMLElement).closest<HTMLElement>('.slot[data-i]'); if (b && chars[selIdx]) play(); });
+    function play() { const sv = chars[selIdx]; if (!info || !sv) return; setBusy(true); info.onPlay(sv.name, false); }
+
+    // --- borrar personaje: hay que escribir el nombre ---
+    const delBox = $('delBox'), delIn = $('delIn') as HTMLInputElement, delOk = $('delOk') as HTMLButtonElement;
+    const sameName = (a: string, b: string) => a.trim().normalize('NFC').toLowerCase() === b.trim().normalize('NFC').toLowerCase();
+    function openDelete() {
+        const sv = chars[selIdx]; if (!sv) return;
+        $('delTxt').innerHTML = `Vas a borrar a <b>${esc(sv.name)}</b> (${clsOf(sv.cls).name}, nivel ${sv.lvl}) con todo lo que lleva encima. No se puede deshacer. El depósito de la cuenta no se toca.`;
+        delIn.value = ''; delOk.disabled = true; $('delErr').textContent = ''; delBox.hidden = false; delIn.focus();
+    }
+    delIn.addEventListener('input', () => { delOk.disabled = !chars[selIdx] || !sameName(delIn.value, chars[selIdx].name); });
+    $('delNo').addEventListener('click', () => { delBox.hidden = true; ($('selDel') as HTMLElement).focus(); });
+    delOk.addEventListener('click', () => { const sv = chars[selIdx]; if (!info || !sv || !sameName(delIn.value, sv.name)) return; delBox.hidden = true; setBusy(true); info.onDelete(sv.name); });
+    delIn.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !delOk.disabled) delOk.click(); });
+    $('selDel').addEventListener('click', openDelete);
 
     // --- tarjetas de clase / facción ---
     function bullets(c: ClassInfo): string[] {
@@ -187,19 +237,30 @@ export function initLoginUI(ctx: FlowCtx) {
     <section class="pnl"><h4>DESCRIPCIÓN</h4><p class="lore">${esc(CLS_LORE[c.id] ?? c.desc)}</p>
       <h4 class="h4b">BONUS DE CLASE</h4><ul class="bon"><li style="--b:${col}">+${c.hpL} de vida por nivel</li><li style="--b:#5aa0ff">+${c.mpL} de maná por nivel</li><li style="--b:#d6a445">Equipo inicial: ${esc(c.weapon)}${c.armor ? ' y ' + esc(c.armor) : ''}</li></ul></section>
   </div>
-  <div class="pnl crstrip"><dl><div><dt>Nombre</dt><dd>${esc(info.name)}</dd></div><div><dt>Clase</dt><dd style="color:${col}">${c.name}</dd></div><div><dt>Facción</dt><dd style="color:${f.col}">${f.name}</dd></div><div><dt>Ciudad inicial</dt><dd>${esc(ctx.cityName(f.id))}</dd></div></dl></div>`;
+  <div class="pnl crstrip"><dl><div><dt>Nombre</dt><dd><input id="crName" class="crname" maxlength="16" autocomplete="off" spellcheck="false" placeholder="Nombre del personaje" value="${esc(newName)}" aria-describedby="crErr"></dd></div><div><dt>Clase</dt><dd style="color:${col}">${c.name}</dd></div><div><dt>Facción</dt><dd style="color:${f.col}">${f.name}</dd></div><div><dt>Ciudad inicial</dt><dd>${esc(ctx.cityName(f.id))}</dd></div></dl></div>
+  <p class="err crerr" id="crErr" role="alert"></p>`;
+        const inp = $('crName') as HTMLInputElement;
+        inp.addEventListener('input', () => { newName = inp.value; $('crErr').textContent = ''; });
+        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('crOk').click(); } });
+        setBusy(false);
     }
 
     // --- botones ---
-    $('selPlay').addEventListener('click', () => info?.onPlay());
+    $('selPlay').addEventListener('click', play);
     $('selBack').addEventListener('click', () => info?.onBack());
-    $('clsBack').addEventListener('click', () => info?.onBack());
+    $('clsBack').addEventListener('click', () => (chars.length ? show('select') : info?.onBack()));
     $('clsOk').addEventListener('click', () => show('faction'));
     $('facBack').addEventListener('click', () => show('class'));
     $('facOk').addEventListener('click', () => show('create'));
     $('crBack').addEventListener('click', () => show('faction'));
-    $('crOk').addEventListener('click', () => info?.onPlay());
-    root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && cur !== 'login') { e.preventDefault(); ({ select: () => info?.onBack(), class: () => info?.onBack(), faction: () => show('class'), create: () => show('faction'), login: () => {} })[cur](); } });
+    $('crOk').addEventListener('click', () => {
+        if (!info) return;
+        const name = newName.trim().replace(/\s+/g, ' '), { cls, faction } = ctx.get();
+        if (!NAME_RE.test(name)) { $('crErr').textContent = 'El nombre tiene que tener entre 2 y 16 letras, números, espacios, guiones o _.'; ($('crName') as HTMLElement).focus(); return; }
+        if (chars.some((c) => sameName(c.name, name))) { $('crErr').textContent = 'Ya tenés un personaje con ese nombre.'; return; }
+        creating = true; newName = name; setBusy(true); info.onCreate({ name, cls, faction });
+    });
+    root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && cur !== 'login') { e.preventDefault(); ({ select: () => { if (!delBox.hidden) delBox.hidden = true; else info?.onBack(); }, class: () => (chars.length ? show('select') : info?.onBack()), faction: () => show('class'), create: () => show('faction'), login: () => {} })[cur](); } });
 
     // --- login / crear cuenta (el server crea la cuenta si el nombre no existe) ---
     let reg = false;
@@ -222,7 +283,29 @@ export function initLoginUI(ctx: FlowCtx) {
             if (!reg) return '';
             return ($('passIn') as HTMLInputElement).value === ($('pass2In') as HTMLInputElement).value ? '' : 'Las contraseñas no coinciden.';
         },
-        /** Ya conectado y con el mundo cargado: tiene personaje → selección, si no → clase, facción y creación. */
-        start(i: StartInfo) { info = i; show(i.saved ? 'select' : 'class'); },
+        /** Cuenta autenticada, antes de entrar al mundo: con personajes → selección; sin ninguno → clase, facción y creación. */
+        start(i: StartInfo) {
+            info = i; chars = i.chars; creating = false; newName = '';
+            selIdx = Math.max(0, chars.findIndex((c) => c.name === i.preselect));
+            ($('selErr') as HTMLElement).textContent = '';
+            show(chars.length ? 'select' : 'class');
+        },
+        /** El server mandó la lista de nuevo (tras crear o borrar) o rechazó la última acción (`error`). */
+        update(list: CharInfo[], error: string) {
+            if (!info) return;
+            const wasCreating = creating; creating = false;
+            chars = list;
+            if (error) {
+                if (cur === 'create' && wasCreating) { $('crErr').textContent = error; setBusy(false); ($('crName') as HTMLElement).focus(); } // no se pudo crear: sigue en el formulario
+                else { ($('selErr') as HTMLElement).textContent = error; if (cur !== 'select') show('select'); else renderSelect(); }
+                return;
+            }
+            if (wasCreating) { // recién creado: entra directo al mundo
+                const nuevo = chars.find((c) => sameName(c.name, newName));
+                if (nuevo) { selIdx = chars.indexOf(nuevo); setBusy(true); info.onPlay(nuevo.name, true); return; }
+            }
+            ($('selErr') as HTMLElement).textContent = '';
+            show(chars.length ? 'select' : 'class');
+        },
     };
 }

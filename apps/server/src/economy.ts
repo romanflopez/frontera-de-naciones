@@ -166,6 +166,11 @@ function cleanImportItem(st: Econ, v: unknown, clipped: string[], trusted = fals
 }
 
 // ---------- estado ----------
+/** Personaje nuevo con el kit inicial; undefined si la clase o la facción no existen (no se confía en lo que manda el cliente). */
+export function newEconChecked(cls: unknown, faction: unknown): Econ | undefined {
+    return typeof cls === 'string' && CLASS_KIT[cls] && FACTIONS.includes(String(faction)) ? newEcon(cls, String(faction)) : undefined;
+}
+
 export function newEcon(cls: string, faction: string): Econ {
     const kit = CLASS_KIT[cls] ?? CLASS_KIT.guerrero;
     const st: Econ = {

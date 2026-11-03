@@ -11,13 +11,13 @@ import { randomUUID } from 'node:crypto';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { ClientMessage, ServerMessage } from '@fdn/proto';
 import { DATA_DIR, loadSettings, type GameWorldConfig } from './config.ts';
-import { MAPS, MOB_TYPES, factionHome, getMapDef, type MapDef } from '@fdn/world';
+import { MAPS, MOB_TYPES, canonicalMapId, factionHome, getMapDef, type MapDef } from '@fdn/world';
 import { loadPosition, resolveSaved, savePosition } from './persist.ts';
 import * as M from './messages.ts';
 import type { PersistedPlayer } from './player.ts';
 import { WorldRegistry } from './registry.ts';
-import { authenticate } from './accounts.ts';
-import { Economy, toCharSave } from './economy.ts';
+import { authenticate, charKeysOf, createCharacter, deleteCharacter, findChar, MAX_CHARS } from './accounts.ts';
+import { Economy, newEconChecked, toCharSave } from './economy.ts';
 import { FileStorage, PgStorage, type Storage } from './storage.ts';
 import { AuctionHouse, setAuctionHouse } from './auction.ts';
 import { Depot, setDepot } from './deposit.ts';
@@ -26,6 +26,8 @@ import { PartyService, setParties } from './party.ts';
 import { ChatManager } from './systems/chat.ts';
 
 const MAX_INCOMING_BYTES = 24576;
+/** Cuánto puede quedarse una conexión autenticada en la pantalla de personajes sin hacer nada. */
+const SELECT_IDLE_MS = 10 * 60 * 1000;
 
 const settings = loadSettings();
 // el estado económico (oro, bolsa, equipo, nivel) es del server; se guarda en la cuenta por el mismo Storage
@@ -76,6 +78,8 @@ const clientIp = (req: { headers: Record<string, string | string[] | undefined>;
 // ---------- sesiones ----------
 interface Session {
     networkId: string;
+    /** Clave de la cuenta dueña del personaje. */
+    owner: string;
     sessionId: string;
     worldId: string;
     characterName: string;
@@ -92,6 +96,15 @@ const saveOf = (s: Session) => (state: PersistedPlayer) => saveChar(s.networkId,
 registry.sessionHook = (sessionId) => { const s = sessionsById.get(sessionId); return s ? { session: s, save: saveOf(s) } : undefined; };
 
 function encode(m: ServerMessage): Uint8Array { return ServerMessage.encode(m).finish(); }
+
+/** Lista de personajes de la cuenta para la pantalla de selección (`error` no vacío = falló la última acción). */
+function characterListMsg(accKey: string, error = ''): ServerMessage {
+    const list = charKeysOf(storage, accKey).map((k) => {
+        const rec = storage.get(k)!, econ = economy.load(k), mapId = canonicalMapId(rec.pos?.mapId ?? rec.pos?.worldId);
+        return { name: rec.name, cls: econ?.cls ?? '', faction: econ?.faction ?? '', level: econ?.lvl ?? 1, zone: (mapId && getMapDef(mapId)?.name) || '' };
+    });
+    return M.characterList(list, MAX_CHARS, error);
+}
 
 // Party (docs/PARTY_Y_ARENAS.md): vive fuera de los mundos; la identidad es el sessionId.
 const parties = new PartyService({
@@ -147,6 +160,48 @@ wss.on('connection', (ws, req) => {
         ws.close(1000, reason.slice(0, 120));
     };
 
+    /** Cuenta autenticada que todavía no eligió personaje. */
+    let acct: string | null = null;
+    let preJoinMsgs = 0;
+    let selectTimer: NodeJS.Timeout | null = null;
+    const armSelectTimer = () => {
+        if (selectTimer) clearTimeout(selectTimer);
+        selectTimer = setTimeout(() => { if (!session) disconnect('Te quedaste mucho tiempo sin elegir personaje.'); }, SELECT_IDLE_MS); selectTimer.unref();
+    };
+    /** Entra al mundo con el personaje `key` de la cuenta `accKey` (o retoma la sesión en gracia). */
+    const joinWorld = (accKey: string, key: string, characterName: string): void => {
+        const networkId = `acc:${key}`;
+        // un solo personaje por cuenta en el mundo a la vez (el depósito es compartido: evita pasarse cosas entre personajes propios)
+        for (const o of sessionsByNetworkId.values()) if (o.socket && o.owner === accKey && o.networkId !== networkId) { send(characterListMsg(accKey, 'Ya tenés otro personaje de esta cuenta conectado.')); return; }
+        const existing = sessionsByNetworkId.get(networkId);
+        if (existing && (existing.socket || existing.disconnectDeadline === null)) { send(characterListMsg(accKey, 'Ese personaje ya está conectado.')); return; }
+        if (existing && existing.disconnectDeadline !== null && existing.disconnectDeadline <= Date.now()) { send(characterListMsg(accKey, 'Se venció el tiempo para reconectarte. Probá de nuevo en un momento.')); return; }
+        if (selectTimer) { clearTimeout(selectTimer); selectTimer = null; }
+        // lo que ve el cliente sale del estado del server (cuentas viejas: se importa una sola vez lo que el cliente tenía)
+        const econ = economy.load(key);
+        send(M.characterLoaded(!!econ, econ ? toCharSave(econ) : ''));
+        const rec = storage.get(key); if (rec) { rec.lastLogin = Date.now(); storage.put(key, rec); }
+
+        if (existing) {
+            existing.socket = ws;
+            existing.disconnectDeadline = null;
+            existing.characterName = characterName;
+            session = existing;
+            worldOf(session)?.playerReconnected(session.sessionId, characterName, send, disconnect);
+            worldOf(session)?.resendEconomy(session.sessionId); // el cliente nuevo necesita la foto del estado
+            return;
+        }
+
+        // un personaje guardado sin mapa (guardado viejo: 'solmar' vale como el mapa original) o en un mapa que ya no existe arranca en el mapa por defecto
+        const saved = loadChar(networkId);
+        const { persisted, mapId } = resolveSaved(saved, settings.initialMap);
+        const world = registry.ensure(mapId);
+        session = { networkId, owner: accKey, sessionId: randomUUID(), worldId: world.id, characterName, socket: ws, disconnectDeadline: null, logoutAllowedAt: null };
+        sessionsByNetworkId.set(networkId, session); sessionsById.set(session.sessionId, session);
+        world.playerConnected(session.sessionId, characterName, send, disconnect, persisted);
+        world.bindAccount(session.sessionId, key);
+    };
+
     send(worldsListMessage);
     const authTimeout = setTimeout(() => { if (!session) disconnect('No llegó la autenticación a tiempo.'); }, settings.ping.timeout);
 
@@ -162,39 +217,50 @@ wss.on('connection', (ws, req) => {
         const payload = message.payload;
 
         if (!session) {
-            if (payload?.$case !== 'authenticateRequest') { disconnect('Autenticate antes de mandar otros mensajes.'); return; }
-            clearTimeout(authTimeout);
-            if (!payload.value.characterName.trim()) { disconnect('Falta el nombre del personaje.'); return; }
-            const auth = authenticate(storage, payload.value.characterName, payload.value.password ?? '', clientIp(req));
-            if (!auth.ok) { disconnect(auth.error); return; }
-            // la identidad la define la cuenta, no lo que mande el cliente
-            const networkId = `acc:${auth.key}`, characterName = auth.account.name;
-            // lo que ve el cliente sale del estado del server (cuentas viejas: se importa una sola vez lo que el cliente tenía)
-            const econ = economy.load(auth.key);
-            send(M.characterLoaded(!!econ, econ ? toCharSave(econ) : ''));
-
-            const existing = sessionsByNetworkId.get(networkId);
-            if (existing) {
-                if (existing.socket || existing.disconnectDeadline === null) { disconnect('Ese personaje ya está conectado.'); return; }
-                if (existing.disconnectDeadline <= Date.now()) { disconnect('Se venció el tiempo para reconectarte.'); return; }
-                existing.socket = ws;
-                existing.disconnectDeadline = null;
-                existing.characterName = characterName;
-                session = existing;
-                worldOf(session)?.playerReconnected(session.sessionId, characterName, send, disconnect);
-                worldOf(session)?.resendEconomy(session.sessionId); // el cliente nuevo necesita la foto del estado
+            // 1) autenticar la cuenta; 2) elegir / crear / borrar personajes; 3) recién ahí se entra al mundo
+            if (!acct) {
+                if (payload?.$case !== 'authenticateRequest') { disconnect('Autenticate antes de mandar otros mensajes.'); return; }
+                clearTimeout(authTimeout);
+                if (!payload.value.characterName.trim()) { disconnect('Falta el nombre de la cuenta.'); return; }
+                const auth = authenticate(storage, payload.value.characterName, payload.value.password ?? '', clientIp(req));
+                if (!auth.ok) { disconnect(auth.error); return; }
+                acct = auth.key;
+                armSelectTimer();
+                send(characterListMsg(acct));
                 return;
             }
-
-            // un personaje guardado sin mapa (guardado viejo: 'solmar' vale como el mapa original) o en un mapa que ya no existe arranca en el mapa por defecto
-            const saved = loadChar(networkId);
-            const { persisted, mapId } = resolveSaved(saved, settings.initialMap);
-            const world = registry.ensure(mapId);
-            session = { networkId, sessionId: randomUUID(), worldId: world.id, characterName, socket: ws, disconnectDeadline: null, logoutAllowedAt: null };
-            sessionsByNetworkId.set(networkId, session); sessionsById.set(session.sessionId, session);
-            world.playerConnected(session.sessionId, characterName, send, disconnect, persisted);
-            world.bindAccount(session.sessionId, auth.key);
-            return;
+            armSelectTimer();
+            if (++preJoinMsgs > 60) { disconnect('Demasiados pedidos sin elegir personaje.'); return; }
+            const accKey = acct;
+            switch (payload?.$case) {
+                case 'createCharacterRequest': {
+                    const v = payload.value, econ = newEconChecked(v.cls, v.faction);
+                    if (!econ) { send(characterListMsg(accKey, 'Elegí una clase y una facción válidas.')); return; }
+                    const r = createCharacter(storage, accKey, v.name.slice(0, 40), econ);
+                    if (r.ok) console.log(`[Cuentas] personaje nuevo '${r.name}' (${econ.cls}, ${econ.faction}) en la cuenta ${accKey.slice(0, 12)}…`);
+                    send(characterListMsg(accKey, r.ok ? '' : r.error));
+                    return;
+                }
+                case 'deleteCharacterRequest': {
+                    const f = findChar(storage, accKey, payload.value.name.slice(0, 40));
+                    let err = '';
+                    if (!f) err = 'Ese personaje no existe.';
+                    else if (sessionsByNetworkId.has(`acc:${f.key}`)) err = 'Ese personaje todavía está en el mundo. Esperá un minuto y probá de nuevo.';
+                    else if (auction.mine(f.key).length > 0 || auction.mailbox(f.key).length > 0) err = 'Ese personaje tiene publicaciones o reclamos en la casa de subastas: retiralos antes de borrarlo.';
+                    else { const r = deleteCharacter(storage, accKey, f!.rec.name); if (!r.ok) err = r.error; else console.log(`[Cuentas] personaje borrado '${r.name}' de la cuenta ${accKey.slice(0, 12)}…`); }
+                    send(characterListMsg(accKey, err));
+                    return;
+                }
+                case 'selectCharacterRequest': {
+                    const f = findChar(storage, accKey, payload.value.name.slice(0, 40));
+                    if (!f) { send(characterListMsg(accKey, 'Ese personaje no existe.')); return; }
+                    joinWorld(accKey, f.key, f.rec.name);
+                    return;
+                }
+                default:
+                    if (payload?.$case === 'authenticateRequest') disconnect('La autenticación se manda una sola vez por conexión.');
+                    return; // el resto (pings, movimiento) no vale hasta entrar al mundo
+            }
         }
 
         switch (payload?.$case) {
@@ -244,7 +310,7 @@ wss.on('connection', (ws, req) => {
     });
 
     ws.on('close', (code, reasonBuf) => {
-        clearTimeout(authTimeout);
+        clearTimeout(authTimeout); if (selectTimer) clearTimeout(selectTimer);
         console.log(`[Server] WebSocket cerrado desde ${remote} (código ${code}${reasonBuf.length ? `: ${reasonBuf.toString()}` : ''})`);
         if (!session || session.socket !== ws) return;
         session.socket = null;

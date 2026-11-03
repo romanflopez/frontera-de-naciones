@@ -3,7 +3,7 @@
  *
  * - Guarda hasta 48 items de equipo (con su rareza y atributos intactos), oro sin tope de juego (techo técnico
  *   Number.MAX_SAFE_INTEGER, igual que el oro de la bolsa) y stacks de pociones, llaves y esquirlas.
- * - Es de la CUENTA (`AccountRecord.vault`), no del personaje: si un día hay varios personajes por cuenta, lo comparten.
+ * - Es de la CUENTA (`AccountRecord.vault`), no del personaje: los personajes de una cuenta lo comparten (el registro del personaje apunta a su cuenta con `owner`).
  * - Se usa hablando con cualquier NPC de rol `depositario` (se reconoce por el rol, no por la posición) del mismo
  *   mundo/mapa en el que está el jugador.
  *
@@ -71,9 +71,12 @@ export class Depot {
 
     constructor(private readonly storage: Storage, private readonly now: () => number = Date.now) {}
 
-    /** Depósito de la cuenta (vacío si nunca lo usó; se guarda recién con la primera operación). */
+    /** Registro donde vive el depósito: la cuenta dueña del personaje (los personajes nuevos tienen `owner`; el personaje de una cuenta vieja es la cuenta misma). */
+    private holder(key: string): string { return this.storage.get(key)?.owner ?? key; }
+
+    /** Depósito de la cuenta (vacío si nunca lo usó; se guarda recién con la primera operación). `key` es la del personaje. */
     vault(key: string): Vault {
-        const acc = this.storage.get(key) as VaultRecord | undefined;
+        const acc = this.storage.get(this.holder(key)) as VaultRecord | undefined;
         const v = acc?.vault;
         if (v && v.v === 1) { v.ops ??= []; v.stacks ??= {}; return v; }
         const fresh: Vault = { v: 1, items: [], gold: 0, stacks: {}, nextUid: 1, ops: [] };
@@ -84,15 +87,16 @@ export class Depot {
     /** `op_id` del pedido en curso: se anota en el depósito dentro de la MISMA escritura que el cambio. */
     private pendingOp = 0;
 
-    /** Escribe bolsa y depósito juntos: es un solo registro (la cuenta), así que es una sola escritura. */
+    /** Escribe bolsa y depósito juntos: pueden ser dos registros (personaje y cuenta dueña), pero el flush los escribe en un solo lote atómico. */
     private save(a: Actor, v: Vault): void {
         const acc = this.storage.get(a.key) as VaultRecord | undefined; if (!acc) return;
+        const hk = this.holder(a.key), home = hk === a.key ? acc : this.storage.get(hk) as VaultRecord | undefined; if (!home) return;
         if (this.pendingOp) {
             v.ops.push(this.pendingOp); this.pendingOp = 0;
             if (v.ops.length > DEPOT_OPS_KEEP) v.ops.splice(0, v.ops.length - DEPOT_OPS_KEEP);
         }
-        acc.econ = a.econ; acc.vault = v;
-        this.storage.put(a.key, acc);
+        acc.econ = a.econ; home.vault = v;
+        this.storage.put(a.key, acc); if (home !== acc) this.storage.put(hk, home); // dos registros, un solo lote: el flush los escribe juntos
         this.storage.flush();
     }
 

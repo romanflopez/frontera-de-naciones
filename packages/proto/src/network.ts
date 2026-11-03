@@ -73,6 +73,9 @@ export interface ClientMessage {
     | { $case: "makeServerCellOccupiedRequest"; value: MakeServerCellOccupiedRequest }
     | { $case: "playerMovementStateChangeRequest"; value: PlayerMovementStateChangeRequest }
     | { $case: "authenticateRequest"; value: AuthenticateRequest }
+    | { $case: "createCharacterRequest"; value: CreateCharacterRequest }
+    | { $case: "selectCharacterRequest"; value: SelectCharacterRequest }
+    | { $case: "deleteCharacterRequest"; value: DeleteCharacterRequest }
     | { $case: "logoutRequest"; value: LogoutRequest }
     | { $case: "logoutCancelledRequest"; value: LogoutCancelledRequest }
     | //
@@ -335,9 +338,27 @@ export interface LogoutCancelledRequest {
 
 export interface AuthenticateRequest {
   id: string;
+  /** Nombre de la CUENTA (usuario). Los personajes se eligen después con SelectCharacterRequest. */
   characterName: string;
   /** Cuenta: si el nombre no existe se crea con esta contraseña; si existe tiene que coincidir. */
   password: string;
+}
+
+/** Crea un personaje en la cuenta (máximo 3). El server responde con CharacterList (con `error` si no se pudo). */
+export interface CreateCharacterRequest {
+  name: string;
+  cls: string;
+  faction: string;
+}
+
+/** Entra al mundo con uno de los personajes de la cuenta. */
+export interface SelectCharacterRequest {
+  name: string;
+}
+
+/** Borra un personaje de la cuenta. `name` tiene que coincidir con el del personaje. */
+export interface DeleteCharacterRequest {
+  name: string;
 }
 
 export interface LogoutRequest {
@@ -526,6 +547,7 @@ export interface ServerMessage {
     | { $case: "pvpHit"; value: PvpHit }
     | { $case: "skillEffect"; value: SkillEffect }
     | { $case: "characterLoaded"; value: CharacterLoaded }
+    | { $case: "characterList"; value: CharacterList }
     | { $case: "mobsSnapshot"; value: MobsSnapshot }
     | { $case: "mobDamaged"; value: MobDamaged }
     | { $case: "mobAttack"; value: MobAttack }
@@ -873,6 +895,22 @@ export interface SaveCharacterRequest {
 export interface CharacterLoaded {
   exists: boolean;
   data: string;
+}
+
+export interface CharacterSummary {
+  name: string;
+  cls: string;
+  faction: string;
+  level: number;
+  /** Nombre del mapa donde quedó (vacío si nunca entró). */
+  zone: string;
+}
+
+/** Personajes de la cuenta. Se manda tras autenticar y después de cada crear/borrar; `error` no vacío = la última acción falló (la lista sigue vigente). */
+export interface CharacterList {
+  characters: CharacterSummary[];
+  max: number;
+  error: string;
 }
 
 export interface ChangePlayerProfileRequest {
@@ -2011,6 +2049,15 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "authenticateRequest":
         AuthenticateRequest.encode(message.payload.value, writer.uint32(50).fork()).join();
         break;
+      case "createCharacterRequest":
+        CreateCharacterRequest.encode(message.payload.value, writer.uint32(8002).fork()).join();
+        break;
+      case "selectCharacterRequest":
+        SelectCharacterRequest.encode(message.payload.value, writer.uint32(8010).fork()).join();
+        break;
+      case "deleteCharacterRequest":
+        DeleteCharacterRequest.encode(message.payload.value, writer.uint32(8018).fork()).join();
+        break;
       case "logoutRequest":
         LogoutRequest.encode(message.payload.value, writer.uint32(58).fork()).join();
         break;
@@ -2266,6 +2313,39 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = {
               $case: "authenticateRequest",
               value: AuthenticateRequest.decode(reader, reader.uint32()),
+            };
+            continue;
+          }
+          case 1000: {
+            if (tag !== 8002) {
+              break;
+            }
+
+            message.payload = {
+              $case: "createCharacterRequest",
+              value: CreateCharacterRequest.decode(reader, reader.uint32()),
+            };
+            continue;
+          }
+          case 1001: {
+            if (tag !== 8010) {
+              break;
+            }
+
+            message.payload = {
+              $case: "selectCharacterRequest",
+              value: SelectCharacterRequest.decode(reader, reader.uint32()),
+            };
+            continue;
+          }
+          case 1002: {
+            if (tag !== 8018) {
+              break;
+            }
+
+            message.payload = {
+              $case: "deleteCharacterRequest",
+              value: DeleteCharacterRequest.decode(reader, reader.uint32()),
             };
             continue;
           }
@@ -2930,6 +3010,33 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           message.payload = {
             $case: "authenticateRequest",
             value: AuthenticateRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "createCharacterRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "createCharacterRequest",
+            value: CreateCharacterRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "selectCharacterRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "selectCharacterRequest",
+            value: SelectCharacterRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "deleteCharacterRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "deleteCharacterRequest",
+            value: DeleteCharacterRequest.fromPartial(object.payload.value),
           };
         }
         break;
@@ -5433,6 +5540,195 @@ export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
   },
 };
 
+function createBaseCreateCharacterRequest(): CreateCharacterRequest {
+  return { name: "", cls: "", faction: "" };
+}
+
+export const CreateCharacterRequest: MessageFns<CreateCharacterRequest> = {
+  encode(message: CreateCharacterRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.name !== "") {
+      writer.uint32(10).string(message.name);
+    }
+    if (message.cls !== "") {
+      writer.uint32(18).string(message.cls);
+    }
+    if (message.faction !== "") {
+      writer.uint32(26).string(message.faction);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CreateCharacterRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseCreateCharacterRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.name = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.cls = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.faction = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<CreateCharacterRequest>, I>>(base?: I): CreateCharacterRequest {
+    return CreateCharacterRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CreateCharacterRequest>, I>>(object: I): CreateCharacterRequest {
+    const message = createBaseCreateCharacterRequest();
+    message.name = object.name ?? "";
+    message.cls = object.cls ?? "";
+    message.faction = object.faction ?? "";
+    return message;
+  },
+};
+
+function createBaseSelectCharacterRequest(): SelectCharacterRequest {
+  return { name: "" };
+}
+
+export const SelectCharacterRequest: MessageFns<SelectCharacterRequest> = {
+  encode(message: SelectCharacterRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.name !== "") {
+      writer.uint32(10).string(message.name);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SelectCharacterRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseSelectCharacterRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.name = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<SelectCharacterRequest>, I>>(base?: I): SelectCharacterRequest {
+    return SelectCharacterRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SelectCharacterRequest>, I>>(object: I): SelectCharacterRequest {
+    const message = createBaseSelectCharacterRequest();
+    message.name = object.name ?? "";
+    return message;
+  },
+};
+
+function createBaseDeleteCharacterRequest(): DeleteCharacterRequest {
+  return { name: "" };
+}
+
+export const DeleteCharacterRequest: MessageFns<DeleteCharacterRequest> = {
+  encode(message: DeleteCharacterRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.name !== "") {
+      writer.uint32(10).string(message.name);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DeleteCharacterRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseDeleteCharacterRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.name = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<DeleteCharacterRequest>, I>>(base?: I): DeleteCharacterRequest {
+    return DeleteCharacterRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<DeleteCharacterRequest>, I>>(object: I): DeleteCharacterRequest {
+    const message = createBaseDeleteCharacterRequest();
+    message.name = object.name ?? "";
+    return message;
+  },
+};
+
 function createBaseLogoutRequest(): LogoutRequest {
   return {};
 }
@@ -7164,6 +7460,9 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "characterLoaded":
         CharacterLoaded.encode(message.payload.value, writer.uint32(642).fork()).join();
         break;
+      case "characterList":
+        CharacterList.encode(message.payload.value, writer.uint32(11202).fork()).join();
+        break;
       case "mobsSnapshot":
         MobsSnapshot.encode(message.payload.value, writer.uint32(962).fork()).join();
         break;
@@ -7900,6 +8199,14 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             }
 
             message.payload = { $case: "characterLoaded", value: CharacterLoaded.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 1400: {
+            if (tag !== 11202) {
+              break;
+            }
+
+            message.payload = { $case: "characterList", value: CharacterList.decode(reader, reader.uint32()) };
             continue;
           }
           case 120: {
@@ -8709,6 +9016,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "characterLoaded": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "characterLoaded", value: CharacterLoaded.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "characterList": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "characterList", value: CharacterList.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -11944,6 +12257,188 @@ export const CharacterLoaded: MessageFns<CharacterLoaded> = {
     const message = createBaseCharacterLoaded();
     message.exists = object.exists ?? false;
     message.data = object.data ?? "";
+    return message;
+  },
+};
+
+function createBaseCharacterSummary(): CharacterSummary {
+  return { name: "", cls: "", faction: "", level: 0, zone: "" };
+}
+
+export const CharacterSummary: MessageFns<CharacterSummary> = {
+  encode(message: CharacterSummary, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.name !== "") {
+      writer.uint32(10).string(message.name);
+    }
+    if (message.cls !== "") {
+      writer.uint32(18).string(message.cls);
+    }
+    if (message.faction !== "") {
+      writer.uint32(26).string(message.faction);
+    }
+    if (message.level !== 0) {
+      writer.uint32(32).int32(message.level);
+    }
+    if (message.zone !== "") {
+      writer.uint32(42).string(message.zone);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CharacterSummary {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseCharacterSummary();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.name = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.cls = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.faction = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.level = reader.int32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.zone = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<CharacterSummary>, I>>(base?: I): CharacterSummary {
+    return CharacterSummary.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CharacterSummary>, I>>(object: I): CharacterSummary {
+    const message = createBaseCharacterSummary();
+    message.name = object.name ?? "";
+    message.cls = object.cls ?? "";
+    message.faction = object.faction ?? "";
+    message.level = object.level ?? 0;
+    message.zone = object.zone ?? "";
+    return message;
+  },
+};
+
+function createBaseCharacterList(): CharacterList {
+  return { characters: [], max: 0, error: "" };
+}
+
+export const CharacterList: MessageFns<CharacterList> = {
+  encode(message: CharacterList, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.characters) {
+      CharacterSummary.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.max !== 0) {
+      writer.uint32(16).int32(message.max);
+    }
+    if (message.error !== "") {
+      writer.uint32(26).string(message.error);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CharacterList {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseCharacterList();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.characters.push(CharacterSummary.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.max = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.error = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<CharacterList>, I>>(base?: I): CharacterList {
+    return CharacterList.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CharacterList>, I>>(object: I): CharacterList {
+    const message = createBaseCharacterList();
+    message.characters = object.characters?.map((e) => CharacterSummary.fromPartial(e)) || [];
+    message.max = object.max ?? 0;
+    message.error = object.error ?? "";
     return message;
   },
 };

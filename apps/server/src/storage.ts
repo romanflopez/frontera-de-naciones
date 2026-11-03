@@ -21,6 +21,15 @@ export interface AccountRecord {
     econ?: Econ;
     /** Dónde quedó el personaje (mapa, celda, apariencia). Vive en la cuenta para sobrevivir a los redeploys (antes estaba en `chars/`, en disco). */
     pos?: PersistedPlayer;
+    /**
+     * Cuenta de login: claves de sus personajes, en orden (máximo MAX_CHARS). Una cuenta vieja no la tiene hasta el primer login:
+     * ahí se migra y su personaje es el propio registro de la cuenta (clave = clave de la cuenta).
+     */
+    chars?: string[];
+    /** Registro de personaje (`c_<hex>`): clave de la cuenta dueña. Las cuentas no lo tienen. */
+    owner?: string;
+    /** Personaje borrado (borrado lógico: el nombre queda libre y el dato se puede recuperar a mano). Marca el momento. */
+    charDeleted?: number;
 }
 
 export interface Storage {

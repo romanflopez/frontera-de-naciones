@@ -7,6 +7,16 @@
 - Al volver a entrar el server manda lo guardado y el cliente lo aplica (se saltea la elección de bando/clase). La posición se guarda salvo que estés en la arena o en una mazmorra: en ese caso volvés al campamento.
 - El progreso lo calcula el cliente, así que todavía no es a prueba de trampas: eso llega cuando mobs y combate pasen al server.
 
+## Personajes por cuenta
+
+- Una cuenta (usuario + contraseña) tiene **hasta 3 personajes** (`MAX_CHARS` en `apps/server/src/accounts.ts`). Tras autenticar, el server manda `CharacterList` y el cliente elige, crea o borra; **recién al elegir uno se entra al mundo** (`SelectCharacterRequest`).
+- Cada personaje es un registro propio `c_<hex del nombre>` (con `owner` = clave de la cuenta) que guarda su economía y su posición. La cuenta guarda la lista en `chars`.
+- Los **nombres de personaje son únicos en todo el server** (sin distinguir mayúsculas). El nombre de una cuenta no bloquea el de un personaje.
+- **Cuentas viejas:** su único personaje es el propio registro de la cuenta; se migra solo en el primer login (`chars = [claveDeLaCuenta]`), sin mover datos.
+- **Borrar** es lógico (`charDeleted`): el nombre queda libre y el dato no se destruye. No se puede borrar un personaje que está en el mundo (incluida la gracia de reconexión de ~60 s) ni uno con publicaciones o reclamos en la casa de subastas.
+- Solo **un personaje por cuenta** puede estar conectado a la vez.
+- El **depósito es de la cuenta**: lo comparten sus personajes (vive en el registro de la cuenta). La casa de subastas, en cambio, es por personaje.
+
 ## Dónde se guarda
 `apps/server/data/accounts/<nombre en hex>.json` (un archivo por cuenta, escritura atómica con `tmp` + `rename`), o en `DATA_DIR` si definís esa variable de entorno. La posición y la apariencia del personaje van dentro del registro de la cuenta (`pos`), así que con Postgres también sobreviven a los redeploys. Se guardan al cambiar de mapa, al desconectarse, al cerrar el server y cada 60 s mientras estás conectado. Los guardados viejos en `chars/` de esa carpeta se siguen leyendo una vez y pasan a la cuenta en el próximo guardado.
 

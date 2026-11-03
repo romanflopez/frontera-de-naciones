@@ -554,13 +554,13 @@ canvas:focus{outline:none}
 
       <section class="scr" id="scrLogin" aria-label="Iniciar sesión">
         <form id="loginForm" class="lcard">
-          <div class="field"><label for="nameIn" class="sr">Usuario o personaje</label><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><input id="nameIn" maxlength="16" required autocomplete="username" placeholder="Usuario o personaje"></div>
+          <div class="field"><label for="nameIn" class="sr">Usuario</label><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><input id="nameIn" maxlength="16" required autocomplete="username" placeholder="Usuario"></div>
           <div class="field"><label for="passIn" class="sr">Contraseña</label><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><input id="passIn" type="password" minlength="4" maxlength="64" required autocomplete="current-password" placeholder="Contraseña"></div>
           <div class="field" id="pass2Row" hidden><label for="pass2In" class="sr">Repetir contraseña</label><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><input id="pass2In" type="password" minlength="4" maxlength="64" autocomplete="new-password" placeholder="Repetir contraseña"></div>
           <button type="submit" id="loginBtn" class="lbtn pri">INICIAR SESIÓN</button>
           <div class="err" id="loginErr" role="alert"></div>
           <p class="alt"><span id="altTxt">¿No tenés una cuenta?</span> <button type="button" id="altBtn" class="lnk">Crear cuenta</button></p>
-          <p class="hint" id="regHint" hidden>La cuenta se crea con ese nombre y contraseña. Después elegís clase y facción.</p>
+          <p class="hint" id="regHint" hidden>La cuenta se crea con ese usuario y contraseña. Después creás tus personajes (hasta 3): clase, facción y nombre.</p>
         </form>
       </section>
 
@@ -569,7 +569,15 @@ canvas:focus{outline:none}
         <ul class="slots" id="slots"></ul>
         <div class="selart" id="selArt" aria-hidden="true"></div>
         <aside class="sdetail" id="selDetail" aria-live="polite"></aside>
-        <div class="acts"><button type="button" class="lbtn ghost" id="selBack">VOLVER</button><button type="button" class="lbtn pri" id="selPlay">JUGAR</button></div>
+        <p class="err selerr" id="selErr" role="alert"></p>
+        <div class="delbox" id="delBox" role="alertdialog" aria-labelledby="delT" aria-describedby="delTxt" hidden>
+          <h3 id="delT">BORRAR PERSONAJE</h3>
+          <p id="delTxt"></p>
+          <input id="delIn" maxlength="16" autocomplete="off" spellcheck="false" placeholder="Escribí el nombre para confirmar" aria-label="Escribí el nombre del personaje para confirmar">
+          <p class="err" id="delErr" role="alert"></p>
+          <div class="dacts"><button type="button" class="lbtn ghost" id="delNo">CANCELAR</button><button type="button" class="lbtn danger" id="delOk" disabled>BORRAR</button></div>
+        </div>
+        <div class="acts"><button type="button" class="lbtn ghost" id="selBack">VOLVER</button><button type="button" class="lbtn danger" id="selDel">BORRAR PERSONAJE</button><button type="button" class="lbtn pri" id="selPlay">JUGAR</button></div>
       </section>
 
       <section class="scr" id="scrClass" aria-labelledby="hCls" hidden>

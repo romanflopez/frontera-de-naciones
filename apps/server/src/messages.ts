@@ -147,6 +147,8 @@ export const playerProfileChanged = (p: Player): ServerMessage =>
 export const pvpHit = (casterId: bigint, v: { fx: string; x: number; y: number; targetId: bigint; dmg: number; secs: number; r: number }): ServerMessage =>
     msg({ $case: 'pvpHit', value: { casterId, ...v } });
 
+export const characterList = (characters: { name: string; cls: string; faction: string; level: number; zone: string }[], max: number, error = ''): ServerMessage =>
+    msg({ $case: 'characterList', value: { characters, max, error } });
 export const characterLoaded = (exists: boolean, data: string): ServerMessage => msg({ $case: 'characterLoaded', value: { exists, data } });
 // ---------- PvE autoritativo ----------
 export const mobsSnapshot = (mobs: { id: number; type: number; zone: number; x: number; y: number; hp: number; par: number; imm: number; poison: boolean; moving: boolean; traits: number; hpMax: number }[]): ServerMessage =>

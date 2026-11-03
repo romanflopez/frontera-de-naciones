@@ -2836,11 +2836,26 @@ $('loginForm').addEventListener('submit', async (e) => {
     btn.disabled = true; $('loginErr').textContent = 'Conectando…';
     try { localStorage.setItem('fdn:lastName', name); } catch { /* sin almacenamiento */ }
     pendingSave = null; welcomeBack = false;
-    net.onMessage = (m) => { if (m.$case === 'characterLoaded') { pendingSave = m.value.exists ? parseSave(m.value.data) : null; if (pendingSave) { selectedClass = pendingSave.cls; selectedFaction = pendingSave.faction; welcomeBack = true; } return; } onServer(m); if (m.$case === 'initialGameWorldState' && !connected && !inFlow) { if (auto) enterWorld(name); else startFlow(name); } };
+    flowActive = false; inFlow = false;
+    net.onMessage = (m) => {
+        if (m.$case === 'characterList') {
+            const chars = m.value.characters.map((c) => ({ name: c.name, cls: c.cls, faction: c.faction, lvl: c.level, zone: c.zone }));
+            if (flowActive) { inFlow = true; flow.update(chars, m.value.error); return; }
+            // reconexión automática tras un corte: vuelve a entrar con el mismo personaje sin pasar por la selección
+            const again = auto && playName ? chars.find((c) => c.name === playName) : undefined;
+            if (again) { playChar(again.name, false); return; }
+            startFlow(name, chars, m.value.max || 3);
+            if (m.value.error) flow.update(chars, m.value.error);
+            return;
+        }
+        if (m.$case === 'characterLoaded') { welcomeBack = false; pendingSave = m.value.exists && !creatingNew ? parseSave(m.value.data) : null; if (pendingSave) { selectedClass = pendingSave.cls; selectedFaction = pendingSave.faction; welcomeBack = true; } return; }
+        onServer(m);
+        if (m.$case === 'initialGameWorldState' && !connected && !inFlow && playName) enterWorld(playName);
+    };
     let tries = 0;
     net.onClose = (reason) => {
         const was = connected; saver.stop(); others.clear(); drops.length = 0; lastInv = null; mapLoading = false; loadEl().hidden = true;
-        inFlow = false;
+        inFlow = false; flowActive = false;
         if (backToLogin) { backToLogin = false; showLogin(); btn.disabled = false; return; }
         if (leaving) { leaving = false; connected = false; showLogin('Saliste del juego.'); btn.disabled = false; return; }
         // si se cortó sin querer, reintenta solo unos segundos (el server te guarda el lugar 60 s)
@@ -2854,15 +2869,25 @@ $('loginForm').addEventListener('submit', async (e) => {
     catch (err) { $('loginErr').textContent = `${(err as Error).message} ¿Está corriendo el server (pnpm dev)?`; btn.disabled = false; }
 });
 let autoEnter = false, inFlow = false, backToLogin = false;
-/** Ya conectado y con el mundo cargado: muestra la selección (cuenta con personaje) o el flujo clase → facción → crear. */
-function startFlow(name: string) {
-    inFlow = true;
-    const here = cityAt(P.cell.x, P.cell.y);
+/** Pantallas de personajes abiertas en esta conexión / personaje con el que se juega / recién creado (arranca en su ciudad). */
+let flowActive = false, playName = '', creatingNew = false;
+const lastCharKey = (account: string) => `fdn:char:${account.toLowerCase()}`;
+/** Pide entrar al mundo con ese personaje; el mundo llega después (initialGameWorldState) y ahí se llama a enterWorld. */
+function playChar(name: string, isNew: boolean) {
+    inFlow = false; creatingNew = isNew; playName = name;
+    try { localStorage.setItem(lastCharKey(($('nameIn') as HTMLInputElement).value.trim()), name); } catch { /* sin almacenamiento */ }
+    net.send({ $case: 'selectCharacterRequest', value: { name } });
+}
+/** Ya autenticado: muestra la selección (con personajes) o el flujo clase → facción → nombre (sin ninguno). */
+function startFlow(account: string, chars: { name: string; cls: string; faction: string; lvl: number; zone: string }[], max: number) {
+    flowActive = true; inFlow = true;
+    let preselect = playName; try { preselect ||= localStorage.getItem(lastCharKey(account)) ?? ''; } catch { /* sin almacenamiento */ }
     flow.start({
-        name, saved: pendingSave ? { cls: pendingSave.cls, faction: pendingSave.faction, lvl: pendingSave.lvl } : null,
-        zone: here?.name ?? ZONES.find((z) => dist(P, z) <= z.r + 2)?.name ?? 'Tierras de la Frontera',
-        onPlay: () => { inFlow = false; enterWorld(name); },
-        onBack: () => { if (net.open) { backToLogin = true; net.close(); } else { inFlow = false; showLogin(); ($('loginBtn') as HTMLButtonElement).disabled = false; } },
+        account, chars, max, preselect,
+        onPlay: playChar,
+        onCreate: (p) => net.send({ $case: 'createCharacterRequest', value: p }),
+        onDelete: (n) => net.send({ $case: 'deleteCharacterRequest', value: { name: n } }),
+        onBack: () => { if (net.open) { backToLogin = true; net.close(); } else { inFlow = false; flowActive = false; showLogin(); ($('loginBtn') as HTMLButtonElement).disabled = false; } },
     });
 }
 function enterWorld(name: string) {

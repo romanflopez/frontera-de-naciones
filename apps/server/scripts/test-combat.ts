@@ -45,6 +45,7 @@ class Bot {
         this.ws.on('message', (d: Buffer) => {
             const p = ServerMessage.decode(new Uint8Array(d)).payload as Srv | undefined; if (!p) return;
             switch (p.$case) {
+                case 'characterList': this.send(p.value.characters.some((c) => c.name === this.name) ? { $case: 'selectCharacterRequest', value: { name: this.name } } : { $case: 'createCharacterRequest', value: { name: this.name, cls: 'guerrero', faction: 'solmar' } }); if (p.value.error) throw new Error(p.value.error); break;
                 case 'initialState': this.id = p.value.playerId; this.ms = p.value.movementSpeedMs || 270; break;
                 case 'initialGameWorldState': this.mapName = p.value.mapName; this.x = p.value.playerX; this.y = p.value.playerY; ready(); break;
                 case 'vitals': this.vitals = { hp: p.value.hp, maxHp: p.value.maxHp, mp: p.value.mp, maxMp: p.value.maxMp, dead: p.value.dead }; this.vitalsLog.push({ t: Date.now(), hp: p.value.hp, mp: p.value.mp }); break;
