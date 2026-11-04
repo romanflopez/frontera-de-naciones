@@ -581,6 +581,7 @@ const roofCache = new Map<number, Canvas>();
 const roofTile = (id: number) => { let r = roofCache.get(id); if (!r) { r = hardDiamond(floorTiles.get(id)!); roofCache.set(id, r); } return r; };
 const buildingsMeta: Record<string, { w: number; h: number; ax: number; ay: number; fw: number; fh: number }> = {};
 for (const b of TOWN_BUILDINGS) {
+    if (b.prerender) continue; // los sm2_*/vh2_* vienen de Blender (tools/src/iso3d/city_edificios.py)
     const st = WALL_STYLES.find((s) => s.id === b.style)!, H = b.floors * STORY, uppers: TownUpper[] = b.upper ? (Array.isArray(b.upper) ? b.upper : [b.upper]) : [], Hup = Math.max(0, ...uppers.map((u) => u.floors)) * STORY;
     // lienzo a escala Large con margen; origen = esquina norte del edificio a nivel del piso
     const left = -b.h * 128 - 60, right = b.w * 128 + 60, top = -H - Hup - 160, bottom = (b.w + b.h) * 64 + 40;

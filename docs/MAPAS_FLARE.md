@@ -150,3 +150,21 @@ Los mapas de Flare son datos CC-BY-SA 3.0 o posterior: hay que atribuir (autores
 - Pendiente: distribución de farmeo y niveles de ítems por mob (después de definir el modelo de ítems).
 
 - Borde del mapa: el cliente repite el piso del borde, oscurecido, fuera de los límites en mapas de caza y mazmorras (ya no se ve negro). Opción más acabada para más adelante: un margen decorado dentro de los datos de cada mapa.
+
+## Campos de Sal por nación
+
+Desde el 3/11 `campos_de_sal` (Solmar) y `campos_de_sal_vhar` (Vhar) son dos copias del mismo mapa de Flare (`salted_field`). La copia no es un archivo generado: `packages/world/src/flare/index.ts` la arma desde los datos de `salted_field` (otro `id`/`eris`/nombre, zonas con el sufijo "(Vhar)") y le suma a `stonewood` una salida `walk` hacia ella (`extras`, que ahora admite `kind: 'walk'` y `arrive`). Si se regeneran los datos con `flare:maps`, nada de esto se pierde. Detalle y pruebas en `CIUDADES.md` §8.
+
+## PvP más plano (4/11/2026)
+Pedido de Román: los mapas de caza con PvP (`pvp: 'faction'`) tienen que ser abiertos, caminables y sin estructuras que traben. Revisados uno por uno con él. El importador (`tools/src/flare/maps.ts`) hace, solo en esos mapas:
+
+- **Obstáculos sueltos**: se abren grupos de hasta 6000 celdas (lagunas y acantilados interiores incluidos) y las murallas finas (sin ningún bloque de 5x5 bloqueado); se conserva ~1 de cada 10 de lo suelto.
+- **Agua**: se aplana toda a piso (en la nieve también los ids 144-207), copiando el piso de una celda a múltiplos de 4.
+- **Árboles**: solo en las 2 filas del borde del cuadrado; por el medio, un árbol cada ~12 de los que había (a 10+ celdas) y 5 más repartidos.
+- **Restos rojizos** (acantilados sueltos de 48-71, tocones y piedritas 112-113/124-127, y en la nieve las matas 128-131/136) sacados; después 4 tocones de adorno sin colisión.
+- **Relleno** del borde caminable (menos los pocos árboles) y solo lo alcanzable desde la entrada.
+- **Zonas de caza** (pits y sueltas): cada una se muda al lugar más despejado cercano (sin árboles ni paredes, sin pisarse con otras); si no hay, se saca (cada pit conserva al menos una).
+- **`widen`** (La Brecha 2, Cenizas I 4, Cenizas II 14, Cenizas III y Minas Abandonadas 40): ensancha los pasillos de las cuevas hasta ocupar casi todo el mapa (piso liso 16-31; sin medios rombos 56/57). Variedad: hongos, piedras, vagonetas, cajas, estalagmitas y monolitos altos (solos, a 9+ celdas) y círculos de piedra chatos.
+- **Nieve**: variedad (cajas, barriles, leña, tocones, arbustos, lápidas, carteles bajos sin colisión y monolitos altos a 14+ celdas).
+
+Los mapas `off` (Campos de Sal, Bosque de Piedra) y las mazmorras no cambian.

@@ -402,9 +402,11 @@ export type QuestEvent =
 export interface QuestHave { mats: Record<string, number>; maxUp: number }
 
 /** Cuánto suma un evento a un objetivo (0 si no le corresponde). Los de "tener" (collect) no avanzan por eventos. */
+/** Los dos campos de entrada (uno por nación) cuentan como el mismo mapa para las misiones (docs/CIUDADES.md §8). */
+const questMap = (m: string | undefined): string | undefined => (m === 'campos_de_sal_vhar' ? 'campos_de_sal' : m);
 export function goalStep(g: QuestGoal, e: QuestEvent): number {
     switch (g.k) {
-        case 'kill': return e.k === 'kill' && g.mobs.includes(e.type) && (!g.map || g.map === e.map) ? 1 : 0;
+        case 'kill': return e.k === 'kill' && g.mobs.includes(e.type) && (!g.map || g.map === questMap(e.map)) ? 1 : 0;
         case 'pit': return e.k === 'kill' && e.pit && e.tier >= e.myTier ? 1 : 0;
         case 'mutant': return e.k === 'kill' && e.mutant ? 1 : 0;
         case 'gather': return e.k === 'gather' ? e.n : 0;

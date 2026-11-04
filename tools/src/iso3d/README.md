@@ -6,8 +6,10 @@ de Flare y los packs comerciales de personajes; lo que se compra en esos packs s
 
 ## Lo que hay que acertar sí o sí
 
-La proyección de ERIS es **2:1** (el tile mide 192×96), así que la cámara va con elevación `atan(1/2)` = **26,565°** y proyección
-**ortográfica**. No son los 30° del isométrico "real": con 30° los sprites no calzan con el piso. El modelo rota 45° por dirección.
+La proyección de ERIS es **2:1** (el tile mide 192×96). Con cámara **ortográfica** el rombo de una celda mide ancho/alto = 1/sin(elevación),
+así que la elevación tiene que ser de **30°** (medido renderizando un rombo: 26,565° da 2,238:1 y 30° da 2,000:1). Los 26,565° = `atan(1/2)`
+son el ángulo de las *líneas* en pantalla, no el de la cámara; ese era el error de la versión anterior de este archivo. El modelo rota 45° por dirección.
+Para edificios y otras piezas con huella en la grilla, ver `city.py` (misma cámara, con el ancla verificada).
 
 ## Cómo usarlo
 

@@ -54,7 +54,7 @@ test('la ciudadela y sus interiores están en el registro y el grafo valida', ()
         assert.ok(d.size >= 16 && d.size <= 28, `${it.id}: ${d.size}`);
     }
     assert.equal(VHAR_INTERIORS.length, 8);
-    assert.equal(MAPS.vhar_ciudadela.size, 128); assert.equal(MAPS.vhar_ciudadela.pvp, 'off');
+    assert.equal(MAPS.vhar_ciudadela.size, 58); assert.equal(MAPS.vhar_ciudadela.pvp, 'off');
     // todo alcanzable a pie desde el spawn: el portal, las 8 puertas y el camino al mapa viejo
     const m = buildMap('vhar_ciudadela'), reach = reachableFrom(m, VHAR.spawn.x, VHAR.spawn.y);
     for (const c of [VHAR.portal, VHAR.toLegacy, VHAR.fromLegacy, ...(Object.keys(VHAR_BUILDINGS) as VharBuilding[]).map((k) => vharDoor(k).door)]) assert.ok(reach[c.y][c.x], JSON.stringify(c));
@@ -154,12 +154,16 @@ test('el recall (H) de Vhar lleva a la plaza de la ciudadela', () => {
     } finally { c.restore(); }
 });
 
-test('el Portal de Frontera de la ciudadela lleva a los Campos de Sal', () => {
+test('el Portal de Frontera de la ciudadela lleva a los Campos de Sal de Vhar, una vez que se llegó a pie', () => {
     const { reg, join } = setup();
     const city = reg.ensure('vhar_ciudadela');
     const J = join(city, 'viajero', { x: VHAR.portal.x + 1, y: VHAR.portal.y + 1 });
+    // el primer campo no se abre por nivel: hay que llegar a pie una vez
     pkt(city, J.session.sessionId, 'waypointRequest', { id: 'campos_de_sal' });
-    assert.deepEqual([reg.pendingOf(J.session.sessionId)!.map, reg.pendingOf(J.session.sessionId)!.x, reg.pendingOf(J.session.sessionId)!.y], ['campos_de_sal', MAPS.campos_de_sal.spawn.x, MAPS.campos_de_sal.spawn.y]);
+    assert.equal(reg.pendingOf(J.session.sessionId), undefined); assert.match(find(J.log, 'sendMessage').value.message, /Portal bloqueado/);
+    J.p.prog.unlocked.push('campos_de_sal');
+    pkt(city, J.session.sessionId, 'waypointRequest', { id: 'campos_de_sal' });
+    assert.deepEqual([reg.pendingOf(J.session.sessionId)!.map, reg.pendingOf(J.session.sessionId)!.x, reg.pendingOf(J.session.sessionId)!.y], ['campos_de_sal_vhar', MAPS.campos_de_sal_vhar.spawn.x, MAPS.campos_de_sal_vhar.spawn.y]);
 });
 
 test('el portón sur de la ciudadela sale a los Campos de Sal (solo ida)', () => {
@@ -168,7 +172,7 @@ test('el portón sur de la ciudadela sale a los Campos de Sal (solo ida)', () =>
     const J = join(city, 'caminante', VHAR.spawn);
     city.playerOf(J.session.sessionId)!.setPosition(VHAR.toLegacy.x, VHAR.toLegacy.y);
     reg.handlePortal(J.session, 'ciudadela_a_legacy');
-    assert.equal(reg.pendingOf(J.session.sessionId)?.map, 'campos_de_sal');
+    assert.equal(reg.pendingOf(J.session.sessionId)?.map, 'campos_de_sal_vhar');
 });
 
 test('comprar dentro del Bazar y los NPC _v de la ciudadela', () => {

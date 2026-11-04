@@ -20,12 +20,15 @@ export interface TrainingStep {
     col: string;
     /** Siempre null: la cadena vieja de misiones ya no abre portales (se conserva por compatibilidad con el menú). */
     after: string | null;
+    /** El portal no se abre por nivel: hay que llegar a pie a esa zona una vez (la abre el server al entrar al mapa). */
+    onFoot?: true;
 }
 
-const T = (step: number, map: string, zone: string, lvl: number, col: string): TrainingStep => ({ id: map, step, zone, map, lvl, col, after: null });
+const T = (step: number, map: string, zone: string, lvl: number, col: string, onFoot = false): TrainingStep => ({ id: map, step, zone, map, lvl, col, after: null, ...(onFoot ? { onFoot: true as const } : {}) });
 /** Una zona por mapa abierto de Flare, de T1 a T7. El nivel es el mínimo del `lvl` del mapa (lo comprueba el test de tiers). */
 export const TRAINING: TrainingStep[] = [
-    T(0, 'campos_de_sal', 'Campos de Sal', 1, '#8fd05a'),
+    // el primer campo es uno por nación (FIELD_MAP): el portal a ese campo se abre al llegar a pie una vez (docs/CIUDADES.md §8)
+    T(0, 'campos_de_sal', 'Campos de Sal', 1, '#8fd05a', true),
     T(1, 'bosque_de_piedra', 'Bosque de Piedra', 2, '#a6d24e'),
     T(2, 'canon_goblin', 'Cañón goblin', 3, '#c4d24a'),
     T(3, 'pantano_de_merrimead', 'Pantano de Merrimead', 6, '#d3cf4a'),
@@ -44,6 +47,16 @@ export const TRAINING: TrainingStep[] = [
     T(16, 'minas_abandonadas', 'Minas abandonadas', 38, '#c98a5a'),
 ];
 export const TRAINING_IDS = TRAINING.map((t) => t.id);
+
+/** Campo de entrada (nivel 1-2) de cada facción: el paso 0 del menú lleva al de la propia nación. */
+export const FIELD_MAP: Record<string, string> = { solmar: 'campos_de_sal', vhar: 'campos_de_sal_vhar' };
+/** Mapa al que lleva el paso `t` para alguien de la facción `faction`. */
+export const trainingMapFor = (t: TrainingStep, faction: string): string => (t.step === 0 ? FIELD_MAP[faction] ?? t.map : t.map);
+/** Paso del menú al que pertenece un mapa (los dos campos de entrada cuentan como el paso 0), o undefined. */
+export const trainingOfMap = (mapId: string): TrainingStep | undefined => TRAINING.find((t) => t.map === mapId || (t.step === 0 && Object.values(FIELD_MAP).includes(mapId)));
+/** Aviso cuando el portal del paso `t` todavía está cerrado. */
+export const trainingLockedMsg = (t: TrainingStep): string =>
+    t.onFoot ? `Portal bloqueado (${t.zone}): todavía no conocés el camino. Llegá a pie una vez y se abre.` : `Portal bloqueado (${t.zone}): se abre al llegar al nivel ${t.lvl}.`;
 
 /** Waypoint (estilo Diablo): el Portal de Frontera de la plaza de cada ciudad. `kind: 'zone'` lo usa solo el cliente para dibujar vínculos entre mapas. */
 export interface Waypoint {
@@ -64,15 +77,15 @@ export const CITY_PORTAL_OFFSET = { x: 3, y: 0 };
 export const LEGACY_CITY_PORTALS: readonly string[] = [];
 
 /** ¿Está abierto el portal del paso `step` para alguien de nivel `lvl`? (`qi`, el índice de la cadena vieja de misiones, ya no cuenta.) */
-export const trainingUnlocked = (step: number, _qi: number, lvl: number): boolean => { const t = TRAINING[step]; return !!t && lvl >= t.lvl; };
+export const trainingUnlocked = (step: number, _qi: number, lvl: number): boolean => { const t = TRAINING[step]; return !!t && !t.onFoot && lvl >= t.lvl; };
 
 /** Lo que el server (y el cliente) necesitan saber del personaje para decidir si un portal deja pasar. */
-export interface PortalProgress { qi: number; lvl: number; keys: Record<string, number>; unlocked: readonly string[] }
+export interface PortalProgress { qi: number; lvl: number; keys: Record<string, number>; unlocked: readonly string[]; /** Nación del personaje (para los enlaces de una sola nación). */ faction?: string }
 
 /** Motivo por el que el portal no deja pasar, o null si deja. */
 export function portalGate(p: Portal, g: PortalProgress): string | null {
     const t = p.train;
-    if (t && !g.unlocked.includes(t.id) && !trainingUnlocked(t.step, g.qi, g.lvl)) return `Portal bloqueado (${t.zone}): se abre al llegar al nivel ${t.lvl}.`; // la cadena vieja de misiones quedó jubilada: solo cuenta el nivel (los ya abiertos siguen abiertos)
+    if (t && !g.unlocked.includes(t.id) && !trainingUnlocked(t.step, g.qi, g.lvl)) return trainingLockedMsg(t); // la cadena vieja de misiones quedó jubilada: solo cuenta el nivel (los ya abiertos siguen abiertos)
     if (p.key && !(g.keys[p.key] >= 1)) return `La escalera está sellada: necesitás la llave (${p.key}).`;
     return null;
 }

@@ -59,7 +59,8 @@ test('una puerta sin requisito es un error', () => {
     assert.ok(validateMapGraph(d).some((e) => e.includes('pide requisito')));
 });
 test('detecta mapas inalcanzables y zonas repetidas entre mapas', () => {
-    const d = clone(); d.solmar_legacy.links = [];
+    // la ciudadela de Vhar ya se alcanza desde el mundo (campo de Vhar -> Bosque de Piedra), así que para aislarla hay que cortar también la salida de la villa
+    const d = clone(); d.solmar_legacy.links = []; d.solmar_villa.links = d.solmar_villa.links.filter((l) => l.kind === 'enter');
     assert.ok(validateMapGraph(d).some((e) => e.includes('no se alcanza desde')));
     const z = clone(); const b = z.prueba_mazmorra.build; z.prueba_mazmorra.build = () => { const m = b(); m.zones[0].name = 'Claro de prueba: goblins'; return m; };
     assert.ok(validateMapGraph(z).some((e) => e.includes('repetida')));

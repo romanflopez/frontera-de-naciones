@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { INTERIORS, MAPS, TEMPLE_RESPAWN, VILLA, VILLA_BUILDINGS, buildMap, factionHome, getMapDef, respawnTarget, roleOf, roomOf, validateMapGraph, villaDoor, type VillaBuilding } from '@fdn/world';
+import { INTERIORS, MAPS, TEMPLE_RESPAWN, VILLA, VILLA_FLARE, VILLA_BUILDINGS, buildMap, factionHome, getMapDef, respawnTarget, roleOf, roomOf, validateMapGraph, villaDoor, type VillaBuilding } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
@@ -44,7 +44,7 @@ test('la villa y sus interiores están en el registro y el grafo valida', () => 
         assert.equal(d.safe, true); assert.equal(d.pvp, 'off');
         assert.ok(d.size >= 16 && d.size <= 28, `${it.id}: ${d.size}`);
     }
-    assert.equal(MAPS.solmar_villa.size, 128); assert.equal(MAPS.solmar_villa.pvp, 'off');
+    assert.equal(MAPS.solmar_villa.size, 64); assert.equal(MAPS.solmar_villa.pvp, 'off');
 });
 
 test('cada edificio tiene puerta de ida (villa -> interior) y de vuelta (interior -> frente a la puerta)', () => {
@@ -126,6 +126,11 @@ test('el Portal de Frontera de la villa lleva a la entrada de cada mapa de Flare
     const { reg, join } = setup();
     const villa = reg.ensure('solmar_villa');
     const J = join(villa, 'viajera', { x: VILLA.portal.x + 1, y: VILLA.portal.y + 1 });
+    // el primer campo no se abre por nivel: hay que haber llegado a pie una vez
+    villa.handleClientPacket(J.session.sessionId, { payload: { $case: 'waypointRequest', value: { id: 'campos_de_sal' } } } as never);
+    assert.equal(reg.pendingOf(J.session.sessionId), undefined);
+    assert.match(find(J.log, 'sendMessage').value.message, /Portal bloqueado.*pie/);
+    J.p.prog.unlocked.push('campos_de_sal');
     villa.handleClientPacket(J.session.sessionId, { payload: { $case: 'waypointRequest', value: { id: 'campos_de_sal' } } } as never);
     assert.equal(reg.pendingOf(J.session.sessionId)?.map, 'campos_de_sal');
     assert.deepEqual([reg.pendingOf(J.session.sessionId)!.x, reg.pendingOf(J.session.sessionId)!.y], [MAPS.campos_de_sal.spawn.x, MAPS.campos_de_sal.spawn.y]);
@@ -134,7 +139,7 @@ test('el Portal de Frontera de la villa lleva a la entrada de cada mapa de Flare
     const campos = reg.get('campos_de_sal')!;
     campos.handleClientPacket(J.session.sessionId, { payload: { $case: 'waypointRequest', value: { id: 'city' } } } as never);
     assert.equal(reg.pendingOf(J.session.sessionId), undefined);
-    assert.match(find(J.log, 'sendMessage').value.message, /Portal de Frontera/);
+    assert.match(J.log.filter((m) => m.payload?.$case === 'sendMessage').map((m) => (m.payload as any).value.message).join('|'), /Portal de Frontera/);
     // una zona alta está cerrada hasta tener su nivel
     const K = join(villa, 'novata', { x: VILLA.portal.x + 1, y: VILLA.portal.y + 1 });
     villa.handleClientPacket(K.session.sessionId, { payload: { $case: 'waypointRequest', value: { id: 'cenizas_iii' } } } as never);
@@ -142,6 +147,32 @@ test('el Portal de Frontera de la villa lleva a la entrada de cada mapa de Flare
     K.p.prog.lvl = 26;
     villa.handleClientPacket(K.session.sessionId, { payload: { $case: 'waypointRequest', value: { id: 'cenizas_iii' } } } as never);
     assert.equal(reg.pendingOf(K.session.sessionId)?.map, 'cenizas_iii');
+});
+
+test('llegar a pie al primer campo abre el portal de la plaza y el Portal de Frontera (y queda guardado)', () => {
+    const { reg, join } = setup();
+    const villa = reg.ensure('solmar_villa');
+    const J = join(villa, 'pionera', VILLA.spawn), sid = J.session.sessionId;
+    const mensajes = () => J.log.filter((m) => m.payload?.$case === 'sendMessage').map((m) => (m.payload as any).value.message as string).join(' | ');
+    // sin haber llegado a pie, el atajo de la plaza está cerrado
+    villa.playerOf(sid)!.setPosition(VILLA_FLARE.x, VILLA_FLARE.y);
+    reg.handlePortal(J.session, 'villa_a_campos');
+    assert.equal(reg.pendingOf(sid), undefined); assert.match(mensajes(), /a pie/);
+    assert.ok(!J.p.econ!.u.includes('campos_de_sal'));
+    // por el portón se camina: el portal se abre al llegar
+    villa.playerOf(sid)!.setPosition(VILLA.toLegacy.x, VILLA.toLegacy.y);
+    reg.handlePortal(J.session, 'villa_a_llanos');
+    assert.equal(reg.pendingOf(sid)?.map, 'campos_de_sal');
+    reg.completeTransfer(sid, 'campos_de_sal', reg.hashOf('campos_de_sal'));
+    assert.ok(J.p.econ!.u.includes('campos_de_sal'), 'queda en el personaje guardado');
+    assert.ok(J.p.prog.unlocked.includes('campos_de_sal'));
+    assert.match(mensajes(), /Portal desbloqueado: Campos de Sal/);
+    // de vuelta en la villa, el atajo de la plaza y el Portal de Frontera ya sirven
+    assert.ok(reg.beginTransfer(J.session, { map: 'solmar_villa', x: VILLA_FLARE.x, y: VILLA_FLARE.y }));
+    reg.completeTransfer(sid, 'solmar_villa', reg.hashOf('solmar_villa'));
+    villa.playerOf(sid)!.setPosition(VILLA_FLARE.x, VILLA_FLARE.y);
+    reg.handlePortal(J.session, 'villa_a_campos');
+    assert.equal(reg.pendingOf(sid)?.map, 'campos_de_sal');
 });
 
 test('el portón este de la villa sale a los Campos de Sal', () => {

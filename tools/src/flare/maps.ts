@@ -8,7 +8,7 @@
  * Determinista: sin Math.random ni hora; el mismo mapa da siempre el mismo archivo.
  */
 import { pitLevel, TIERS, type Tier } from '../../../packages/world/src/tiers';
-import { shadeId } from '../../../packages/world/src/flare/types';
+import { shadeId, isFlareWater, isFlareCliff } from '../../../packages/world/src/flare/types';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,6 +48,8 @@ interface MapSpec {
     openMods?: boolean;
     /** Parte de los obstáculos sueltos que se conserva al abrir el mapa (por defecto KEEP_PROPS). */
     keepProps?: number;
+    /** Ensancha los pasillos esta cantidad de celdas a cada lado (La Brecha: laberinto de cañones angostos, pedido de Román 4/11/2026). */
+    widen?: number;
 }
 
 /** Un mapa por entrada. Pit A = el más cerca de la entrada (el más fácil), C = el más lejos. Los nombres de zona son únicos entre mapas. */
@@ -107,13 +109,13 @@ const SPECS: MapSpec[] = [
     { id: 'stormrock_pass', eris: 'paso_de_stormrock', name: 'Paso de Stormrock', region: 'comun', pvp: 'faction', lvl: [18, 20], tier: 4, dropLinks: ['stormrock_ruins'], skipLinks: [['the_breach', 23, 14], ['the_breach', 76, 41]],
         pits: [{ name: 'Riscos de wyvern', type: 'wyvern' }, { name: 'Hormigueros helados', type: 'ice_ant' }, { name: 'Cumbre helada', type: 'wyvern_ice' }],
         loose: [{ type: 'skeleton_archer' }], extras: [{ to: 'cenizas_i', where: 'far' }] },
-    { id: 'underworld', eris: 'cenizas_i', name: 'Cenizas I', region: 'comun', pvp: 'faction', lvl: [21, 23], tier: 5, dropLinks: ['torture_chambers'],
+    { id: 'underworld', eris: 'cenizas_i', widen: 4, name: 'Cenizas I', region: 'comun', pvp: 'faction', lvl: [21, 23], tier: 5, dropLinks: ['torture_chambers'],
         pits: [{ name: 'Brasas de la ceniza', type: 'fire_ant' }, { name: 'Hechiceros de ceniza', type: 'skeleton_mage' }, { name: 'Muertos calcinados', type: 'zombie_dark' }],
         loose: [{ type: 'skeleton' }], extras: [{ to: 'paso_de_stormrock', where: 'near' }] },
-    { id: 'underworld_catacombs', eris: 'cenizas_ii', name: 'Cenizas II', region: 'comun', pvp: 'faction', lvl: [23, 25], tier: 5,
+    { id: 'underworld_catacombs', eris: 'cenizas_ii', widen: 14, name: 'Cenizas II', region: 'comun', pvp: 'faction', lvl: [23, 25], tier: 5,
         pits: [{ name: 'Osario', type: 'skeleton' }, { name: 'Tumbas ardientes', type: 'cursed_grave' }, { name: 'Arqueros de las catacumbas', type: 'skeleton_archer' }],
         loose: [{ type: 'zombie_dark' }], extras: [{ to: 'templo_de_mez', where: 'far', kind: 'door', gate: 19 }] },
-    { id: 'underworld_mines', eris: 'cenizas_iii', name: 'Cenizas III', region: 'comun', pvp: 'faction', lvl: [26, 28], tier: 6, dropLinks: ['underworld_stronghold_1'],
+    { id: 'underworld_mines', eris: 'cenizas_iii', widen: 40, name: 'Cenizas III', region: 'comun', pvp: 'faction', lvl: [26, 28], tier: 6, dropLinks: ['underworld_stronghold_1'],
         pits: [{ name: 'Mineros condenados', type: 'zombie_dark' }, { name: 'Hornos de wyvern', type: 'wyvern_fire' }, { name: 'Galerías de brasas', type: 'fire_ant' }],
         loose: [{ type: 'skeleton_mage' }], extras: [{ to: 'fortaleza_infernal', where: 'far', kind: 'door', gate: 24 }, { to: 'granja_roble_negro', where: 'near' }] },
     // T6, segundo mapa abierto (Nv 28-30): la Granja de Roble Negro, de pasto, para cortar la seguidilla de cuevas. Flare la une al Risco del Sur
@@ -135,7 +137,7 @@ const SPECS: MapSpec[] = [
         loose: [{ type: 'skeleton' }], extras: [{ to: 'lago_kuuma', where: 'near' }] },
     // T7, cuarto mapa abierto (Nv 38-40, el tope): las Minas abandonadas. Flare las une a la Laguna (camino propio); las salidas a La Brecha y a
     // Blackmire se descartan.
-    { id: 'abandoned_mines', eris: 'minas_abandonadas', name: 'Minas abandonadas', region: 'comun', pvp: 'faction', lvl: [38, 40], tier: 7, dropLinks: ['the_breach', 'blackmire_mines'],
+    { id: 'abandoned_mines', eris: 'minas_abandonadas', widen: 40, name: 'Minas abandonadas', region: 'comun', pvp: 'faction', lvl: [38, 40], tier: 7, dropLinks: ['the_breach', 'blackmire_mines'],
         pits: [{ name: 'Galerías de los muertos', type: 'zombie_dark' }, { name: 'Pozos de las hormigas', type: 'antlion' }, { name: 'Socavón de los hechiceros', type: 'skeleton_mage' }],
         loose: [{ type: 'skeleton_archer' }] },
     // D7 (T7): Fuerte Amir y Cámaras de tortura (2 pisos, Nv 38-40, jefe: el Gran Verdugo). La entrada es la puerta de Flare del Lago Kuuma
@@ -155,7 +157,7 @@ const SPECS: MapSpec[] = [
     { id: 'lochport_cemetery', eris: 'cementerio_de_lochport', name: 'Cementerio de Lochport', region: 'comun', pvp: 'faction', lvl: [11, 13], tier: 3,
         pits: [{ name: 'Tumbas viejas', type: 'skeleton' }, { name: 'Arqueros del osario', type: 'skeleton_archer' }, { name: 'Hechiceros del camposanto', type: 'skeleton_mage' }],
         loose: [{ type: 'cursed_grave' }], extras: [{ to: 'risco_del_sur', where: 'far' }, { to: 'cripta_olvidada', where: 'near', kind: 'door', gate: 9 }] },
-    { id: 'the_breach', eris: 'la_brecha', name: 'La Brecha', region: 'comun', pvp: 'faction', lvl: [16, 18], tier: 4,
+    { id: 'the_breach', eris: 'la_brecha', name: 'La Brecha', region: 'comun', pvp: 'faction', lvl: [16, 18], tier: 4, widen: 2,
         pits: [{ name: 'Túneles de hormiga león', type: 'antlion' }, { name: 'Hormigueros de la brecha', type: 'fire_ant' }, { name: 'Mineros caídos', type: 'zombie_dark' }],
         loose: [{ type: 'antlion_small' }, { type: 'fire_ant' }], dropLinks: ['antlion_nest', 'abandoned_mines'], extras: [{ to: 'risco_del_sur', where: 'near' }, { to: 'torre_del_hechicero', where: 'far', kind: 'door', gate: 14 }] },
     { id: 'southern_ridge', eris: 'risco_del_sur', name: 'Risco del Sur', region: 'comun', pvp: 'faction', lvl: [13, 15], tier: 3, dropLinks: ['black_oak_farm'],
@@ -179,10 +181,10 @@ const FILLS: Record<string, { floor: number[]; deco: [number, number[]][]; shade
         floor: Array.from({ length: 16 }, (_, i) => 16 + i), shade: true,
         deco: [[0.08, [144, 145, 146, 147, 148, 149]], [0.13, [150, 151, 152, 153]], [0.15, [132, 133, 134, 135]]],
     },
-    // Nieve: el vacío es nieve lisa (16-31) con árboles pelados, rocas nevadas, matas y tocones (sin las piezas del agua ni los marcadores violeta 92-95).
+    // Nieve (más despejada el 4/11/2026, como la Granja: pocos árboles, solo en los extremos): el vacío es nieve lisa (16-31) con árboles pelados, rocas nevadas, matas y tocones (sin las piezas del agua ni los marcadores violeta 92-95).
     snowplains: {
         floor: Array.from({ length: 16 }, (_, i) => 16 + i),
-        deco: [[0.13, [244, 245, 246, 247]], [0.17, [128, 129, 130, 131]], [0.22, [112, 113, 124, 125, 126, 127]], [0.23, [136]]],
+        deco: [[0.045, [244, 245, 246, 247]], [0.06, [128, 129, 130, 131]], [0.085, [112, 113, 124, 125, 126, 127]], [0.09, [136]]],
     },
     // Mazmorra de piedra: lo mismo que la cueva, piso liso oscurecido en bandas que se funde a negro y apenas unos huesos en la primera fila
     // (antes eran muñones de muro por todos lados y el mapa se veía como un bosque de columnas grises).
@@ -239,9 +241,11 @@ const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.m
 interface OutZone { type: string; x: number; y: number; r: number; n: number; name: string; lvl: number; kind: 'pit' | 'loose' | 'boss'; pit?: number }
 
 /** Tamaño máximo (en celdas) de un obstáculo suelto que se abre en los mapas abiertos, y alto máximo (px de Flare) de un objeto que queda de adorno. */
-const OPEN_MAX = 12, LOW_PROP = 90;
+const OPEN_MAX = 12, OPEN_MAX_PVP = 6000, LOW_PROP = 90;
 /** Parte de los obstáculos sueltos que se conserva y distancia mínima (celdas, Manhattan) entre dos conservados. */
 const KEEP_PROPS = 0.25, KEEP_GAP = 6;
+/** Mapas de PvP (pedido de Román, 4/11/2026: "más planos"): se abren grupos más grandes y se conserva menos y más separado. */
+const KEEP_PROPS_PVP = 0.1, KEEP_GAP_PVP = 10;
 /** Celda bloqueada (fuera de lo alcanzable). Los vecinos alcanzables ya están marcados en `seen` como vistos. */
 const hardBlockOrUnreached = (reach: boolean[][], x: number, y: number): boolean => !reach[y][x];
 /** Alto en px de cada pieza de la hoja (para decidir si un objeto es bajo). */
@@ -314,6 +318,10 @@ function convert(spec: MapSpec): object {
     if (!spec.dungeon) {
         const heights = objectHeights(p.tileset);
         const seen = reach.map((r) => r.slice());
+        // Piso de relleno para lagunas y acantilados que se aplanan en los mapas de PvP: el piso más común de lo caminable.
+        const cnt = new Map<number, number>();
+        for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const t = background[y][x]; if (reach[y][x] && t && !isFlareWater(tsName, t) && !isFlareCliff(tsName, t)) cnt.set(t, (cnt.get(t) ?? 0) + 1); }
+        const groundTile = [...cnt.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 0;
         let opened = 0, removed = 0; const kept: [number, number][] = [];
         for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
             if (seen[y][x] || !hardBlockOrUnreached(reach, x, y)) continue;
@@ -326,15 +334,42 @@ function convert(spec: MapSpec): object {
                     if (inside(nx, ny) && !seen[ny][nx]) { seen[ny][nx] = true; isle.push([nx, ny]); }
                 }
             }
-            if (!enclosed || isle.length > OPEN_MAX) continue;
+            if (!enclosed || isle.length > (spec.pvp === 'faction' ? OPEN_MAX_PVP : OPEN_MAX)) continue;
             // Se conserva ~1 de cada 4 (bloqueando, como estaba) para que el mapa no pierda su identidad (las lápidas del cementerio, las
             // carpas del cañón), siempre separados entre sí: un obstáculo suelto se rodea fácil; muchos juntos son los que traban.
             const [ix, iy] = isle[0];
-            if (hashStr(`${spec.id}:isla:${ix},${iy}`) / 4294967296 < (spec.keepProps ?? KEEP_PROPS) && !kept.some((k) => Math.abs(k[0] - ix) + Math.abs(k[1] - iy) < KEEP_GAP)) { kept.push([ix, iy]); continue; }
+            if (hashStr(`${spec.id}:isla:${ix},${iy}`) / 4294967296 < (spec.keepProps ?? (spec.pvp === 'faction' ? KEEP_PROPS_PVP : KEEP_PROPS)) && !kept.some((k) => Math.abs(k[0] - ix) + Math.abs(k[1] - iy) < (spec.pvp === 'faction' ? KEEP_GAP_PVP : KEEP_GAP))) { kept.push([ix, iy]); continue; }
             for (const [cx, cy] of isle) {
                 reach[cy][cx] = true; opened++;
+                if (spec.pvp === 'faction' && groundTile && (isFlareWater(tsName, background[cy][cx]) || isFlareCliff(tsName, background[cy][cx]))) { background[cy][cx] = groundTile; object[cy][cx] = 0; }
                 const o = object[cy][cx]; if (o && (heights.get(o) ?? 999) > LOW_PROP) { object[cy][cx] = 0; removed++; }
             }
+        }
+        // Pedido de Román (4/11/2026): en los mapas de PvP "todo caminable": el agua se aplana a piso (el lago grande no cuenta como obstáculo
+        // suelto porque se une al borde por los acantilados). El piso se copia de una celda de piso a múltiplos de 4 (el patrón de las hojas).
+        if (spec.pvp === 'faction' && groundTile) {
+            // En la nieve el lago usa también los ids 166-207 (hielo y fondo oscuro: están en el rango de acantilados).
+            const isWater = (t: number): boolean => isFlareWater(tsName, t) || (tsName === 'snowplains' && t >= 144 && t <= 207);
+            const isGround = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < p.w && y < p.h && !!background[y][x] && !isWater(background[y][x]) && !isFlareCliff(tsName, background[y][x]) && reach[y][x];
+            const todo: [number, number][] = [];
+            for (let y = 0; y < p.h; y++) for (let x = 0; x < p.w; x++) if (background[y][x] && (isWater(background[y][x]) || isFlareCliff(tsName, background[y][x]))) todo.push([x, y]);
+            const nuevo = todo.map(([x, y]) => {
+                for (let k = 1; k < 40; k++) for (const [dx, dy] of [[-4, 0], [4, 0], [0, -4], [0, 4]] as const) if (isGround(x + dx * k, y + dy * k)) return background[y + dy * k][x + dx * k];
+                return groundTile;
+            });
+            todo.forEach(([x, y], i) => { background[y][x] = nuevo[i]; object[y][x] = 0; reach[y][x] = true; });
+            if (todo.length) console.log(`${spec.id}: ${todo.length} celdas de agua y acantilado aplanadas`);
+        }
+        // Murallas finas (lomas, bordes de acantilado, vallas de piedra) abiertas en los mapas de PvP: un obstáculo es "grueso" si tiene un
+        // bloque de 5x5 bloqueado; lo grueso (edificios, macizos) queda y todo lo bloqueado a más de 3 celdas de lo grueso se abre y se limpia.
+        if (spec.pvp === 'faction') {
+            const blk = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < p.w && y < p.h && background[y][x] !== 0 && !reach[y][x];
+            const fat: [number, number][] = [];
+            for (let y = 2; y < p.h - 2; y++) for (let x = 2; x < p.w - 2; x++) { let all = true; for (let dy = -2; dy <= 2 && all; dy++) for (let dx = -2; dx <= 2; dx++) if (!blk(x + dx, y + dy)) { all = false; break; } if (all) fat.push([x, y]); }
+            const keep = new Set<number>(); for (const [x, y] of fat) for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) keep.add((y + dy) * N + x + dx);
+            let thin = 0;
+            for (let y = 0; y < p.h; y++) for (let x = 0; x < p.w; x++) if (blk(x, y) && !keep.has(y * N + x)) { reach[y][x] = true; object[y][x] = 0; thin++; }
+            if (thin) console.log(`${spec.id}: ${thin} celdas de murallas finas abiertas`);
         }
         if (opened) console.log(`${spec.id}: ${opened} celdas de obstáculos sueltos abiertas (${removed} objetos altos sacados, ${kept.length} obstáculos conservados)`);
     }
@@ -345,6 +380,41 @@ function convert(spec: MapSpec): object {
         return undefined;
     };
 
+    // Ensanchado de pasillos (spec.widen): todo lo que está a menos de `widen` celdas de lo caminable se abre: el piso reemplaza las paredes y el
+    // negro de entre medio, y se limpian los objetos (paredes sueltas, rocas). Las paredes del tope del cuadrado quedan.
+    if (spec.widen) {
+        const W = spec.widen; const cnt2 = new Map<number, number>();
+        for (let y = 0; y < p.h; y++) for (let x = 0; x < p.w; x++) { const t = background[y][x]; if (reach[y][x] && t && !isFlareCliff(tsName, t) && !isFlareWater(tsName, t)) cnt2.set(t, (cnt2.get(t) ?? 0) + 1); }
+        const gt = [...cnt2.entries()].sort((a, c) => c[1] - a[1])[0]?.[0] ?? 0;
+        // solo piso liso: se descartan las piezas de borde y rincón (poco frecuentes), que dejan triángulos oscuros
+        { const mx = Math.max(0, ...cnt2.values()); for (const [t, n] of [...cnt2]) if (n < mx * 0.25 || t < 16 || t > 31) cnt2.delete(t); }
+        const nuevo: [number, number][] = [];
+        for (let y = 2; y < p.h - 2; y++) for (let x = 2; x < p.w - 2; x++) {
+            if (reach[y][x]) continue;
+            let near = false;
+            for (let dy = -W; dy <= W && !near; dy++) for (let dx = -W; dx <= W; dx++) { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < N && ny < N && reach[ny][nx]) { near = true; break; } }
+            if (near) nuevo.push([x, y]);
+        }
+        for (const [x, y] of nuevo) {
+            const t = background[y][x];
+            if (t === 0 || isFlareCliff(tsName, t) || isFlareWater(tsName, t)) {
+                // piso copiado de una celda de piso a múltiplos de 4 (el patrón de la hoja); si no hay, el piso más común
+                let f = gt;
+                const ok = (cx: number, cy: number): boolean => cx >= 0 && cy >= 0 && cx < p.w && cy < p.h && reach[cy][cx] && !!background[cy][cx] && !isFlareCliff(tsName, background[cy][cx]) && !isFlareWater(tsName, background[cy][cx]) && cnt2.has(background[cy][cx]);
+                search: for (let kk = 1; kk < 30; kk++) for (const [dx, dy] of [[-4, 0], [4, 0], [0, -4], [0, 4]] as const) if (ok(x + dx * kk, y + dy * kk)) { f = background[y + dy * kk][x + dx * kk]; break search; }
+                background[y][x] = f;
+            }
+            object[y][x] = 0;
+        }
+        for (const [x, y] of nuevo) reach[y][x] = true;
+        // Piezas sueltas de borde (la 56 y la 57 de la cueva son medios rombos): dentro de lo caminable no pueden quedar, dejan triángulos negros.
+        for (let y = 0; y < p.h; y++) for (let x = 0; x < p.w; x++) if (reach[y][x] && background[y][x] && !cnt2.has(background[y][x]) && background[y][x] < 900 && !object[y][x]) {
+            let f = gt;
+            search2: for (let kk = 1; kk < 30; kk++) for (const [dx, dy] of [[-4, 0], [4, 0], [0, -4], [0, 4]] as const) { const cx = x + dx * kk, cy = y + dy * kk; if (cx >= 0 && cy >= 0 && cx < p.w && cy < p.h && reach[cy][cx] && cnt2.has(background[cy][cx])) { f = background[cy][cx]; break search2; } }
+            background[y][x] = f;
+        }
+        console.log(`${spec.id}: ${nuevo.length} celdas ganadas al ensanchar los pasillos (${W} a cada lado)`);
+    }
     // 2) Sin partes negras: el vacío de Flare (fuera de la isla, en los pozos y en el relleno a cuadrado) se rellena con el piso de la hoja
     // y objetos que lo cubren. Esas celdas ya están bloqueadas (no se pueden pisar).
     const fill = FILLS[tsName];
@@ -363,11 +433,100 @@ function convert(spec: MapSpec): object {
             const f = fill.floor[Math.floor(r(0) * fill.floor.length)];
             background[y][x] = fill.shade ? shadeId(tsName, f, far[y][x] - 1) : f;
             if (object[y][x] !== 0 || (fill.shade && far[y][x] > 1)) continue;
-            const roll = r(1), band = fill.deco.find(([t]) => roll < t);
+            // En los mapas de PvP el relleno es caminable (abajo): solo ~40 % de los objetos de siempre, así el mapa no se siente chico.
+            const roll = spec.pvp === 'faction' && !fill.shade ? r(1) / 0.4 : r(1), band = fill.deco.find(([t]) => roll < t);
             if (band) object[y][x] = band[1][Math.floor(r(2) * band[1].length)];
+        }
+        // Pedido de Román (4/11/2026): "como mucho 2 filas" de árboles: en los mapas de PvP los árboles solo quedan en las 2 filas del borde del
+        // cuadrado; los de adentro (los del mapa de Flare y los del relleno) se sacan y esas celdas se caminan (el mapa se siente más grande).
+        if (spec.pvp === 'faction' && !fill.shade) {
+            const TREES = new Set(tsName === 'snowplains' ? [244, 245, 246, 247] : [240, 241, 242, 243, 248, 249, 250, 251, 252, 253, 254, 255]);
+            // Algunos árboles sueltos por el medio, muy separados entre sí (no estorban el PvP): ~1 de cada 12 y a 10+ celdas uno de otro.
+            let cut = 0; const solos: [number, number][] = [];
+            for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (TREES.has(object[y][x]) && Math.min(x, y, N - 1 - x, N - 1 - y) >= 2) {
+                if (hashStr(`${spec.id}:solo:${x},${y}`) / 4294967296 < 1 / 12 && !solos.some((k) => Math.max(Math.abs(k[0] - x), Math.abs(k[1] - y)) < 10)) { solos.push([x, y]); continue; }
+                object[y][x] = 0; if (background[y][x] !== 0) reach[y][x] = true; cut++;
+            }
+            // 5 árboles más por el medio (pedido de Román): en celdas libres, a 10+ de los otros y lejos de la entrada y del borde.
+            const arboles = tsName === 'snowplains' ? [244, 245, 246, 247] : [248, 249, 250, 251, 252, 253, 254, 255];
+            const rr = makeRnd(hashStr(`${spec.id}:cinco`)); let puestos = 0;
+            for (let t = 0; t < 4000 && puestos < 5; t++) {
+                const x = 6 + Math.floor(rr() * (N - 12)), y = 6 + Math.floor(rr() * (N - 12));
+                if (!reach[y][x] || object[y][x] !== 0 || dist({ x, y }, entry) < 14 || solos.some((k) => Math.max(Math.abs(k[0] - x), Math.abs(k[1] - y)) < 10)) continue;
+                object[y][x] = arboles[Math.floor(rr() * arboles.length)]; reach[y][x] = false; solos.push([x, y]); puestos++;
+            }
+            if (cut) console.log(`${spec.id}: ${cut} árboles de adentro sacados (quedan 2 filas en el borde)`);
+        }
+        // Los restos de acantilado (piezas rojizas de 48-71 en la capa de objetos: bordes de roca sueltos sobre el pasto) se sacan en los mapas de PvP.
+        if (spec.pvp === 'faction' && !fill.shade) {
+            let rocas = 0; const TOCONES = new Set(tsName === 'snowplains' ? [112, 113, 124, 125, 126, 127, 128, 129, 130, 131, 136] : [112, 113, 124, 125, 126, 127]); // tocones, troncos y piedritas rojizas del relleno
+            for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (object[y][x] && (isFlareCliff(tsName, object[y][x]) || TOCONES.has(object[y][x]))) { object[y][x] = 0; rocas++; }
+            if (rocas) console.log(`${spec.id}: ${rocas} restos de acantilado, tocones y piedritas sacados`);
+        }
+        // Pedido de Román (4/11/2026): "queda muy chico el mapa". En los mapas de PvP el relleno se camina (menos los pocos árboles): el
+        // piso jugable llega hasta el borde del cuadrado. Solo lo que se alcanza desde lo ya caminable (sin bolsillos sueltos).
+        if (spec.pvp === 'faction' && !fill.shade) {
+            const q2: [number, number][] = []; for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (reach[y][x]) q2.push([x, y]);
+            let extra = 0;
+            for (let i = 0; i < q2.length; i++) {
+                const [cx, cy] = q2[i];
+                for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+                    const nx = cx + dx, ny = cy + dy;
+                    if (nx < 0 || ny < 0 || nx >= N || ny >= N || reach[ny][nx] || far[ny][nx] === 0 || object[ny][nx] !== 0) continue;
+                    reach[ny][nx] = true; extra++; q2.push([nx, ny]);
+                }
+            }
+            walkable += extra;
+            if (extra) console.log(`${spec.id}: ${extra} celdas del relleno ahora se caminan`);
         }
     } else console.warn(`${spec.id}: tileset '${tsName}' sin relleno definido: el vacío queda negro`);
 
+    // Lo que se abrió para el PvP no puede dejar bolsillos sueltos: solo queda caminable lo que se alcanza a pie desde la entrada.
+    if (spec.pvp === 'faction' && entry) {
+        const ok: boolean[][] = Array.from({ length: N }, () => new Array<boolean>(N).fill(false)); const qq: [number, number][] = [[entry.x, entry.y]]; ok[entry.y][entry.x] = true;
+        for (let i = 0; i < qq.length; i++) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) { const nx = qq[i][0] + dx, ny = qq[i][1] + dy; if (nx >= 0 && ny >= 0 && nx < N && ny < N && reach[ny][nx] && !ok[ny][nx]) { ok[ny][nx] = true; qq.push([nx, ny]); } }
+        let lost = 0; for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (reach[y][x] && !ok[y][x]) { reach[y][x] = false; lost++; }
+        walkable = 0; for (const r of reach) for (const v of r) if (v) walkable++;
+        if (lost) console.log(`${spec.id}: ${lost} celdas sueltas (sin camino desde la entrada) vueltas a bloquear`);
+    }
+    // Variedad en los mapas ensanchados (pedido de Román: "piedras distintas, estructuras, que ocupe todo pero que no jodan al PvP"):
+    // hongos, montones de piedra, vagonetas, cajas y barriles bajos sin colisión; estalagmitas y monolitos altos que sí bloquean pero
+    // solos y separados (9+ celdas); y círculos de piedra (264/265) chatos en el piso como puntos de encuentro, sin colisión.
+    if (spec.widen && spec.pvp === 'faction' && tsName === 'cave') {
+        const rv = makeRnd(hashStr(`${spec.id}:variedad`)); const pick = (arr: number[], _k: string): number => arr[Math.floor(rv() * arr.length)];
+        const hongos = [132, 133, 134, 135], piedras = [150, 151, 152], cosas = [128, 129, 130, 131, 162, 163, 179, 160, 161], altos = [144, 145, 146, 147, 148, 149, 153];
+        const altas: [number, number][] = [], circulos: [number, number][] = [];
+        for (let y = 5; y < N - 5; y++) for (let x = 5; x < N - 5; x++) {
+            if (!reach[y][x] || object[y][x] !== 0 || dist({ x, y }, entry) < 10) continue;
+            const r = rv();
+            if (r < 0.0035 && !altas.some((k) => Math.max(Math.abs(k[0] - x), Math.abs(k[1] - y)) < 9)) { object[y][x] = pick(altos, `${spec.id}:v2:${x},${y}`); reach[y][x] = false; altas.push([x, y]); }
+            else if (r > 0.9 && r < 0.925) object[y][x] = pick(hongos, `${spec.id}:v3:${x},${y}`);
+            else if (r > 0.925 && r < 0.955) object[y][x] = pick(piedras, `${spec.id}:v4:${x},${y}`);
+            else if (r > 0.955 && r < 0.962) object[y][x] = pick(cosas, `${spec.id}:v5:${x},${y}`);
+            else if (r > 0.9985 && circulos.length < 3 && !circulos.some((k) => Math.max(Math.abs(k[0] - x), Math.abs(k[1] - y)) < 30) && !altas.some((k) => Math.max(Math.abs(k[0] - x), Math.abs(k[1] - y)) < 6)) { object[y][x] = circulos.length % 2 ? 265 : 264; circulos.push([x, y]); }
+        }
+    }
+    // Variedad en los mapas de nieve (pedido de Román): cajas, barriles, leña, tocones, arbustos, cruces y carteles bajos sin colisión
+    // (~1,6 % del piso) y unos monolitos de piedra altos que sí bloquean pero solos y separados (14+ celdas).
+    if (spec.pvp === 'faction' && !spec.dungeon && tsName === 'snowplains') {
+        const rv2 = makeRnd(hashStr(`${spec.id}:variedad-nieve`)); const pk = (a: number[]): number => a[Math.floor(rv2() * a.length)];
+        const bajos = [112, 113, 100, 101, 96, 98, 136, 137, 140, 141, 142, 143, 138, 139], monolitos = [133, 134]; const mono: [number, number][] = [];
+        for (let y = 5; y < N - 5; y++) for (let x = 5; x < N - 5; x++) {
+            if (!reach[y][x] || object[y][x] !== 0 || dist({ x, y }, entry) < 10) continue;
+            const r = rv2();
+            if (r < 0.0012 && !mono.some((k) => Math.max(Math.abs(k[0] - x), Math.abs(k[1] - y)) < 14)) { object[y][x] = pk(monolitos); reach[y][x] = false; mono.push([x, y]); }
+            else if (r > 0.97 && r < 0.986) object[y][x] = pk(bajos);
+        }
+    }
+    // Un par de tocones de adorno por el medio (pedido de Román): bajos y sin colisión, no estorban el PvP; separados 12+ celdas.
+    if (spec.pvp === 'faction' && !spec.dungeon && FILLS[tsName] && !FILLS[tsName].shade) {
+        const rt = makeRnd(hashStr(`${spec.id}:tocones`)); const tocs: [number, number][] = [];
+        for (let t = 0; t < 4000 && tocs.length < 4; t++) {
+            const x = 6 + Math.floor(rt() * (N - 12)), y = 6 + Math.floor(rt() * (N - 12));
+            if (!reach[y][x] || object[y][x] !== 0 || dist({ x, y }, entry) < 12 || tocs.some((k) => Math.max(Math.abs(k[0] - x), Math.abs(k[1] - y)) < 12)) continue;
+            object[y][x] = rt() < 0.5 ? 112 : 113; tocs.push([x, y]);
+        }
+    }
     // 3) Regiones de spawn de Flare -> centros caminables.
     const cells = p.regions.flatMap((r) => { const c = snap(Math.floor(r.x + r.w / 2), Math.floor(r.y + r.h / 2)); if (!c) return []; const rad = clamp(Math.round(Math.max(r.w, r.h) / 2), 4, 12); return [{ ...c, r: rad, n: clamp(Math.round((rad * rad) / 10), 3, 10) }]; });
 
@@ -404,6 +563,35 @@ function convert(spec: MapSpec): object {
         loose.push({ type: s.type, x: c.x, y: c.y, r: 5, n: 2, name: `Merodeadores de ${spec.name}`, lvl: pitLevel(spec.lvl), kind: 'loose' });
     }
     zones.push(...loose);
+    // Pedido de Román (4/11/2026): las zonas de caza no pueden quedar metidas en el bosque (no se puede entrar y los mobs no se ven) ni en el
+    // borde del mapa. En los mapas de PvP cada zona se muda al lugar más despejado cerca (sin árboles ni paredes en su disco); si no hay,
+    // se saca (los pits siempre conservan al menos una zona).
+    if (spec.pvp === 'faction' && !spec.dungeon) {
+        const clearAt = (cx: number, cy: number, r: number): number => {
+            let tot = 0, ok = 0;
+            for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) { if (Math.hypot(x - cx, y - cy) > r) continue; tot++; if (x > 1 && y > 1 && x < N - 2 && y < N - 2 && reach[y][x] && object[y][x] === 0) ok++; }
+            return ok / tot;
+        };
+        let moved = 0, dropped = 0;
+        for (let i = zones.length - 1; i >= 0; i--) {
+            const z = zones[i]; if (z.kind === 'boss') continue;
+            // sin zonas encimadas: el centro de otra zona no puede caer a menos de ~85 % de la suma de radios
+            const crowd = (x: number, y: number): boolean => zones.some((o, j) => j !== i && dist(o, { x, y }) < (o.r + z.r) * 0.85);
+            let best = { x: z.x, y: z.y, s: crowd(z.x, z.y) ? -1 : clearAt(z.x, z.y, z.r) };
+            if (best.s < 0.8) for (let dy = -16; dy <= 16; dy++) for (let dx = -16; dx <= 16; dx++) {
+                const x = z.x + dx, y = z.y + dy; if (!free(x, y) || dist({ x, y }, entry) < 8 || crowd(x, y)) continue;
+                const sc = clearAt(x, y, z.r) - Math.hypot(dx, dy) * 0.004;
+                if (sc > best.s) best = { x, y, s: sc };
+            }
+            if (best.s < 0.88) {
+                const mates = zones.filter((o, j) => j !== i && o.kind === z.kind && (z.kind === 'loose' || o.pit === z.pit)).length;
+                if (mates > 0) { zones.splice(i, 1); dropped++; continue; }
+            }
+            if (best.x !== z.x || best.y !== z.y) { z.x = best.x; z.y = best.y; moved++; }
+        }
+        // dos zonas encimadas (el centro de una cae dentro de la otra) no tienen sentido: se saca la más chica si el pit tiene más
+        if (moved || dropped) console.log(`${spec.id}: ${moved} zonas movidas a lugar despejado, ${dropped} sacadas`);
+    }
     for (const z of zones) if (!knownMobs.has(z.type)) throw new Error(`${spec.id}: tipo de mob desconocido "${z.type}" (agregalo a MOB_TYPES o cambialo en SPECS)`);
 
     // 6) Vínculos de Flare: la celda disparadora es la libre más cercana al centro de su rectángulo.

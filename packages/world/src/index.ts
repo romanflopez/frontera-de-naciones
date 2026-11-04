@@ -13,7 +13,7 @@ import { extendCities } from './cities';
 import { extendTraining, type TrainingStep } from './training';
 import { extendVharGate } from './vhar/legacy';
 export { CITIES, HUBS, cityAt, type City } from './cities';
-export { TRAINING, TRAINING_IDS, WAYPOINT_RANGE, CITY_PORTAL_OFFSET, LEGACY_CITY_PORTALS, trainingUnlocked, portalGate, type TrainingStep, type PortalProgress, type Waypoint } from './training';
+export { FIELD_MAP, trainingMapFor, trainingOfMap, trainingLockedMsg, TRAINING, TRAINING_IDS, WAYPOINT_RANGE, CITY_PORTAL_OFFSET, LEGACY_CITY_PORTALS, trainingUnlocked, portalGate, type TrainingStep, type PortalProgress, type Waypoint } from './training';
 import type { MobType } from './mobs';
 export * from './mobs';
 export * from './mobTraits';
@@ -174,4 +174,4 @@ export { VILLA, VILLA_ID, VILLA_BUILDINGS, villaDoor, type VillaBuilding } from 
 export { INTERIORS, TEMPLE_RESPAWN, roomOf } from './solmar/interiors';
 export { VHAR, VHAR_CITADEL_ID, VHAR_BUILDINGS, vharDoor, type VharBuilding } from './vhar/citadel';
 export { VHAR_INTERIORS, VHAR_RESPAWN } from './vhar/interiors';
-export { FLARE_DATA, FLARE_FIRST, FLARE_ARRIVAL, FLARE_BACK, flareTile, FLARE_BASE, type FlareMapData } from './flare';
+export { FLARE_DATA, FLARE_FIRST, FLARE_FIELD, FLARE_ARRIVAL, FLARE_BACK, flareTile, FLARE_BASE, type FlareMapData } from './flare';

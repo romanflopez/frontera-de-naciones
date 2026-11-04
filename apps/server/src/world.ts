@@ -11,7 +11,7 @@ import { dailyOffers } from './dailyShop.ts';
 /** Hasta dónde llega el botín personal de un élite o jefe de mundo para los que participaron (celdas desde donde murió). */
 const BOSS_SHARE_RANGE = 30;
 import { AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, pvpMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionLockMs, potionMp, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, POTION_LOCK_PVP_MS, PVP_COMBAT_MS, pvpCap, pvpScale, pvpVsCtrl, RECALL_PVP_LOCK_MS, INVIS_CD_MS, DETECT_CD_MS, SECOND_WIND, secondWindHeal, progressFromEcon, PVP_SPELLS, BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, POISON_HEAL_TAKEN, HEAL_THREAT, HEALER_SKILLS, STUN_SPELLS, healAmount, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, K8_SKILLS, skillMpCost, SHIELD_MS, BUFF, withBuffs, buffTakenMult, type DmgKind } from './systems/pvpCombat.ts';
-import { HUBS, QUESTS, RECALL, TRAINING, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef, checkSkill, skillDeniedText } from '@fdn/world';
+import { HUBS, QUESTS, RECALL, TRAINING, trainingLockedMsg, trainingOfMap, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef, checkSkill, skillDeniedText } from '@fdn/world';
 import { applyParalysis, applySlow, applyBless, applyPoison, applyBuff, applyShield, absorbShield, activeBuffs, clearBuffs, hasBuff, shieldOf, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, isBlessed, isPoisoned, isSlowed, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import type { GameWorldConfig, Settings } from './config.ts';
@@ -374,6 +374,12 @@ export class GameWorld {
         p.lastDamager = null;
         console.log(`[Mundo:${this.id}] Llegó ${p.characterName} (#${p.playerId}) a (${spawn.x}, ${spawn.y}). Jugadores: ${this.players.size}`);
         this.completeJoin(p, false);
+        // llegar a pie a una zona de entrenamiento "de a pie" (los Campos de Sal) abre su portal para después (docs/CIUDADES.md §8)
+        const zone = trainingOfMap(this.mapId);
+        if (zone?.onFoot && p.econ && this.econ?.unlockZone(p, zone.id)) {
+            p.prog = progressFromEcon(p.econ);
+            p.send(M.sendMessage(`Portal desbloqueado: ${zone.zone}. Ya podés viajar ahí desde el Portal de Frontera de tu ciudad.`));
+        }
         if (p.econ) this.sendVitals(p, false);
         return spawn;
     }
@@ -1026,7 +1032,7 @@ export class GameWorld {
         if (dest.step !== undefined) {
             const t = TRAINING[dest.step];
             if (!p.prog.unlocked.includes(t.id) && !trainingUnlocked(t.step, p.prog.qi, p.prog.lvl)) {
-                p.send(M.sendMessage(`Portal bloqueado (${t.zone}): se abre al llegar al nivel ${t.lvl}.`));
+                p.send(M.sendMessage(trainingLockedMsg(t)));
                 return;
             }
         }

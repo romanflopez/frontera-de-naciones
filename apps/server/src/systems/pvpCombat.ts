@@ -237,12 +237,12 @@ export function statsFromChar(o: StatSource | undefined, uncapCrit = false): Com
 }
 
 /** Progreso para los portales (del estado del server) */
-export function progressFromEcon(st: { lvl: number; q: { i: number; keys: Record<string, number> }; u: string[]; mats?: Record<string, number> } | undefined): { qi: number; lvl: number; keys: Record<string, number>; unlocked: string[] } {
+export function progressFromEcon(st: { lvl: number; q: { i: number; keys: Record<string, number> }; u: string[]; faction?: string; mats?: Record<string, number> } | undefined): { faction?: string; qi: number; lvl: number; keys: Record<string, number>; unlocked: string[] } {
     if (!st) return { qi: 0, lvl: 1, keys: {}, unlocked: [] };
     // las llaves de las mazmorras del corte viven en los materiales (docs/LLAVES.md)
     const keys: Record<string, number> = { ...st.q.keys };
     for (const k of Object.keys(KEY_RECIPES)) if (st.mats?.[k]) keys[k] = st.mats[k];
-    return { qi: st.q.i, lvl: st.lvl, keys, unlocked: [...st.u] };
+    return { qi: st.q.i, lvl: st.lvl, keys, unlocked: [...st.u], faction: st.faction };
 }
 
 /** Mitigación con rendimiento decreciente: daño × 100 / (100 + X), con X = DF (físico) o RM (mágico). Mínimo 1. */

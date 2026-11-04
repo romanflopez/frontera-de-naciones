@@ -2,6 +2,7 @@
  * Render de control de un mapa entero (o un recorte) sin levantar el juego: pisos, decals y objetos ordenados por profundidad,
  * edificios en tiras (como el cliente), NPC como marcas y vínculos como rombos. Sirve para iterar el armado de los mapas.
  * Uso: npx tsx src/town/render.ts <mapId[,mapId...]> <salida.png> [escala=0.25] [x0 y0 x1 y1]
+ *      Con SIN=sm_herreria,sm_deposito se omiten esos edificios (para ponerles encima una versión nueva y comparar).
  *      Con varios mapas, cada uno va a <salida>_<mapId>.png.
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -13,17 +14,18 @@ import { buildMap, getMapDef } from '../../../packages/world/src/index.ts';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const A = join(root, 'apps', 'client', 'public', 'assets');
 const [mapArg, outArg, scaleArg, ...rect] = process.argv.slice(2);
+const skip = new Set((process.env.SIN ?? '').split(',').filter(Boolean));
 const meta = JSON.parse(readFileSync(join(A, 'meta.json'), 'utf8'));
 const atlases: { im: Image; pos: Record<string, number[]> }[] = [];
 atlases.push({ im: await loadImage(readFileSync(join(A, 'world.webp'))), pos: meta.world });
-for (const k of ['dungeon', 'terrain', 'town']) atlases.push({ im: await loadImage(readFileSync(join(A, `${k}.webp`))), pos: meta[k].pos });
+for (const k of ['dungeon', 'terrain', 'town', ...Object.keys(meta).filter((g) => g.startsWith('flare_'))]) atlases.push({ im: await loadImage(readFileSync(join(A, `${k}.webp`))), pos: meta[k].pos });
 const find = (id: number) => { for (const a of atlases) { const p = a.pos[id]; if (p) return { im: a.im, p }; } return null; };
 async function renderMap(mapId: string, outFile: string) {
 const def = getMapDef(mapId); if (!def) { console.error('mapa desconocido'); process.exit(1); }
 const m = buildMap(mapId), K = Number(scaleArg ?? 0.25);
 const [rx0, ry0, rx1, ry1] = rect.length === 4 ? rect.map(Number) : [0, 0, m.size - 1, m.size - 1];
 const bimg = new Map<string, Image>();
-for (const b of m.buildings) if (!bimg.has(b.id) && existsSync(join(A, `${b.id}.webp`))) bimg.set(b.id, await loadImage(readFileSync(join(A, `${b.id}.webp`))));
+for (const b of m.buildings) if (!skip.has(b.id) && !bimg.has(b.id) && existsSync(join(A, `${b.id}.webp`))) bimg.set(b.id, await loadImage(readFileSync(join(A, `${b.id}.webp`))));
 const iso = (x: number, y: number) => ({ x: (x - y) * 48, y: (x + y) * 24 });
 const corners = [iso(rx0, ry0), iso(rx1 + 1, ry0), iso(rx0, ry1 + 1), iso(rx1 + 1, ry1 + 1)];
 const minX = Math.min(...corners.map((c) => c.x)) - 60, maxX = Math.max(...corners.map((c) => c.x)) + 60;

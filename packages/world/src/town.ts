@@ -112,6 +112,8 @@ export interface TownBuilding {
     iron?: boolean;
     /** Toldo a rayas sobre la puerta (color). */
     awning?: string;
+    /** Edificio pre-renderizado en Blender (tools/src/iso3d/city_edificios.py): el sprite y su ancla ya vienen hechos en `meta.json`, el atlas no lo compone. */
+    prerender?: true;
 }
 export const TOWN_BUILDINGS: TownBuilding[] = [
     { id: 'sm_ayuntamiento', w: 10, h: 7, floors: 2, style: 'cal', door: { side: 'S', i: 5 }, sign: 'AYUNTAMIENTO', roof: 15, parapet: 'muro', upper: { x: 1, y: 1, w: 4, h: 3, floors: 1 } },
@@ -154,6 +156,18 @@ TOWN_BUILDINGS.push(
     { id: 'vh_torre_muralla', w: 4, h: 4, floors: 2, style: 'basalto', roof: 'placa', parapet: 'muro', upper: [{ x: 1, y: 1, w: 2, h: 2, floors: 1 }] },
     { id: 'vh_torreon', w: 6, h: 6, floors: 3, style: 'basalto', roof: 'placa', parapet: 'muro', upper: [{ x: 1, y: 1, w: 4, h: 4, floors: 1 }] },
 );
+/**
+ * Edificios del rediseño de ciudades (docs/CIUDADES.md): `sm2_*` para Solmar y `vh2_*` para Vhar, con la misma planta y las mismas puertas.
+ * [nombre, w, h, puerta]. Los sprites salen de `python3 -I tools/src/iso3d/city_edificios.py` (ver su cabecera); `floors` y `style`
+ * son de relleno porque el atlas no los usa.
+ */
+export const PRERENDER_BUILDINGS: readonly [string, number, number, TownBuilding['door']][] = [
+    ['ayuntamiento', 9, 6, { side: 'S', i: 4 }], ['templo', 7, 7, { side: 'S', i: 3 }], ['joyeria', 5, 5, { side: 'E', i: 2 }], ['tienda', 6, 5, { side: 'E', i: 2 }],
+    ['herreria', 7, 5, { side: 'S', i: 3 }], ['deposito', 6, 5, { side: 'S', i: 2 }], ['cuartel', 8, 6, { side: 'E', i: 3 }], ['torre', 4, 4, { side: 'S', i: 2 }],
+    ['casa_a', 4, 3, { side: 'S', i: 1 }], ['casa_b', 4, 4, { side: 'E', i: 1 }], ['casa_c', 5, 4, { side: 'S', i: 2 }],
+    ['torre_muralla', 3, 3, undefined], ['muralla_x', 4, 1, undefined], ['muralla_y', 1, 4, undefined], ['porton_x', 4, 1, undefined], ['porton_y', 1, 4, undefined], ['fuente', 3, 3, undefined],
+];
+for (const pre of ['sm2_', 'vh2_']) for (const [n, w, h, door] of PRERENDER_BUILDINGS) TOWN_BUILDINGS.push({ id: pre + n, w, h, floors: 1, style: 'cal', door, prerender: true });
 export const townBuilding = (id: string): TownBuilding => { const b = TOWN_BUILDINGS.find((q) => q.id === id); if (!b) throw new Error(`edificio desconocido: ${id}`); return b; };
 
 /**

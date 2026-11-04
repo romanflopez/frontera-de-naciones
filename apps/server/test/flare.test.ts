@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ALL_BASES, BASE_BY_NAME, BOSS_UNIQUES, FLARE_DATA, FLARE_FIRST, MAPS, MOB_TYPES, UNIQUES_BY_TIER, UNIQUE_BASES, UNIQUE_TIERS_READY, buildMap, mobDef, tierOfLevel, flareTile, mapHash, type MobType } from '@fdn/world';
+import { ALL_BASES, BASE_BY_NAME, BOSS_UNIQUES, FLARE_DATA, FLARE_FIELD, MAPS, MOB_TYPES, UNIQUES_BY_TIER, UNIQUE_BASES, UNIQUE_TIERS_READY, buildMap, mobDef, tierOfLevel, flareTile, mapHash, type MobType } from '@fdn/world';
 
 /** Mapas importados de Flare (docs/MAPAS_FLARE.md): datos de tools/src/flare/maps.ts y atlas de tools/src/flare/mapatlas.ts. */
 const meta = JSON.parse(readFileSync(new URL('../../client/public/assets/meta.json', import.meta.url), 'utf8')) as Record<string, { pos?: Record<string, number[]> }>;
@@ -48,13 +48,13 @@ test('las entradas y los vínculos están en zona segura (sin mobs)', () => {
         for (const l of d.links) assert.equal(m.safe[l.cell.y][l.cell.x], true, `${d.eris}: el vínculo a ${l.to} tiene que ser zona segura`);
     }
 });
-test('los portales de las ciudades llevan a los Campos de Sal y la vuelta llega a la plaza de Solmar', () => {
+test('los portales de las ciudades llevan al campo de su nación y la vuelta llega a su propia plaza', () => {
     const v = MAPS.solmar_villa.links.find((l) => l.id === 'villa_a_campos'), c = MAPS.vhar_ciudadela.links.find((l) => l.id === 'ciudadela_a_campos');
     assert.ok(v && c);
-    assert.equal(v.to.map, FLARE_FIRST.eris); assert.equal(c.to.map, FLARE_FIRST.eris);
+    assert.equal(v.to.map, FLARE_FIELD.solmar.eris); assert.equal(c.to.map, FLARE_FIELD.vhar.eris);
     assert.equal(v.kind, 'portal'); assert.equal(c.kind, 'oneway');
-    const back = MAPS[FLARE_FIRST.eris].links.find((l) => l.id === 'campos_a_ciudad');
-    assert.equal(back?.to.map, 'solmar_villa');
+    assert.equal(MAPS[FLARE_FIELD.solmar.eris].links.find((l) => l.id === 'campos_a_ciudad')?.to.map, 'solmar_villa');
+    assert.equal(MAPS[FLARE_FIELD.vhar.eris].links.find((l) => l.id === 'campos_de_sal_vhar_a_ciudad')?.to.map, 'vhar_ciudadela');
 });
 
 test('mazmorra D1: puerta con nivel mínimo, jefe, tier de mazmorra y mapas temporales', () => {

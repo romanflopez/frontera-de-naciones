@@ -3,8 +3,9 @@ Generador de spritesheets isométricos de 8 direcciones a partir de un modelo 3D
 bichos de Flare y los packs comerciales de personajes: no hace falta comprar un "character creator", hace falta un modelo animado.
 Es el mismo método con el que se hicieron los bichos de Flare y los packs de SmallScaleInt.
 
-Clave para que calce con ERIS: la proyección del juego es 2:1 (tile 192x96), así que la cámara va con elevación
-atan(1/2) = 26,565°, NO los 30° del isométrico "real". Cámara ortográfica, y el modelo rota 45° por dirección.
+Clave para que calce con ERIS: la proyección del juego es 2:1 (tile 192x96). Con cámara ortográfica el rombo de una celda mide
+ancho/alto = 1/sin(elevación), así que 2:1 exacto pide elevación de 30° (medido: 26,565° da 2,238:1 y 30° da 2,000:1; los 26,565°
+= atan(1/2) son el ángulo de las LÍNEAS en pantalla, no el de la cámara). El modelo rota 45° por dirección.
 El spritesheet sale con el mismo layout que usa tools/src/flare/atlas.ts: fila = animación*8 + dirección, columna = cuadro.
 """
 import bpy, math, os
@@ -88,7 +89,7 @@ def anim_golpe(n=10):
     return n
 
 # ---------- cámara isométrica 2:1 ----------
-ELEV = math.atan(0.5)            # 26,565°: lo que pide un tile 192x96
+ELEV = math.radians(30)          # 30°: da la celda 2:1 exacta de 192x96 (ver tools/src/iso3d/city.py, verificar_ancla)
 bpy.ops.object.camera_add()
 cam = bpy.context.object
 esc.camera = cam

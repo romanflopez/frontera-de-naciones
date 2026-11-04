@@ -8,14 +8,14 @@ import { buildSolmar, type WorldMap } from './index';
 import { HUBS } from './cities';
 import { buildPruebaCaza, buildPruebaMazmorra, PRUEBA_CAZA, PRUEBA_MAZMORRA } from './testmaps';
 import { ARENA as ARENA_MAP, buildArena } from './arena';
-import { TRAINING, type PortalProgress } from './training';
+import { TRAINING, trainingMapFor, type PortalProgress } from './training';
 import { KEY_RECIPES, keyMatName } from './quests';
 import { buildSolmarVilla, VILLA, VILLA_BUILDINGS, VILLA_ID, VILLA_N, villaDoor, type VillaBuilding } from './solmar/villa';
 import { buildInterior, INTERIORS, roomOf, TEMPLE_RESPAWN } from './solmar/interiors';
 import { buildVharCiudadela, VHAR, VHAR_CITADEL_ID, VHAR_N, vharDoor, type VharBuilding } from './vhar/citadel';
 import { LEGACY_FROM_VHAR, LEGACY_VHAR_LINK } from './vhar/legacy';
 import { buildVharInterior, VHAR_INTERIORS, VHAR_RESPAWN } from './vhar/interiors';
-import { FLARE_ARRIVAL, FLARE_FIRST, flareMaps } from './flare';
+import { FLARE_ARRIVAL, FLARE_FIELD, flareMaps } from './flare';
 import { tiledMaps } from './tiledmaps';
 import { TIERS, TIER_LIST, tierGateLevel, type Tier } from './tiers';
 import { mobDef } from './mobs';
@@ -33,7 +33,7 @@ export const inMapRect = (r: MapRect, x: number, y: number): boolean => x >= r.x
  */
 export type LinkKind = 'walk' | 'portal' | 'oneway' | 'door' | 'npc' | 'enter';
 /** Requisitos para cruzar: nivel mínimo, misiones entregadas (índice en QUESTS: `qi >= quest`) y/o una llave que se consume al cruzar. */
-export interface LinkGate { lvl?: number; quest?: number; key?: string }
+export interface LinkGate { lvl?: number; quest?: number; key?: string; /** Id de una zona de TRAINING que el personaje ya tiene que haber abierto (llegando a pie). */ unlocked?: string; /** Solo pasa gente de esta nación (el campo y el portal de vuelta de cada ciudad). */ faction?: string }
 /** Vínculo entre mapas: pisar (x, y) en `map` lleva a `to`. El cliente lo pide por `id`, nunca por coordenadas. */
 export interface Link {
     id: string;
@@ -105,7 +105,9 @@ export const LEGACY_PARAMO_LINK = { x: 44, y: 50 }, LEGACY_CRYPT_ARRIVAL = { x: 
  * la vuelta aterriza en la plaza de Solmar (el portal de la Ciudadela es de ida: Vhar vuelve por el Portal de Frontera o con H).
  */
 export const VILLA_FLARE = { x: VILLA.spawn.x + 5, y: VILLA.spawn.y }, VILLA_FLARE_BACK = { x: VILLA.spawn.x + 5, y: VILLA.spawn.y + 2 };
-export const VHAR_FLARE = { x: VHAR.spawn.x + 5, y: VHAR.spawn.y };
+export const VHAR_FLARE = { x: VHAR.spawn.x + 5, y: VHAR.spawn.y }, VHAR_FLARE_BACK = { x: VHAR.spawn.x + 5, y: VHAR.spawn.y + 2 };
+/** El portal de la plaza a Campos de Sal sirve de atajo: solo se abre después de haber llegado a pie una vez (docs/CIUDADES.md §8). */
+const SHORTCUT_GATE = { unlocked: 'campos_de_sal' } as const;
 
 /** Camino entre la Ciudadela de Vhar y el mapa viejo: sale por el portón sur y llega junto a la puerta de la ciudad vieja de Vhar. */
 export { LEGACY_VHAR_LINK, LEGACY_FROM_VHAR };
@@ -115,8 +117,8 @@ function vharMaps(): Record<string, MapDef> {
     const out: Record<string, MapDef> = {};
     const links: Link[] = [
         // el portón sur de la ciudadela también sale a los Campos de Sal (antes iba al mapa viejo, que quedó solo para pruebas)
-        { id: 'ciudadela_a_legacy', map: VHAR_CITADEL_ID, ...VHAR.toLegacy, to: { map: FLARE_FIRST.eris, ...FLARE_ARRIVAL }, kind: 'oneway', msg: 'Tomás el Camino de Ceniza hacia los Campos de Sal.' },
-        { id: 'ciudadela_a_campos', map: VHAR_CITADEL_ID, ...VHAR_FLARE, to: { map: FLARE_FIRST.eris, ...FLARE_ARRIVAL }, kind: 'oneway', msg: 'Cruzás el portal hacia los Campos de Sal.' },
+        { id: 'ciudadela_a_legacy', map: VHAR_CITADEL_ID, ...VHAR.toLegacy, to: { map: FLARE_FIELD.vhar.eris, ...FLARE_ARRIVAL }, kind: 'oneway', msg: 'Tomás el Camino de Ceniza hacia los Campos de Sal.' },
+        { id: 'ciudadela_a_campos', map: VHAR_CITADEL_ID, ...VHAR_FLARE, to: { map: FLARE_FIELD.vhar.eris, ...FLARE_ARRIVAL }, kind: 'oneway', gate: SHORTCUT_GATE, msg: 'Cruzás el portal hacia los Campos de Sal.' },
     ];
     for (const it of VHAR_INTERIORS) {
         const d = vharDoor(it.building as VharBuilding), r = roomOf(it);
@@ -140,8 +142,8 @@ function solmarMaps(): Record<string, MapDef> {
     const out: Record<string, MapDef> = {};
     const villaLinks: Link[] = [
         // el portón este de la villa también sale a los Campos de Sal (antes iba a los Llanos del Alba, que se sacaron)
-        { id: 'villa_a_llanos', map: VILLA_ID, ...VILLA.toLegacy, to: { map: FLARE_FIRST.eris, ...FLARE_ARRIVAL }, kind: 'oneway', msg: 'Tomás el Camino de la Marea hacia los Campos de Sal.' },
-        { id: 'villa_a_campos', map: VILLA_ID, ...VILLA_FLARE, to: { map: FLARE_FIRST.eris, ...FLARE_ARRIVAL }, kind: 'portal', msg: 'Cruzás el portal hacia los Campos de Sal.' },
+        { id: 'villa_a_llanos', map: VILLA_ID, ...VILLA.toLegacy, to: { map: FLARE_FIELD.solmar.eris, ...FLARE_ARRIVAL }, kind: 'oneway', msg: 'Tomás el Camino de la Marea hacia los Campos de Sal.' },
+        { id: 'villa_a_campos', map: VILLA_ID, ...VILLA_FLARE, to: { map: FLARE_FIELD.solmar.eris, ...FLARE_ARRIVAL }, kind: 'portal', gate: SHORTCUT_GATE, msg: 'Cruzás el portal hacia los Campos de Sal.' },
     ];
     for (const it of INTERIORS) {
         const d = villaDoor(it.building as VillaBuilding), r = roomOf(it);
@@ -203,7 +205,7 @@ export const MAPS: Record<string, MapDef> = {
     ...solmarMaps(),
     ...vharMaps(),
     // mapas importados de Flare: Campos de Sal -> Bosque de Piedra -> Cañón goblin (docs/MAPAS_FLARE.md)
-    ...flareMaps({ map: VILLA_ID, to: VILLA_FLARE_BACK }),
+    ...flareMaps({ [FLARE_FIELD.solmar.eris]: { map: VILLA_ID, to: VILLA_FLARE_BACK }, [FLARE_FIELD.vhar.eris]: { map: VHAR_CITADEL_ID, to: VHAR_FLARE_BACK } }),
 };
 // mapas importados de Tiled (pnpm maps:tiled): van después porque sus conexiones llegan al spawn de mapas ya definidos
 Object.assign(MAPS, tiledMaps(MAPS));
@@ -251,7 +253,7 @@ export function recallBlockedReason(def: MapDef | undefined, x: number, y: numbe
  */
 export function waypointTarget(id: string, faction: string): { map: string; x: number; y: number; step?: number } | null {
     if (id === 'city') return factionHome(faction);
-    const t = TRAINING.find((q) => q.id === id); const d = t && MAPS[t.map]; if (!t || !d) return null;
+    const t = TRAINING.find((q) => q.id === id); const d = t && MAPS[trainingMapFor(t, faction)]; if (!t || !d) return null;
     return { map: d.id, ...d.spawn, step: t.step };
 }
 /** ¿La posición (x, y) de `def` es temporal (no se guarda; al reconectar se usa `rest` o el spawn)? */
@@ -265,6 +267,8 @@ export function isTemporaryCell(def: MapDef, map: WorldMap | undefined, x: numbe
 export function linkGateReason(l: Link, g: PortalProgress, questName?: (qi: number) => string | undefined): string | null {
     const gt = l.gate; if (!gt) return null;
     if (gt.lvl !== undefined && g.lvl < gt.lvl) return `Necesitás nivel ${gt.lvl} para pasar.`;
+    if (gt.faction && g.faction !== gt.faction) return 'Ese camino es de la otra nación: no podés pasar.';
+    if (gt.unlocked && !g.unlocked.includes(gt.unlocked)) return 'Todavía no conocés el camino: llegá a pie una vez por el portón de la ciudad y este portal se abre.';
     if (gt.quest !== undefined && g.qi < gt.quest) { const n = questName?.(gt.quest - 1); return n ? `Todavía no: entregá «${n}» al Capitán.` : 'Todavía no cumpliste la misión que pide este paso.'; }
     if (gt.key && !(g.keys[gt.key] >= 1)) return KEY_RECIPES[gt.key] ? `Está sellado: necesitás una ${keyMatName(gt.key)} (cada uno gasta la suya).` : `Está sellado: necesitás la llave (${gt.key}).`;
     return null;

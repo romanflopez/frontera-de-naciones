@@ -30,7 +30,7 @@ export interface FlareMapData {
     /** Vínculos de Flare hacia otros mapas (`to` = id de Flare; `tx,ty` = celda de llegada allá). */
     links: FlareLinkData[];
     /** Conexiones que Flare no trae (`to` = id de ERIS del otro mapa): portales de piedra en esta celda. */
-    extras: { to: string; cell: { x: number; y: number }; kind: 'portal' | 'door'; gate?: number }[];
+    extras: { to: string; cell: { x: number; y: number }; kind: 'portal' | 'door' | 'walk'; gate?: number; /** Celda de llegada en el otro mapa (por defecto su entrada). */ arrive?: { x: number; y: number } }[];
     layers: { background: number[][]; object: number[][] };
     /** 1 = bloqueada. */
     blocked: number[][];

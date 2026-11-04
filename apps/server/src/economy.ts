@@ -772,6 +772,12 @@ export class Economy {
     }
 
     /** Un portal con llave se cruzó: gasta una (el server ya validó el paso). */
+    /** Abre el portal de entrenamiento `id` (los abiertos no se cierran). Devuelve true si estaba cerrado. */
+    unlockZone(p: Player, id: string): boolean {
+        const st = p.econ; if (!st || st.u.includes(id)) return false;
+        st.u.push(id); this.touch(p); this.snapshot(p);
+        return true;
+    }
     consumeKey(p: Player, key: string): void {
         const st = p.econ; if (!st) return;
         if (KEY_RECIPES[key]) { const mats = (st.mats ??= {}); mats[key] = Math.max(0, (mats[key] ?? 0) - 1); this.touch(p); this.snapshot(p); return; }

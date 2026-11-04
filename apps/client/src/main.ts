@@ -22,7 +22,7 @@ import { chatBus, logToChat, type ChatChannel } from './ui/chatStore';
 import { drawPortalFloor, drawPortalFx, PORTAL_CITY, PORTAL_ZONE } from './portal';
 import { checkSkill, skillDeniedText, canUseSkill, skillLevel } from '@fdn/world';
 import { DEFAULT_MAP, RECALL, STAT_CAP, classBaseHp, itemDfTotal, itemRmTotal, STAT_DESC, STAT_IDS, STAT_BASE, STAT_RESET_FREE_LVL, statTip, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, traitLabel, traitHpMult, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
-import { UNIQUE_BY_NAME, UP_MAX, UP_MAX_BY_QUALITY, EXTRAS_BY_QUALITY, FX_INFO, JUNK_MATS, MAT_REFORJA, junkValue, reforgeGold, reforgeStones, activeSets, setOfPiece, slotsFor, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, fitsSlot, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Slot, type Stock } from '@fdn/world';
+import { UNIQUE_BY_NAME, UP_MAX, UP_MAX_BY_QUALITY, EXTRAS_BY_QUALITY, FX_INFO, JUNK_MATS, MAT_REFORJA, junkValue, reforgeGold, reforgeStones, activeSets, setOfPiece, slotsFor, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, fitsSlot, TALK_RANGE, roleOf, trainingLockedMsg, trainingOfMap, sellPrice, type AttrId, type Base, type KeyId, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
 import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
 import { DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, MAIN_QUESTS, type MainQuest, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, dailyGold, rewardUniques, type QuestBookView, type QuestGoal, KEY_RECIPES, KEY_MAT_NAMES, keyMissing, TRAIT_ELITE } from '@fdn/world';
@@ -2313,7 +2313,7 @@ const hasKeyStuff = () => KEY_IDS.some((k) => Q.keys[k] || Q.shards[k]);
 // ---------- portales de entrenamiento: se abren con la cadena de misiones (o con el nivel) y el estado se guarda en el personaje ----------
 const UNLOCKED = new Set<string>();
 const trainOpen = (t: TrainingStep) => UNLOCKED.has(t.id) || trainingUnlocked(t.step, Q.i, P.lvl);
-const portalProgress = () => ({ qi: Q.i, lvl: P.lvl, keys: Q.keys as Record<string, number>, unlocked: [...UNLOCKED] });
+const portalProgress = () => ({ qi: Q.i, lvl: P.lvl, keys: Q.keys as Record<string, number>, unlocked: [...UNLOCKED], faction: selectedFaction });
 function refreshUnlocks(_announce: boolean) { /* los portales abiertos los decide el server (inventoryState.unlocked) */ }
 /** Seguimiento en el HUD: el Camino del aventurero, los encargos del día y las llaves viejas (la cadena vieja de 10 quedó jubilada). */
 function renderQuest() {
@@ -2734,12 +2734,12 @@ function talkWp(q: Waypoint) {
 /** Paso de la zona de entrenamiento donde estás parado (o cerca), para resaltarla en el menú; -1 si ninguna. */
 function currentTrainStep(): number {
     let best = -1, bd = Infinity;
-    void bd; for (const t of TRAINING) if (t.map === MAP_DEF.id) best = t.step;
+    void bd; best = trainingOfMap(MAP_DEF.id)?.step ?? best;
     return best;
 }
 const LOCK_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4.5 7V5a3.5 3.5 0 017 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="7" width="10" height="7" rx="1.4" fill="currentColor"/></svg>';
 const inHomeCity = () => factionHome(selectedFaction)?.map === MAP_DEF.id;
-const lockMsg = (t: TrainingStep) => `Portal bloqueado (${t.zone}): se abre al llegar al nivel ${t.lvl}.`;
+const lockMsg = (t: TrainingStep) => trainingLockedMsg(t);
 function renderWp() {
     if (!wpOpen) return;
     const city = selectedFaction === 'solmar' ? { name: 'Villa de Solmar' } : selectedFaction === 'vhar' ? { name: 'Ciudadela de Vhar' } : MAP.cities?.find((c) => c.faction === selectedFaction), inCity = inHomeCity(), cur = inCity ? -1 : currentTrainStep();
@@ -2748,7 +2748,7 @@ function renderWp() {
     const rows = [`<button type="button" class="wprow home${inCity ? ' cur' : ''}" data-wp="city"${inCity ? ' disabled' : ''}><i class="wpn">&#8962;</i><span class="wpt"><b>${inCity ? 'Estás en ' : 'Volver a '}${esc(city?.name ?? 'la ciudad')}</b><small>${inCity ? 'Zona segura' : 'Zona segura · tu facción'}</small></span>${inCity ? '<em class="wptag">Estás aquí</em>' : ''}</button>`];
     for (const t of TRAINING) {
         const open = trainOpen(t), here = t.step === cur, ml = getMapDef(t.map)?.lvl, lv = ml ? `Nv ${ml[0]}–${ml[1]}` : '';
-        const sub = open ? `<small>Nivel recomendado ${lv.replace('Nv ', '')}</small>` : `<small class="req">${LOCK_SVG} Nivel ${t.lvl}</small>`;
+        const sub = open ? `<small>Nivel recomendado ${lv.replace('Nv ', '')}</small>` : `<small class="req">${LOCK_SVG} ${t.onFoot ? 'Llegá a pie una vez' : `Nivel ${t.lvl}`}</small>`;
         rows.push(`<button type="button" class="wprow${open ? '' : ' locked'}${here ? ' cur' : ''}" data-wp="${t.id}" style="--zc:${t.col}"><i class="wpn">${t.step + 1}</i><span class="wpt"><b>${esc(t.zone)}</b>${sub}</span>${here ? '<em class="wptag">Estás aquí</em>' : `<em class="wplv">${lv}</em>`}</button>`);
     }
     $('wpList').innerHTML = rows.join('');
