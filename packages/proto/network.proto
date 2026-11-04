@@ -536,6 +536,7 @@ message ServerMessage {
     // Party (ver docs/PARTY_Y_ARENAS.md). Rango propio de tags desde 600.
     PartyState party_state = 600;
     PartyInvited party_invited = 601;
+    ArenaInvited arena_invited = 603;
     PartyStatsUpdate party_stats_update = 602;
     // Texto flotante de combate (daño / cura). Rango propio de tags desde 700.
     CombatTextEvent combat_text_event = 700;
@@ -639,6 +640,13 @@ message PartyInvited {
   string from_name = 1;
   int64 expires_ms = 2;
   string party_id = 3;
+}
+
+// Hay partida de arena: la party tiene hasta expires_ms para aceptar (/arena aceptar) o rechazar.
+message ArenaInvited {
+  string mode = 1;       // "2v2" | "3v3"
+  int64 expires_ms = 2;  // epoch ms
+  string arena = 3;      // nombre de la arena sorteada
 }
 
 // Solo los stats de un compañero, para no mandar el estado completo en cada golpe o regen.

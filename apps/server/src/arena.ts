@@ -287,7 +287,8 @@ export class ArenaService {
                 this.invites.set(inv.id, inv);
                 for (const e of inv.entries) for (const m of e.members) {
                     this.inviteOf.set(m, inv);
-                    this.say(m, `¡Partida de arena ${mode} encontrada! Escribí /arena aceptar (vence en ${ARENA_RULES.acceptMs / 1000} s) o /arena rechazar. Rechazar o no contestar penaliza ${fmtMin(ARENA_RULES.penaltyMs)}.`);
+                    this.h.send(m, M.arenaInvited(mode, inv.expires)); // el cliente muestra el aviso con Aceptar / Rechazar
+                    this.say(m, `¡Partida de arena ${mode} encontrada! Aceptá en el aviso o escribí /arena aceptar (vence en ${ARENA_RULES.acceptMs / 1000} s) o /arena rechazar. Rechazar o no contestar penaliza ${fmtMin(ARENA_RULES.penaltyMs)}.`);
                 }
             }
         }

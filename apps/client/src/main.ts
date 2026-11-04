@@ -343,6 +343,7 @@ function onServer(m: ServerPayload) {
         case 'combatTextEvent': onCombatText(m.value); break;
         case 'partyStatsUpdate': updatePartyStats(m.value.name, m.value.hp, m.value.mp); break;
         case 'partyInvited': showPartyInvite(m.value.fromName, Number(m.value.expiresMs)); break;
+        case 'arenaInvited': showArenaInvite(m.value.mode, Number(m.value.expiresMs)); break;
         case 'econResult': deposit.onResult(m.value.ok, m.value.text); if (m.value.ok) { log(esc(m.value.text), ['daily_done', 'quest_ready'].includes(m.value.code)); if (m.value.code === 'daily_done') notify('Encargo cumplido', m.value.text); else if (m.value.code === 'quest_ready') notify('Misión', m.value.text); } else { toast(m.value.text); log(esc(m.value.text)); } break;
         case 'killReward': onKillReward(m.value); break;
         case 'statusUpdate': onStatusUpdate(m.value); break;
@@ -1450,6 +1451,23 @@ function showPartyInvite(from: string, expiresMs: number, mock = false): void {
     clearTimeout(inviteTimer); inviteTimer = window.setTimeout(hidePartyInvite, ms);
 }
 
+/** Partida de arena encontrada: mismo cartel que la invitación de party, más el aviso grande al centro. Aceptar/Rechazar mandan el comando /arena. */
+function showArenaInvite(mode: string, expiresMs: number, mock = false): void {
+    const el = $('partyInvite'), ms = Math.max(1000, Math.min(INVITE_SHOW_MS, expiresMs ? expiresMs - Date.now() : INVITE_SHOW_MS));
+    el.innerHTML = `<p>¡Partida de <b>arena ${esc(mode)}</b> encontrada!</p><p class="sub">Rechazar o no contestar penaliza 10 min.</p><div class="pib"><button type="button" class="ok">Aceptar</button><button type="button" class="no">Rechazar</button></div><div class="pit"><i></i></div>`;
+    const bar = el.querySelector('.pit i') as HTMLElement; bar.style.transitionDuration = ms + 'ms';
+    const answer = (action: 'aceptar' | 'rechazar') => {
+        const req = { $case: 'chatMessageSendRequest' as const, value: { message: `/arena ${action}` } };
+        if (mock) console.info('[arena] (simulado, no se envía)', req); else net.send(req);
+        hidePartyInvite();
+    };
+    (el.querySelector('.ok') as HTMLElement).onclick = () => answer('aceptar');
+    (el.querySelector('.no') as HTMLElement).onclick = () => answer('rechazar');
+    el.hidden = false; void bar.offsetWidth; bar.style.width = '0%';
+    clearTimeout(inviteTimer); inviteTimer = window.setTimeout(hidePartyInvite, ms);
+    notify(`Arena ${mode}`, '¡Partida encontrada! Aceptá en el cartel de la derecha.');
+}
+
 window.addEventListener('keydown', (e) => {
     if (!connected) return;
     if (e.target instanceof HTMLInputElement) return;
@@ -1473,6 +1491,7 @@ window.addEventListener('keydown', (e) => {
     if (e.code === 'Space' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); pickupNearest(); return; }
     // ?debug: Shift+I simula una invitación de KingLuthor (la I sola sigue abriendo la bolsa).
     if (DEBUG && e.shiftKey && e.code === 'KeyI' && !e.repeat) { showPartyInvite('KingLuthor', Date.now() + 30_000, true); return; }
+    if (DEBUG && e.shiftKey && e.code === 'KeyA' && !e.repeat) { showArenaInvite('2v2', Date.now() + 30_000, true); return; }
     // ?debug: K simula un golpe de 326 y una cura de +92 sobre mi personaje.
     if (DEBUG && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'k' || e.key === 'K')) {
         const me = myId.toString(), sp = SPELLS.find((x) => x.id && x.id !== 'ataque');
@@ -3086,7 +3105,7 @@ async function boot() {
     loadBuildingImages();
     refreshLook(); void initKnight();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, toScreen, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, perf: () => ({ ...perf }), setQb: (v: QuestBookView | null) => { QB = v; renderQuest(); }, questDlg: (name: string) => openQuestDlg({ id: 'capitan_s', name, x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), questLog: toggleQuestLog, shopDbg: (role = 'mercader') => openShop({ id: role + '_s', name: 'Mercader', x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), uid: () => uid++, RARS: RAR, mobCount: () => mobs.length, arrows: () => arrows.length });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, perf: () => ({ ...perf }), setQb: (v: QuestBookView | null) => { QB = v; renderQuest(); }, questDlg: (name: string) => openQuestDlg({ id: 'capitan_s', name, x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), questLog: toggleQuestLog, arenaInvite: (mode = '2v2') => showArenaInvite(mode, Date.now() + 30_000, true), shopDbg: (role = 'mercader') => openShop({ id: role + '_s', name: 'Mercader', x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), uid: () => uid++, RARS: RAR, mobCount: () => mobs.length, arrows: () => arrows.length });
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5), recall: () => ({ on: !!recall, k: recallK(now()), cd: Math.max(0, recallCdEnd - now()) }) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();

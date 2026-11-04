@@ -211,6 +211,7 @@ export const recallState = (channeling: boolean, channelMs: number, remainingMs:
     msg({ $case: 'recallState', value: { state: channeling ? 1 : 0, channelMs, remainingMs: Math.max(0, Math.round(remainingMs)), cooldownMs: Math.max(0, Math.round(cooldownMs)), reason } });
 
 export const partyState = (members: { name: string; level: number; hp: number; maxHp: number; mp: number; maxMp: number; map: string; leader: boolean; online: boolean }[], partyId = ''): ServerMessage => msg({ $case: 'partyState', value: { members, partyId } });
+export const arenaInvited = (mode: string, expiresMs: number, arena = ''): ServerMessage => msg({ $case: 'arenaInvited', value: { mode, expiresMs: BigInt(expiresMs), arena } });
 export const partyInvited = (fromName: string, expiresMs: number, partyId = ''): ServerMessage => msg({ $case: 'partyInvited', value: { fromName, expiresMs: BigInt(expiresMs), partyId } });
 export const partyStatsUpdate = (name: string, hp: number, mp: number): ServerMessage => msg({ $case: 'partyStatsUpdate', value: { name, hp, mp } });
 

@@ -585,6 +585,7 @@ export interface ServerMessage {
     /** Party (ver docs/PARTY_Y_ARENAS.md). Rango propio de tags desde 600. */
     { $case: "partyState"; value: PartyState }
     | { $case: "partyInvited"; value: PartyInvited }
+    | { $case: "arenaInvited"; value: ArenaInvited }
     | { $case: "partyStatsUpdate"; value: PartyStatsUpdate }
     | //
     /** Texto flotante de combate (daño / cura). Rango propio de tags desde 700. */
@@ -714,6 +715,16 @@ export interface PartyInvited {
   fromName: string;
   expiresMs: bigint;
   partyId: string;
+}
+
+/** Hay partida de arena: la party tiene hasta expires_ms para aceptar (/arena aceptar) o rechazar. */
+export interface ArenaInvited {
+  /** "2v2" | "3v3" */
+  mode: string;
+  /** epoch ms */
+  expiresMs: bigint;
+  /** nombre de la arena sorteada */
+  arena: string;
 }
 
 /** Solo los stats de un compañero, para no mandar el estado completo en cada golpe o regen. */
@@ -7538,6 +7549,9 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "partyInvited":
         PartyInvited.encode(message.payload.value, writer.uint32(4810).fork()).join();
         break;
+      case "arenaInvited":
+        ArenaInvited.encode(message.payload.value, writer.uint32(4826).fork()).join();
+        break;
       case "partyStatsUpdate":
         PartyStatsUpdate.encode(message.payload.value, writer.uint32(4818).fork()).join();
         break;
@@ -8412,6 +8426,14 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "partyInvited", value: PartyInvited.decode(reader, reader.uint32()) };
             continue;
           }
+          case 603: {
+            if (tag !== 4826) {
+              break;
+            }
+
+            message.payload = { $case: "arenaInvited", value: ArenaInvited.decode(reader, reader.uint32()) };
+            continue;
+          }
           case 602: {
             if (tag !== 4818) {
               break;
@@ -9175,6 +9197,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "partyInvited": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "partyInvited", value: PartyInvited.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "arenaInvited": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "arenaInvited", value: ArenaInvited.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -10148,6 +10176,88 @@ export const PartyInvited: MessageFns<PartyInvited> = {
     message.fromName = object.fromName ?? "";
     message.expiresMs = (object.expiresMs !== undefined && object.expiresMs !== null) ? BigInt(object.expiresMs) : 0n;
     message.partyId = object.partyId ?? "";
+    return message;
+  },
+};
+
+function createBaseArenaInvited(): ArenaInvited {
+  return { mode: "", expiresMs: 0n, arena: "" };
+}
+
+export const ArenaInvited: MessageFns<ArenaInvited> = {
+  encode(message: ArenaInvited, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mode !== "") {
+      writer.uint32(10).string(message.mode);
+    }
+    if (message.expiresMs !== 0n) {
+      if (BigInt.asIntN(64, message.expiresMs) !== message.expiresMs) {
+        throw new globalThis.Error("value provided for field message.expiresMs of type int64 too large");
+      }
+      writer.uint32(16).int64(message.expiresMs);
+    }
+    if (message.arena !== "") {
+      writer.uint32(26).string(message.arena);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaInvited {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseArenaInvited();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.mode = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.expiresMs = reader.int64() as bigint;
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.arena = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<ArenaInvited>, I>>(base?: I): ArenaInvited {
+    return ArenaInvited.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaInvited>, I>>(object: I): ArenaInvited {
+    const message = createBaseArenaInvited();
+    message.mode = object.mode ?? "";
+    message.expiresMs = (object.expiresMs !== undefined && object.expiresMs !== null) ? BigInt(object.expiresMs) : 0n;
+    message.arena = object.arena ?? "";
     return message;
   },
 };
