@@ -1142,13 +1142,17 @@ function piece(n: string): HTMLImageElement | null {
  * Aura del arma mejorada. No se puede hornear en el sprite (el +N cambia en el juego), así que se pinta al componer el muñeco:
  * una pasada de la hoja del arma con sombra difusa al fondo, y encima las capas normales. Arranca recién en +UP_GLOW_DESDE para
  * que el brillo signifique algo; el color es el de la rareza, así el aura dice calidad y nivel de mejora a la vez.
+ *
+ * Decisión de Román (4/11): arranca en +10. Con el tope en +11 quedan solo dos escalones, así que el primero ya entra visible
+ * en vez de empezar en un brillo mínimo: un arma +10 es rarísima y tiene que notarse apenas aparece en pantalla.
  */
-const UP_GLOW_DESDE = 5;
+const UP_GLOW_DESDE = 10;
+const AURA_MIN = 7, AURA_MAX = 13;
 const auraDe = (it?: Item | null): { color: string; size: number } | undefined => {
     const up = it?.up ?? 0;
     if (up < UP_GLOW_DESDE) return undefined;
-    // de +5 a +11 (UP_MAX): de apenas perceptible a aura marcada
-    return { color: it!.rar.c, size: 2 + (up - UP_GLOW_DESDE) * ((13 - 2) / Math.max(1, UP_MAX - UP_GLOW_DESDE)) };
+    const pasos = Math.max(1, UP_MAX - UP_GLOW_DESDE);
+    return { color: it!.rar.c, size: AURA_MIN + (up - UP_GLOW_DESDE) * ((AURA_MAX - AURA_MIN) / pasos) };
 };
 
 function composeLook(names: string[], aura?: { color: string; size: number }): HTMLCanvasElement | null {
