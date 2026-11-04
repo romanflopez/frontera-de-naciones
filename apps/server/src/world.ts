@@ -576,7 +576,6 @@ export class GameWorld {
                 case 'spellCastCancelRequest': if (p.cast && !p.cast.fired) p.cast = null; break;
                 case 'playerMovementStateChangeRequest': {
                     p.setRunningMode(payload.value.runningMode);
-                    if (p.runningMode && p.cast && !p.cast.fired) p.cast = null; // correr cancela el cast
                     const m = M.playerMovementStateChanged(p.playerId, p.runningMode, p.movementSpeedMs);
                     p.send(m);
                     this.broadcastNear(p, m);

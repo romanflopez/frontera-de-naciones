@@ -372,7 +372,7 @@ function onServer(m: ServerPayload) {
         }
         case 'playerDisconnected': { const o = others.get(m.value.playerId); if (o) o.gone = true; break; }
         case 'playerReconnected': { const o = others.get(m.value.playerId); if (o) o.gone = false; break; }
-        case 'spellCastFailed': cancelCast(P.running ? 'Corriendo no podés castear. Apretá T para caminar.' : 'No podés castear ahora.'); break;
+        case 'spellCastFailed': cancelCast('No podés castear ahora.'); break;
         case 'playerMovementStateChanged':
             if (m.value.playerId === myId) { P.stepMs = m.value.movementSpeedMs || P.stepMs; P.running = m.value.runningMode; }
             else { const o = others.get(m.value.playerId); if (o) o.stepMs = m.value.movementSpeedMs || o.stepMs; }
@@ -999,7 +999,6 @@ function cast(i: number) {
     if (cds[i] > now()) { toast(`${s.name} se está recargando.`); return; }
     if (P.mp < s.mp) { toast('No te alcanza el maná.'); return; }
     if (s.instant) { instantCast(i); return; }
-    if (P.running) { toast('Corriendo no podés castear. Apretá T para caminar.'); return; }
     P.ready = null; P.engage = false; P.queued = null; P.path = []; holding = false;
     const T = now(), len = s.castT ?? CAST_T; P.casting = { i, start: T, end: T + len, len };
     const ty = spellTypeOf(s.id);
@@ -1050,7 +1049,7 @@ function fire(i: number, m: Target | null) {
 }
 function cancelCast(why?: string | null) { if (!P.casting && !P.ready) return; P.casting = null; useCastStore.getState().cancelCast(); castBarOf = null; P.ready = null; net.send({ $case: 'spellCastCancelRequest', value: {} }); if (why) toast(why); }
 /** Walk (castea, 333 ms/celda) o run (no castea, 200 ms/celda). La velocidad la manda el server en playerMovementStateChanged. */
-function toggleRun() { P.running = !P.running; if (P.running) cancelCast(P.casting || P.ready ? 'Hechizo cancelado: estás corriendo.' : null); net.send({ $case: 'playerMovementStateChangeRequest', value: { runningMode: P.running } }); toast(P.running ? 'Corriendo (no podés castear).' : 'Caminando.'); }
+function toggleRun() { P.running = !P.running; net.send({ $case: 'playerMovementStateChangeRequest', value: { runningMode: P.running } }); toast(P.running ? 'Corriendo.' : 'Caminando (misma velocidad).'); }
 let toastT: ReturnType<typeof setTimeout> | undefined;
 function toast(t: string) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 1600); }
 
@@ -1357,7 +1356,7 @@ function steerDir(): Cell | null {
     }
     return null;
 }
-/** Un paso de volante hacia d: si la celda está tomada, resbala por una vecina (como Helbreath contra una pared). */
+/** Un paso de volante hacia d: si la celda está tomada, resbala por una vecina (como contra una pared en los MMO clásicos). */
 function steerStep(d: Cell): Cell | null {
     const c = P.cell, cand: Cell[] = [{ x: c.x + d.x, y: c.y + d.y }];
     if (d.x && d.y) cand.push({ x: c.x + d.x, y: c.y }, { x: c.x, y: c.y + d.y });

@@ -41,8 +41,8 @@ export interface PvpSpell {
 export type DmgKind = 'phys' | 'magic';
 /** Físico = ataque cuerpo a cuerpo, golpe, tajo, sismo (todo lo que escala con el arma); mágico = el resto de los hechizos. */
 export const spellDmgKind = (id: string): DmgKind => { const sp = PVP_SPELLS[id]; return sp && (sp.stat === 'melee' || sp.stat === 'wdmg' || sp.melee) ? 'phys' : 'magic'; };
-/** Movimiento (docs/COMBATE.md): walk 333 ms/celda permite castear; run 200 ms/celda no. Cap duro 200 ms/celda: ningún buff baja de ahí. */
-export const WALK_MS = 333, RUN_MS = 200, MOVE_CAP_MS = 200;
+/** Movimiento: siempre se corre a 200 ms/celda (decisión del 4/11: el walk/run clásico hacía el juego lento; casteás corriendo, el cast te frena y un paso lo corta). WALK_MS queda igual a RUN_MS por compatibilidad del protocolo. Cap duro 200 ms/celda: ningún buff baja de ahí. */
+export const WALK_MS = 200, RUN_MS = 200, MOVE_CAP_MS = 200;
 /** Escala de cast times (ms). */
 export const CAST_FAST_MS = 750, CAST_NORMAL_MS = 1000, CAST_HEAVY_MS = 1500, CAST_TELEGRAPH_MS = 2400;
 /** true si el hechizo es un cast (no golpe cuerpo a cuerpo): esos no se pueden lanzar corriendo. */

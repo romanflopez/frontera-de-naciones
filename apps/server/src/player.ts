@@ -163,8 +163,8 @@ export class Player {
     get baseMovementMs(): number { return RUN_MS; }
     /** Milisegundos por celda: los decide el server según walk/run. Nunca por debajo del cap de combate. */
     get movementSpeedMs(): number { return Math.max(MOVE_CAP_MS, this.runningMode ? RUN_MS : WALK_MS); }
-    /** Corriendo no se castea (docs/COMBATE.md): el hechizo no inicia. */
-    get canCast(): boolean { return !this.runningMode; }
+    /** Se castea siempre, también corriendo (4/11): el cast frena al jugador y un paso lo corta. */
+    get canCast(): boolean { return true; }
     /** Cast en curso validado por el server: el golpe de `spell` vale desde `okAt` hasta `until`. Un paso o ponerse a correr lo corta (si no salió todavía). */
     cast: { spell: string; okAt: number; until: number; fired: boolean } | null = null;
 

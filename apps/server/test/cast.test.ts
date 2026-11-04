@@ -53,10 +53,10 @@ function setup() {
     return { w, A, B, fire };
 }
 
-test('movimiento: el server fija walk 333 / run 200 e ignora la velocidad del guardado y del cliente', () => {
+test('movimiento: el server fija 200 ms/celda siempre e ignora la velocidad del guardado y del cliente', () => {
     const { w, A } = setup();
-    assert.equal(A.p.runningMode, false, 'siempre se entra caminando');
     assert.equal(A.p.movementSpeedMs, WALK_MS);
+    assert.equal(WALK_MS, RUN_MS, 'ya no hay modo caminar');
     pkt(w, A.sid, 'changePlayerMovementSpeedRequest', { movementSpeedMs: 100 }); // mensaje retirado del proto
     assert.equal(A.p.movementSpeedMs, WALK_MS);
     pkt(w, A.sid, 'playerMovementStateChangeRequest', { runningMode: true });
@@ -89,19 +89,19 @@ test('cast: el golpe antes del cast time del server se descarta; después pega',
     } finally { c.restore(); }
 });
 
-test('cast: corriendo no inicia; ponerse a correr corta el cast en curso', () => {
+test('cast: corriendo también se castea; un paso corta el cast que no salió', () => {
     const c = clock();
     try {
         const { w, A, B, fire } = setup();
         const hp = B.p.hp;
         pkt(w, A.sid, 'playerMovementStateChangeRequest', { runningMode: true });
         pkt(w, A.sid, 'spellCastStartRequest', { spellId: 0, spell: 'proyectil' });
-        assert.equal(count(A.log, 'spellCastFailed'), 1);
-        c.advance(2000); fire('proyectil'); assert.equal(B.p.hp, hp);
+        assert.equal(count(A.log, 'spellCastFailed'), 0, 'corriendo se castea');
+        c.advance(2000); fire('proyectil'); assert.ok(B.p.hp < hp, 'el hechizo salió');
 
-        pkt(w, A.sid, 'playerMovementStateChangeRequest', { runningMode: false });
+        const hp2 = B.p.hp;
         pkt(w, A.sid, 'spellCastStartRequest', { spellId: 0, spell: 'proyectil' });
-        c.advance(500); pkt(w, A.sid, 'playerMovementStateChangeRequest', { runningMode: true });
-        c.advance(2000); fire('proyectil'); assert.equal(B.p.hp, hp);
+        c.advance(300); pkt(w, A.sid, 'requestMovement', { curX: A.p.posX, curY: A.p.posY, destX: A.p.posX + 1, destY: A.p.posY, gameWorldId: w.mapId, dashAttack: false });
+        c.advance(2000); fire('proyectil'); assert.equal(B.p.hp, hp2, 'el paso cortó el cast');
     } finally { c.restore(); }
 });
