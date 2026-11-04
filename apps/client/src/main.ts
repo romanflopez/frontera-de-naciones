@@ -38,6 +38,9 @@ import { createAuctionUI } from './auction.ts';
 import { createDepositUI } from './deposit.ts';
 import { createTradeUI } from './trade.ts';
 import { createCursor } from './cursor.ts';
+import { installErrorReporting, watchForNewVersion } from './ops.ts';
+installErrorReporting();
+watchForNewVersion(() => log('Hay una versión nueva del juego. Cuando termines lo que estás haciendo, recargá la página (F5) para jugar con los últimos cambios.', true));
 const ico = (it: { name: string; look?: string; slot: string; rar: { c: string; k: number } }) => `<img class="iico" alt="" src="${itemIcon(it.look, it.slot, it.rar.c, it.rar.k, UNIQUE_BY_NAME.get(it.name)?.uniq.set, setPieceOf(it.slot, it.name))}">`;
 
 // ---------- utilidades ----------

@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { ClientMessage, ServerMessage } from '@fdn/proto';
+import { RestartCountdown, changelogLines, handleClientReport } from './ops.ts';
 import { DATA_DIR, loadSettings, type GameWorldConfig } from './config.ts';
 import { MAPS, MOB_TYPES, canonicalMapId, factionHome, getMapDef, type MapDef } from '@fdn/world';
 import { loadPosition, resolveSaved, savePosition } from './persist.ts';
@@ -161,6 +162,7 @@ setInterval(() => {
 const CLIENT_DIST = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'client', 'dist');
 const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webp': 'image/webp', '.png': 'image/png', '.txt': 'text/plain; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
 const http = createServer((req, res) => {
+    if (handleClientReport(req, res, SAVE_DIR)) return;
     const path = decodeURIComponent((req.url ?? '/').split('?')[0]);
     const file = normalize(join(CLIENT_DIST, path === '/' ? 'index.html' : path));
     if (file.startsWith(CLIENT_DIST) && existsSync(file) && statSync(file).isFile()) {
@@ -376,6 +378,7 @@ function gmMaps() {
 const GM_HELP = [
     'Comandos GM: /gm mapas · /gm ir <mapa> [x y] · /gm pos [x y] · /gm nivel <n> · /gm oro <n> · /gm curar · /gm dios',
     '/gm mobs · /gm mob <tipo> [nivel] [cantidad] · /gm limpiar · /gm llaves [n] · /gm espada [crit] · /gm traer <jugador> · /gm ira <jugador> · /gm menu (o F9)',
+    '/gm reiniciar [segundos] (cuenta regresiva y reinicio; por defecto 300) · /gm reiniciar cancelar',
     '/gm jefemundo (estado) · /gm jefemundo aca (sale al lado tuyo) · /gm jefemundo ya (sale ahora en un mapa al azar)',
 ];
 /** Prefijo con el que el server le manda al cliente el contenido del menú GM (el cliente lo abre en vez de mostrarlo en el chat). */
@@ -401,6 +404,12 @@ function handleGm(s: Session, text: string, reply: (m: ServerMessage) => void): 
     const [, cmd = 'ayuda', ...args] = text.split(/\s+/);
     const c = cmd.toLowerCase();
     if (c === 'ayuda' || c === 'help') { say(...GM_HELP); return; }
+    if (c === 'reiniciar') {
+        if ((args[0] ?? '').toLowerCase() === 'cancelar') { if (restart.cancel()) { broadcastChat('Se canceló el reinicio del servidor.'); say('Reinicio cancelado.'); } else say('No hay un reinicio en marcha.'); return; }
+        const secs = args[0] === undefined ? 300 : Math.floor(Number(args[0]));
+        if (!Number.isFinite(secs) || secs < 5 || secs > 3600) { say('Usá /gm reiniciar <segundos entre 5 y 3600>, o /gm reiniciar cancelar.'); return; }
+        restart.start(secs); say(`Reinicio en ${secs} s. /gm reiniciar cancelar lo frena.`); return;
+    }
     if (c === 'jefemundo') {
         const sub = (args[0] ?? '').toLowerCase(), w = worldOf(s), p = w?.playerOf(s.sessionId);
         if (sub === 'aca') { if (!w || !p) { say('No estás en un mundo.'); return; } say(worldBoss.spawn(Date.now(), w.id, { x: p.posX, y: p.posY })); return; }
@@ -454,6 +463,7 @@ function handleGm(s: Session, text: string, reply: (m: ServerMessage) => void): 
 function handleChat(sender: Session, raw: string, reply: (m: ServerMessage) => void): void {
     let text = raw.trim(), channel = 'global';
     if (/^\/gm(\s|$)/i.test(text)) { handleGm(sender, text, reply); return; } // comandos de GM (modo GM)
+    if (/^\/novedades(\s|$)/i.test(text)) { for (const l of changelogLines(2)) reply(M.sendMessage(l)); return; }
     if (/^\/arena(\s|$)/i.test(text)) { arena.command(sender.sessionId, text); return; } // arenas 2v2 / 3v3
     const pre = /^\/(gu|g|n|p|a|c)\s+/i.exec(text);
     if (pre) { channel = ({ gu: 'guild', g: 'global', n: 'nacion', p: 'party', a: 'area', c: 'comercio' } as Record<string, string>)[pre[1].toLowerCase()]; text = text.slice(pre[0].length); }
@@ -471,6 +481,10 @@ const chat = new ChatManager({
 });
 // la oferta estrella de la tienda avisa en el chat global a todo el server (la sirve el mismo Economy de todos los mundos)
 economy.announce = (text) => { const m = M.serverChat('global', 'Tienda', text, ''); for (const s of sessionsById.values()) if (s.socket && s.socket.readyState === s.socket.OPEN) s.socket.send(encode(m)); };
+/** Aviso del server a todos los conectados (canal global, remitente «Servidor»). */
+function broadcastChat(text: string): void { const m = M.serverChat('global', 'Servidor', text, ''); for (const x of sessionsById.values()) if (x.socket && x.socket.readyState === x.socket.OPEN) x.socket.send(encode(m)); }
+/** Reinicio avisado: cuenta regresiva en el chat y, en cero, el mismo cierre ordenado que SIGTERM (guarda a todos). */
+const restart = new RestartCountdown(broadcastChat, () => { setTimeout(() => void shutdown(), 500); }); // medio segundo para que el último aviso salga por los sockets
 const factionOfSession = (s: Session): string | undefined => worldOf(s)?.playerOf(s.sessionId)?.profile.split(';')[0] || undefined;
 
 async function shutdown(): Promise<void> {
@@ -483,7 +497,7 @@ async function shutdown(): Promise<void> {
     process.exit(0);
 }
 process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+process.on('SIGTERM', () => { if (!restart.active) broadcastChat('El servidor se reinicia ahora (actualización). Tu personaje queda guardado: volvé a entrar en un minuto.'); setTimeout(() => void shutdown(), 300); });
 
 http.listen(settings.port, '0.0.0.0', () => {
     console.log(`[Server] Escuchando en ws://localhost:${settings.port}/ws`);
