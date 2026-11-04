@@ -1,6 +1,6 @@
 /**
- * Portal de piedra gris (plataforma circular en perspectiva isométrica) con aros entrelazados; el cristal está gris apagado y se enciende violeta-cian al pisarlo.
- * Todo se dibuja por código. El sprite base se pre-renderiza UNA vez en canvas offscreen (en capas) y por frame solo se
+ * Portal: vórtice animado de Frostwindz (`assets/portal_priv.png`) sobre un charco de luz. Si la tira no carga, queda el portal anterior
+ * de piedra gris dibujado por código (plataforma con aros entrelazados y haz de luz). El sprite base se pre-renderiza UNA vez en canvas offscreen (en capas) y por frame solo se
  * componen esas capas con alpha (brillo del cristal y de los aros) más un haz de luz y partículas livianas.
  */
 const R = 200, SW = 480, SH = 290, CX = 240, CY = 150, FLAT = 0.5;
@@ -135,8 +135,17 @@ export const PORTAL_ZONE: PortalStyle = { rx: 36, beam: 85 };
 
 /** Plataforma en el suelo: sprite base + brillo del cristal y de los aros según `act` (0 apagado .. 1 encendido). */
 export function drawPortalFloor(ctx: CanvasRenderingContext2D, x: number, y: number, st: PortalStyle, act: number, T: number, reduce: boolean, seed: number) {
-    layers ||= build();
     const k = st.rx / R, pulse = reduce ? 0.5 : 0.5 + 0.5 * Math.sin(T * 1.3 + seed);
+    if (sheet) { // con el vórtice no hay plataforma de piedra: solo una sombra de contacto y un charco de luz violeta en el pasto
+        const rb = 0.5 * R * k;
+        ctx.save();
+        ctx.fillStyle = `rgba(10,4,24,${0.28 + act * 0.1})`; ctx.beginPath(); ctx.ellipse(x, y + 2, rb * 1.15, rb * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.globalCompositeOperation = 'lighter';
+        const g = ctx.createRadialGradient(x, y, 0, x, y, rb * 1.3); g.addColorStop(0, `rgba(150,100,255,${0.18 + pulse * 0.08 + act * 0.3})`); g.addColorStop(0.6, `rgba(120,70,255,${0.06 + act * 0.12})`); g.addColorStop(1, 'rgba(120,70,255,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y, rb * 1.3, rb * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore(); return;
+    }
+    layers ||= build();
     ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.translate(-CX, -CY);
     ctx.drawImage(layers.under, 0, 0);
     ctx.globalAlpha = Math.min(1, 0.03 + pulse * 0.04 + act * 0.95); ctx.drawImage(layers.crystal, 0, 0);
@@ -156,7 +165,7 @@ export function setPortalSheet(img: HTMLImageElement) { sheet = { img, n: Math.m
 function drawVortex(ctx: CanvasRenderingContext2D, bx: number, by: number, rb: number, act: number, T: number, reduce: boolean, seed: number) {
     const s = sheet!, i = reduce ? 0 : Math.floor(T * PORTAL_FPS + seed * 3) % s.n, w = rb * 5, h = w; // el óvalo ocupa ~60 % de la celda: queda del alto de un personaje en la ciudad
     const bob = reduce ? 0 : Math.sin(T * 1.6 + seed) * 2 * act;
-    const dx = bx - w / 2, dy = by - h * 0.92 - bob; // la base del óvalo apoya apenas sobre el disco central
+    const dx = bx - w / 2, dy = by - h * 0.9 - bob; // la base del óvalo apoya en el piso
     ctx.save();
     ctx.globalAlpha = 0.55 + act * 0.45;
     ctx.drawImage(s.img, i * s.c, 0, s.c, s.c, dx, dy, w, h);
@@ -166,7 +175,7 @@ function drawVortex(ctx: CanvasRenderingContext2D, bx: number, by: number, rb: n
 
 /** Vórtice (o haz de luz si no hay tira) y partículas encima del suelo: suaves en reposo, intensos al activarse. */
 export function drawPortalFx(ctx: CanvasRenderingContext2D, x: number, y: number, st: PortalStyle, act: number, T: number, reduce: boolean, seed: number) {
-    const k = st.rx / R, bx = x, by = y - 12 * k, rb = 0.5 * R * k, H = st.beam;
+    const k = st.rx / R, bx = x, by = sheet ? y : y - 12 * k, rb = 0.5 * R * k, H = st.beam;
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     // halo en el suelo
     const hg = ctx.createRadialGradient(bx, by, 0, bx, by, rb * 1.5); hg.addColorStop(0, `rgba(${sheet ? '150,110,255' : '120,200,255'},${0.05 + act * 0.14})`); hg.addColorStop(1, 'rgba(120,80,255,0)');
