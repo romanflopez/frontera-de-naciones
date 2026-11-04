@@ -28,6 +28,7 @@ import { depotService } from './deposit.ts';
 import { tradeService } from './trade.ts';
 import { canPickup, GroundLoot, type GroundApi } from './ground.ts';
 import { LootManager, rollLoot, splitLoot } from './systems/loot.ts';
+import { DROPS } from './drops.ts';
 
 interface Timer { at: number; fn: () => void }
 
@@ -1380,6 +1381,17 @@ export class GameWorld {
     /** Tirada de botín de suelo al morir un mob: si cae algo, lo ven en el acto los jugadores cercanos. */
     private dropLoot(type: MobType, name: string, lvl: number, x: number, y: number, killer?: Player): void {
         const r = rollLoot(type, name, lvl); if (!r) return;
+        // modo personal (drops.json): va directo a la bolsa de quien lo mató y de su party en rango, sin pasar por el piso
+        if (DROPS.mode === 'personal' && killer && !killer.disconnected && this.econ) {
+            const alive = this.partyInRange(killer).filter((m) => !m.isDead), mates = alive.length ? alive : [killer];
+            const shares = splitLoot(r.itemId, r.amount, mates.length);
+            for (const { i, amount } of shares) {
+                const m = mates[i], lvl0 = m.econ?.lvl; this.econ.addLoot(m, r.itemId, amount);
+                if (m.econ && m.econ.lvl !== lvl0) this.restat(m);
+                m.send(M.sendMessage(r.itemId === 'gold' ? `Botín: ${amount} de oro.` : `Botín: ${r.itemName}${amount > 1 ? ` x${amount}` : ''}.`));
+            }
+            return;
+        }
         // [DM] sin "ninjas": durante LOOT_OWNED_MS solo lo levanta la party del que lo mató (los que estaban cerca)
         const owners = killer && !killer.disconnected ? this.partyInRange(killer).map((m) => m.sessionId) : [];
         const e = this.floorLoot.spawn(x, y, r, owners), m = M.lootSpawn(e);

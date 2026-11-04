@@ -7,6 +7,7 @@ import { PartyService, setParties } from '../src/party.ts';
 import { WorldRegistry } from '../src/registry.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
 import { LOOT_OWNED_MS, LOOT_TTL_MS, LootManager, rollLoot, splitLoot } from '../src/systems/loot.ts';
+import { DROPS } from '../src/drops.ts';
 
 class MemStorage implements Storage {
     private m = new Map<string, AccountRecord>();
@@ -92,4 +93,34 @@ test('en el mundo: lo levanta uno y se reparte solo entre la party cerca; el de 
         B.hp = 0; const g2 = drop('gold', 10); W.pickupLoot(A, g2.lootId);
         assert.equal(A.econ!.gold + B.econ!.gold, 31); assert.ok(A.econ!.gold >= 20, 'el muerto no entra en el reparto');
     } finally { setParties(undefined); }
+});
+
+test('modo personal: el botín del mob va directo a la bolsa del que mató y su party cerca, sin pasar por el piso; en modo suelo cae al piso', () => {
+    const mem = new MemStorage(), eco = new Economy(mem), reg = new WorldRegistry({ settings: loadSettings(), economy: eco });
+    const w = reg.ensure('campos_de_sal');
+    const mk = (name: string) => {
+        const sid = `s-${name}`, sp = MAPS.campos_de_sal.spawn;
+        w.playerConnected(sid, name, () => {}, () => {}, { mapId: w.mapId, worldId: w.mapId, x: sp.x, y: sp.y, direction: 4, gender: 0, skinColor: 0, hairStyleIndex: 0, underwearColorIndex: 0, movementSpeedMs: 270, runningMode: true, attackMode: true });
+        mem.put(`acc-${name}`, { name, salt: '', hash: '', created: 0, lastLogin: 0 }); w.bindAccount(sid, `acc-${name}`);
+        w.onClientSave(sid, JSON.stringify({ cls: 'guerrero', faction: 'solmar' }));
+        const p = w.playerOf(sid)!; p.econ!.gold = 0; p.econ!.mats = {}; return p;
+    };
+    const [A, B, C] = ['ana', 'beto', 'caro'].map(mk);
+    const svc = new PartyService({ sessionByName: (n) => [A, B, C].find((p) => p.characterName === n)?.sessionId, send: () => {}, info: (sid) => ({ name: [A, B, C].find((p) => p.sessionId === sid)!.characterName, faction: 'solmar', level: 5, hp: 100, maxHp: 100, mp: 0, maxMp: 0, map: 'campos_de_sal', online: true }) });
+    setParties(svc);
+    const old = { mode: DROPS.mode, floor: DROPS.floorChance };
+    try {
+        svc.handle(A.sessionId, 'invite', 'beto'); svc.handle(B.sessionId, 'accept', '');
+        B.setPosition(A.posX + 2, A.posY); C.setPosition(A.posX + 40, A.posY);
+        const W = w as unknown as { floorLoot: LootManager; dropLoot(t: string, n: string, l: number, x: number, y: number, k?: unknown): void };
+        const total = (p: typeof A) => p.econ!.gold + Object.values(p.econ!.mats ?? {}).reduce((s, n) => s + n, 0);
+        DROPS.floorChance = 1; DROPS.mode = 'personal';
+        for (let i = 0; i < 20; i++) W.dropLoot('goblin', 'Goblin', 5, A.posX, A.posY, A);
+        assert.ok(total(A) > 0 && total(B) > 0, 'le llega al que mató y a su compañero cerca');
+        assert.equal(total(C), 0, 'el que está lejos no cobra');
+        assert.equal(W.floorLoot.items.size, 0, 'nada cae al piso');
+        DROPS.mode = 'suelo';
+        W.dropLoot('goblin', 'Goblin', 5, A.posX, A.posY, A);
+        assert.equal(W.floorLoot.items.size, 1, 'en modo suelo cae al piso');
+    } finally { DROPS.mode = old.mode; DROPS.floorChance = old.floor; setParties(undefined); }
 });

@@ -4,6 +4,7 @@
  * El ClientPickupItem se valida (existe, a ≤ 1,5 celdas, vivo); si vale se borra, se suma a la cuenta y se avisa a todos con ServerItemPickedUp.
  * Aparte del botín de items de la economía (ground.ts / Economy.reward): esto son materiales apilables y montoncitos de oro.
  */
+import { DROPS } from '../drops.ts';
 import { JUNK_MATS, type MobType } from '@fdn/world';
 
 /** Distancia máxima (celdas) para levantar. */
@@ -11,7 +12,7 @@ export const LOOT_PICKUP_RANGE = 1.5;
 /** Cuánto dura el botín en el suelo antes de desaparecer. */
 export const LOOT_TTL_MS = 3 * 60_000;
 /** Chance de que un mob suelte algo. */
-export const LOOT_DROP_CHANCE = 0.2;
+export const LOOT_DROP_CHANCE = 0.2; // valor de diseño; el que rige sale de DROPS.floorChance (drops.ts)
 /** Dentro de lo que cae: chance de que sea oro en vez del material. */
 const GOLD_SHARE = 0.3;
 
@@ -55,7 +56,7 @@ export const materialOf = (type: MobType, name: string): { id: string; name: str
 export interface LootRoll { itemId: string; itemName: string; amount: number }
 /** Tirada al morir un mob: null = no cae nada. */
 export function rollLoot(type: MobType, name: string, lvl: number, rnd: () => number = Math.random): LootRoll | null {
-    if (rnd() >= LOOT_DROP_CHANCE) return null;
+    if (rnd() >= DROPS.floorChance) return null;
     if (rnd() < GOLD_SHARE) return { itemId: 'gold', itemName: 'Oro', amount: Math.max(1, Math.round((2 + rnd() * 4) * lvl)) };
     const m = materialOf(type, name);
     return { itemId: m.id, itemName: m.name, amount: 1 };

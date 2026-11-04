@@ -8,6 +8,7 @@
  * Persistencia: el estado va en la propia cuenta (`AccountRecord.econ`, JSON versionado) y se guarda por el mismo
  * Storage (archivos o Postgres). Ver docs/ECONOMIA_SERVER.md.
  */
+import { DROPS } from './drops.ts';
 import {
     ATTR_RANGES, traitExpMult, traitDropMult, BAG_MAX, BASE_BY_NAME, BASES, KEY_IDS, KEYDEFS, POT_MAX, POTS, QUESTS, roleOf, SHARDS_PER_KEY, SHOP_SERVER_RANGE,
     SHOPS, SLOTS, slotsFor, fitsSlot, TRAINING, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, sellPrice, trainingUnlocked,
@@ -104,11 +105,7 @@ export const UP_RATE = [0.33, 0.33, 0.33, 0.25, 0.2, 0.15, 0.12, 0.25, 0.25, 0.2
 export const UP_RISK_FROM = 99;
 /** Desde este nivel actual (+8 en adelante) cada intento gasta una copia de repuesto de la misma pieza. */
 export const UP_SPARE_FROM = 7;
-/** Chance de poción por kill (bajó de 14 % a 9 %: sobraban). */
-export const POTION_DROP_CHANCE = 0.09;
-export const GOLD_CHANCE = 0.25;
-/** Oro por drop de un mob común: de GOLD_MIN a GOLD_MAX por nivel del mob (menos drops, más grandes: mismo ingreso que con 45 % de 3-8). */
-export const GOLD_MIN = 5, GOLD_MAX = 15;
+/** El oro por drop y su chance salen de `DROPS` (drops.ts): configurables sin tocar código. */
 const pick = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
 
 // ---------- calidad del botín (docs/ITEMS.md: la calidad define extras y tope de mejora) ----------
@@ -851,10 +848,10 @@ export class Economy {
         } else {
             // El ítem solo cae como único de la banda, con poca chance (más en pits y mazmorras); el resto del tiempo, oro.
             // El botín viejo con rareza al azar se eliminó (docs/ITEMS.md): los "comunes" son la basura vendible del suelo (systems/loot.ts).
-            const r = Math.random(), uc = tier <= UNIQUE_TIERS_READY ? uniqueChance(tier, k.origin ?? 'pit') * dm : 0, gc = GOLD_CHANCE * dm;
+            const r = Math.random(), uc = tier <= UNIQUE_TIERS_READY ? uniqueChance(tier, k.origin ?? 'pit') * dm * DROPS.uniqueMult : 0, gc = DROPS.goldChance * dm;
             // en mazmorras del tramo, parte de los únicos son piezas de set (solo caen ahí, nunca en pits ni en la tienda)
             if (r < uc) item = uniqueItem(st, k.origin === 'dungeon' && SET_PIECES_BY_TIER[tier] && Math.random() < SET_PIECE_SHARE ? pickSetPiece(st, SET_PIECES_BY_TIER[tier]) : pick(UNIQUES_BY_TIER[tier]), rollQuality(k.origin ?? 'pit'));
-            else if (r < uc + gc) gold = rint(GOLD_MIN, GOLD_MAX) * def.lvl;
+            else if (r < uc + gc) gold = rint(DROPS.goldMin, DROPS.goldMax) * def.lvl;
         }
         if (gold) addGold(st, gold);
         if (item) {
@@ -862,7 +859,7 @@ export class Economy {
             else { bagFull = true; ctx.ground.add(item, Math.floor(p.posX) + 0.5, Math.floor(p.posY) + 0.5, [p.accountKey], LOOT_FREE_MS); } // nada se destruye: cae junto al jugador
         }
         let forge = 0;
-        if (boss ? (bossU || k.origin === 'world') : Math.random() < FORGE_CHANCE[k.origin ?? 'pit']) { forge = boss ? rint(FORGE_BOSS[0], FORGE_BOSS[1]) : 1; st.forge = (st.forge ?? 0) + forge; }
+        if (boss ? (bossU || k.origin === 'world') : Math.random() < FORGE_CHANCE[k.origin ?? 'pit'] * DROPS.forgeMult) { forge = boss ? rint(FORGE_BOSS[0], FORGE_BOSS[1]) : 1; st.forge = (st.forge ?? 0) + forge; }
         if (boss && bossU) { // pieza de set extra (jefes de mazmorra): la banda es la de su mazmorra (D1 = T1 … D7 = T7), no la del nivel del jefe
             const di = DUNGEON_IDS.findIndex((d) => DUNGEON_BOSS[d] === k.type && k.map === DUNGEON_MAP[d]), pool = di >= 0 ? SET_PIECES_BY_TIER[di + 1] : undefined;
             if (pool && Math.random() < BOSS_SET_CHANCE) {
@@ -875,7 +872,7 @@ export class Economy {
             const n = rint(1, 2), mats = (st.mats ??= {}); mats[MAT_REFORJA] = Math.min(999, (mats[MAT_REFORJA] ?? 0) + n);
             p.send(M.econResult(true, 'quest_mat', `Conseguiste ${n} piedra${n > 1 ? 's' : ''} de reforja.`));
         }
-        if (Math.random() < POTION_DROP_CHANCE) { const kind: PotKind = Math.random() < 0.6 ? 'hp' : 'mp'; if (st.pots[kind] < POT_MAX) { st.pots[kind]++; potion = kind; } }
+        if (Math.random() < DROPS.potionChance) { const kind: PotKind = Math.random() < 0.6 ? 'hp' : 'mp'; if (st.pots[kind] < POT_MAX) { st.pots[kind]++; potion = kind; } }
         if (boss && !bossU && k.origin !== 'world') { const kid: KeyId = k.shard ?? (k.zoneName === 'Cripta olvidada' ? 'foso' : 'cripta'); st.q.shards[kid] = Math.min(99, st.q.shards[kid] + 1); shard = kid; }
         // materiales de las llaves: cada uno en los pits de su tier de zona (T1-T7, sin el tope 6 de la banda de ítems; ×2 en mutantes, como el resto del botín)
         const qmats: string[] = [];

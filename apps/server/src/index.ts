@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { ClientMessage, ServerMessage } from '@fdn/proto';
+import { dropLines, loadDropsFile, setDrop } from './drops.ts';
 import { RestartCountdown, changelogLines, handleClientReport } from './ops.ts';
 import { DATA_DIR, loadSettings, type GameWorldConfig } from './config.ts';
 import { MAPS, MOB_TYPES, canonicalMapId, factionHome, getMapDef, type MapDef } from '@fdn/world';
@@ -36,6 +37,7 @@ const settings = loadSettings();
 // el estado económico (oro, bolsa, equipo, nivel) es del server; se guarda en la cuenta por el mismo Storage
 /** Dónde se guardan cuentas y personajes: DATA_DIR (env) o, por defecto, la carpeta data del server. */
 const SAVE_DIR = process.env.DATA_DIR || DATA_DIR;
+for (const e of loadDropsFile(SAVE_DIR)) console.warn(`[Drops] ${e}`);
 // con DATABASE_URL las cuentas van a Postgres (sobreviven a los redeploys); sin ella, archivos JSON
 const storage: Storage & { close?: () => Promise<void> } = process.env.DATABASE_URL ? await PgStorage.create(process.env.DATABASE_URL) : new FileStorage(SAVE_DIR);
 const economy = new Economy(storage);
@@ -378,6 +380,7 @@ function gmMaps() {
 const GM_HELP = [
     'Comandos GM: /gm mapas · /gm ir <mapa> [x y] · /gm pos [x y] · /gm nivel <n> · /gm oro <n> · /gm curar · /gm dios',
     '/gm mobs · /gm mob <tipo> [nivel] [cantidad] · /gm limpiar · /gm llaves [n] · /gm espada [crit] · /gm traer <jugador> · /gm ira <jugador> · /gm menu (o F9)',
+    '/gm drops (ver) · /gm drops <clave> <valor> (botín en vivo: mode personal|suelo, goldChance, floorChance, potionChance, uniqueMult, forgeMult)',
     '/gm reiniciar [segundos] (cuenta regresiva y reinicio; por defecto 300) · /gm reiniciar cancelar',
     '/gm jefemundo (estado) · /gm jefemundo aca (sale al lado tuyo) · /gm jefemundo ya (sale ahora en un mapa al azar)',
 ];
@@ -404,6 +407,11 @@ function handleGm(s: Session, text: string, reply: (m: ServerMessage) => void): 
     const [, cmd = 'ayuda', ...args] = text.split(/\s+/);
     const c = cmd.toLowerCase();
     if (c === 'ayuda' || c === 'help') { say(...GM_HELP); return; }
+    if (c === 'drops') {
+        if (args.length === 0) { say(...dropLines(), 'Cambiar en vivo: /gm drops <clave> <valor> (mode, goldChance, goldMin, goldMax, floorChance, potionChance, uniqueMult, forgeMult). Para que quede, drops.json en la carpeta de datos.'); return; }
+        const err = setDrop(args[0], args[1] ?? '');
+        say(err ?? 'Listo (en vivo, hasta el próximo reinicio).', ...dropLines()); return;
+    }
     if (c === 'reiniciar') {
         if ((args[0] ?? '').toLowerCase() === 'cancelar') { if (restart.cancel()) { broadcastChat('Se canceló el reinicio del servidor.'); say('Reinicio cancelado.'); } else say('No hay un reinicio en marcha.'); return; }
         const secs = args[0] === undefined ? 300 : Math.floor(Number(args[0]));

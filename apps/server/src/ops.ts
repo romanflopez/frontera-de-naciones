@@ -14,7 +14,7 @@ export const CHANGELOG: { date: string; items: string[] }[] = [
         'Jefe de mundo (Coloso de piedra), botín de jefe sin ninjas, quests que cuentan en party y encargo de dungeon que devuelve una llave.',
         'Las bendiciones del healer duran 15 min y le llegan a toda la party.',
         'Balance de PvE: los bichos pegan según el nivel, la vida y el maná se recuperan por porcentaje.',
-        'Menos botín: caen menos pociones, oro y basura, pero el oro que cae es más grande.',
+        'Botín personal: lo que suelta un mob va directo a tu bolsa (y a la de tu party cerca), con menos oro y basura pero más grande, y pociones seguido para el sustain.',
     ] },
     { date: '3/11', items: [
         'Hasta 3 personajes por cuenta, Dar e Intercambiar entre jugadores, libro de hechizos (P) y chats de Nación y Comercio.',
