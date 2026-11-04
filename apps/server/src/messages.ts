@@ -234,3 +234,5 @@ export const bossTelegraph = (mobId: number, name: string, x: number, y: number,
 export const bossZone = (id: number, mobId: number, name: string, x: number, y: number, r: number, durationMs: number): ServerMessage =>
     msg({ $case: 'bossZone', value: { id, mobId, name, x, y, r, durationMs } });
 export const bossPhase = (mobId: number, event: string, text: string, enraged: boolean): ServerMessage => msg({ $case: 'bossPhase', value: { mobId, event, text, enraged } });
+export const playerProjectile = (id: bigint, spell: string, fromX: number, fromY: number, toX: number, toY: number, travelMs: number): ServerMessage =>
+    msg({ $case: 'playerProjectile', value: { playerId: id, spell, fromX, fromY, toX, toY, travelMs } });

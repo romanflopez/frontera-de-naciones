@@ -19,6 +19,7 @@ import { adjacentCellsAt45, distance, findNearestFreeLocation, nextGridDirection
 import type { Occupancy } from './map.ts';
 import * as M from './messages.ts';
 import { MobSim } from './mobs.ts';
+import { PROJECTILES, projectileFlightMs, projectileHits } from '@fdn/world';
 import { ARENA_RULES, MOB_TYPES, POISON_SECS, arenaHealMult, meleeIntervalSecs, type MobType, type WorldMap } from '@fdn/world';
 import { Player, type PersistedPlayer, type Send } from './player.ts';
 import type { Economy, EconCtx } from './economy.ts';
@@ -47,6 +48,9 @@ const RECALL_BREAKERS: Record<string, string> = {
 const WIND_BREAKERS: Record<string, string> = {
     ...RECALL_BREAKERS, spellCastStartRequest: 'Empezaste a lanzar', potionRequest: 'Tomaste una poción', recallRequest: 'Pediste volver a la ciudad',
 };
+
+/** Efecto con el que se ve el impacto de cada proyectil. */
+const IMPACT_FX: Record<string, string> = { proyectil: 'splash', bola: 'eruption' };
 
 export class GameWorld {
     private readonly players = new Map<string, Player>();
@@ -572,6 +576,7 @@ export class GameWorld {
                     if (payload.value.gameWorldId && payload.value.gameWorldId !== this.id) break;
                     this.handleRequestMovement(p, payload.value);
                     break;
+                case 'projectileLaunchRequest': this.handleProjectileLaunch(p, payload.value); break;
                 case 'playerPositionRequest': this.handlePositionRequest(p, payload.value.x, payload.value.y); break;
                 case 'spellCastStartRequest': this.startCast(p, payload.value.spell); break;
                 case 'spellCastCancelRequest': if (p.cast && !p.cast.fired) p.cast = null; break;
@@ -594,56 +599,7 @@ export class GameWorld {
                     break;
                 }
                 case 'pvpHitRequest': {
-                    // El server decide el daño: el cliente solo dice qué hechizo y sobre quién (ver systems/pvpCombat.ts).
-                    const v = payload.value, num = (n: number, lo: number, hi: number) => (Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : lo);
-                    const fx = /^[a-z]{0,16}$/.test(v.fx) ? v.fx : '';
-                    const now = Date.now(), spell = /^[a-z0-9]{0,16}$/.test(v.spell) ? v.spell : '';
-                    // los avisos de efecto van con tope de ritmo; los golpes con hechizo los limita cada hechizo (recarga y ritmo)
-                    if (!spell) { if (now - p.lastPvpMs < 40) break; p.lastPvpMs = now; }
-                    const x = num(v.x, 0, 200), y = num(v.y, 0, 200), r = num(v.r, 0, 6);
-                    if (spell && !this.kitOk(p, spell)) break; // habilidad de otra clase o de un nivel que no tiene
-                    // Furia: la lleva el server
-                    if (spell === 'furia') {
-                        if (!p.isDead && now >= p.pvp.furyCdUntil && this.payMp(p, UTIL_MP.furia) && p.pvp.castFury(now)) {
-                            this.broadcastNear(p, M.pvpHit(p.playerId, { fx: fx || 'flamme', x: p.posX, y: p.posY, targetId: 0n, dmg: 0, secs: 0, r: 0 }));
-                            this.announceStatus(p); this.playerTimer(p, FURY_MS + 30, (w) => w.announceStatus(p));
-                        }
-                        break;
-                    }
-                    const sp = PVP_SPELLS[spell];
-                    if (sp && !this.castOk(p, spell, now)) break; // hechizo sin cast terminado en el server: se descarta
-                    let dmg = 0, secs = 0;
-                    if (sp && v.targetId) {
-                        const tgt = this.playersById.get(v.targetId);
-                        if (!tgt || tgt === p || tgt.disconnected) break;
-                        const dTgt = Math.hypot(tgt.posX - p.posX, tgt.posY - p.posY);
-                        if (dTgt > sp.range + 2.5) break;                                  // muy lejos del que lanza
-                        if (sp.aoe && Math.hypot(tgt.posX - x, tgt.posY - y) > sp.aoe + 2) break; // fuera del área
-                        if (p.isDead || !p.pvp.allow(spell, tgt.playerId, now, (c) => this.payMp(p, c))) break; // recarga, ritmo o sin maná
-                        // K6: sin ventaja de abridor. Contra alguien que no estaba en combate PvP no valen Furia ni los bonus sobre controlado o quemado.
-                        const opener = !this.inPvp(tgt, now);
-                        dmg = rollSpellDamage(spell, p.combat, !opener && p.pvp.fury(now));
-                        if (!opener && sp.vsCtrl && tgt.isParalyzed(now)) dmg = Math.round(dmg * pvpVsCtrl(sp.vsCtrl)); // Esquirla, Juicio, Escudo contra un controlado (tope 1,2× en PvP)
-                        if (!opener && sp.vsBurn && tgt.burnUntil > now) dmg = Math.round(dmg * sp.vsBurn); // Bola de fuego sobre un quemado
-                        if (v.secs > 0 && p.pvp.allowSecs(spell, tgt.playerId, now)) secs = sp.secs ?? 0;
-                        this.changeStatus(p, () => breakInvisibility(p.status));
-                        if (secs > 0) secs = paralysisSecs(secs, tgt.combat); // la RM (y la resistencia a parálisis) del que recibe acortan la duración
-                        if (!this.isEnemyPair(p, tgt)) break;                              // mismo bando o zona segura (antes del CC: no gasta DR en aliados)
-                        if (secs > 0) { // DR por tipo de CC (15 s): full / 50 % / 25 % / inmune
-                            secs = applyParalysis(tgt.status, now, secs * 1000, STUN_SPELLS.has(spell) ? 'aturdir' : 'paralisis') / 1000;
-                            if (secs <= 0) { p.send(M.pvpHit(tgt.playerId, { fx: 'resist', x: tgt.posX, y: tgt.posY, targetId: 0n, dmg: 0, secs: 0, r: 0 })); if (dmg <= 0) break; }
-                        }
-                        if (dmg > 0) dmg = this.damagePlayer(tgt, dmg, spellDmgKind(spell), p, '', spell === 'ataque' ? '' : spell);              // la vida del que recibe la lleva el server
-                        if (dmg > 0) { // efectos de K3: frenar, quemar, curarse
-                            if (sp.slow && applySlow(tgt.status, now, sp.slow * 1000) > 0) this.announceStatus(tgt);
-                            if (sp.burn) this.burnPlayer(tgt, p);
-                            if (sp.lifesteal) this.healPlayer(p, Math.round(dmg * sp.lifesteal));
-                            if (sp.refund) this.refundMp(p, sp.refund);
-                            if (spellDmgKind(spell) === 'phys' && p.combat.poison > 0 && Math.random() * 100 < p.combat.poison) this.poisonPlayer(tgt, POISON_SECS); // chance de veneno del equipo, como contra los mobs
-                        }
-                        if (dmg > 0 || secs > 0) p.send(M.pvpHit(p.playerId, { fx: '', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs, r: 0 })); // para que el que pega vea el número
-                    } else if (v.targetId) break; // daño sin hechizo conocido: se descarta
-                    this.broadcastNear(p, M.pvpHit(p.playerId, { fx, x, y, targetId: v.targetId, dmg, secs, r }));
+                    this.resolvePvpHit(p, payload.value);
                     break;
                 }
                 case 'blinkRequest': this.handleBlink(p, payload.value.x, payload.value.y, payload.value.skill === 'pasoluz' ? 'pasoluz' : 'blink'); break;
@@ -773,6 +729,92 @@ export class GameWorld {
         p.fx = x; p.fy = y; p.fCell = { x: p.posX, y: p.posY };
         if (p.cast && !p.cast.fired) p.cast = null; // moverse cancela el cast que no salió
         this.broadcastNear(p, M.playerPositionUpdate(p.playerId, x, y));
+    }
+
+    /** Resuelve un golpe de hechizo contra un jugador (daño, control, efectos). `launched`: viene de un proyectil que el server ya validó y cuyo cast ya se consumió. */
+    private resolvePvpHit(p: Player, v: { fx: string; x: number; y: number; targetId: bigint; secs: number; r: number; spell: string }, launched = false): void {
+        // El server decide el daño: el cliente solo dice qué hechizo y sobre quién (ver systems/pvpCombat.ts).
+        const num = (n: number, lo: number, hi: number) => (Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : lo);
+        const fx = /^[a-z]{0,16}$/.test(v.fx) ? v.fx : '';
+        const now = Date.now(), spell = /^[a-z0-9]{0,16}$/.test(v.spell) ? v.spell : '';
+        // los avisos de efecto van con tope de ritmo; los golpes con hechizo los limita cada hechizo (recarga y ritmo)
+        if (!spell) { if (now - p.lastPvpMs < 40) return; p.lastPvpMs = now; }
+        const x = num(v.x, 0, 200), y = num(v.y, 0, 200), r = num(v.r, 0, 6);
+        if (spell && !this.kitOk(p, spell)) return; // habilidad de otra clase o de un nivel que no tiene
+        // Furia: la lleva el server
+        if (spell === 'furia') {
+            if (!p.isDead && now >= p.pvp.furyCdUntil && this.payMp(p, UTIL_MP.furia) && p.pvp.castFury(now)) {
+                this.broadcastNear(p, M.pvpHit(p.playerId, { fx: fx || 'flamme', x: p.posX, y: p.posY, targetId: 0n, dmg: 0, secs: 0, r: 0 }));
+                this.announceStatus(p); this.playerTimer(p, FURY_MS + 30, (w) => w.announceStatus(p));
+            }
+            return;
+        }
+        const sp = PVP_SPELLS[spell];
+        if (PROJECTILES[spell] && v.targetId && !launched) return;       // los proyectiles esquivables se piden con projectileLaunchRequest
+        if (sp && !launched && !this.castOk(p, spell, now)) return; // hechizo sin cast terminado en el server: se descarta
+        let dmg = 0, secs = 0;
+        if (sp && v.targetId) {
+            const tgt = this.playersById.get(v.targetId);
+            if (!tgt || tgt === p || tgt.disconnected) return;
+            const dTgt = Math.hypot(tgt.posX - p.posX, tgt.posY - p.posY);
+            if (dTgt > sp.range + 2.5) return;                                  // muy lejos del que lanza
+            if (sp.aoe && Math.hypot(tgt.posX - x, tgt.posY - y) > sp.aoe + 2) return; // fuera del área
+            if (p.isDead || !p.pvp.allow(spell, tgt.playerId, now, (c) => this.payMp(p, c))) return; // recarga, ritmo o sin maná
+            // K6: sin ventaja de abridor. Contra alguien que no estaba en combate PvP no valen Furia ni los bonus sobre controlado o quemado.
+            const opener = !this.inPvp(tgt, now);
+            dmg = rollSpellDamage(spell, p.combat, !opener && p.pvp.fury(now));
+            if (!opener && sp.vsCtrl && tgt.isParalyzed(now)) dmg = Math.round(dmg * pvpVsCtrl(sp.vsCtrl)); // Esquirla, Juicio, Escudo contra un controlado (tope 1,2× en PvP)
+            if (!opener && sp.vsBurn && tgt.burnUntil > now) dmg = Math.round(dmg * sp.vsBurn); // Bola de fuego sobre un quemado
+            if (v.secs > 0 && p.pvp.allowSecs(spell, tgt.playerId, now)) secs = sp.secs ?? 0;
+            this.changeStatus(p, () => breakInvisibility(p.status));
+            if (secs > 0) secs = paralysisSecs(secs, tgt.combat); // la RM (y la resistencia a parálisis) del que recibe acortan la duración
+            if (!this.isEnemyPair(p, tgt)) return;                              // mismo bando o zona segura (antes del CC: no gasta DR en aliados)
+            if (secs > 0) { // DR por tipo de CC (15 s): full / 50 % / 25 % / inmune
+                secs = applyParalysis(tgt.status, now, secs * 1000, STUN_SPELLS.has(spell) ? 'aturdir' : 'paralisis') / 1000;
+                if (secs <= 0) { p.send(M.pvpHit(tgt.playerId, { fx: 'resist', x: tgt.posX, y: tgt.posY, targetId: 0n, dmg: 0, secs: 0, r: 0 })); if (dmg <= 0) return; }
+            }
+            if (dmg > 0) dmg = this.damagePlayer(tgt, dmg, spellDmgKind(spell), p, '', spell === 'ataque' ? '' : spell);              // la vida del que recibe la lleva el server
+            if (dmg > 0) { // efectos de K3: frenar, quemar, curarse
+                if (sp.slow && applySlow(tgt.status, now, sp.slow * 1000) > 0) this.announceStatus(tgt);
+                if (sp.burn) this.burnPlayer(tgt, p);
+                if (sp.lifesteal) this.healPlayer(p, Math.round(dmg * sp.lifesteal));
+                if (sp.refund) this.refundMp(p, sp.refund);
+                if (spellDmgKind(spell) === 'phys' && p.combat.poison > 0 && Math.random() * 100 < p.combat.poison) this.poisonPlayer(tgt, POISON_SECS); // chance de veneno del equipo, como contra los mobs
+            }
+            if (dmg > 0 || secs > 0) p.send(M.pvpHit(p.playerId, { fx: '', x: tgt.posX, y: tgt.posY, targetId: tgt.playerId, dmg, secs, r: 0 })); // para que el que pega vea el número
+        } else if (v.targetId) return; // daño sin hechizo conocido: se descarta
+        this.broadcastNear(p, M.pvpHit(p.playerId, { fx, x, y, targetId: v.targetId, dmg, secs, r }));
+    }
+
+    /** Posición decimal de un jugador (la del último pedido de posición, o el centro de su celda si no se movió desde que cambió de sitio). */
+    private decPos(p: Player): { x: number; y: number } {
+        return p.fCell.x === p.posX && p.fCell.y === p.posY ? { x: p.fx, y: p.fy } : { x: p.posX + 0.5, y: p.posY + 0.5 };
+    }
+
+    /**
+     * Proyectil esquivable: el cliente dice a dónde apunta; el server valida el cast, calcula el vuelo con su propia distancia y
+     * decide el impacto al llegar mirando dónde está el blanco en ese momento (ver @fdn/world projectiles).
+     */
+    private handleProjectileLaunch(p: Player, v: { spell: string; targetId: bigint; aimX: number; aimY: number }): void {
+        const spell = /^[a-z0-9]{0,16}$/.test(v.spell) ? v.spell : '', ps = PROJECTILES[spell], sp = PVP_SPELLS[spell];
+        if (!ps || !sp || p.isDead || !Number.isFinite(v.aimX) || !Number.isFinite(v.aimY) || !this.kitOk(p, spell)) return;
+        const tgt = this.playersById.get(v.targetId);
+        if (!tgt || tgt === p || tgt.disconnected || tgt.isDead || !this.isEnemyPair(p, tgt)) return;
+        const from = this.decPos(p), aim = { x: v.aimX, y: v.aimY };
+        if (Math.hypot(aim.x - from.x, aim.y - from.y) > sp.range + 3) return; // apuntó más lejos de lo que llega el hechizo
+        if (!this.castOk(p, spell, Date.now())) return;                       // consume el cast, igual que un golpe directo
+        const ms = projectileFlightMs(spell, from.x, from.y, aim.x, aim.y);
+        this.broadcastNear(p, M.playerProjectile(p.playerId, spell, from.x, from.y, aim.x, aim.y, ms)); // el que lanza ya lo dibujó él
+        this.playerTimer(p, ms, (w) => w.projectileImpact(p, tgt, spell, aim));
+    }
+
+    /** Llegó el proyectil: pega si el blanco sigue donde se apuntó; si no, erra (y igual cuesta maná y recarga). */
+    private projectileImpact(p: Player, tgt: Player, spell: string, aim: { x: number; y: number }): void {
+        if (p.isDead || this.players.get(p.sessionId) !== p || this.playersById.get(tgt.playerId) !== tgt || tgt.disconnected || tgt.isDead) return;
+        const now = Date.now(), fx = IMPACT_FX[spell] ?? 'splash', tp = this.decPos(tgt);
+        if (projectileHits(spell, aim.x, aim.y, tp.x, tp.y)) return this.resolvePvpHit(p, { fx, x: aim.x, y: aim.y, targetId: tgt.playerId, secs: 0, r: 0, spell }, true);
+        p.pvp.allow(spell, tgt.playerId, now, (c) => this.payMp(p, c));
+        this.broadcastNear(p, M.pvpHit(p.playerId, { fx, x: aim.x, y: aim.y, targetId: 0n, dmg: 0, secs: 0, r: 0 }));
     }
 
     private handleRequestMovement(p: Player, req: { curX: number; curY: number; destX: number; destY: number; dashAttack: boolean }): void {

@@ -49,7 +49,8 @@ function setup() {
     };
     const A = join('caster', { x: 30, y: 20 }, 'solmar', 'mago');
     const B = join('blanco', { x: 33, y: 20 }, 'vhar', 'guerrero');
-    const fire = (spell: string) => pkt(w, A.sid, 'pvpHitRequest', { fx: '', x: B.p.posX, y: B.p.posY, targetId: B.p.playerId, dmg: 9999, secs: 0, r: 0, spell });
+    // el proyectil esquivable se lanza apuntado al blanco y llega después de volar (ver projectile.test.ts)
+    const fire = (spell: string) => { pkt(w, A.sid, 'projectileLaunchRequest', { spell, targetId: B.p.playerId, aimX: B.p.posX + 0.5, aimY: B.p.posY + 0.5 }); };
     return { w, A, B, fire };
 }
 
@@ -67,8 +68,8 @@ test('movimiento: el server fija una sola velocidad (336 ms/celda) e ignora la v
 test('cast: un golpe de hechizo sin cast empezado en el server se descarta', () => {
     const c = clock();
     try {
-        const { B, fire } = setup();
-        const hp = B.p.hp; fire('proyectil');
+        const { w, B, fire } = setup();
+        const hp = B.p.hp; fire('proyectil'); c.advance(1000); w.tick();
         assert.equal(B.p.hp, hp);
     } finally { c.restore(); }
 });
@@ -80,11 +81,11 @@ test('cast: el golpe antes del cast time del server se descarta; después pega',
         const hp = B.p.hp;
         pkt(w, A.sid, 'changePlayerCastSpeedRequest', { castSpeedMs: 200 }); // un cliente modificado pide 200 ms: no existe más
         pkt(w, A.sid, 'spellCastStartRequest', { spellId: 0, spell: 'proyectil' });
-        c.advance(200); fire('proyectil');
+        c.advance(200); fire('proyectil'); c.advance(1000); w.tick();
         assert.equal(B.p.hp, hp, 'a los 200 ms no puede salir (cast de 1,5 s)');
-        c.advance(castMsOf('proyectil')); fire('proyectil');
+        c.advance(castMsOf('proyectil')); fire('proyectil'); c.advance(1000); w.tick();
         assert.ok(B.p.hp < hp, 'terminado el cast, pega');
-        const hp2 = B.p.hp; c.advance(500); fire('proyectil');
+        const hp2 = B.p.hp; c.advance(500); fire('proyectil'); c.advance(1000); w.tick();
         assert.equal(B.p.hp, hp2, 'el cast se consumió: otro golpe necesita otro cast');
     } finally { c.restore(); }
 });
@@ -97,12 +98,12 @@ test('cast: corriendo también se castea; un paso corta el cast que no salió', 
         pkt(w, A.sid, 'playerMovementStateChangeRequest', { runningMode: true });
         pkt(w, A.sid, 'spellCastStartRequest', { spellId: 0, spell: 'proyectil' });
         assert.equal(count(A.log, 'spellCastFailed'), 0, 'corriendo se castea');
-        c.advance(2000); fire('proyectil'); assert.ok(B.p.hp < hp, 'el hechizo salió');
+        c.advance(2000); fire('proyectil'); c.advance(1000); w.tick(); assert.ok(B.p.hp < hp, 'el hechizo salió');
 
         const hp2 = B.p.hp;
         pkt(w, A.sid, 'spellCastStartRequest', { spellId: 0, spell: 'proyectil' });
         c.advance(300); pkt(w, A.sid, 'requestMovement', { curX: A.p.posX, curY: A.p.posY, destX: A.p.posX + 1, destY: A.p.posY, gameWorldId: w.mapId, dashAttack: false });
-        c.advance(2000); fire('proyectil'); assert.equal(B.p.hp, hp2, 'el paso cortó el cast');
+        c.advance(2000); fire('proyectil'); c.advance(1000); w.tick(); assert.equal(B.p.hp, hp2, 'el paso cortó el cast');
     } finally { c.restore(); }
 });
 

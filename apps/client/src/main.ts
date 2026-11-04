@@ -20,7 +20,7 @@ import { useCastStore } from './ui/castStore';
 import { spellTypeOf, type SpellType } from './ui/colors';
 import { chatBus, logToChat, type ChatChannel } from './ui/chatStore';
 import { drawPortalFloor, drawPortalFx, setPortalSheet, PORTAL_CITY, PORTAL_ZONE } from './portal';
-import { stepFree } from '@fdn/world';
+import { stepFree, leadAim, projectileFlightMs } from '@fdn/world';
 import { checkSkill, skillDeniedText, canUseSkill, skillLevel } from '@fdn/world';
 import { DEFAULT_MAP, RECALL, STAT_CAP, classBaseHp, itemDfTotal, itemRmTotal, STAT_DESC, STAT_IDS, STAT_BASE, STAT_RESET_FREE_LVL, statTip, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, traitLabel, traitHpMult, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
 import { UNIQUE_BY_NAME, UP_MAX, UP_MAX_BY_QUALITY, EXTRAS_BY_QUALITY, FX_INFO, JUNK_MATS, MAT_REFORJA, junkValue, reforgeGold, reforgeStones, activeSets, setOfPiece, slotsFor, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, fitsSlot, TALK_RANGE, roleOf, trainingLockedMsg, trainingOfMap, sellPrice, type AttrId, type Base, type KeyId, type Slot, type Stock } from '@fdn/world';
@@ -312,6 +312,11 @@ function onServer(m: ServerPayload) {
             const mob = mobMap.get(m.value.mobId); if (!mob) break;
             turnTo(mob, m.value.tx - mob.x, m.value.ty - mob.y, 0, true); oneShot(mob, 'swing', 0.4);
             if (/arana|spider/.test(mob.sprite ?? '') && dist(mob, P) < 10) sfx('spider-attack', 0.6); // ataque de araña (solo si está cerca mío)
+            break;
+        }
+        case 'playerProjectile': {
+            const v = m.value;
+            if (v.playerId !== myId && arrows.length < 80) arrows.push({ x0: v.fromX, y0: v.fromY, x1: v.toX, y1: v.toY, t0: now(), dur: Math.max(0.08, v.travelMs / 1000), kind: v.spell === 'bola' ? 3 : 2 });
             break;
         }
         case 'mobProjectile': {
@@ -1101,17 +1106,37 @@ function pvpDamage(o: Other, spell: string, fxName: string, secs = 0) {
     if (fxName) efxLocal(fxName, o.x, o.y, 8);
     pvpSend(fxName, o.x, o.y, o.id, spell, secs);
 }
+/** Velocidad conocida del blanco: la última foto que mandó el server (si es reciente) y la anterior. */
+function enemyVelocity(o: Other, T: number): { x: number; y: number; vx: number; vy: number } {
+    const b = o.buf, n = b.length;
+    if (n < 2 || T - b[n - 1].t > 0.25) return { x: n ? b[n - 1].x : o.x, y: n ? b[n - 1].y : o.y, vx: 0, vy: 0 };
+    const a = b[n - 2], c = b[n - 1], dt = Math.max(0.03, c.t - a.t);
+    return { x: c.x, y: c.y, vx: (c.x - a.x) / dt, vy: (c.y - a.y) / dt };
+}
+/**
+ * Proyectil esquivable: se apunta adelantado a donde va a estar el blanco (anticipación lineal), vuela a velocidad fija y el server
+ * decide el impacto al llegar. Si el blanco cambia de rumbo, erra: de eso se trata caderear.
+ */
+function launchProjectile(spell: string, o: Other, fxName: string): boolean {
+    const T = now(), e = enemyVelocity(o, T), lag = 0.05; // lag: lo que tarda en llegar al server lo que veo
+    const a = leadAim(spell, P.x, P.y, e.x + e.vx * lag, e.y + e.vy * lag, e.vx, e.vy);
+    const ms = projectileFlightMs(spell, P.x, P.y, a.x, a.y);
+    net.send({ $case: 'projectileLaunchRequest', value: { spell, targetId: o.id, aimX: a.x, aimY: a.y } });
+    if (arrows.length < 80) arrows.push({ x0: P.x, y0: P.y, x1: a.x, y1: a.y, t0: T, dur: ms / 1000, kind: spell === 'bola' ? 3 : 2 });
+    later(ms / 1000, () => efxLocal(fxName, a.x, a.y, 8)); // el impacto se ve donde se apuntó (errar = cae al piso)
+    return true;
+}
 /** Hechizos de un solo objetivo contra un jugador. */
 function pvpCast(id: string | undefined, o: Other): boolean {
     switch (id) {
-        case 'proyectil': later(dist(P, o) / 11, () => { if (isEnemy(o)) pvpDamage(o, 'proyectil', 'splash'); }); return true;
+        case 'proyectil': return launchProjectile('proyectil', o, 'splash');
         case 'paralisis': pvpDamage(o, 'paralisis', 'stop', 3); return true;
         case 'aturdir': pvpDamage(o, 'aturdir', 'turbulence', 3); return true;
         case 'esquirla': later(dist(P, o) / 12, () => { if (isEnemy(o)) pvpDamage(o, 'esquirla', 'blizz'); }); return true;
         case 'ignicion': pvpDamage(o, 'ignicion', 'flamme'); return true;
         case 'juicio': pvpDamage(o, 'juicio', 'tajo'); return true;
         case 'escudo': pvpDamage(o, 'escudo', 'turbulence', 3); return true;
-        case 'bola': later(dist(P, o) / 9, () => { if (isEnemy(o)) pvpDamage(o, 'bola', 'eruption'); }); return true;
+        case 'bola': return launchProjectile('bola', o, 'eruption');
         case 'golpe': pvpDamage(o, 'golpe', 'crosswind'); return true;
         case 'carga': skillSend('carga', o.id); return true;
         case 'castigo': pvpDamage(o, 'castigo', 'crosswind'); return true;
@@ -1899,6 +1924,16 @@ function render() {
     for (let i = arrows.length - 1; i >= 0; i--) {
         const a = arrows[i], k = (now() - a.t0) / a.dur;
         if (k >= 1) { arrows.splice(i, 1); continue; }
+        if (a.kind >= 2) { // proyectil de hechizo: orbe ardiente con estela, vuela recto a media altura
+            const A2 = iso(a.x0, a.y0), B2 = iso(a.x1, a.y1), big = a.kind === 3, rr = big ? 11 : 7;
+            const at = (u: number) => ({ x: A2.x + (B2.x - A2.x) * u, y: A2.y + (B2.y - A2.y) * u - 26 });
+            const h2 = at(k), t2 = at(Math.max(0, k - 0.18));
+            ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+            ctx.strokeStyle = big ? 'rgba(255,110,40,0.55)' : 'rgba(255,170,70,0.55)'; ctx.lineWidth = rr * 0.9; ctx.beginPath(); ctx.moveTo(t2.x, t2.y); ctx.lineTo(h2.x, h2.y); ctx.stroke();
+            const g2 = ctx.createRadialGradient(h2.x, h2.y, 0, h2.x, h2.y, rr * 1.6); g2.addColorStop(0, '#fff'); g2.addColorStop(0.35, big ? '#ff7a2a' : '#ffb347'); g2.addColorStop(1, 'rgba(255,80,0,0)');
+            ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(h2.x, h2.y, rr * 1.6, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+            continue;
+        }
         const A = iso(a.x0, a.y0), B = iso(a.x1, a.y1), lift = Math.sin(Math.PI * k) * 12 + 22;
         const hx = A.x + (B.x - A.x) * k, hy = A.y + (B.y - A.y) * k - lift, k2 = Math.max(0, k - 0.12);
         const tx = A.x + (B.x - A.x) * k2, ty = A.y + (B.y - A.y) * k2 - (Math.sin(Math.PI * k2) * 12 + 22);

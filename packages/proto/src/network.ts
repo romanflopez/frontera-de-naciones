@@ -146,6 +146,9 @@ export interface ClientMessage {
     /** Movimiento libre (ver PlayerPositionRequest). */
     { $case: "playerPositionRequest"; value: PlayerPositionRequest }
     | //
+    /** Hechizo con proyectil esquivable: el server decide el impacto (ver ProjectileLaunchRequest). */
+    { $case: "projectileLaunchRequest"; value: ProjectileLaunchRequest }
+    | //
     /** Casa de subastas (ver docs/SUBASTAS.md). Rango propio de tags desde 300. */
     { $case: "auctionRequest"; value: AuctionRequest }
     | //
@@ -554,6 +557,9 @@ export interface ServerMessage {
     | //
     /** Movimiento libre: posición decimal de un jugador que veo (ver PlayerPositionUpdate). */
     { $case: "playerPositionUpdate"; value: PlayerPositionUpdate }
+    | //
+    /** Un jugador lanzó un proyectil esquivable (visual; el daño lo decide el server al llegar). */
+    { $case: "playerProjectile"; value: PlayerProjectile }
     | { $case: "mobsSnapshot"; value: MobsSnapshot }
     | { $case: "mobDamaged"; value: MobDamaged }
     | { $case: "mobAttack"; value: MobAttack }
@@ -2106,6 +2112,25 @@ export interface BossPhase {
   enraged: boolean;
 }
 
+/** Lanzar un hechizo con proyectil (Saeta ígnea, Bola de fuego) a un jugador: se apunta a una posición y vuela; pega solo si el blanco sigue ahí al llegar. */
+export interface ProjectileLaunchRequest {
+  spell: string;
+  targetId: bigint;
+  aimX: number;
+  aimY: number;
+}
+
+/** Visual del proyectil de un jugador: sale de (from_x, from_y) y llega a (to_x, to_y) en travel_ms. */
+export interface PlayerProjectile {
+  playerId: bigint;
+  spell: string;
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  travelMs: number;
+}
+
 function createBaseClientMessage(): ClientMessage {
   return { payload: undefined };
 }
@@ -2307,6 +2332,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         break;
       case "playerPositionRequest":
         PlayerPositionRequest.encode(message.payload.value, writer.uint32(10410).fork()).join();
+        break;
+      case "projectileLaunchRequest":
+        ProjectileLaunchRequest.encode(message.payload.value, writer.uint32(10418).fork()).join();
         break;
       case "auctionRequest":
         AuctionRequest.encode(message.payload.value, writer.uint32(2402).fork()).join();
@@ -2986,6 +3014,17 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             };
             continue;
           }
+          case 1302: {
+            if (tag !== 10418) {
+              break;
+            }
+
+            message.payload = {
+              $case: "projectileLaunchRequest",
+              value: ProjectileLaunchRequest.decode(reader, reader.uint32()),
+            };
+            continue;
+          }
           case 300: {
             if (tag !== 2402) {
               break;
@@ -3571,6 +3610,15 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           message.payload = {
             $case: "playerPositionRequest",
             value: PlayerPositionRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "projectileLaunchRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "projectileLaunchRequest",
+            value: ProjectileLaunchRequest.fromPartial(object.payload.value),
           };
         }
         break;
@@ -7568,6 +7616,9 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "playerPositionUpdate":
         PlayerPositionUpdate.encode(message.payload.value, writer.uint32(11210).fork()).join();
         break;
+      case "playerProjectile":
+        PlayerProjectile.encode(message.payload.value, writer.uint32(11218).fork()).join();
+        break;
       case "mobsSnapshot":
         MobsSnapshot.encode(message.payload.value, writer.uint32(962).fork()).join();
         break;
@@ -8329,6 +8380,14 @@ export const ServerMessage: MessageFns<ServerMessage> = {
               $case: "playerPositionUpdate",
               value: PlayerPositionUpdate.decode(reader, reader.uint32()),
             };
+            continue;
+          }
+          case 1402: {
+            if (tag !== 11218) {
+              break;
+            }
+
+            message.payload = { $case: "playerProjectile", value: PlayerProjectile.decode(reader, reader.uint32()) };
             continue;
           }
           case 120: {
@@ -9169,6 +9228,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             $case: "playerPositionUpdate",
             value: PlayerPositionUpdate.fromPartial(object.payload.value),
           };
+        }
+        break;
+      }
+      case "playerProjectile": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "playerProjectile", value: PlayerProjectile.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -25975,6 +26040,230 @@ export const BossPhase: MessageFns<BossPhase> = {
     message.event = object.event ?? "";
     message.text = object.text ?? "";
     message.enraged = object.enraged ?? false;
+    return message;
+  },
+};
+
+function createBaseProjectileLaunchRequest(): ProjectileLaunchRequest {
+  return { spell: "", targetId: 0n, aimX: 0, aimY: 0 };
+}
+
+export const ProjectileLaunchRequest: MessageFns<ProjectileLaunchRequest> = {
+  encode(message: ProjectileLaunchRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.spell !== "") {
+      writer.uint32(10).string(message.spell);
+    }
+    if (message.targetId !== 0n) {
+      if (BigInt.asIntN(64, message.targetId) !== message.targetId) {
+        throw new globalThis.Error("value provided for field message.targetId of type int64 too large");
+      }
+      writer.uint32(16).int64(message.targetId);
+    }
+    if (message.aimX !== 0) {
+      writer.uint32(29).float(message.aimX);
+    }
+    if (message.aimY !== 0) {
+      writer.uint32(37).float(message.aimY);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ProjectileLaunchRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseProjectileLaunchRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.spell = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.targetId = reader.int64() as bigint;
+            continue;
+          }
+          case 3: {
+            if (tag !== 29) {
+              break;
+            }
+
+            message.aimX = reader.float();
+            continue;
+          }
+          case 4: {
+            if (tag !== 37) {
+              break;
+            }
+
+            message.aimY = reader.float();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<ProjectileLaunchRequest>, I>>(base?: I): ProjectileLaunchRequest {
+    return ProjectileLaunchRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ProjectileLaunchRequest>, I>>(object: I): ProjectileLaunchRequest {
+    const message = createBaseProjectileLaunchRequest();
+    message.spell = object.spell ?? "";
+    message.targetId = (object.targetId !== undefined && object.targetId !== null) ? BigInt(object.targetId) : 0n;
+    message.aimX = object.aimX ?? 0;
+    message.aimY = object.aimY ?? 0;
+    return message;
+  },
+};
+
+function createBasePlayerProjectile(): PlayerProjectile {
+  return { playerId: 0n, spell: "", fromX: 0, fromY: 0, toX: 0, toY: 0, travelMs: 0 };
+}
+
+export const PlayerProjectile: MessageFns<PlayerProjectile> = {
+  encode(message: PlayerProjectile, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.playerId !== 0n) {
+      if (BigInt.asIntN(64, message.playerId) !== message.playerId) {
+        throw new globalThis.Error("value provided for field message.playerId of type int64 too large");
+      }
+      writer.uint32(8).int64(message.playerId);
+    }
+    if (message.spell !== "") {
+      writer.uint32(18).string(message.spell);
+    }
+    if (message.fromX !== 0) {
+      writer.uint32(29).float(message.fromX);
+    }
+    if (message.fromY !== 0) {
+      writer.uint32(37).float(message.fromY);
+    }
+    if (message.toX !== 0) {
+      writer.uint32(45).float(message.toX);
+    }
+    if (message.toY !== 0) {
+      writer.uint32(53).float(message.toY);
+    }
+    if (message.travelMs !== 0) {
+      writer.uint32(56).int32(message.travelMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PlayerProjectile {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBasePlayerProjectile();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.playerId = reader.int64() as bigint;
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.spell = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 29) {
+              break;
+            }
+
+            message.fromX = reader.float();
+            continue;
+          }
+          case 4: {
+            if (tag !== 37) {
+              break;
+            }
+
+            message.fromY = reader.float();
+            continue;
+          }
+          case 5: {
+            if (tag !== 45) {
+              break;
+            }
+
+            message.toX = reader.float();
+            continue;
+          }
+          case 6: {
+            if (tag !== 53) {
+              break;
+            }
+
+            message.toY = reader.float();
+            continue;
+          }
+          case 7: {
+            if (tag !== 56) {
+              break;
+            }
+
+            message.travelMs = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<PlayerProjectile>, I>>(base?: I): PlayerProjectile {
+    return PlayerProjectile.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PlayerProjectile>, I>>(object: I): PlayerProjectile {
+    const message = createBasePlayerProjectile();
+    message.playerId = (object.playerId !== undefined && object.playerId !== null) ? BigInt(object.playerId) : 0n;
+    message.spell = object.spell ?? "";
+    message.fromX = object.fromX ?? 0;
+    message.fromY = object.fromY ?? 0;
+    message.toX = object.toX ?? 0;
+    message.toY = object.toY ?? 0;
+    message.travelMs = object.travelMs ?? 0;
     return message;
   },
 };

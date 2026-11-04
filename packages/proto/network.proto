@@ -123,6 +123,8 @@ message ClientMessage {
     MapReady map_ready = 124;
     // Movimiento libre (ver PlayerPositionRequest).
     PlayerPositionRequest player_position_request = 1301;
+    // Hechizo con proyectil esquivable: el server decide el impacto (ver ProjectileLaunchRequest).
+    ProjectileLaunchRequest projectile_launch_request = 1302;
     // Casa de subastas (ver docs/SUBASTAS.md). Rango propio de tags desde 300.
     AuctionRequest auction_request = 300;
     // Depósito por cuenta (ver docs/DEPOSITO.md). Rango propio de tags desde 400.
@@ -509,6 +511,8 @@ message ServerMessage {
     CharacterList character_list = 1400;
     // Movimiento libre: posición decimal de un jugador que veo (ver PlayerPositionUpdate).
     PlayerPositionUpdate player_position_update = 1401;
+    // Un jugador lanzó un proyectil esquivable (visual; el daño lo decide el server al llegar).
+    PlayerProjectile player_projectile = 1402;
     MobsSnapshot mobs_snapshot = 120;
     MobDamaged mob_damaged = 121;
     MobAttack mob_attack = 122;
@@ -1790,4 +1794,22 @@ message BossPhase {
   string event = 2;
   string text = 3;
   bool enraged = 4;
+}
+
+/** Lanzar un hechizo con proyectil (Saeta ígnea, Bola de fuego) a un jugador: se apunta a una posición y vuela; pega solo si el blanco sigue ahí al llegar. */
+message ProjectileLaunchRequest {
+  string spell = 1;
+  int64 target_id = 2;
+  float aim_x = 3;
+  float aim_y = 4;
+}
+/** Visual del proyectil de un jugador: sale de (from_x, from_y) y llega a (to_x, to_y) en travel_ms. */
+message PlayerProjectile {
+  int64 player_id = 1;
+  string spell = 2;
+  float from_x = 3;
+  float from_y = 4;
+  float to_x = 5;
+  float to_y = 6;
+  int32 travel_ms = 7;
 }
