@@ -278,6 +278,30 @@ export function initLoginUI(ctx: FlowCtx) {
     };
     $('altBtn').addEventListener('click', () => { setReg(!reg); ($('nameIn') as HTMLInputElement).focus(); });
 
+    // Créditos: la licencia del arte de Flare (CC-BY-SA 3.0) obliga a mostrar la atribución de una forma razonable para el medio,
+    // así que los archivos de atribución se leen y se muestran dentro del juego, no solo como .txt en /assets.
+    let credLoaded = false;
+    const abrirCreditos = async () => {
+        $('credits').hidden = false;
+        if (credLoaded) return;
+        const pre = $('credText');
+        try {
+            const partes = await Promise.all(['CREDITS.txt', 'CREDITS-CC0.txt'].map(async (f) => {
+                const r = await fetch(`assets/${f}`);
+                if (!r.ok) throw new Error(f);
+                return r.text();
+            }));
+            pre.textContent = partes.join('\n\n' + '─'.repeat(60) + '\n\n');
+            credLoaded = true;
+        } catch {
+            pre.textContent = 'No se pudieron cargar los créditos. Están en assets/CREDITS.txt y assets/CREDITS-CC0.txt.';
+        }
+    };
+    $('credBtn').addEventListener('click', () => void abrirCreditos());
+    $('credClose').addEventListener('click', () => { $('credits').hidden = true; });
+    $('credits').addEventListener('click', (e) => { if (e.target === $('credits')) $('credits').hidden = true; });
+    addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('credits').hidden) $('credits').hidden = true; });
+
     return {
         show,
         /** Antes de conectar: en modo "crear cuenta" las dos contraseñas tienen que coincidir. */

@@ -1,10 +1,34 @@
 # Auditoría de licencias y procedencia (previa al lanzamiento público)
 
-Fecha: 2026-10-30. Alcance: todo el árbol de trabajo y el historial completo de git (`git log --all`, 73 commits).
+Fecha: 2026-10-30. **Revisión de estado: 2026-11-03** (ver sección 0 bis). Alcance: todo el árbol de trabajo y el historial completo de git.
 
 > **Aviso.** Es una auditoría técnica hecha leyendo el repo y las páginas públicas de cada pack. **No es asesoramiento legal.**
 > Antes de lanzar (y sobre todo antes de cobrar cosméticos) conviene que lo revise un abogado con experiencia en propiedad intelectual y videojuegos.
 > Lo que figura como CONFIRMADA se basa en un archivo de licencia incluido en el repo o en la página oficial del autor consultada hoy; lo demás está marcado DUDOSA.
+
+## 0 bis. Estado al 3/11/2026
+
+Desde la auditoría original se resolvieron varios bloqueantes. Lo que sigue abierto está en la sección 6, actualizada.
+
+| Bloqueante original | Estado hoy |
+|---|---|
+| `reference/server-csharp/**` (código y datos de Helbreath) | **Resuelto:** ya no está en el árbol de trabajo |
+| `apps/server/data/catalog/*.json` (copia exacta de datos de Helbreath) | **Resuelto:** ya no existen; nunca llegaron a estar versionados en git |
+| Nombres de terceros en código y textos | **Resuelto y protegido:** `apps/server/test/legal.test.ts` falla si aparece alguno |
+| Atribución CC-BY-SA visible dentro del juego | **Resuelto (3/11):** botón "Créditos" en el login que muestra `CREDITS.txt` y `CREDITS-CC0.txt`, con test que lo cuida |
+| Avisos de licencia de las dependencias | **Resuelto (3/11):** `THIRD_PARTY_NOTICES.txt` generado con `pnpm legal:notices`, con test |
+| Repo público | **Abierto:** sigue público |
+| Bosses 3D (`barbaro`, `arana`, `golem`, `demonio`) | **Abierto:** siguen en el repo, origen sin probar |
+| `fantasy_house.webp` | **Abierto:** sigue en el repo y en uso (`meta.json` → `buildings`) |
+| Efectos TOMAS (`fx.webp`) | **Abierto:** licencia sin verificar |
+| Íconos de hechizos generados con IA | **Abierto:** falta registrar herramienta y términos |
+| Texturas de Craftpix (`ui/craftpix/*`) | **Abierto:** commiteadas a propósito, repo todavía público |
+| Efectos de Frostwindz (`fx_priv.*`) | **Abierto (nuevo):** la licencia prohíbe publicarlos y están commiteados de forma temporal |
+| Marca y nombre | **Abierto:** sin búsqueda de marca. El juego pasó a llamarse ERIS |
+
+**Novedad que sube la apuesta (3/11):** se decidió distribuir ERIS como **aplicación de escritorio** (Steam como destino). Distribuir
+un ejecutable comercial es más exigente que tener un repo: los packs con licencia de "no redistribución" y el arte de origen no
+probado pasan de ser un riesgo de repositorio a un riesgo de producto. Conviene cerrar la sección 6 **antes** de publicar en Steam.
 
 Leyenda: **Uso comercial** sí / no / dudoso. **Riesgo** alto / medio / bajo. **Acción**: mantener / reemplazar / pedir permiso / eliminar.
 

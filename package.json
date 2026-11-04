@@ -17,7 +17,8 @@
         "sets:dev": "python3 tools/src/sets/build_sets.py --fast",
         "maps:tiled": "pnpm --filter @fdn/tools maps:tiled",
         "proto": "pnpm --filter @fdn/proto generate",
-        "typecheck": "pnpm -r typecheck"
+        "typecheck": "pnpm -r typecheck",
+        "legal:notices": "node tools/src/legal/notices.mjs"
     },
     "pnpm": {
         "onlyBuiltDependencies": [

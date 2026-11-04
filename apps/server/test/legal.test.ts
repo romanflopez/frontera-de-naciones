@@ -48,3 +48,31 @@ test('no vuelven los catálogos ni la carpeta de referencia del server original'
     assert.equal(existsSync(join(ROOT, 'apps/server/data/catalog')), false, 'apps/server/data/catalog no debe existir');
     assert.equal(existsSync(join(ROOT, 'reference/server-csharp')), false, 'reference/server-csharp no debe existir');
 });
+
+/**
+ * La atribución de CC-BY-SA tiene que estar al alcance del jugador, no solo en un .txt dentro de /assets. Estos tests cuidan que
+ * la pantalla de créditos siga existiendo y que los archivos que muestra estén donde el cliente los busca.
+ */
+test('la atribución es visible desde el juego y los archivos de créditos existen', () => {
+    const html = readFileSync(join(ROOT, 'apps/client/index.html'), 'utf8');
+    assert.match(html, /id="credBtn"/, 'falta el botón de Créditos en el login');
+    assert.match(html, /id="credits"/, 'falta el panel de créditos');
+
+    for (const f of ['CREDITS.txt', 'CREDITS-CC0.txt']) {
+        const p = join(ROOT, 'apps/client/public/assets', f);
+        assert.ok(existsSync(p), `falta ${f}`);
+        assert.ok(readFileSync(p, 'utf8').trim().length > 200, `${f} está vacío`);
+    }
+
+    // CC-BY-SA 3.0 exige nombrar la obra, los autores y la licencia, e indicar que se modificó.
+    const cred = readFileSync(join(ROOT, 'apps/client/public/assets/CREDITS.txt'), 'utf8');
+    for (const req of ['CC-BY-SA', 'Flare', 'Bellanger', 'creativecommons.org']) {
+        assert.ok(cred.includes(req), `CREDITS.txt no menciona "${req}"`);
+    }
+});
+
+test('los avisos de las dependencias están generados', () => {
+    const p = join(ROOT, 'apps/client/public/THIRD_PARTY_NOTICES.txt');
+    assert.ok(existsSync(p), 'falta THIRD_PARTY_NOTICES.txt: corré pnpm legal:notices');
+    assert.ok(readFileSync(p, 'utf8').includes('@bufbuild/protobuf'), 'los avisos no cubren las dependencias que se distribuyen');
+});

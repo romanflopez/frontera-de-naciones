@@ -172,3 +172,13 @@
 #login .selart,#login .crart{pointer-events:none} /* decorativos: no tapan los botones de abajo */
 /* el chat flotante no va sobre las pantallas de cuenta / personajes (tapaba VOLVER y el formulario de creación) */
 body:has(#login:not([hidden])) #chatRoot{display:none}
+
+/* ===== Créditos y licencias =====
+   CC-BY-SA 3.0 pide que la atribución se muestre de una forma razonable para el medio; un .txt dentro de /assets no alcanza. */
+#login .sep{opacity:.45;margin:0 4px}
+#credits{position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:rgba(4,2,10,.82);backdrop-filter:blur(3px)}
+#credits[hidden]{display:none}
+#credits .credbox{width:min(760px,92vw);max-height:84vh;display:flex;flex-direction:column;gap:14px;padding:22px;background:linear-gradient(180deg,rgba(22,12,34,.97),rgba(12,6,20,.97));border:1px solid #7a52b8;border-radius:10px;box-shadow:0 18px 60px rgba(0,0,0,.6)}
+#credits h2{margin:0;font:700 20px var(--f-cinzel);color:#f0e4ff;letter-spacing:.04em}
+#credits pre{flex:1;overflow:auto;margin:0;padding:14px;font:400 12px/1.6 ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:#d9ccea;white-space:pre-wrap;word-break:break-word;background:rgba(8,3,14,.75);border:1px solid #3d2a5c;border-radius:6px}
+#credits .lbtn{align-self:center}

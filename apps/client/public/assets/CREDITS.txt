@@ -1,4 +1,4 @@
-Créditos de Frontera de Naciones (arte, fuentes y código de terceros)
+Créditos de ERIS (arte, fuentes y código de terceros)
 
 Este archivo reúne las atribuciones que exigen las licencias de los materiales de terceros que SÍ están confirmados.
 El estado de verificación de cada material (y lo que todavía falta confirmar) está en docs/LICENCIAS_AUDITORIA.md.
@@ -13,8 +13,9 @@ Clint Bellanger, Holly Daniel, Justin Jacobs, Justin Nichol, Jessica "Zeldyn" Co
 Stefan Beller. La atribución por archivo está en https://github.com/flareteam/flare-game/wiki/Credits
 Licencia: Creative Commons Atribución-CompartirIgual 3.0 (CC-BY-SA 3.0), https://creativecommons.org/licenses/by-sa/3.0/
 
-Archivos de este juego derivados de ese arte (son adaptaciones: recortados, combinados, reordenados en atlas y escalados a la mitad
-con tools/src/flare/atlas.ts) y que se distribuyen bajo la misma licencia, CC-BY-SA 3.0:
+Archivos de este juego derivados de ese arte (son adaptaciones: recortados, combinados y reordenados en atlas con
+tools/src/flare/atlas.ts y tools/src/flare/mapatlas.ts; los tiles de mapa y los bichos van al tamaño original del arte de Flare y
+las piezas del muñeco por capas, a la mitad) y que se distribuyen bajo la misma licencia, CC-BY-SA 3.0:
   - world.webp
   - paper/*.webp (piezas de equipo y cuerpo del personaje)
   - goblin.webp, goblin_elite.webp, zombie.webp, skeleton.webp, skeleton_mage.webp, antlion.webp, fire_ant.webp, wyvern.webp, minotaur.webp
