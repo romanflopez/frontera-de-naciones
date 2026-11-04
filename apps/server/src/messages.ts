@@ -218,6 +218,10 @@ export const arenaInfo = (v: Omit<ArenaInfo, 'queuedMs' | 'penaltyMs'> & { queue
 export const arenaInvited = (mode: string, expiresMs: number, arena = ''): ServerMessage => msg({ $case: 'arenaInvited', value: { mode, expiresMs: BigInt(expiresMs), arena } });
 export const partyInvited = (fromName: string, expiresMs: number, partyId = ''): ServerMessage => msg({ $case: 'partyInvited', value: { fromName, expiresMs: BigInt(expiresMs), partyId } });
 export const partyStatsUpdate = (name: string, hp: number, mp: number): ServerMessage => msg({ $case: 'partyStatsUpdate', value: { name, hp, mp } });
+/** Estado de la guild (docs/GUILDS.md); null = no tiene guild. */
+export const guildState = (g: { id: string; name: string; tag: string; faction: string; crest: string; members: { name: string; rank: string; online: boolean; level: number; cls: string; map: string; lastSeenMs: number; joinedMs: number }[]; maxMembers: number; motd: string; myRank: string; createdMs: number } | null): ServerMessage =>
+    msg({ $case: 'guildState', value: g ? { ...g, createdMs: BigInt(g.createdMs), members: g.members.map((m) => ({ ...m, lastSeenMs: BigInt(m.lastSeenMs), joinedMs: BigInt(m.joinedMs) })) } : { id: '', members: [] } });
+export const guildInvited = (fromName: string, guildName: string, tag: string, expiresMs: number): ServerMessage => msg({ $case: 'guildInvited', value: { fromName, guildName, tag, expiresMs: BigInt(expiresMs) } });
 
 /** El server no aceptó el inicio del cast (corriendo, paralizado o muerto). */
 /** Canal y recarga del Segundo aliento ('aliento') o del bloqueo de pociones ('pocion'), para el que lo usa (K6). */

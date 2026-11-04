@@ -36,6 +36,7 @@ import { initLoginUI } from './loginui.ts';
 import { createMinimap, type Minimap } from './minimap.ts';
 import { createAuctionUI } from './auction.ts';
 import { createDepositUI } from './deposit.ts';
+import { createGuildUI } from './guild.ts';
 import { createTradeUI } from './trade.ts';
 import { createCursor } from './cursor.ts';
 import { installErrorReporting, watchForNewVersion } from './ops.ts';
@@ -359,6 +360,8 @@ function onServer(m: ServerPayload) {
         case 'combatTextEvent': onCombatText(m.value); break;
         case 'partyStatsUpdate': updatePartyStats(m.value.name, m.value.hp, m.value.mp); break;
         case 'partyInvited': showPartyInvite(m.value.fromName, Number(m.value.expiresMs)); break;
+        case 'guildState': guild.onState(m.value); deposit.refresh(); break; // docs/GUILDS.md
+        case 'guildInvited': guild.onInvited(m.value.fromName, m.value.guildName, m.value.tag, Number(m.value.expiresMs)); break;
         case 'arenaInvited': showArenaInvite(m.value.mode, Number(m.value.expiresMs)); break;
         case 'arenaInfo': renderArena(m.value); break;
         case 'econResult': deposit.onResult(m.value.ok, m.value.text); if (m.value.ok) { log(esc(m.value.text), ['daily_done', 'quest_ready'].includes(m.value.code)); if (m.value.code === 'daily_done') notify('Encargo cumplido', m.value.text); else if (m.value.code === 'quest_ready') notify('Misión', m.value.text); } else { toast(m.value.text); log(esc(m.value.text)); } break;
@@ -1490,10 +1493,10 @@ cv.addEventListener('pointercancel', () => { holding = false; });
 cv.addEventListener('pointermove', (e) => { const r = cv.getBoundingClientRect(); mouse = { x: e.clientX - r.left, y: e.clientY - r.top }; });
 cv.addEventListener('pointerleave', () => { mouse = { x: -1, y: -1 }; });
 
-// ---------- chat por canales: Global, Nación (tu facción), Party; Guild llega más adelante ----------
+// ---------- chat por canales: Global, Nación (tu facción), Party y Guild ----------
 const CHAT_NET = new Set<ChatChannel>(['global', 'comercio', 'area', 'party', 'guild', 'nacion']);
 function chatChannel(c: string): ChatChannel { const k = (c || 'global') as ChatChannel; return CHAT_NET.has(k) ? k : 'global'; }
-const CHAT_HELP = () => `Comandos: /meditar, /diag (fps, ping y correcciones de movimiento)${DEBUG ? ', /look' : ''}; chat: /g global, /c comercio, /a área, /n nación, /p party, /gu guild (pronto); party: /invitar /aceptar /rechazar /salir /expulsar /lider; arena: /arena (2v2, 3v3, salir, aceptar, rechazar, ranking, rating)`;
+const CHAT_HELP = () => `Comandos: /meditar, /diag (fps, ping y correcciones de movimiento)${DEBUG ? ', /look' : ''}; chat: /g global, /c comercio, /a área, /n nación, /p party, /gu guild; party: /invitar /aceptar /rechazar /salir /expulsar /lider; guild: /guild (crear <nombre> <ETIQUETA>, invitar, aceptar, rechazar, salir, expulsar, ascender, bajar, lider, lema, disolver; O abre la ventana); arena: /arena (2v2, 3v3, salir, aceptar, rechazar, ranking, rating)`;
 /** Lo que se escribe en el ChatBox: comandos locales, o mensaje al server por el canal de la pestaña (o el del prefijo). */
 chatBus.on('chat:send', ({ text, channel }) => {
     cv.focus({ preventScroll: true });
@@ -1502,6 +1505,7 @@ chatBus.on('chat:send', ({ text, channel }) => {
     if (/^\/diag$/i.test(text)) { diag.toggle(); return; }
     if (DEBUG && /^\/look(\s|$)/i.test(text)) { lookCommand(text); return; }
     if (partyCommand(text)) return;
+    if (guildCommand(text)) return;
     if (/^\/gm(\s|$)/i.test(text)) { net.send({ $case: 'chatMessageSendRequest', value: { message: text } }); return; } // comandos de GM: los resuelve el server (FDN_GM)
     if (/^\/arena(\s|$)/i.test(text)) { net.send({ $case: 'chatMessageSendRequest', value: { message: text } }); return; } // arenas 2v2 / 3v3: los resuelve el server
     const pre = /^\/(gu|g|n|p|a|c)\s+/i.exec(text);
@@ -1517,6 +1521,22 @@ function partyCommand(text: string): boolean {
     if ((action === 'invite' || action === 'kick' || action === 'leader') && !m[2]) { log(`Falta el nombre: /${m[1]} nombre`); return true; }
     net.send({ $case: 'partyRequest', value: { action, name: (m[2] ?? '').trim() } }); return true;
 }
+// ---------- guild (docs/GUILDS.md): /guild <acción> [nombre] [resto] ----------
+const GUILD_CMDS: Record<string, string> = { crear: 'create', invitar: 'invite', inv: 'invite', aceptar: 'accept', rechazar: 'decline', salir: 'leave', expulsar: 'kick', ascender: 'promote', bajar: 'demote', lider: 'leader', lema: 'motd', disolver: 'disband', info: 'info' };
+function guildCommand(text: string): boolean {
+    const m = /^\/guild(?:\s+(\w+))?(?:\s+(.+))?$/i.exec(text); if (!m) return false;
+    if (!m[1]) { guild.toggle(); return true; }
+    const action = GUILD_CMDS[m[1].toLowerCase()]; if (!action) { log('Guild: /guild crear <nombre> <ETIQUETA> · invitar <nombre> · aceptar · rechazar · salir · expulsar <nombre> · ascender <nombre> · bajar <nombre> · lider <nombre> · lema <texto> · disolver. Sin nada abre la ventana (también con O).'); return true; }
+    const rest = (m[2] ?? '').trim();
+    if (action === 'create') { const c = /^(.+?)\s+([A-Za-z0-9]{2,4})$/.exec(rest); if (!c) { log('Usá /guild crear <nombre> <ETIQUETA de 2 a 4 letras>, por ejemplo: /guild crear Los Cuervos CRV'); return true; } net.send({ $case: 'guildRequest', value: { action, name: c[1], arg: c[2] } }); return true; }
+    if (action === 'motd') { net.send({ $case: 'guildRequest', value: { action, name: '', arg: rest } }); return true; }
+    if (['invite', 'kick', 'promote', 'demote', 'leader'].includes(action) && !rest) { log(`Falta el nombre: /guild ${m[1]} nombre`); return true; }
+    net.send({ $case: 'guildRequest', value: { action, name: rest, arg: '' } }); return true;
+}
+/** Etiqueta de guild de otro jugador: la 4.ª parte del perfil, que pone el server. */
+const guildTagOf = (profile: string) => profile.split(';')[3] ?? '';
+const taggedName = (name: string, tag: string) => (tag ? `[${tag}] ${name}` : name);
+
 type PartyRow = { name: string; level: number; hp: number; maxHp: number; mp: number; maxMp: number; map: string; leader: boolean; online: boolean };
 /** Filas del panel por nombre: los cambios de hp/mp tocan solo el ancho de las barras (con transición CSS), sin reescribir el panel. */
 const partyRows = new Map<string, { m: PartyRow; el: HTMLElement }>();
@@ -1633,6 +1653,7 @@ window.addEventListener('keydown', (e) => {
     }
     if (e.key === 'i' || e.key === 'I') toggleBag();
     if (e.key === 'c' || e.key === 'C') toggleChar();
+    if (e.key === 'o' || e.key === 'O') guild.toggle();
     if (e.key === 'l' || e.key === 'L') toggleQuestLog();
     if (e.key === 'p' || e.key === 'P') toggleSpellBook();
     if (e.key === 'Escape') { if (P.casting || P.ready) cancelCast('Hechizo cancelado.'); else P.target = null; }
@@ -1918,8 +1939,8 @@ function render() {
         } } });
     objs.sort((a, b) => a.d - b.d).forEach((o) => o.f());
     // nombres arriba de todo
-    for (const o of others.values()) { if (unseen(o)) continue; const p = iso(o.x, o.y); nameTag(o.name, p.x, p.y - 70, factionCol(o.profile.split(';')[0]), o.gone ? 0.5 : 1); if (o.maxHp && o.hp !== undefined && (o.hp < o.maxHp || (o.shield ?? 0) > 0)) { const f = Math.max(0, o.hp / o.maxHp); ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - 17, p.y - 66, 34, 5); ctx.fillStyle = isEnemy(o) ? '#d9443a' : '#58b85a'; ctx.fillRect(p.x - 16, p.y - 65, 32 * f, 3); if ((o.shield ?? 0) > 0) { ctx.fillStyle = '#9fd8ff'; ctx.fillRect(p.x - 16, p.y - 65, 32 * Math.min(1, o.shield! / o.maxHp), 1.5); } } }
-    { const p = iso(P.x, P.y); nameTag(P.name, p.x, p.y - 70, factionCol(selectedFaction)); }
+    for (const o of others.values()) { if (unseen(o)) continue; const p = iso(o.x, o.y); nameTag(taggedName(o.name, guildTagOf(o.profile)), p.x, p.y - 70, factionCol(o.profile.split(';')[0]), o.gone ? 0.5 : 1); if (o.maxHp && o.hp !== undefined && (o.hp < o.maxHp || (o.shield ?? 0) > 0)) { const f = Math.max(0, o.hp / o.maxHp); ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - 17, p.y - 66, 34, 5); ctx.fillStyle = isEnemy(o) ? '#d9443a' : '#58b85a'; ctx.fillRect(p.x - 16, p.y - 65, 32 * f, 3); if ((o.shield ?? 0) > 0) { ctx.fillStyle = '#9fd8ff'; ctx.fillRect(p.x - 16, p.y - 65, 32 * Math.min(1, o.shield! / o.maxHp), 1.5); } } }
+    { const p = iso(P.x, P.y); nameTag(taggedName(P.name, guild.state?.tag ?? ''), p.x, p.y - 70, factionCol(selectedFaction)); }
     drawPortalLabels(); drawLinkLabels();
     for (const n of MAP.npcs) {
         const p = iso(n.x + 0.5, n.y + 0.5);
@@ -2695,7 +2716,10 @@ const auction = createAuctionUI({ send: (p) => net.send(p), bag: () => P.bag, go
 /** Depósito por cuenta (ventana propia en deposit.ts; el server valida todo, ver docs/DEPOSITO.md). */
 /** Dar e Intercambiar entre jugadores (ventana propia en trade.ts; el server valida todo, ver docs/INTERCAMBIO.md). */
 const trade = createTradeUI({ send: (p) => net.send(p), bag: () => P.bag, gold: () => P.gold, fromInv: itemFromInv, icon: ico, attrText, esc, fmt: fmtNum, toast });
-const deposit = createDepositUI({ send: (p) => net.send(p), bag: () => P.bag, gold: () => P.gold, pots: () => pots, keys: () => Q.keys, shards: () => Q.shards, fromInv: itemFromInv, icon: ico, attrText, esc, fmt: fmtNum, requestClose: () => closeShop() });
+/** Guild (ventana propia en guild.ts; el server valida todo, ver docs/GUILDS.md). El cofre compartido es una pestaña del depósito. */
+const guild = createGuildUI({ send: (p) => net.send(p), esc, me: () => P.name, mapName: (id) => getMapDef(id)?.name ?? id, toast });
+const deposit = createDepositUI({ send: (p) => net.send(p), bag: () => P.bag, gold: () => P.gold, pots: () => pots, keys: () => Q.keys, shards: () => Q.shards, fromInv: itemFromInv, icon: ico, attrText, esc, fmt: fmtNum, requestClose: () => closeShop(), guild: () => (guild.state ? { name: guild.state.name, tag: guild.state.tag } : null) });
+$('openGuild').addEventListener('click', () => guild.toggle());
 /** Burbuja de saludo del NPC (textura NPC Bubble del pack), sobre su cabeza durante unos segundos; sigue a la cámara. */
 let bubble: { n: Npc; until: number } | null = null;
 function showBubble(n: Npc, title: string, text: string, secs = 5) {

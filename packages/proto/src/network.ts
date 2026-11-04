@@ -172,6 +172,9 @@ export interface ClientMessage {
     | //
     /** Dar e Intercambiar entre jugadores (ver docs/INTERCAMBIO.md). Rango propio de tags desde 1300. */
     { $case: "tradeRequest"; value: TradeRequest }
+    | //
+    /** Guilds (ver docs/GUILDS.md). Rango propio de tags desde 1500. */
+    { $case: "guildRequest"; value: GuildRequest }
     | undefined;
 }
 
@@ -627,6 +630,10 @@ export interface ServerMessage {
     /** Dar e Intercambiar entre jugadores (ver docs/INTERCAMBIO.md). Rango propio de tags desde 1300. */
     { $case: "tradeState"; value: TradeState }
     | { $case: "tradeInvite"; value: TradeInvite }
+    | //
+    /** Guilds (ver docs/GUILDS.md). Rango propio de tags desde 1500. */
+    { $case: "guildState"; value: GuildState }
+    | { $case: "guildInvited"; value: GuildInvited }
     | undefined;
 }
 
@@ -1977,6 +1984,8 @@ export interface DepositRequest {
   amount: number;
   stack: string;
   opId: number;
+  /** '' = depósito de la cuenta; 'guild' = cofre compartido de la guild (ver docs/GUILDS.md). */
+  scope: string;
 }
 
 export interface DepositStack {
@@ -1984,13 +1993,68 @@ export interface DepositStack {
   qty: number;
 }
 
-/** Contenido del depósito de la cuenta (se manda al abrir y después de cada acción). */
+/** Contenido del depósito de la cuenta (se manda al abrir y después de cada acción). Con scope = 'guild' es el cofre de la guild. */
 export interface DepositState {
   items: InvItem[];
   gold: number;
   stacks: DepositStack[];
   capacity: number;
   stackMax: number;
+  scope: string;
+  /** Cofre de guild: últimos movimientos ("Ana guardó Mandoble"), del más nuevo al más viejo. */
+  log: string[];
+  /** Cofre de guild: tu rango te deja retirar (líder y oficiales). */
+  canTake: boolean;
+}
+
+/**
+ * Pedido de guild. action:
+ *   create  = crear (name = nombre de la guild, arg = etiqueta de 2 a 4 letras); cuesta oro y pide nivel mínimo.
+ *   invite  = invitar al personaje `name` (líder y oficiales); accept / decline = responder a la invitación pendiente.
+ *   leave   = salir; kick = expulsar a `name`; promote / demote = subir o bajar de rango a `name`; leader = ceder el liderazgo a `name`.
+ *   crest   = cambiar el escudo (arg = "forma,fondo,figura,símbolo", índices); motd = cambiar el lema (arg); disband = disolver (solo el líder, cofre vacío).
+ *   info    = pedir el estado (GuildState).
+ */
+export interface GuildRequest {
+  action: string;
+  name: string;
+  arg: string;
+}
+
+export interface GuildMember {
+  name: string;
+  /** 'lider' | 'oficial' | 'miembro' */
+  rank: string;
+  online: boolean;
+  level: number;
+  cls: string;
+  map: string;
+  /** Última conexión (epoch ms); 0 = conectado ahora. */
+  lastSeenMs: bigint;
+  joinedMs: bigint;
+}
+
+/** Estado completo de tu guild (al entrar, al cambiar algo y cuando se conecta o desconecta un miembro). id vacío = no tenés guild. */
+export interface GuildState {
+  id: string;
+  name: string;
+  tag: string;
+  faction: string;
+  /** "forma,fondo,figura,símbolo" (índices; el cliente dibuja el escudo). */
+  crest: string;
+  members: GuildMember[];
+  maxMembers: number;
+  motd: string;
+  myRank: string;
+  createdMs: bigint;
+}
+
+/** Te invitaron a una guild. */
+export interface GuildInvited {
+  fromName: string;
+  guildName: string;
+  tag: string;
+  expiresMs: bigint;
 }
 
 /**
@@ -2359,6 +2423,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         break;
       case "tradeRequest":
         TradeRequest.encode(message.payload.value, writer.uint32(10402).fork()).join();
+        break;
+      case "guildRequest":
+        GuildRequest.encode(message.payload.value, writer.uint32(12002).fork()).join();
         break;
     }
     return writer;
@@ -3089,6 +3156,14 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "tradeRequest", value: TradeRequest.decode(reader, reader.uint32()) };
             continue;
           }
+          case 1500: {
+            if (tag !== 12002) {
+              break;
+            }
+
+            message.payload = { $case: "guildRequest", value: GuildRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -3668,6 +3743,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "tradeRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "tradeRequest", value: TradeRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "guildRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "guildRequest", value: GuildRequest.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -7742,6 +7823,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "tradeInvite":
         TradeInvite.encode(message.payload.value, writer.uint32(10410).fork()).join();
         break;
+      case "guildState":
+        GuildState.encode(message.payload.value, writer.uint32(12002).fork()).join();
+        break;
+      case "guildInvited":
+        GuildInvited.encode(message.payload.value, writer.uint32(12010).fork()).join();
+        break;
     }
     return writer;
   },
@@ -8724,6 +8811,22 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "tradeInvite", value: TradeInvite.decode(reader, reader.uint32()) };
             continue;
           }
+          case 1500: {
+            if (tag !== 12002) {
+              break;
+            }
+
+            message.payload = { $case: "guildState", value: GuildState.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 1501: {
+            if (tag !== 12010) {
+              break;
+            }
+
+            message.payload = { $case: "guildInvited", value: GuildInvited.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -9486,6 +9589,18 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "tradeInvite": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "tradeInvite", value: TradeInvite.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "guildState": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "guildState", value: GuildState.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "guildInvited": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "guildInvited", value: GuildInvited.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -24660,7 +24775,7 @@ export const AuctionHistory: MessageFns<AuctionHistory> = {
 };
 
 function createBaseDepositRequest(): DepositRequest {
-  return { npcId: "", action: "", uid: 0, amount: 0, stack: "", opId: 0 };
+  return { npcId: "", action: "", uid: 0, amount: 0, stack: "", opId: 0, scope: "" };
 }
 
 export const DepositRequest: MessageFns<DepositRequest> = {
@@ -24682,6 +24797,9 @@ export const DepositRequest: MessageFns<DepositRequest> = {
     }
     if (message.opId !== 0) {
       writer.uint32(48).uint32(message.opId);
+    }
+    if (message.scope !== "") {
+      writer.uint32(58).string(message.scope);
     }
     return writer;
   },
@@ -24747,6 +24865,14 @@ export const DepositRequest: MessageFns<DepositRequest> = {
             message.opId = reader.uint32();
             continue;
           }
+          case 7: {
+            if (tag !== 58) {
+              break;
+            }
+
+            message.scope = reader.string();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -24770,6 +24896,7 @@ export const DepositRequest: MessageFns<DepositRequest> = {
     message.amount = object.amount ?? 0;
     message.stack = object.stack ?? "";
     message.opId = object.opId ?? 0;
+    message.scope = object.scope ?? "";
     return message;
   },
 };
@@ -24842,7 +24969,7 @@ export const DepositStack: MessageFns<DepositStack> = {
 };
 
 function createBaseDepositState(): DepositState {
-  return { items: [], gold: 0, stacks: [], capacity: 0, stackMax: 0 };
+  return { items: [], gold: 0, stacks: [], capacity: 0, stackMax: 0, scope: "", log: [], canTake: false };
 }
 
 export const DepositState: MessageFns<DepositState> = {
@@ -24861,6 +24988,15 @@ export const DepositState: MessageFns<DepositState> = {
     }
     if (message.stackMax !== 0) {
       writer.uint32(40).int32(message.stackMax);
+    }
+    if (message.scope !== "") {
+      writer.uint32(50).string(message.scope);
+    }
+    for (const v of message.log) {
+      writer.uint32(58).string(v!);
+    }
+    if (message.canTake !== false) {
+      writer.uint32(64).bool(message.canTake);
     }
     return writer;
   },
@@ -24918,6 +25054,30 @@ export const DepositState: MessageFns<DepositState> = {
             message.stackMax = reader.int32();
             continue;
           }
+          case 6: {
+            if (tag !== 50) {
+              break;
+            }
+
+            message.scope = reader.string();
+            continue;
+          }
+          case 7: {
+            if (tag !== 58) {
+              break;
+            }
+
+            message.log.push(reader.string());
+            continue;
+          }
+          case 8: {
+            if (tag !== 64) {
+              break;
+            }
+
+            message.canTake = reader.bool();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -24940,6 +25100,506 @@ export const DepositState: MessageFns<DepositState> = {
     message.stacks = object.stacks?.map((e) => DepositStack.fromPartial(e)) || [];
     message.capacity = object.capacity ?? 0;
     message.stackMax = object.stackMax ?? 0;
+    message.scope = object.scope ?? "";
+    message.log = object.log?.map((e) => e) || [];
+    message.canTake = object.canTake ?? false;
+    return message;
+  },
+};
+
+function createBaseGuildRequest(): GuildRequest {
+  return { action: "", name: "", arg: "" };
+}
+
+export const GuildRequest: MessageFns<GuildRequest> = {
+  encode(message: GuildRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.action !== "") {
+      writer.uint32(10).string(message.action);
+    }
+    if (message.name !== "") {
+      writer.uint32(18).string(message.name);
+    }
+    if (message.arg !== "") {
+      writer.uint32(26).string(message.arg);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GuildRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseGuildRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.action = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.name = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.arg = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<GuildRequest>, I>>(base?: I): GuildRequest {
+    return GuildRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GuildRequest>, I>>(object: I): GuildRequest {
+    const message = createBaseGuildRequest();
+    message.action = object.action ?? "";
+    message.name = object.name ?? "";
+    message.arg = object.arg ?? "";
+    return message;
+  },
+};
+
+function createBaseGuildMember(): GuildMember {
+  return { name: "", rank: "", online: false, level: 0, cls: "", map: "", lastSeenMs: 0n, joinedMs: 0n };
+}
+
+export const GuildMember: MessageFns<GuildMember> = {
+  encode(message: GuildMember, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.name !== "") {
+      writer.uint32(10).string(message.name);
+    }
+    if (message.rank !== "") {
+      writer.uint32(18).string(message.rank);
+    }
+    if (message.online !== false) {
+      writer.uint32(24).bool(message.online);
+    }
+    if (message.level !== 0) {
+      writer.uint32(32).int32(message.level);
+    }
+    if (message.cls !== "") {
+      writer.uint32(42).string(message.cls);
+    }
+    if (message.map !== "") {
+      writer.uint32(50).string(message.map);
+    }
+    if (message.lastSeenMs !== 0n) {
+      if (BigInt.asIntN(64, message.lastSeenMs) !== message.lastSeenMs) {
+        throw new globalThis.Error("value provided for field message.lastSeenMs of type int64 too large");
+      }
+      writer.uint32(56).int64(message.lastSeenMs);
+    }
+    if (message.joinedMs !== 0n) {
+      if (BigInt.asIntN(64, message.joinedMs) !== message.joinedMs) {
+        throw new globalThis.Error("value provided for field message.joinedMs of type int64 too large");
+      }
+      writer.uint32(64).int64(message.joinedMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GuildMember {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseGuildMember();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.name = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.rank = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.online = reader.bool();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.level = reader.int32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.cls = reader.string();
+            continue;
+          }
+          case 6: {
+            if (tag !== 50) {
+              break;
+            }
+
+            message.map = reader.string();
+            continue;
+          }
+          case 7: {
+            if (tag !== 56) {
+              break;
+            }
+
+            message.lastSeenMs = reader.int64() as bigint;
+            continue;
+          }
+          case 8: {
+            if (tag !== 64) {
+              break;
+            }
+
+            message.joinedMs = reader.int64() as bigint;
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<GuildMember>, I>>(base?: I): GuildMember {
+    return GuildMember.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GuildMember>, I>>(object: I): GuildMember {
+    const message = createBaseGuildMember();
+    message.name = object.name ?? "";
+    message.rank = object.rank ?? "";
+    message.online = object.online ?? false;
+    message.level = object.level ?? 0;
+    message.cls = object.cls ?? "";
+    message.map = object.map ?? "";
+    message.lastSeenMs = (object.lastSeenMs !== undefined && object.lastSeenMs !== null)
+      ? BigInt(object.lastSeenMs)
+      : 0n;
+    message.joinedMs = (object.joinedMs !== undefined && object.joinedMs !== null) ? BigInt(object.joinedMs) : 0n;
+    return message;
+  },
+};
+
+function createBaseGuildState(): GuildState {
+  return {
+    id: "",
+    name: "",
+    tag: "",
+    faction: "",
+    crest: "",
+    members: [],
+    maxMembers: 0,
+    motd: "",
+    myRank: "",
+    createdMs: 0n,
+  };
+}
+
+export const GuildState: MessageFns<GuildState> = {
+  encode(message: GuildState, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    if (message.name !== "") {
+      writer.uint32(18).string(message.name);
+    }
+    if (message.tag !== "") {
+      writer.uint32(26).string(message.tag);
+    }
+    if (message.faction !== "") {
+      writer.uint32(34).string(message.faction);
+    }
+    if (message.crest !== "") {
+      writer.uint32(42).string(message.crest);
+    }
+    for (const v of message.members) {
+      GuildMember.encode(v!, writer.uint32(50).fork()).join();
+    }
+    if (message.maxMembers !== 0) {
+      writer.uint32(56).int32(message.maxMembers);
+    }
+    if (message.motd !== "") {
+      writer.uint32(66).string(message.motd);
+    }
+    if (message.myRank !== "") {
+      writer.uint32(74).string(message.myRank);
+    }
+    if (message.createdMs !== 0n) {
+      if (BigInt.asIntN(64, message.createdMs) !== message.createdMs) {
+        throw new globalThis.Error("value provided for field message.createdMs of type int64 too large");
+      }
+      writer.uint32(80).int64(message.createdMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GuildState {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseGuildState();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.id = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.name = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.tag = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.faction = reader.string();
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.crest = reader.string();
+            continue;
+          }
+          case 6: {
+            if (tag !== 50) {
+              break;
+            }
+
+            message.members.push(GuildMember.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 7: {
+            if (tag !== 56) {
+              break;
+            }
+
+            message.maxMembers = reader.int32();
+            continue;
+          }
+          case 8: {
+            if (tag !== 66) {
+              break;
+            }
+
+            message.motd = reader.string();
+            continue;
+          }
+          case 9: {
+            if (tag !== 74) {
+              break;
+            }
+
+            message.myRank = reader.string();
+            continue;
+          }
+          case 10: {
+            if (tag !== 80) {
+              break;
+            }
+
+            message.createdMs = reader.int64() as bigint;
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<GuildState>, I>>(base?: I): GuildState {
+    return GuildState.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GuildState>, I>>(object: I): GuildState {
+    const message = createBaseGuildState();
+    message.id = object.id ?? "";
+    message.name = object.name ?? "";
+    message.tag = object.tag ?? "";
+    message.faction = object.faction ?? "";
+    message.crest = object.crest ?? "";
+    message.members = object.members?.map((e) => GuildMember.fromPartial(e)) || [];
+    message.maxMembers = object.maxMembers ?? 0;
+    message.motd = object.motd ?? "";
+    message.myRank = object.myRank ?? "";
+    message.createdMs = (object.createdMs !== undefined && object.createdMs !== null) ? BigInt(object.createdMs) : 0n;
+    return message;
+  },
+};
+
+function createBaseGuildInvited(): GuildInvited {
+  return { fromName: "", guildName: "", tag: "", expiresMs: 0n };
+}
+
+export const GuildInvited: MessageFns<GuildInvited> = {
+  encode(message: GuildInvited, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.fromName !== "") {
+      writer.uint32(10).string(message.fromName);
+    }
+    if (message.guildName !== "") {
+      writer.uint32(18).string(message.guildName);
+    }
+    if (message.tag !== "") {
+      writer.uint32(26).string(message.tag);
+    }
+    if (message.expiresMs !== 0n) {
+      if (BigInt.asIntN(64, message.expiresMs) !== message.expiresMs) {
+        throw new globalThis.Error("value provided for field message.expiresMs of type int64 too large");
+      }
+      writer.uint32(32).int64(message.expiresMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GuildInvited {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseGuildInvited();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.fromName = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.guildName = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.tag = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.expiresMs = reader.int64() as bigint;
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<GuildInvited>, I>>(base?: I): GuildInvited {
+    return GuildInvited.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GuildInvited>, I>>(object: I): GuildInvited {
+    const message = createBaseGuildInvited();
+    message.fromName = object.fromName ?? "";
+    message.guildName = object.guildName ?? "";
+    message.tag = object.tag ?? "";
+    message.expiresMs = (object.expiresMs !== undefined && object.expiresMs !== null) ? BigInt(object.expiresMs) : 0n;
     return message;
   },
 };
