@@ -24,6 +24,8 @@ export interface MobHost {
     hurt(p: Player, raw: number, source: string, srcId?: string, mobId?: number): void;
     /** Paraliza al jugador (si no es inmune): devuelve los segundos que quedó. */
     stun(p: Player, secs: number): number;
+    /** ¿El jugador ya está aturdido o congelado? Opcional (tests: nunca). */
+    held?(p: Player): boolean;
     /** Botín y exp del golpe final: lo decide y lo aplica el server (economía autoritativa). */
     /** Cobra maná en el server si alcanza (devuelve false si no). */
     pay(p: Player, cost: number): boolean;
@@ -473,6 +475,11 @@ export class MobSim {
 
     /** Los jefes con motor son inmunes al aturdir: el control les corta el casteo pero no los deja quietos. Los adds sí se aturden. */
     private bossImmune(m: SimMob): boolean { return !!m.bs && !!m.def.boss; }
+    /** Control sobre un mob: lo aplica, o si es inmune (jefe con motor, o los 8 s después de otro control) le avisa "Inmune" al que lo tiró. */
+    private control(p: Player, m: SimMob, secs: number, T: number): void {
+        if (m.imm <= T && !this.bossImmune(m)) { m.par = T + secs; m.imm = T + secs + 8; m.moving = false; return; }
+        p.send(M.pvpHit(p.playerId, { fx: 'resist', x: m.x, y: m.y, targetId: 0n, dmg: 0, secs: 0, r: 0 }));
+    }
 
     /** Lo que el motor de jefes necesita del simulador. */
     private readonly bh: BossHost = {
@@ -484,6 +491,7 @@ export class MobSim {
         roll: (bm) => { const m = bm as SimMob; return Math.round(rint(m.def.dmg[0], m.def.dmg[1]) * this.dmgMult(m)); },
         hurt: (p, raw, source, bm) => { p.send(M.mobHitPlayer(bm.id, raw, 0)); this.host.hurt(p, raw, source, M.mid(bm.id), bm.id); },
         stun: (p, secs) => this.host.stun(p, secs),
+        held: (p) => this.host.held?.(p) ?? false,
         slow: (p, secs) => this.host.slow?.(p, secs),
         poison: (p, secs) => this.host.poison?.(p, secs),
         after: (ms, fn) => this.host.after(ms, fn),
@@ -565,7 +573,7 @@ export class MobSim {
         const m = this.mobs.get(id); if (!m || m.dead) return;
         const T = this.now();
         if (slowSecs > 0) m.slow = T + slowSecs;
-        if (stunSecs > 0 && m.imm <= T && !this.bossImmune(m)) { m.par = T + stunSecs; m.imm = T + stunSecs + 8; m.moving = false; } // aturdido (corta la carga de un jefe)
+        if (stunSecs > 0) this.control(p, m, stunSecs, T); // aturdido (corta la carga de un jefe)
         if (m.bs) bossInterrupt(this.bh, m, skill, p); // motor de jefes: Carga, Nova, Giro... cortan el casteo
         const phys = (SKILLS[skill] ?? PVP_SPELLS[skill])?.stat !== 'mag'; // Nova de escarcha y Nova sagrada son mágicas; las del paladín, físicas
         if (m.traits & (phys ? TRAIT_ANTI_PHYS : TRAIT_ANTI_MAGIC)) dmg = Math.max(1, Math.round(dmg * ANTI_DAMAGE_MULT));
@@ -620,7 +628,7 @@ export class MobSim {
         const parSecs = wantsSecs && sp.secs && p.pvp.allowSecs(spell, BigInt(m.id), nowMs) ? sp.secs : 0;
         const poisonSecs = dmg > 0 && phys && p.combat.poison > 0 && Math.random() * 100 < p.combat.poison ? POISON_SECS : 0;
         if (dmg <= 0 && parSecs <= 0) return;
-        if (parSecs > 0 && m.imm <= T && !this.bossImmune(m)) { m.par = T + parSecs; m.imm = T + parSecs + 8; m.moving = false; }
+        if (parSecs > 0) this.control(p, m, parSecs, T);
         if (m.bs && (dmg > 0 || parSecs > 0 || sp.taunt)) bossInterrupt(this.bh, m, spell, p); // corte duro o blando (en la ventana)
         if (dmg > 0 && sp.slow) m.slow = T + sp.slow;                                  // Esquirla: frena
         if (dmg > 0 && sp.burn) { m.burn = T + BURN_TICKS * BURN_EVERY + 0.05; m.burnTick = T + BURN_EVERY; m.burnDmg = burnTickDmg(p.combat); m.burnBy = p.playerId; } // una sola por mob: la nueva reemplaza
