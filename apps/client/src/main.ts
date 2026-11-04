@@ -1324,7 +1324,56 @@ function moveTo(gx: number, gy: number) {
     P.path = p; return true;
 }
 
-let holding = false, holdT = 0;
+let holding = false;
+/** Teclas de movimiento (WASD y flechas): vector de pantalla, se pasa a grilla en steerDir(). */
+const moveKeys = new Set<string>();
+const MOVE_KEY: Record<string, [number, number]> = { w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0], arrowup: [0, -1], arrowdown: [0, 1], arrowleft: [-1, 0], arrowright: [1, 0] };
+window.addEventListener('keydown', (e) => {
+    if (e.target instanceof HTMLInputElement || e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key.toLowerCase(); if (!(k in MOVE_KEY)) return;
+    e.preventDefault(); if (moveKeys.has(k)) return; moveKeys.add(k);
+    // moverse con el teclado corta lo que estaba haciendo el personaje, igual que un clic en el suelo
+    holding = false; P.engage = false; P.target = null; P.foe = null; P.pickup = null; P.queued = null; P.path = [];
+});
+window.addEventListener('keyup', (e) => { moveKeys.delete(e.key.toLowerCase()); });
+window.addEventListener('blur', () => { moveKeys.clear(); holding = false; });
+/** A 8 direcciones de grilla (-1/0/1). */
+function quant8(dx: number, dy: number): Cell | null {
+    if (Math.hypot(dx, dy) < 1e-6) return null;
+    const a = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4);
+    return { x: Math.round(Math.cos(a)), y: Math.round(Math.sin(a)) };
+}
+/** Dirección del "volante": hacia donde apunta el teclado o, con el clic mantenido, hacia el cursor. null = quieto. */
+function steerDir(): Cell | null {
+    if (moveKeys.size) {
+        let u = 0, v = 0; for (const k of moveKeys) { const m = MOVE_KEY[k]; u += m[0]; v += m[1]; }
+        // de pantalla a grilla (inversa de faceAngle): dx-dy = u, (dx+dy)/2 = v
+        return quant8((u + 2 * v) / 2, (2 * v - u) / 2);
+    }
+    if (holding && mouse.x >= 0) {
+        const g = toGrid(mouse.x, mouse.y), dx = g.x - P.x, dy = g.y - P.y;
+        if (Math.hypot(dx, dy) < 0.6) return null; // llegaste al cursor
+        return quant8(dx, dy);
+    }
+    return null;
+}
+/** Un paso de volante hacia d: si la celda está tomada, resbala por una vecina (como Helbreath contra una pared). */
+function steerStep(d: Cell): Cell | null {
+    const c = P.cell, cand: Cell[] = [{ x: c.x + d.x, y: c.y + d.y }];
+    if (d.x && d.y) cand.push({ x: c.x + d.x, y: c.y }, { x: c.x, y: c.y + d.y });
+    else if (d.x) cand.push({ x: c.x + d.x, y: c.y - 1 }, { x: c.x + d.x, y: c.y + 1 });
+    else cand.push({ x: c.x - 1, y: c.y + d.y }, { x: c.x + 1, y: c.y + d.y });
+    for (const n of cand) if (freeForMe(n.x, n.y) && !occupiedByOther(n.x, n.y)) return n;
+    return null;
+}
+/** Arranca un paso a la celda vecina `next`: lo pide al server y lo dibuja ya (el server lo valida). Giro instantáneo. */
+function startStep(next: Cell, T: number) {
+    net.send({ $case: 'requestMovement', value: { curX: P.cell.x, curY: P.cell.y, destX: next.x, destY: next.y, gameWorldId: MAP_WORLD_ID, dashAttack: false } });
+    P.step = { fx: P.cell.x, fy: P.cell.y, tx: next.x, ty: next.y, t0: T, dur: (P.stepMs / 1000) * (P.slowEnd > T ? 1.7 : 1) + STEP_MARGIN };
+    turnTo(P, next.x - P.cell.x, next.y - P.cell.y, 0, true);
+    P.cell = { x: next.x, y: next.y };
+    advanceStep(P, T, 0);
+}
 cv.addEventListener('pointerdown', (e) => {
     cv.focus({ preventScroll: true });
     if (P.dead || !connected) return; const r = cv.getBoundingClientRect(); const sx = e.clientX - r.left, sy = e.clientY - r.top;
@@ -1351,7 +1400,7 @@ cv.addEventListener('pointerdown', (e) => {
     const d = pickDrop(sx, sy);
     if (d) { cancelCast(); P.target = null; P.engage = false; P.pickup = d; moveTo(d.x, d.y); return; }
     cancelCast(P.casting || P.ready ? 'Hechizo cancelado.' : null);
-    holding = true; holdT = 0.18; mouse = { x: sx, y: sy };
+    holding = true; mouse = { x: sx, y: sy };
     P.engage = false; P.target = null; P.pickup = null; P.queued = null; const g = toGrid(sx, sy); if (moveTo(g.x, g.y)) fx.push({ k: 'click', x: Math.floor(g.x) + 0.5, y: Math.floor(g.y) + 0.5, t: 0 });
 });
 cv.addEventListener('contextmenu', (e) => {
@@ -1530,7 +1579,6 @@ setInterval(() => { if (connected) net.send({ $case: 'pingRequest', value: { seq
 function update(dt: number) {
     const T = now(), tot = totals();
     for (const p of pending.slice()) if (T >= p.t) { pending.splice(pending.indexOf(p), 1); p.fn(); }
-    if (holding && !P.dead && !P.target && !P.casting && mouse.x >= 0) { holdT -= dt; if (holdT <= 0) { holdT = 0.18; const g = toGrid(mouse.x, mouse.y); if (Math.hypot(g.x - P.x, g.y - P.y) > 0.7) moveTo(g.x, g.y); } }
     // el server necesita saber si estoy muerto (los mobs me ignoran) y mi nivel (tope de daño por golpe)
     pveT -= dt;
     if (connected && (pveT <= 0 || pveSent.dead !== P.dead || pveSent.lvl !== P.lvl)) { pveT = 5; pveSent = { dead: P.dead, lvl: P.lvl }; net.send({ $case: 'pveStatusRequest', value: { dead: P.dead, lvl: P.lvl } }); }
@@ -1559,16 +1607,15 @@ function update(dt: number) {
         }
         // caminar: un paso por vez; el server valida cada uno
         if (P.step) advanceStep(P, T, dt);
+        // volante (teclado o clic mantenido): cada paso sale hacia donde apuntás en este instante, sin camino ni espera
+        if (!P.step && !P.casting && !P.target && !P.foe && T >= P.frozenUntil) {
+            const d = steerDir();
+            if (d) { P.path = []; const n = steerStep(d); if (n) startStep(n, T); else turnTo(P, d.x, d.y, 0, true); }
+        }
         if (!P.step && P.path.length && !P.casting && T >= P.frozenUntil) {
             const next = P.path[0];
             if (occupiedByOther(next.x, next.y)) { const end = P.path[P.path.length - 1]; P.path = []; if (end !== next) moveTo(end.x + 0.5, end.y + 0.5); }
-            else {
-                P.path.shift();
-                net.send({ $case: 'requestMovement', value: { curX: P.cell.x, curY: P.cell.y, destX: next.x, destY: next.y, gameWorldId: MAP_WORLD_ID, dashAttack: false } });
-                P.step = { fx: P.cell.x, fy: P.cell.y, tx: next.x, ty: next.y, t0: T, dur: (P.stepMs / 1000) * (P.slowEnd > T ? 1.7 : 1) + STEP_MARGIN };
-                P.cell = { x: next.x, y: next.y };
-                advanceStep(P, T, 0);
-            }
+            else { P.path.shift(); startStep(next, T); }
         }
         if (!P.step && !P.path.length && !P.moving) sendFacing();
         if (P.pickup) { if (!drops.includes(P.pickup)) P.pickup = null; else if (dist(P, P.pickup) < 1.4) { requestPickup(P.pickup); P.pickup = null; } }
@@ -1583,6 +1630,7 @@ function update(dt: number) {
             if (o.queue.length > 3) { const last = o.queue.splice(0, o.queue.length - 1)[0]; o.cell = { ...last }; }
             const next = o.queue.shift()!;
             o.step = { fx: o.cell.x, fy: o.cell.y, tx: next.x, ty: next.y, t0: T, dur: o.stepMs / 1000 };
+            turnTo(o, next.x - o.cell.x, next.y - o.cell.y, 0, true);
             o.cell = next;
         }
         if (o.step) advanceStep(o, T, dt);
