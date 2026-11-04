@@ -105,3 +105,19 @@ test('cast: corriendo también se castea; un paso corta el cast que no salió', 
         c.advance(2000); fire('proyectil'); assert.equal(B.p.hp, hp2, 'el paso cortó el cast');
     } finally { c.restore(); }
 });
+
+test('movimiento: el ritmo se mide en promedio; el jitter de red no paraliza, ir al doble de velocidad sí', () => {
+    const c = clock();
+    try {
+        const { w, A } = setup();
+        const step = (i: number) => { const dx = i % 2 ? 1 : -1; pkt(w, A.sid, 'requestMovement', { curX: A.p.posX, curY: A.p.posY, destX: A.p.posX + dx, destY: A.p.posY, gameWorldId: w.mapId, dashAttack: false }); };
+        // 60 pasos a 215 ms nominales pero llegando de a pares (130 / 300): promedio legal
+        for (let i = 0; i < 60; i++) { c.advance(i % 2 ? 130 : 300); step(i); }
+        assert.equal(count(A.log, 'playerParalyzed'), 0, 'el jitter no es trampa');
+        assert.equal(count(A.log, 'resetPosition'), 0, 'ningún paso rechazado');
+        // ahora de verdad al doble (100 ms por celda): se rechaza y termina paralizado
+        for (let i = 0; i < 40; i++) { c.advance(100); step(i); }
+        assert.equal(count(A.log, 'playerParalyzed'), 1, 'eso sí paraliza');
+        assert.ok(count(A.log, 'resetPosition') > 0, 'y paralizado, cada paso se rechaza');
+    } finally { c.restore(); }
+});

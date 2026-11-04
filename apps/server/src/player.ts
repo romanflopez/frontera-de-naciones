@@ -191,10 +191,19 @@ export class Player {
         return delta;
     }
 
-    /** false cuando el jugador se mueve demasiado rápido muchas veces seguidas. */
+    /** Deuda de movimiento en ms: cada paso cuesta lo que tarda una celda y el tiempo que pasa la va pagando. */
+    private moveDebtMs = 0;
+    /**
+     * false cuando el jugador se mueve demasiado rápido muchas veces seguidas.
+     * Se mide el ritmo promedio, no cada intervalo suelto: el cliente manda un paso por celda y la red
+     * puede juntar dos, así que se tolera una ráfaga de hasta 2,5 pasos adelantados. Lo que no se tolera
+     * es ir más rápido que la velocidad en promedio (eso sí es trampa).
+     */
     checkMovementCadence(deltaMs: number, now: number): boolean {
-        if (deltaMs >= this.minRequiredMs(this.movementSpeedMs)) return true;
-        return this.violations.tryAcquire(now);
+        const need = this.minRequiredMs(this.movementSpeedMs);
+        this.moveDebtMs = Math.max(0, this.moveDebtMs - deltaMs) + need;
+        if (this.moveDebtMs <= need * 3.5) return true;
+        return this.violations.tryAcquire(now); // se tolera hasta `limit` veces por ventana; después, parálisis
     }
 
     paralyzeFor(seconds: number, now: number): void {
