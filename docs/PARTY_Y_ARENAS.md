@@ -90,5 +90,5 @@ Código: `apps/server/src/arena.ts` (`ArenaService`: cola, invitación, partida,
 
 ## 5. Chat por canales (implementado)
 
-Cuatro canales, como Helbreath y Dreadmyst: **Global** (por defecto), **Nación** (tu facción), **Party** y **Guild** (todavía no existe: responde "Las guilds llegan próximamente"). Comandos: `/g`, `/n`, `/p`, `/gu` más el texto; sin prefijo el mensaje va por el canal elegido en el selector de la barra de chat (clic o Tab para cambiar entre Global, Nación y Party). Cada mensaje llega con su canal (`ChatMessageReceived.channel`) y se pinta con una etiqueta de color. Server: `handleChat` en `apps/server/src/index.ts`.
-Pendiente: pestañas para filtrar por canal, ignorar jugadores, límite de ritmo anti-spam y el canal de guild cuando existan las guilds.
+Cuatro canales, como Helbreath y Dreadmyst: **Global** (por defecto), **Nación** (tu facción), **Party** y **Guild** (desde el 4/11, ver `GUILDS.md`). Comandos: `/g`, `/n`, `/p`, `/gu` más el texto; sin prefijo el mensaje va por el canal elegido en el selector de la barra de chat (clic o Tab para cambiar entre Global, Nación y Party). Cada mensaje llega con su canal (`ChatMessageReceived.channel`) y se pinta con una etiqueta de color. Server: `handleChat` en `apps/server/src/index.ts`.
+Pendiente: pestañas para filtrar por canal, ignorar jugadores y límite de ritmo anti-spam.

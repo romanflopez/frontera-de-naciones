@@ -5,6 +5,10 @@
  *
  * Dos grillas lado a lado (Bolsa | Depósito). Mover: arrastrar y soltar, doble clic, Shift+clic, o seleccionar y usar
  * el botón de abajo (también Shift+Enter con el teclado). Las flechas recorren la grilla y Escape cierra.
+ *
+ * Con guild, la misma ventana tiene dos pestañas: «Depósito» (de la cuenta) y «Cofre de guild» (compartido, docs/GUILDS.md):
+ * cambia el `scope` de los pedidos; en el cofre, retirar solo lo pueden el líder y los oficiales (`can_take`) y abajo se ve
+ * el registro de los últimos movimientos.
  */
 import { BAG_MAX, DEPOT_SLOTS, DEPOT_STACKS, DEPOT_STACK_BY_ID, DEPOT_STACK_MAX, type AttrId, type Base, type DepotStackDef, type DepotStackId, type KeyId } from '@fdn/world';
 import type { DepositState, InvItem } from '@fdn/proto';
@@ -30,6 +34,8 @@ export interface DepositDeps<I extends DepItem> {
     fmt: (n: number) => string;
     /** Pide cerrar (main.ts cierra la "tienda" actual y con eso esta ventana). */
     requestClose: () => void;
+    /** Guild del jugador (null = sin guild: no se muestra la pestaña del cofre). */
+    guild?: () => { name: string; tag: string } | null;
 }
 export interface DepositUI {
     open(npc: { id: string; name: string }): void;
@@ -48,6 +54,12 @@ const CSS = `
 #dep .fw-body{gap:8px}
 #dep .dsub{display:flex;align-items:baseline;justify-content:center;gap:8px;margin-top:-4px;font:600 13px/1.2 var(--f-cinzel);color:#cdb98a;letter-spacing:.04em}
 #dep .dsub small{font:400 11px var(--f-inter);color:#8d7a52;letter-spacing:.02em}
+#dep .dtabs{display:flex;justify-content:center;gap:4px;margin-top:-6px}
+#dep .dtabs button{height:26px;padding:0 12px;font:700 11px/1 var(--f-cinzel);letter-spacing:.1em;text-transform:uppercase;color:#bfae86;background:linear-gradient(#1d160e,#0a0807);border:1px solid #4d3b20;border-bottom:none;border-radius:4px 4px 0 0;cursor:pointer}
+#dep .dtabs button.on{color:#ecd39a;background:linear-gradient(#3c0c14,#220509);border-color:#a98340}
+#dep .dlog{margin-top:auto;max-height:64px;overflow:auto;font-size:11px;line-height:1.4;color:#8d7a52;scrollbar-width:thin}
+#dep .dlog b{color:#bfae86;font-weight:600}
+#dep .dlog div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #dep .dcols{display:grid;grid-template-columns:auto auto;justify-content:space-between;gap:12px;min-height:0;flex:1}
 #dep .dpan{display:flex;flex-direction:column;gap:6px;min-height:0;border-radius:4px;outline:2px dashed transparent;outline-offset:2px;transition:outline-color .12s}
 #dep .dpan.over{outline-color:#e0b765}
@@ -125,7 +137,8 @@ export function createDepositUI<I extends DepItem>(d: DepositDeps<I>): DepositUI
 <svg class="fw-c tl" aria-hidden="true"><use href="#fwc"/></svg><svg class="fw-c tr" aria-hidden="true"><use href="#fwc"/></svg><svg class="fw-c bl" aria-hidden="true"><use href="#fwc"/></svg><svg class="fw-c br" aria-hidden="true"><use href="#fwc"/></svg>
 <header class="fw-head"><h2>DEPÓSITO</h2><button class="fw-x" id="depClose" type="button" aria-label="Cerrar Depósito">&times;</button></header>
 <div class="fw-body">
-  <div class="dsub"><span id="depNpc">Depositario</span><small>Lo guardado es de tu cuenta y se retira en cualquier Depositario.</small></div>
+  <div class="dtabs" id="depTabs" role="tablist" hidden><button type="button" role="tab" data-scope="" class="on">Depósito</button><button type="button" role="tab" data-scope="guild">Cofre de guild</button></div>
+  <div class="dsub"><span id="depNpc">Depositario</span><small id="depSubText">Lo guardado es de tu cuenta y se retira en cualquier Depositario.</small></div>
   <div class="dcols">
     <section class="dpan" data-side="bag" aria-label="Bolsa">
       <div class="dt">Bolsa <span class="cnt" id="depBagCnt"></span></div>
@@ -135,10 +148,11 @@ export function createDepositUI<I extends DepItem>(d: DepositDeps<I>): DepositUI
       <div class="help"><b>Doble clic</b> o <b>Shift+clic</b> mueve al otro lado; también podés <b>arrastrar</b>. Teclado: flechas para recorrer, <b>Shift+Enter</b> mueve, <b>Esc</b> cierra.</div>
     </section>
     <section class="dpan" data-side="dep" aria-label="Depósito">
-      <div class="dt">Depósito <span class="cnt" id="depCnt"></span><button type="button" class="fb" id="depSort" aria-label="Ordenar el depósito por tipo y rareza">Ordenar</button></div>
+      <div class="dt"><span id="depTitle">Depósito</span> <span class="cnt" id="depCnt"></span><button type="button" class="fb" id="depSort" aria-label="Ordenar el depósito por tipo y rareza">Ordenar</button></div>
       <div class="dg depg" id="depGrid" role="grid" aria-label="Depósito de equipo"></div>
       <div class="lbl">Consumibles y materiales guardados</div>
       <div class="dg stk depstk" id="depStk" role="grid" aria-label="Consumibles y materiales del depósito"></div>
+      <div class="dlog" id="depLog" hidden></div>
     </section>
   </div>
   <div class="dsel" id="depSel" aria-live="polite"></div>
@@ -155,7 +169,12 @@ export function createDepositUI<I extends DepItem>(d: DepositDeps<I>): DepositUI
     const q = <T extends HTMLElement>(sel: string) => el.querySelector(sel) as T;
 
     let npc: { id: string; name: string } | null = null;
-    let st: DepositState = { items: [], gold: 0, stacks: [], capacity: DEPOT_SLOTS, stackMax: DEPOT_STACK_MAX };
+    /** '' = depósito de la cuenta; 'guild' = cofre compartido. */
+    let scope: '' | 'guild' = '';
+    const emptyState = (): DepositState => ({ items: [], gold: 0, stacks: [], capacity: DEPOT_SLOTS, stackMax: DEPOT_STACK_MAX, scope: '', log: [], canTake: true });
+    let st: DepositState = emptyState();
+    const canTake = () => scope !== 'guild' || st.canTake;
+    const label = () => (scope === 'guild' ? 'el cofre de la guild' : 'el depósito');
     let depItems: I[] = [];
     /** Selección: un item (por id) o un stack, de un lado. */
     let sel: { side: Side; kind: 'item'; id: number } | { side: Side; kind: 'stack'; id: DepotStackId } | null = null;
@@ -168,7 +187,7 @@ export function createDepositUI<I extends DepItem>(d: DepositDeps<I>): DepositUI
     const send = (action: string, extra: Record<string, unknown> = {}) => {
         if (!npc) return;
         opSeq = (opSeq % 0xfffffffe) + 1;
-        d.send({ $case: 'depositRequest', value: { npcId: npc.id, action, opId: opSeq, ...extra } });
+        d.send({ $case: 'depositRequest', value: { npcId: npc.id, action, opId: opSeq, scope, ...extra } });
     };
     const say = (text: string, kind: '' | 'ok' | 'err' = '') => {
         const m = q<HTMLElement>('#depMsg'); m.textContent = text; m.className = 'dmsg' + (kind ? ' ' + kind : '');
@@ -187,9 +206,10 @@ export function createDepositUI<I extends DepItem>(d: DepositDeps<I>): DepositUI
     function moveItem(side: Side, id: number) {
         const k = `${side}:i:${id}`; if (pend.has(k)) return;
         if (side === 'bag') {
-            if (depItems.length >= (st.capacity || DEPOT_SLOTS)) { say(`El depósito está lleno (${st.capacity || DEPOT_SLOTS} / ${st.capacity || DEPOT_SLOTS}).`, 'err'); return; }
+            if (depItems.length >= (st.capacity || DEPOT_SLOTS)) { say(`${scope === 'guild' ? 'El cofre' : 'El depósito'} está lleno (${st.capacity || DEPOT_SLOTS} / ${st.capacity || DEPOT_SLOTS}).`, 'err'); return; }
             pend.add(k); send('put', { uid: id });
         } else {
+            if (!canTake()) { say('Solo el líder y los oficiales pueden retirar del cofre de la guild.', 'err'); return; }
             if (d.bag().length >= BAG_MAX) { say(`La bolsa está llena (${BAG_MAX} / ${BAG_MAX}): hacé lugar antes de retirar.`, 'err'); return; }
             pend.add(k); send('take', { uid: id });
         }
@@ -198,6 +218,7 @@ export function createDepositUI<I extends DepItem>(d: DepositDeps<I>): DepositUI
     }
     function moveStack(side: Side, id: DepotStackId, amount?: number) {
         const s = DEPOT_STACK_BY_ID.get(id)!; const max = movable(side, s), n = amount ?? max;
+        if (side === 'dep' && !canTake()) { say('Solo el líder y los oficiales pueden retirar del cofre de la guild.', 'err'); return; }
         if (n <= 0 || max <= 0) {
             say(side === 'bag' ? (carried(s) ? `En el depósito no entran más de ${d.fmt(st.stackMax || DEPOT_STACK_MAX)} de ${s.name}.` : `No tenés ${s.name}.`)
                 : (stored(s.id) ? `Solo podés llevar ${s.carryMax} de ${s.name}.` : `No hay ${s.name} en el depósito.`), 'err');
@@ -208,8 +229,9 @@ export function createDepositUI<I extends DepItem>(d: DepositDeps<I>): DepositUI
     function moveGold(side: Side) {
         const inp = q<HTMLInputElement>('#depGoldIn'), n = parseAmount(inp.value);
         if (n === null) { say('Escribí un monto de oro entero mayor que 0.', 'err'); inp.focus(); return; }
+        if (side === 'dep' && !canTake()) { say('Solo el líder y los oficiales pueden retirar del cofre de la guild.', 'err'); return; }
         if (side === 'bag' && n > d.gold()) { say(`No tenés tanto oro: llevás ${d.fmt(d.gold())}.`, 'err'); return; }
-        if (side === 'dep' && n > st.gold) { say(`No hay tanto oro en el depósito: hay ${d.fmt(st.gold)}.`, 'err'); return; }
+        if (side === 'dep' && n > st.gold) { say(`No hay tanto oro en ${label()}: hay ${d.fmt(st.gold)}.`, 'err'); return; }
         pend.add('gold'); send(side === 'bag' ? 'gold_in' : 'gold_out', { amount: n }); inp.value = ''; render();
     }
 
@@ -230,14 +252,14 @@ export function createDepositUI<I extends DepItem>(d: DepositDeps<I>): DepositUI
         if (sel.kind === 'item') {
             const s = sel, it = (s.side === 'bag' ? d.bag() : depItems).find((x) => x.id === s.id);
             if (!it) { sel = null; renderSel(); return; }
-            box.innerHTML = `${d.icon(it)}<span class="nm" style="color:${it.rar.c}">${d.esc(it.name)}<small>${it.rar.n} · ${it.slot} · ${s.side === 'bag' ? 'en la bolsa' : 'en el depósito'}</small></span><button type="button" class="act" id="depMove">${s.side === 'bag' ? 'Guardar en el depósito →' : '← Retirar a la bolsa'}</button>`;
+            box.innerHTML = `${d.icon(it)}<span class="nm" style="color:${it.rar.c}">${d.esc(it.name)}<small>${it.rar.n} · ${it.slot} · ${s.side === 'bag' ? 'en la bolsa' : `en ${label()}`}</small></span><button type="button" class="act" id="depMove" ${s.side === 'dep' && !canTake() ? 'disabled title="Solo el líder y los oficiales retiran"' : ''}>${s.side === 'bag' ? (scope === 'guild' ? 'Guardar en el cofre →' : 'Guardar en el depósito →') : '← Retirar a la bolsa'}</button>`;
             q<HTMLButtonElement>('#depMove').onclick = () => moveItem(s.side, s.id);
             return;
         }
         const s = sel, def = DEPOT_STACK_BY_ID.get(s.id)!, have = s.side === 'bag' ? carried(def) : stored(def.id), max = movable(s.side, def);
         if (!have) { sel = null; renderSel(); return; }
         box.innerHTML = `<img alt="" src="${STACK_ICON(def)}"><span class="nm" style="color:${stackNameCol(def)}">${d.esc(def.name)}<small>${s.side === 'bag' ? `llevás ${d.fmt(have)} (máx. ${def.carryMax})` : `guardadas ${d.fmt(have)}`}</small></span>
-<input class="num" id="depQty" type="text" inputmode="numeric" autocomplete="off" aria-label="Cantidad" placeholder="Cant." value="${d.esc(qty || String(max || ''))}"><button type="button" class="act" id="depQtyMax" ${max ? '' : 'disabled'}>Máx.</button><button type="button" class="act" id="depMove" ${max ? '' : 'disabled'}>${s.side === 'bag' ? 'Guardar →' : '← Retirar'}</button>`;
+<input class="num" id="depQty" type="text" inputmode="numeric" autocomplete="off" aria-label="Cantidad" placeholder="Cant." value="${d.esc(qty || String(max || ''))}"><button type="button" class="act" id="depQtyMax" ${max ? '' : 'disabled'}>Máx.</button><button type="button" class="act" id="depMove" ${max && (s.side === 'bag' || canTake()) ? '' : 'disabled'}>${s.side === 'bag' ? 'Guardar →' : '← Retirar'}</button>`;
         const inp = q<HTMLInputElement>('#depQty');
         inp.oninput = () => { qty = inp.value; };
         inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); q<HTMLButtonElement>('#depMove').click(); } };
@@ -266,8 +288,17 @@ export function createDepositUI<I extends DepItem>(d: DepositDeps<I>): DepositUI
         const active = document.activeElement as HTMLElement | null;
         const keepFocus = active && el.contains(active) && active.dataset.k ? active.dataset.k : '';
         const typing = active instanceof HTMLInputElement && el.contains(active) ? active.id : '';
-        const bag = d.bag(), cap = st.capacity || DEPOT_SLOTS;
+        const bag = d.bag(), cap = st.capacity || DEPOT_SLOTS, g = d.guild?.() ?? null;
         q<HTMLElement>('#depNpc').textContent = npc?.name ?? 'Depositario';
+        const tabs = q<HTMLElement>('#depTabs'); tabs.hidden = !g;
+        if (!g && scope === 'guild') { scope = ''; st = emptyState(); depItems = []; send('open'); }
+        tabs.querySelectorAll<HTMLButtonElement>('button').forEach((b) => b.classList.toggle('on', (b.dataset.scope ?? '') === scope));
+        q<HTMLElement>('#depSubText').textContent = scope === 'guild'
+            ? `Cofre de «${g?.name ?? 'la guild'}» [${g?.tag ?? ''}]: todos guardan; retiran el líder y los oficiales.${st.canTake ? '' : ' Vos solo podés guardar.'}`
+            : 'Lo guardado es de tu cuenta y se retira en cualquier Depositario.';
+        q<HTMLElement>('#depTitle').textContent = scope === 'guild' ? 'Cofre de guild' : 'Depósito';
+        const lg = q<HTMLElement>('#depLog'); lg.hidden = scope !== 'guild';
+        if (scope === 'guild') lg.innerHTML = st.log.length ? `<b>Últimos movimientos</b>${st.log.map((l) => `<div>${d.esc(l)}</div>`).join('')}` : '<b>Últimos movimientos</b><div>Todavía no hay movimientos.</div>';
         const bc = q<HTMLElement>('#depBagCnt'); bc.textContent = `${bag.length} / ${BAG_MAX}`; bc.classList.toggle('full', bag.length >= BAG_MAX);
         const dc = q<HTMLElement>('#depCnt'); dc.textContent = `${depItems.length} / ${cap}`; dc.classList.toggle('full', depItems.length >= cap);
         q<HTMLElement>('#depBag').innerHTML = bag.map((it, i) => cellItem('bag', it, i)).join('') + empties(BAG_MAX - bag.length);
@@ -278,7 +309,7 @@ export function createDepositUI<I extends DepItem>(d: DepositDeps<I>): DepositUI
         q<HTMLElement>('#depGoldBagN').textContent = d.fmt(d.gold());
         q<HTMLElement>('#depGoldDepN').textContent = d.fmt(st.gold);
         q<HTMLButtonElement>('#depGoldPut').disabled = pend.has('gold') || d.gold() <= 0;
-        q<HTMLButtonElement>('#depGoldTake').disabled = pend.has('gold') || st.gold <= 0;
+        q<HTMLButtonElement>('#depGoldTake').disabled = pend.has('gold') || st.gold <= 0 || !canTake();
         q<HTMLButtonElement>('#depSort').disabled = depItems.length < 2;
         if (typing !== 'depQty') renderSel();
         if (keepFocus) { const f = el.querySelector<HTMLElement>(`[data-k="${keepFocus}"]`); if (f && !typing) f.focus({ preventScroll: true }); }
@@ -292,7 +323,7 @@ export function createDepositUI<I extends DepItem>(d: DepositDeps<I>): DepositUI
         if (c.dataset.stack) {
             const s = DEPOT_STACK_BY_ID.get(c.dataset.stack as DepotStackId)!, n = side === 'bag' ? carried(s) : stored(s.id);
             const what = s.kind === 'pot' ? (s.ref === 'hp' ? 'Recupera 40% de la vida máxima: 20% al instante y el resto en 2 s.' : 'Recupera 50% del maná máximo.') : s.kind === 'key' ? 'Abre la escalera sellada del portal correspondiente.' : 'Con 3 esquirlas y oro el Capitán forja la llave.';
-            return `<div><div class="iname" style="color:${stackNameCol(s)}">${d.esc(s.name)}</div><div class="sub">${s.kind === 'pot' ? 'Consumible' : 'Material'} · ×${d.fmt(n)}</div><div>${what}</div><div class="sub">${side === 'bag' ? `Encima: máx. ${s.carryMax}` : `En depósito: máx. ${d.fmt(st.stackMax || DEPOT_STACK_MAX)}`}</div></div>`;
+            return `<div><div class="iname" style="color:${stackNameCol(s)}">${d.esc(s.name)}</div><div class="sub">${s.kind === 'pot' ? 'Consumible' : 'Material'} · ×${d.fmt(n)}</div><div>${what}</div><div class="sub">${side === 'bag' ? `Encima: máx. ${s.carryMax}` : `En ${label()}: máx. ${d.fmt(st.stackMax || DEPOT_STACK_MAX)}`}</div></div>`;
         }
         const id = Number(c.dataset.item), it = (side === 'bag' ? d.bag() : depItems).find((x) => x.id === id); if (!it) return '';
         const base: string[] = [];
@@ -359,6 +390,11 @@ ${it.attrs.length ? `<ul>${it.attrs.map((a) => `<li style="color:#8fb6f0">${d.at
         if (to >= 0 && to < cells.length) cells[to].focus();
     });
     q<HTMLButtonElement>('#depClose').onclick = () => d.requestClose();
+    q<HTMLElement>('#depTabs').addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-scope]'); if (!b) return;
+        const next = (b.dataset.scope ?? '') as '' | 'guild'; if (next === scope) return;
+        scope = next; st = emptyState(); depItems = []; sel = null; qty = ''; pend.clear(); say(''); render(); send('open');
+    });
     q<HTMLButtonElement>('#depSort').onclick = () => send('sort');
     q<HTMLButtonElement>('#depGoldPut').onclick = () => moveGold('bag');
     q<HTMLButtonElement>('#depGoldTake').onclick = () => moveGold('dep');
@@ -386,7 +422,7 @@ ${it.attrs.length ? `<ul>${it.attrs.map((a) => `<li style="color:#8fb6f0">${d.at
         open(n) {
             const again = npc?.id === n.id && !el.hidden;
             npc = n; el.hidden = false;
-            if (!again) { sel = null; qty = ''; pend.clear(); say(''); q<HTMLInputElement>('#depGoldIn').value = ''; }
+            if (!again) { sel = null; qty = ''; pend.clear(); say(''); q<HTMLInputElement>('#depGoldIn').value = ''; if (scope === 'guild' && !d.guild?.()) scope = ''; st = emptyState(); depItems = []; }
             layout(); render(); send('open');
             if (!again) requestAnimationFrame(() => el.querySelector<HTMLElement>('#depBag .cl[data-side], #depGrid .cl[data-side], #depGoldIn')?.focus({ preventScroll: true }));
         },
@@ -398,6 +434,8 @@ ${it.attrs.length ? `<ul>${it.attrs.map((a) => `<li style="color:#8fb6f0">${d.at
         get isOpen() { return !el.hidden; },
         onMessage(m) {
             if (m.$case !== 'depositState') return false;
+            if ((m.value.scope || '') !== scope) return true; // el server avisa el cofre de guild a todos los conectados; solo importa si es la pestaña abierta
+            if (el.hidden) return true;
             st = m.value; depItems = st.items.map(d.fromInv); pend.clear();
             if (sel?.kind === 'item' && sel.side === 'dep' && !depItems.some((x) => x.id === sel!.id)) sel = null;
             render(); return true;

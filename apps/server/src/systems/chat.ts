@@ -1,5 +1,5 @@
 /**
- * Chat por canales: global (todos los conectados), comercio (todos, para compraventa), area (los que te ven), party (tu party) y nacion (tu facción).
+ * Chat por canales: global (todos los conectados), comercio (todos, para compraventa), area (los que te ven), party (tu party), nacion (tu facción) y guild (tu guild).
  * Anti-spam: como mucho 1 mensaje por segundo y `CHAT_PER_MINUTE` por minuto por jugador.
  */
 import type { ServerMessage } from '@fdn/proto';
@@ -20,6 +20,8 @@ export interface ChatDeps {
     viewersOf(sid: string): string[];
     /** Sesiones de la party de `sid` (vacío si no tiene). */
     partyOf(sid: string): string[];
+    /** Sesiones conectadas de la guild de `sid` (vacío si no tiene). */
+    guildOf?(sid: string): string[];
     /** Facción de `sid` (undefined si no tiene). */
     factionOf(sid: string): string | undefined;
     send(sid: string, m: ServerMessage): void;
@@ -54,7 +56,7 @@ export class ChatManager {
                 const fac = this.d.factionOf(from.sessionId); if (!fac) return 'Todavía no tenés nación.';
                 to = [...this.d.allSessions()].filter((s) => this.d.factionOf(s) === fac); break;
             }
-            case 'guild': return 'Las guilds llegan próximamente.';
+            case 'guild': { const ms = this.d.guildOf?.(from.sessionId) ?? []; if (!ms.length) return 'No estás en una guild.'; to = ms; break; }
         }
         this.last.set(from.sessionId, t);
         win.push(t); this.recent.set(from.sessionId, win);

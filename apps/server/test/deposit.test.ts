@@ -29,7 +29,7 @@ function setup() {
     return { storage, dp, mk };
 }
 const give = (e: Econ, n = 'Espada larga', r = 2): number => { const u = e.nextUid++; e.bag.push({ u, n, r, a: [{ id: 'crit', v: 4 }, { id: 'hp', v: 17 }] }); return u; };
-const req = (o: Partial<DepositRequest>): DepositRequest => ({ npcId: '', action: 'open', uid: 0, amount: 0, stack: '', opId: 0, ...o });
+const req = (o: Partial<DepositRequest>): DepositRequest => ({ npcId: '', action: 'open', uid: 0, amount: 0, stack: '', opId: 0, scope: '', ...o });
 
 test('depositar y retirar un item: sale de un lado, entra en el otro con rareza y atributos intactos', () => {
     const { dp, mk, storage } = setup(); const a = mk('aa', 'Ana');

@@ -18,6 +18,9 @@ import type { GameWorldConfig, Settings } from './config.ts';
 import { adjacentCellsAt45, distance, findNearestFreeLocation, nextGridDirection } from './location.ts';
 import type { Occupancy } from './map.ts';
 import * as M from './messages.ts';
+import { guildTagOf } from './guild.ts';
+/** Perfil `faccion;clase;look` más la etiqueta de guild como 4.ª parte (vacía = sin guild); lo que mande el cliente en esa parte se ignora. */
+const withGuildTag = (profile: string, tag: string): string => { const parts = profile.split(';').slice(0, 3); while (parts.length < 3) parts.push(''); return tag ? `${parts.join(';')};${tag}` : parts.join(';'); };
 import { MobSim } from './mobs.ts';
 import { PROJECTILES, projectileFlightMs, projectileHits } from '@fdn/world';
 import { ARENA_RULES, MOB_TYPES, POISON_SECS, arenaHealMult, meleeIntervalSecs, type MobType, type WorldMap } from '@fdn/world';
@@ -380,6 +383,12 @@ export class GameWorld {
     private broadcastNear(p: Player, m: ServerMessage): void {
         for (const other of this.nearbyPlayers(p.posX, p.posY, p.sessionId)) if (!this.hiddenFrom(other, p)) other.send(m);
     }
+    /** Cambió la guild del jugador: se reescribe la etiqueta de su perfil y la ven los de alrededor. */
+    setGuildTag(sessionId: string, tag: string): void {
+        const p = this.players.get(sessionId); if (!p) return;
+        p.profile = withGuildTag(p.profile, tag);
+        p.send(M.playerProfileChanged(p)); this.broadcastNear(p, M.playerProfileChanged(p));
+    }
 
     private factionOf(p: Player): string { return p.profile.split(';')[0]; }
     /** `target` es invisible para `viewer`: de otra facción y sin Detectar invisible. Los aliados se ven siempre. */
@@ -692,7 +701,7 @@ export class GameWorld {
                 case 'changePlayerProfileRequest': {
                     const v = String(payload.value.profile ?? '').slice(0, 240);
                     if (!/^[\w;,.\- ]*$/.test(v)) break;
-                    p.profile = v;
+                    p.profile = withGuildTag(v, guildTagOf(p.accountKey)); // la etiqueta de guild la pone el server (docs/GUILDS.md)
                     this.broadcastNear(p, M.playerProfileChanged(p));
                     break;
                 }

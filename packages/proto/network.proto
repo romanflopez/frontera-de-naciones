@@ -141,6 +141,8 @@ message ClientMessage {
     ClientPickupItem client_pickup_item = 900;
     // Dar e Intercambiar entre jugadores (ver docs/INTERCAMBIO.md). Rango propio de tags desde 1300.
     TradeRequest trade_request = 1300;
+    // Guilds (ver docs/GUILDS.md). Rango propio de tags desde 1500.
+    GuildRequest guild_request = 1500;
   }
   // P0-A: el cliente ya no fija números de combate (velocidad de movimiento, de ataque, de casteo, alcance, daño, stun).
   // Los calcula el server. Tags retirados: no reutilizar.
@@ -567,6 +569,9 @@ message ServerMessage {
     // Dar e Intercambiar entre jugadores (ver docs/INTERCAMBIO.md). Rango propio de tags desde 1300.
     TradeState trade_state = 1300;
     TradeInvite trade_invite = 1301;
+    // Guilds (ver docs/GUILDS.md). Rango propio de tags desde 1500.
+    GuildState guild_state = 1500;
+    GuildInvited guild_invited = 1501;
   }
 }
 
@@ -1674,15 +1679,70 @@ message DepositRequest {
   double amount = 4;
   string stack = 5;
   uint32 op_id = 6;
+  /** '' = depósito de la cuenta; 'guild' = cofre compartido de la guild (ver docs/GUILDS.md). */
+  string scope = 7;
 }
 message DepositStack { string id = 1; int32 qty = 2; }
-/** Contenido del depósito de la cuenta (se manda al abrir y después de cada acción). */
+/** Contenido del depósito de la cuenta (se manda al abrir y después de cada acción). Con scope = 'guild' es el cofre de la guild. */
 message DepositState {
   repeated InvItem items = 1;
   double gold = 2;
   repeated DepositStack stacks = 3;
   int32 capacity = 4;
   int32 stack_max = 5;
+  string scope = 6;
+  /** Cofre de guild: últimos movimientos ("Ana guardó Mandoble"), del más nuevo al más viejo. */
+  repeated string log = 7;
+  /** Cofre de guild: tu rango te deja retirar (líder y oficiales). */
+  bool can_take = 8;
+}
+
+// ---------- Guilds (ver docs/GUILDS.md) ----------
+/**
+ * Pedido de guild. action:
+ *   create  = crear (name = nombre de la guild, arg = etiqueta de 2 a 4 letras); cuesta oro y pide nivel mínimo.
+ *   invite  = invitar al personaje `name` (líder y oficiales); accept / decline = responder a la invitación pendiente.
+ *   leave   = salir; kick = expulsar a `name`; promote / demote = subir o bajar de rango a `name`; leader = ceder el liderazgo a `name`.
+ *   crest   = cambiar el escudo (arg = "forma,fondo,figura,símbolo", índices); motd = cambiar el lema (arg); disband = disolver (solo el líder, cofre vacío).
+ *   info    = pedir el estado (GuildState).
+ */
+message GuildRequest {
+  string action = 1;
+  string name = 2;
+  string arg = 3;
+}
+message GuildMember {
+  string name = 1;
+  /** 'lider' | 'oficial' | 'miembro' */
+  string rank = 2;
+  bool online = 3;
+  int32 level = 4;
+  string cls = 5;
+  string map = 6;
+  /** Última conexión (epoch ms); 0 = conectado ahora. */
+  int64 last_seen_ms = 7;
+  int64 joined_ms = 8;
+}
+/** Estado completo de tu guild (al entrar, al cambiar algo y cuando se conecta o desconecta un miembro). id vacío = no tenés guild. */
+message GuildState {
+  string id = 1;
+  string name = 2;
+  string tag = 3;
+  string faction = 4;
+  /** "forma,fondo,figura,símbolo" (índices; el cliente dibuja el escudo). */
+  string crest = 5;
+  repeated GuildMember members = 6;
+  int32 max_members = 7;
+  string motd = 8;
+  string my_rank = 9;
+  int64 created_ms = 10;
+}
+/** Te invitaron a una guild. */
+message GuildInvited {
+  string from_name = 1;
+  string guild_name = 2;
+  string tag = 3;
+  int64 expires_ms = 4;
 }
 
 // ---------- Dar e Intercambiar entre jugadores (ver docs/INTERCAMBIO.md) ----------

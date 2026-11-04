@@ -29,6 +29,7 @@ import { AuctionHouse, setAuctionHouse } from './auction.ts';
 import { Depot, setDepot } from './deposit.ts';
 import { TradeService, setTradeService } from './trade.ts';
 import { PartyService, setParties } from './party.ts';
+import { GuildService, setGuilds } from './guild.ts';
 import { ArenaService } from './arena.ts';
 import { ChatManager } from './systems/chat.ts';
 
@@ -61,8 +62,8 @@ console.log(`[Server] ${worldConfigs.length} mapas registrados (${worldConfigs.m
 // casa de subastas compartida por todos los mundos (docs/SUBASTAS.md): mismo Storage; avisa a los vendedores conectados
 const auction = new AuctionHouse(storage); setAuctionHouse(auction); auction.start();
 auction.notify = (key, ...msgs) => { const s = sessionsByNetworkId.get(`acc:${key}`)?.socket; if (s?.readyState === s?.OPEN) for (const m of msgs) s?.send(encode(m)); };
-// depósito por cuenta (docs/DEPOSITO.md): vive dentro del registro de la cuenta, en el mismo Storage
-setDepot(new Depot(storage));
+// depósito por cuenta (docs/DEPOSITO.md): vive dentro del registro de la cuenta, en el mismo Storage; el cofre de guild corre por el mismo Depot (scope 'guild')
+const depot = new Depot(storage); setDepot(depot);
 const trade = new TradeService(storage); setTradeService(trade); trade.start(); // Dar e Intercambiar (docs/INTERCAMBIO.md)
 
 const worldsListMessage = M.worldsList(worldConfigs);
@@ -134,6 +135,24 @@ const parties = new PartyService({
 setParties(parties);
 setInterval(() => parties.tick(), 1000).unref();
 
+// Guilds (docs/GUILDS.md): escudo, cofre compartido y lista de miembros. Persisten en `_guilds` del mismo Storage; la identidad es la clave del personaje.
+const charKeyOf = (s: Session) => s.networkId.replace(/^acc:/, '');
+const guilds = new GuildService({
+    sessionByName: (name) => { const n = name.toLowerCase(); for (const s of sessionsById.values()) if (s.socket && s.characterName.toLowerCase() === n) return s.sessionId; return undefined; },
+    sessionByKey: (key) => sessionsByNetworkId.get(`acc:${key}`)?.sessionId,
+    send: (sid, m) => { const s = sessionsById.get(sid); if (s?.socket && s.socket.readyState === s.socket.OPEN) s.socket.send(encode(m)); },
+    info: (sid) => {
+        const s = sessionsById.get(sid), w = s ? worldOf(s) : undefined, p = w?.playerOf(sid); if (!s || !w || !p) return undefined;
+        return { key: charKeyOf(s), name: s.characterName, faction: p.econ?.faction || p.profile.split(';')[0], level: p.econ?.lvl ?? 1, cls: p.econ?.cls ?? '', map: w.mapId, online: !!s.socket, econ: p.econ };
+    },
+    tagChanged: (sid, tag) => { const s = sessionsById.get(sid); if (s) worldOf(s)?.setGuildTag(sid, tag); },
+}, storage);
+setGuilds(guilds);
+depot.guildHost = (key) => guilds.vaultHost(key);
+// alguien movió algo del cofre: los demás conectados de la guild reciben el cofre nuevo (el cliente lo usa solo si lo tiene abierto)
+guilds.onVaultChanged = (g, byKey) => { for (const m of g.members) { if (m.key === byKey) continue; const s = sessionsByNetworkId.get(`acc:${m.key}`); if (s?.socket && s.socket.readyState === s.socket.OPEN) s.socket.send(encode(depot.stateMessage(m.key, guilds.vaultHost(m.key)))); } };
+setInterval(() => guilds.tick(), 5000).unref();
+
 // Arenas 2v2 / 3v3 (docs/PARTY_Y_ARENAS.md §2): cola, invitación, partida y ranking por temporada. Se maneja con /arena en el chat.
 // FDN_ARENA_TEMPORADA = número de temporada (al cambiarlo, los ratings vuelven hacia el medio); FDN_ARENA_PRUEBA=1 deja entrar sin party
 // o con una party más chica que el modo (para probar con menos gente).
@@ -156,6 +175,7 @@ setInterval(() => {
         if (s.socket || s.disconnectDeadline === null || s.disconnectDeadline > now) continue;
         const world = worldOf(s);
         world?.persistVitals(s.sessionId);
+        guilds.disconnected(s.sessionId);
         saveChar(s.networkId, world?.removePlayer(s.sessionId));
         storage.flush();
         arena.sessionGone(s.sessionId, s.networkId.replace(/^acc:/, ''));
@@ -230,6 +250,7 @@ wss.on('connection', (ws, req) => {
             session = existing;
             worldOf(session)?.playerReconnected(session.sessionId, characterName, send, disconnect);
             worldOf(session)?.resendEconomy(session.sessionId); // el cliente nuevo necesita la foto del estado
+            guilds.connected(session.sessionId);
             return;
         }
 
@@ -241,6 +262,7 @@ wss.on('connection', (ws, req) => {
         sessionsByNetworkId.set(networkId, session); sessionsById.set(session.sessionId, session);
         world.playerConnected(session.sessionId, characterName, send, disconnect, persisted);
         world.bindAccount(session.sessionId, key);
+        guilds.connected(session.sessionId); // estado de la guild al que entra y "se conectó" a sus compañeros
     };
 
     send(worldsListMessage);
@@ -288,6 +310,7 @@ wss.on('connection', (ws, req) => {
                     if (!f) err = 'Ese personaje no existe.';
                     else if (sessionsByNetworkId.has(`acc:${f.key}`)) err = 'Ese personaje todavía está en el mundo. Esperá un minuto y probá de nuevo.';
                     else if (auction.mine(f.key).length > 0 || auction.mailbox(f.key).length > 0) err = 'Ese personaje tiene publicaciones o reclamos en la casa de subastas: retiralos antes de borrarlo.';
+                    else if ((err = guilds.characterDeleted(f.key))) { /* líder con gente o con cofre lleno: no se borra */ }
                     else { const r = deleteCharacter(storage, accKey, f!.rec.name); if (!r.ok) err = r.error; else console.log(`[Cuentas] personaje borrado '${r.name}' de la cuenta ${accKey.slice(0, 12)}…`); }
                     send(characterListMsg(accKey, err));
                     return;
@@ -336,6 +359,10 @@ wss.on('connection', (ws, req) => {
                 parties.handle(session.sessionId, payload.value.action.slice(0, 16), payload.value.name);
                 return;
             }
+            case 'guildRequest': {
+                guilds.handle(session.sessionId, payload.value.action.slice(0, 16), payload.value.name, payload.value.arg);
+                return;
+            }
             case 'portalRequest': {
                 // cruce de mapa: el server valida distancia, requisitos y estado; el cliente solo manda el id del vínculo
                 registry.handlePortal(session, payload.value.portalId.slice(0, 64), saveOf(session));
@@ -365,6 +392,7 @@ wss.on('connection', (ws, req) => {
         world?.persistVitals(session.sessionId);
         saveChar(session.networkId, world?.snapshot(session.sessionId));
         storage.flush(); // la economía se guarda ya al desconectar
+        if (!remainsActive) guilds.disconnected(session.sessionId);
         world?.playerDisconnected(session.sessionId, remainsActive);
         if (!remainsActive) { arena.sessionGone(session.sessionId, session.networkId.replace(/^acc:/, '')); parties.leave(session.sessionId); chat.forget(session.sessionId); sessionsByNetworkId.delete(session.networkId); sessionsById.delete(session.sessionId); }
     });
@@ -493,7 +521,7 @@ function handleGm(s: Session, text: string, reply: (m: ServerMessage) => void): 
 
 /** Chat global: le llega a todos los conectados. Port de GlobalWorld.HandleChatMessageSendRequest. */
 /**
- * Chat por canales (docs/PARTY_Y_ARENAS.md §3): global (por defecto, o `/g `), comercio (`/c `), nación (`/n `, la facción), party (`/p `) y guild (`/gu `, todavía no existe).
+ * Chat por canales (docs/PARTY_Y_ARENAS.md §3): global (por defecto, o `/g `), comercio (`/c `), nación (`/n `, la facción), party (`/p `) y guild (`/gu `, docs/GUILDS.md).
  * El canal manda en el mensaje (`channel`) para que el cliente lo pinte distinto.
  */
 function handleChat(sender: Session, raw: string, reply: (m: ServerMessage) => void): void {
@@ -512,6 +540,7 @@ const chat = new ChatManager({
     allSessions: () => [...sessionsById.values()].filter((s) => s.socket?.readyState === s.socket?.OPEN).map((s) => s.sessionId),
     viewersOf: (sid) => { const s = sessionsById.get(sid); return s ? worldOf(s)?.viewersOf(sid) ?? [sid] : []; },
     partyOf: (sid) => parties.partyMembers(sid),
+    guildOf: (sid) => guilds.onlineMembers(sid),
     factionOf: (sid) => { const s = sessionsById.get(sid); return s ? factionOfSession(s) : undefined; },
     send: (sid, m) => { const s = sessionsById.get(sid); if (s?.socket && s.socket.readyState === s.socket.OPEN) s.socket.send(encode(m)); },
 });
