@@ -1138,10 +1138,31 @@ function piece(n: string): HTMLImageElement | null {
     if (!im) { im = new Image(); im.onload = () => refreshLook(); im.src = `assets/paper/${n}.webp`; PIECES.set(n, im); }
     return im.complete && im.naturalWidth ? im : null;
 }
-function composeLook(names: string[]): HTMLCanvasElement | null {
+/**
+ * Aura del arma mejorada. No se puede hornear en el sprite (el +N cambia en el juego), así que se pinta al componer el muñeco:
+ * una pasada de la hoja del arma con sombra difusa al fondo, y encima las capas normales. Arranca recién en +UP_GLOW_DESDE para
+ * que el brillo signifique algo; el color es el de la rareza, así el aura dice calidad y nivel de mejora a la vez.
+ */
+const UP_GLOW_DESDE = 5;
+const auraDe = (it?: Item | null): { color: string; size: number } | undefined => {
+    const up = it?.up ?? 0;
+    if (up < UP_GLOW_DESDE) return undefined;
+    // de +5 a +11 (UP_MAX): de apenas perceptible a aura marcada
+    return { color: it!.rar.c, size: 2 + (up - UP_GLOW_DESDE) * ((13 - 2) / Math.max(1, UP_MAX - UP_GLOW_DESDE)) };
+};
+
+function composeLook(names: string[], aura?: { color: string; size: number }): HTMLCanvasElement | null {
     const ims = names.map(piece); if (ims.some((i) => !i)) return null;
     const { cw, ch, cols } = PAPER, rows = Object.keys(SPR.hero.anims).length * 8, c = document.createElement('canvas'), g = c.getContext('2d')!;
     c.width = cw * cols; c.height = ch * rows;
+    // El halo va primero, sobre la hoja entera del arma: queda detrás del personaje y no tapa el filo.
+    const iArma = names.findIndex((n) => PAPER.pieces[n] === 'main');
+    if (aura && iArma >= 0) {
+        g.save();
+        g.shadowColor = aura.color; g.shadowBlur = aura.size;
+        for (let i = 0; i < 3; i++) g.drawImage(ims[iArma]!, 0, 0); // varias pasadas: el halo se acumula y se nota
+        g.restore();
+    }
     for (let d = 0; d < 8; d++) for (const t of PAPER.order[d]) names.forEach((n, k) => {
         if (PAPER.pieces[n] !== t) return;
         for (let r = 0; r < rows / 8; r++) g.drawImage(ims[k]!, 0, (r * 8 + d) * ch, c.width, ch, 0, (r * 8 + d) * ch, c.width, ch);
@@ -1186,8 +1207,10 @@ function otherSprite(o: Other): string {
 let lookKey = '';
 function refreshLook() {
     if (!PAPER) return;
-    const names = lookOf(), key = names.join('|');
-    if (key !== lookKey) { const c = composeLook(names); if (c) { IMG.hero = c; lookKey = key; sendProfile(); } }
+    const names = lookOf(), aura = auraDe(P.eq.arma);
+    // el +N entra en la clave: si mejorás el arma hay que recomponer para que cambie el aura
+    const key = names.join('|') + (aura ? `|aura${P.eq.arma?.up}${aura.color}` : '');
+    if (key !== lookKey) { const c = composeLook(names, aura); if (c) { IMG.hero = c; lookKey = key; sendProfile(); } }
     const other = ['leather_boots', 'leather_pants', 'leather_gloves', 'leather_chest', 'head_short', 'shortsword', 'buckler'];
     if (!IMG.hero_other) { const c = composeLook(other); if (c) IMG.hero_other = c; }
     refreshNpcLook();
