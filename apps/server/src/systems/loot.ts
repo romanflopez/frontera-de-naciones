@@ -11,7 +11,7 @@ export const LOOT_PICKUP_RANGE = 1.5;
 /** Cuánto dura el botín en el suelo antes de desaparecer. */
 export const LOOT_TTL_MS = 3 * 60_000;
 /** Chance de que un mob suelte algo. */
-export const LOOT_DROP_CHANCE = 0.35;
+export const LOOT_DROP_CHANCE = 0.2;
 /** Dentro de lo que cae: chance de que sea oro en vez del material. */
 const GOLD_SHARE = 0.3;
 

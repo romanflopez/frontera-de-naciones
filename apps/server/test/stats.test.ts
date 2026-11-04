@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
 import { STAT_CAP, classBaseHp, cleanStats, defaultStats, mobDef, statBonus, statTip, statPointsFree, statPointsTotal, statResetCost } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
-import { ECON_VERSION, Economy, migrateEcon, newEcon, type EconCtx, type KillInfo } from '../src/economy.ts';
+import { ECON_VERSION, GOLD_CHANCE, Economy, migrateEcon, newEcon, type EconCtx, type KillInfo } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
 import { WorldRegistry, type TransferSession } from '../src/registry.ts';
 import type { PersistedPlayer } from '../src/player.ts';
@@ -150,7 +150,7 @@ test('botín: la chance de oro por kill es la de diseño y no depende de los sta
     let hits = 0; const N = 30_000;
     for (let i = 0; i < N; i++) { const g = st.gold; eco.reward(J.p, ctx(), kill); if (st.gold > g) hits++; st.exp = 0; st.bag = []; }
     const rate = hits / N;
-    assert.ok(Math.abs(rate - 0.45) < 0.02, `oro por kill ${rate} (diseño: 45 %)`);
+    assert.ok(Math.abs(rate - GOLD_CHANCE) < 0.02, `oro por kill ${rate} (diseño: ${GOLD_CHANCE * 100} %)`);
 });
 
 // ---------- H. antitrampa ----------
