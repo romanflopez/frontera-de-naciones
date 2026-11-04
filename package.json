@@ -1,28 +1,31 @@
 {
-  "name": "frontera-de-naciones",
-  "private": true,
-  "packageManager": "pnpm@10.28.0",
-  "scripts": {
-    "dev": "pnpm --parallel --filter @fdn/server --filter @fdn/client dev",
-    "server": "pnpm --filter @fdn/server dev",
-    "client": "pnpm --filter @fdn/client dev",
-    "build": "pnpm --filter @fdn/client build",
-    "assets:boss": "pnpm --filter @fdn/tools boss",
-    "assets:dungeon": "pnpm --filter @fdn/tools dungeon",
-    "assets:town": "pnpm --filter @fdn/tools town",
-    "assets:flare": "pnpm --filter @fdn/tools flare:fetch && pnpm --filter @fdn/tools atlas && pnpm assets:sets",
-    "assets:sets": "python3 tools/src/sets/build_sets.py",
-    "sets:preview": "python3 tools/src/sets/preview.py",
-    "sets:dev": "python3 tools/src/sets/build_sets.py --fast",
-    "maps:tiled": "pnpm --filter @fdn/tools maps:tiled",
-    "proto": "pnpm --filter @fdn/proto generate",
-    "typecheck": "pnpm -r typecheck"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "grpc-tools",
-      "@napi-rs/canvas"
-    ]
-  }
+    "name": "frontera-de-naciones",
+    "private": true,
+    "packageManager": "pnpm@10.28.0",
+    "scripts": {
+        "dev": "pnpm --parallel --filter @fdn/server --filter @fdn/client dev",
+        "dev:desktop": "pnpm --parallel --filter @fdn/server --filter @fdn/client --filter @fdn/desktop dev",
+        "server": "pnpm --filter @fdn/server dev",
+        "client": "pnpm --filter @fdn/client dev",
+        "build": "pnpm --filter @fdn/client build",
+        "assets:boss": "pnpm --filter @fdn/tools boss",
+        "assets:dungeon": "pnpm --filter @fdn/tools dungeon",
+        "assets:town": "pnpm --filter @fdn/tools town",
+        "assets:flare": "pnpm --filter @fdn/tools flare:fetch && pnpm --filter @fdn/tools atlas && pnpm assets:sets",
+        "assets:sets": "python3 tools/src/sets/build_sets.py",
+        "sets:preview": "python3 tools/src/sets/preview.py",
+        "sets:dev": "python3 tools/src/sets/build_sets.py --fast",
+        "maps:tiled": "pnpm --filter @fdn/tools maps:tiled",
+        "proto": "pnpm --filter @fdn/proto generate",
+        "typecheck": "pnpm -r typecheck"
+    },
+    "pnpm": {
+        "onlyBuiltDependencies": [
+            "esbuild",
+            "grpc-tools",
+            "@napi-rs/canvas",
+            "electron",
+            "electron-builder"
+        ]
+    }
 }

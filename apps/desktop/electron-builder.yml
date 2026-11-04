@@ -1,0 +1,31 @@
+# Empaquetado del cliente de escritorio. El .exe de Windows lo genera el CI (.github/workflows/desktop.yml);
+# en local alcanza con `pnpm --filter @fdn/desktop pack:dir` para probar el empaquetado sin instalador.
+appId: com.eris.game
+productName: ERIS
+executableName: ERIS
+copyright: ERIS
+directories:
+  output: release
+  buildResources: build
+# Solo el proceso principal: el cliente entra como recurso (ver extraResources).
+files:
+  - src/**/*
+  - package.json
+# El build del cliente va aparte, en resources/client: el proceso principal lo sirve por app:// desde ahí.
+extraResources:
+  - from: ../client/dist
+    to: client
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+  shortcutName: ERIS
+mac:
+  target:
+    - target: dir
+      arch: [arm64]
+  category: public.app-category.games

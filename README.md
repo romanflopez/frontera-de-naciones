@@ -39,6 +39,22 @@ Otros comandos:
 | `pnpm sets:dev [sets...]` | Escribe las hojas de los sets en `assets/paper` sin comprimir (rápido, para probar en el juego) |
 | `pnpm assets:sets` | Igual pero con la compresión final: es el que se commitea |
 | `pnpm typecheck` | Chequeo de tipos de todo el repo |
+| `pnpm dev:desktop` | Server, cliente y la app de escritorio juntos (ver abajo) |
+
+### Cliente de escritorio
+
+El juego se distribuye como aplicación de escritorio para Windows. Es el mismo cliente web envuelto en Electron, que trae su propio
+Chromium: eso importa porque las hojas de sprites a tamaño nativo pasan el límite de canvas de WebKit, así que con el webview del
+sistema (Tauri en macOS, por ejemplo) no andarían.
+
+- **Desarrollar, en cualquier sistema:** `pnpm dev:desktop` levanta el server, el cliente y abre la ventana de Electron apuntando al
+  Vite de siempre. Se puede seguir usando `pnpm dev` y el navegador: es el mismo código.
+- **Probar el empaquetado en local:** `pnpm --filter @fdn/desktop pack:dir` deja la app sin instalador en `apps/desktop/release/`.
+- **Generar el `.exe` de Windows:** no hace falta tener Windows. En la pestaña Actions de GitHub, workflow *Cliente de escritorio
+  (Windows)* → "Run workflow"; el instalador queda como artifact de la corrida. También se dispara solo al publicar un tag `v*`.
+- **A qué server se conecta:** por orden, `--server=<url>` en la línea de comandos, la variable `FDN_SERVER`, un `server.json` con
+  `{"server": "wss://..."}` al lado del ejecutable, y por último el valor por defecto de `apps/desktop/src/main.cjs`. En el disparo
+  manual del workflow se puede pasar el server para que quede compilado en el build.
 
 ### Probar los sets de armadura
 

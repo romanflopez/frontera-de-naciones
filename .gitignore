@@ -17,6 +17,9 @@ apps/server/data/accounts/
 
 # Vistas previas de los sets (pnpm sets:preview)
 tools/out/
+
+# Salida del empaquetado de escritorio (electron-builder)
+apps/desktop/release/
 __pycache__/
 
 # Assets crudos de OpenGameArt: licencias sin verificar por pieza (ver docs/MOBS_NUEVOS.md). No se suben.
