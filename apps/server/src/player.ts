@@ -162,7 +162,10 @@ export class Player {
     get isDead(): boolean { return this.hp < 1; }
     get baseMovementMs(): number { return RUN_MS; }
     /** Milisegundos por celda: los decide el server según walk/run. Nunca por debajo del cap de combate. */
-    get movementSpeedMs(): number { return Math.max(MOVE_CAP_MS, this.runningMode ? RUN_MS : WALK_MS); }
+    /** Solo GM (`/gm vel <ms>`): fija la velocidad para comparar la sensación en vivo. null = la del juego. */
+    gmMoveMs: number | null = null;
+    setGmMoveMs(ms: number | null): void { this.gmMoveMs = ms; this.lastMovementRequestMs = 0; this.moveDebtMs = 0; }
+    get movementSpeedMs(): number { return this.gmMoveMs ?? Math.max(MOVE_CAP_MS, this.runningMode ? RUN_MS : WALK_MS); }
     /** Se castea siempre, también corriendo (4/11): el cast frena al jugador y un paso lo corta. */
     get canCast(): boolean { return true; }
     /** Cast en curso validado por el server: el golpe de `spell` vale desde `okAt` hasta `until`. Un paso o ponerse a correr lo corta (si no salió todavía). */

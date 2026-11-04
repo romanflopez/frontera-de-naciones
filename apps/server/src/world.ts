@@ -1147,6 +1147,13 @@ export class GameWorld {
         const p = this.players.get(sessionId); if (!p || !this.map) return ['No estás en un mundo.'];
         const num = (s: string | undefined) => (s !== undefined && /^-?\d+$/.test(s) ? parseInt(s, 10) : undefined);
         switch (cmd) {
+            case 'vel': {
+                const n = num(args[0]);
+                p.setGmMoveMs(n === undefined ? null : Math.max(120, Math.min(800, n)));
+                const m = M.playerMovementStateChanged(p.playerId, p.runningMode, p.movementSpeedMs);
+                p.send(m); this.broadcastNear(p, m);
+                return [`Velocidad: ${p.movementSpeedMs} ms por celda${p.gmMoveMs === null ? ' (la del juego)' : ''}.`];
+            }
             case 'nivel': {
                 const n = num(args[0]); if (n === undefined) return ['Uso: /gm nivel <1-60>'];
                 if (!this.econ?.gmSet(p, { lvl: n })) return ['Tu personaje todavía no tiene economía.'];
