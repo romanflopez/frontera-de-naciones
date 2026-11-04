@@ -29,6 +29,7 @@ __pycache__/
 # Efectos con licencia que prohíbe publicarlos (Frostwindz). Se generan con tools/src/fx/private_atlas.py.
 # TEMPORAL: subidos a git para verlos en prod; volver a ignorarlos.
 # apps/client/public/assets/fx_priv.*
+# apps/client/public/assets/portal_priv.png  (vórtice de los portales, Frostwindz; se genera con tools/src/fx/portal_strip.py)
 
 # Texturas de Craftpix (RPG MMO Game User Interface): licencia sin redistribución.
 # Se copian con tools/src/ui/install_craftpix.py y tools/src/ui/extract_login_psd.py.

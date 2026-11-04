@@ -23,7 +23,7 @@ Desde la auditoría original se resolvieron varios bloqueantes. Lo que sigue abi
 | Efectos TOMAS (`fx.webp`) | **Abierto:** licencia sin verificar |
 | Íconos de hechizos generados con IA | **Abierto:** falta registrar herramienta y términos |
 | Texturas de Craftpix (`ui/craftpix/*`) | **Abierto:** commiteadas a propósito, repo todavía público |
-| Efectos de Frostwindz (`fx_priv.*`) | **Abierto (nuevo):** la licencia prohíbe publicarlos y están commiteados de forma temporal |
+| Efectos de Frostwindz (`fx_priv.*`) y vórtice de los portales (`portal_priv.png`, pack "Pixel Art Animated Portal" comprado en itch.io, 4/11) | **Abierto (nuevo):** la licencia (uso comercial y modificación sí; redistribución y uso en IA no; atribución opcional) prohíbe publicarlos y están commiteados de forma temporal. Texto de la licencia en el pack (`Frostwindz Asset License Agreement.docx`) |
 | Marca y nombre | **Abierto:** sin búsqueda de marca. El juego pasó a llamarse ERIS |
 
 **Novedad que sube la apuesta (3/11):** se decidió distribuir ERIS como **aplicación de escritorio** (Steam como destino). Distribuir
