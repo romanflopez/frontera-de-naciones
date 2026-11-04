@@ -12,6 +12,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { ClientMessage, ServerMessage } from '@fdn/proto';
 import { dropLines, loadDropsFile, setDrop } from './drops.ts';
 import { RestartCountdown, changelogLines, handleClientReport } from './ops.ts';
+import { alert, alerts, buildInfo } from './alerts.ts';
 import { DATA_DIR, loadSettings, type GameWorldConfig } from './config.ts';
 import { MAPS, MOB_TYPES, canonicalMapId, factionHome, getMapDef, type MapDef } from '@fdn/world';
 import { loadPosition, resolveSaved, savePosition } from './persist.ts';
@@ -21,7 +22,7 @@ import { WorldBossService } from './worldBoss.ts';
 import { WorldRegistry } from './registry.ts';
 import { authenticate, charKeysOf, createCharacter, deleteCharacter, findChar, MAX_CHARS } from './accounts.ts';
 import { Economy, newEconChecked, toCharSave } from './economy.ts';
-import { FileStorage, PgStorage, type Storage } from './storage.ts';
+import { FileStorage, PgStorage, storageHealth, type Storage } from './storage.ts';
 import { AuctionHouse, setAuctionHouse } from './auction.ts';
 import { Depot, setDepot } from './deposit.ts';
 import { TradeService, setTradeService } from './trade.ts';
@@ -165,6 +166,13 @@ const CLIENT_DIST = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'c
 const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webp': 'image/webp', '.png': 'image/png', '.txt': 'text/plain; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
 const http = createServer((req, res) => {
     if (handleClientReport(req, res, SAVE_DIR)) return;
+    if ((req.url ?? '').split('?')[0] === '/health') {
+        const ok = !storageHealth.failing;
+        const online = [...sessionsById.values()].filter((x) => x.socket && x.socket.readyState === x.socket.OPEN).length;
+        res.writeHead(ok ? 200 : 503, { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*' });
+        res.end(JSON.stringify({ ok, build: buildInfo(), uptimeS: Math.round(process.uptime()), online, storage: process.env.DATABASE_URL ? 'postgres' : 'archivos', saving: ok ? 'ok' : `falla desde hace ${Math.round((Date.now() - storageHealth.since) / 1000)} s`, restartInS: restart.remaining }));
+        return;
+    }
     const path = decodeURIComponent((req.url ?? '/').split('?')[0]);
     const file = normalize(join(CLIENT_DIST, path === '/' ? 'index.html' : path));
     if (file.startsWith(CLIENT_DIST) && existsSync(file) && statSync(file).isFile()) {
@@ -410,12 +418,14 @@ function handleGm(s: Session, text: string, reply: (m: ServerMessage) => void): 
     if (c === 'drops') {
         if (args.length === 0) { say(...dropLines(), 'Cambiar en vivo: /gm drops <clave> <valor> (mode, goldChance, goldMin, goldMax, floorChance, potionChance, uniqueMult, forgeMult). Para que quede, drops.json en la carpeta de datos.'); return; }
         const err = setDrop(args[0], args[1] ?? '');
+        if (!err) alert('event', 'GM cambió los drops', { gm: s.characterName, clave: args[0], valor: args[1] });
         say(err ?? 'Listo (en vivo, hasta el próximo reinicio).', ...dropLines()); return;
     }
     if (c === 'reiniciar') {
         if ((args[0] ?? '').toLowerCase() === 'cancelar') { if (restart.cancel()) { broadcastChat('Se canceló el reinicio del servidor.'); say('Reinicio cancelado.'); } else say('No hay un reinicio en marcha.'); return; }
         const secs = args[0] === undefined ? 300 : Math.floor(Number(args[0]));
         if (!Number.isFinite(secs) || secs < 5 || secs > 3600) { say('Usá /gm reiniciar <segundos entre 5 y 3600>, o /gm reiniciar cancelar.'); return; }
+        alert('event', 'Reinicio avisado', { gm: s.characterName, segundos: secs });
         restart.start(secs); say(`Reinicio en ${secs} s. /gm reiniciar cancelar lo frena.`); return;
     }
     if (c === 'jefemundo') {
@@ -495,18 +505,38 @@ function broadcastChat(text: string): void { const m = M.serverChat('global', 'S
 const restart = new RestartCountdown(broadcastChat, () => { setTimeout(() => void shutdown(), 500); }); // medio segundo para que el último aviso salga por los sockets
 const factionOfSession = (s: Session): string | undefined => worldOf(s)?.playerOf(s.sessionId)?.profile.split(';')[0] || undefined;
 
-async function shutdown(): Promise<void> {
+async function shutdown(code = 0): Promise<void> {
     console.log('[Server] Cerrando: guardando personajes…');
+    if (code === 0) alert('info', 'El server se apaga (reinicio o cierre)', { build: buildInfo(), conectados: [...sessionsById.values()].filter((x) => x.socket).length });
     registry.flushAllPending();
     for (const s of sessionsByNetworkId.values()) { worldOf(s)?.persistVitals(s.sessionId); saveChar(s.networkId, worldOf(s)?.snapshot(s.sessionId)); }
     registry.dispose();
     auction.stop();
     try { if (storage.close) await storage.close(); else storage.flush(); } catch (e) { console.error('[Storage] Error al cerrar:', (e as Error).message); }
-    process.exit(0);
+    await alerts.flush(1500);
+    process.exit(code);
 }
-process.on('SIGINT', shutdown);
+process.on('SIGINT', () => void shutdown());
 process.on('SIGTERM', () => { if (!restart.active) broadcastChat('El servidor se reinicia ahora (actualización). Tu personaje queda guardado: volvé a entrar en un minuto.'); setTimeout(() => void shutdown(), 300); });
+
+process.on('uncaughtException', (e) => {
+    console.error('[Server] Excepción no atrapada:', e);
+    alert('error', 'El server se cae (excepción no atrapada)', { msg: e?.message, stack: String(e?.stack ?? '').split('\n').slice(0, 6).join('\n') });
+    void shutdown(1); // guarda a todos y sale con error: el proveedor lo vuelve a levantar
+});
+process.on('unhandledRejection', (e) => {
+    console.error('[Server] Promesa rechazada sin atrapar:', e);
+    alert('error', 'Promesa rechazada sin atrapar', { msg: (e as Error)?.message ?? String(e), stack: String((e as Error)?.stack ?? '').split('\n').slice(0, 6).join('\n') });
+});
+
+// Resumen diario y pico de conectados (canal de registro)
+setInterval(() => alerts.peak('picoConectados', [...sessionsById.values()].filter((x) => x.socket).length), 30_000).unref();
+setInterval(() => {
+    const d = alerts.takeDaily();
+    alert('event', 'Resumen del día', { pico_conectados: d.picoConectados ?? 0, errores_del_cliente: d.erroresDelCliente ?? 0, alertas_error: alerts.counts.error, anti_trampa: d.antiTrampa ?? 0 });
+}, 24 * 3600_000).unref();
 
 http.listen(settings.port, '0.0.0.0', () => {
     console.log(`[Server] Escuchando en ws://localhost:${settings.port}/ws`);
+    alert('info', 'El server arrancó', { build: buildInfo(), storage: process.env.DATABASE_URL ? 'postgres' : 'archivos', puerto: settings.port });
 });

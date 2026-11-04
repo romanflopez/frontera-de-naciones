@@ -3,9 +3,13 @@
  *   DATA_DIR=<carpeta vacía> PORT=8116 FDN_GM=gmoperacion pnpm --filter @fdn/server start
  *   DATA_DIR=<la misma carpeta> npx tsx scripts/test-operacion.ts [ws://localhost:8116/ws]
  * Verifica: /novedades, POST /report (anota, rechaza lo grande y limita por IP), y /gm reiniciar (aviso a todos, cancelar,
- * cuenta regresiva real hasta el cierre del server). OJO: la última prueba APAGA el server.
+ * cuenta regresiva real hasta el cierre del server), GET /health y, si se pasa WEBHOOK_PORT, las alertas a Discord (el script
+ * hace de Discord falso). Para eso el server tiene que arrancar con
+ *   DISCORD_WEBHOOK_URL=http://127.0.0.1:8117/a DISCORD_WEBHOOK_LOG=http://127.0.0.1:8117/l
+ * y el script correrse con WEBHOOK_PORT=8117. OJO: la última prueba APAGA el server.
  */
 import { WebSocket } from 'ws';
+import { createServer } from 'node:http';
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes, scryptSync } from 'node:crypto';
@@ -53,6 +57,12 @@ function seed(name: string) {
 }
 const post = (body: string, path = '/report') => fetch(`${HTTP}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body });
 
+/** Discord falso: guarda lo que llega a cada ruta. */
+const hooks: { path: string; body: string }[] = [];
+const WEBHOOK_PORT = Number(process.env.WEBHOOK_PORT ?? 0);
+if (WEBHOOK_PORT) createServer((rq, rs) => { let b = ''; rq.on('data', (c) => { b += c; }); rq.on('end', () => { hooks.push({ path: rq.url ?? '', body: b }); rs.writeHead(204); rs.end(); }); }).listen(WEBHOOK_PORT, '127.0.0.1');
+const hookHas = async (path: string, re: RegExp, ms = 3000) => { for (let i = 0; i < ms / 50; i++) { if (hooks.some((h) => h.path === path && re.test(h.body))) return true; await sleep(50); } return false; };
+
 async function main() {
     if (!DATA_DIR) throw new Error('Falta DATA_DIR (el mismo del server).');
     const gn = 'gmoperacion', pn = `pj${RUN}`; seed(gn); seed(pn);
@@ -70,8 +80,18 @@ async function main() {
     check((await post('x'.repeat(6000))).status === 413, 'un reporte de más de 4 KB se rechaza (413)');
     check((await post('no es json')).status === 400, 'un cuerpo que no es JSON da 400');
     check((await fetch(`${HTTP}/report`, { method: 'OPTIONS' })).status === 204, 'la preflight de CORS responde');
+    for (let i = 0; i < 3; i++) await post(JSON.stringify({ msg: 'repetido igual', src: 'a.js:1' }));
     let limited = 0; for (let i = 0; i < 15; i++) if ((await post(JSON.stringify({ msg: `e${i}` }))).status === 429) limited++;
     check(limited >= 1, `el tope por IP corta los reportes en ráfaga (${limited} de 15 rechazados con 429)`);
+
+    // ---------- 2b. /health y alertas ----------
+    const hr = await fetch(`${HTTP}/health`); const hj = await hr.json() as Record<string, unknown>;
+    check(hr.status === 200 && hj.ok === true && typeof hj.build === 'string' && Number(hj.online) >= 2 && hj.storage === 'archivos', `/health responde ok con build, conectados y storage (${JSON.stringify(hj)})`);
+    if (WEBHOOK_PORT) {
+        check(await hookHas('/a', /Error del cliente[\s\S]*TypeError: x is undefined/), 'un error del cliente por /report llegó a Discord (canal de alertas)');
+        const n = hooks.filter((h) => h.path === '/a' && /repetido igual/.test(h.body)).length;
+        check(n === 1, `el anti-spam agrupa 3 reportes idénticos en 1 aviso (${n})`);
+    } else console.log('(sin WEBHOOK_PORT: se saltean las pruebas de Discord)');
 
     // ---------- 3. reinicio avisado ----------
     pj.say('/gm reiniciar 60');
@@ -87,8 +107,10 @@ async function main() {
     check(await pj.waitFor(/en 8 s/), 'arranca la cuenta regresiva corta');
     check(await pj.waitFor(/en 5 s/, 6000), 'avisa a los 5 s');
     check(await pj.waitFor(/se reinicia ahora/, 8000), 'avisa en cero');
+    if (WEBHOOK_PORT) check(await hookHas('/l', /Reinicio avisado/), 'el reinicio avisado quedó en el canal de registro');
     const closed = await Promise.race([new Promise<boolean>((r) => pj.ws.once('close', () => r(true))), sleep(5000).then(() => false)]);
     check(closed, 'el server cierra y desconecta a los jugadores después del aviso');
+    if (WEBHOOK_PORT) check(await hookHas('/a', /El server se apaga/), 'a Discord llegó el aviso de apagado');
 
     console.log(failures ? `\n${failures} fallas` : '\nTodo OK');
     process.exit(failures ? 1 : 0);

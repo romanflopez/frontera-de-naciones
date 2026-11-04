@@ -29,6 +29,7 @@ import { tradeService } from './trade.ts';
 import { canPickup, GroundLoot, type GroundApi } from './ground.ts';
 import { LootManager, rollLoot, splitLoot } from './systems/loot.ts';
 import { DROPS } from './drops.ts';
+import { alert, alerts } from './alerts.ts';
 
 interface Timer { at: number; fn: () => void }
 
@@ -749,6 +750,7 @@ export class GameWorld {
             if (!p.registerSpeedViolation(now)) {
                 const secs = this.settings.movementSpeedViolationsChecker.paralysisDuration;
                 p.paralyzeFor(secs, now);
+                alerts.count('antiTrampa'); alert('warn', 'Anti-trampa: paralizado por velocidad', { jugador: p.characterName, mapa: this.id });
                 p.send(M.playerParalyzed(secs));
                 p.send(M.sendMessage(`Te movés demasiado rápido. Si estás tocando cosas que no deberías, frená: por ahora te quedás quieto ${secs} segundos.`));
             }

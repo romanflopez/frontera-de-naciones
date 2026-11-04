@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileS
 import { join } from 'node:path';
 import type { Econ } from './economy.ts';
 import type { PersistedPlayer } from './player.ts';
+import { alert } from './alerts.ts';
 
 export interface AccountRecord {
     /** Nombre tal como lo escribió la primera vez (para mostrar). */
@@ -44,6 +45,18 @@ export interface Storage {
 }
 
 /** Espera antes de reintentar un guardado que falló. */
+/** Estado del último guardado, para /health y para saber si hay progreso sin escribir. */
+export const storageHealth = { failing: false, since: 0, lastError: '' };
+function storageFailed(where: string, msg: string): void {
+    if (!storageHealth.failing) storageHealth.since = Date.now();
+    storageHealth.failing = true; storageHealth.lastError = msg.slice(0, 200);
+    alert('error', 'No se pudo guardar (progreso en riesgo)', { msg, donde: where });
+}
+function storageOk(): void {
+    if (storageHealth.failing) alert('info', 'El guardado volvió a funcionar', { donde: 'storage' });
+    storageHealth.failing = false; storageHealth.lastError = '';
+}
+
 const RETRY_MS = 5000;
 
 /** Archivos JSON en `<dir>/accounts/<clave>.json`, con escritura atómica (tmp + rename) y debounce. */
@@ -90,9 +103,9 @@ export class FileStorage implements Storage {
                 writeFileSync(tmp, JSON.stringify(rec)); staged.push([tmp, f]);
             }
             for (const [tmp, f] of staged) renameSync(tmp, f);
-            this.dirty.clear();
+            this.dirty.clear(); storageOk();
         } catch (err) {
-            console.error('[Storage] No se pudo guardar el lote, se reintenta:', (err as Error).message);
+            console.error('[Storage] No se pudo guardar el lote, se reintenta:', (err as Error).message); storageFailed('archivos', (err as Error).message);
             for (const [tmp] of staged) { try { unlinkSync(tmp); } catch { /* ya no está */ } }
             this.timer = setTimeout(() => this.flush(), RETRY_MS); this.timer.unref();
         }
@@ -151,7 +164,7 @@ export class PgStorage implements Storage {
         const batch = [...this.dirty].flatMap((key) => { const rec = this.cache.get(key); return rec ? [[key, JSON.stringify(rec)] as const] : []; });
         this.dirty.clear();
         this.pending = this.pending.then(() => this.writeBatch(batch)).catch((err) => {
-            console.error(`[Storage] No se pudo guardar el lote de ${batch.length} cuentas en Postgres, se reintenta:`, (err as Error).message);
+            console.error(`[Storage] No se pudo guardar el lote de ${batch.length} cuentas en Postgres, se reintenta:`, (err as Error).message); storageFailed('postgres', (err as Error).message);
             for (const [key] of batch) this.dirty.add(key);
             if (!this.timer) { this.timer = setTimeout(() => this.flush(), this.retryMs); this.timer.unref(); }
         });
@@ -166,7 +179,7 @@ export class PgStorage implements Storage {
                 await client.query('INSERT INTO accounts (key, data) VALUES ($1, $2::jsonb) ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, updated = now()', [key, json]);
             }
             await client.query('COMMIT');
-            client.release();
+            client.release(); storageOk();
         } catch (err) {
             try { await client.query('ROLLBACK'); client.release(); } catch (e) { client.release(e); } // si ni el ROLLBACK anduvo, se descarta la conexión
             throw err;

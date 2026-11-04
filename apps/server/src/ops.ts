@@ -5,6 +5,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { alert, alerts } from './alerts.ts';
 
 /** Registro de cambios que ve cualquiera con `/novedades`. Lo más nuevo primero; solo lo que ya está live. */
 export const CHANGELOG: { date: string; items: string[] }[] = [
@@ -108,6 +109,8 @@ export function handleClientReport(req: IncomingMessage, res: ServerResponse, di
             const j = JSON.parse(body) as Record<string, unknown>;
             const line = `${new Date().toISOString()} ip=${cleanReportField(ip, 45)} ver=${cleanReportField(j.ver, 40)} ${cleanReportField(j.msg, 300)} @ ${cleanReportField(j.src, 200)} | ${cleanReportField(j.stack, 1200).replace(/\s+/g, ' ')}`;
             console.error(`[ClientError] ${line}`);
+            alerts.count('erroresDelCliente');
+            alert('warn', 'Error del cliente', { msg: cleanReportField(j.msg, 300), src: cleanReportField(j.src, 200), ver: cleanReportField(j.ver, 40), stack: cleanReportField(j.stack, 600) });
             if (reportBytes < REPORT_FILE_MAX) { try { mkdirSync(dir, { recursive: true }); appendFileSync(join(dir, 'client-errors.log'), line + '\n'); reportBytes += line.length + 1; } catch { /* sin disco: queda en la consola */ } }
             res.writeHead(204, cors); res.end();
         } catch { res.writeHead(400, cors); res.end(); }
