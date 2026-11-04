@@ -1,6 +1,6 @@
 # Roadmap de mapas: dónde estamos
 
-Documento vivo para no perder el hilo. Última actualización: 3/11/2026. El detalle técnico está en `MAPAS_FLARE.md` (importador, relleno, licencias) y en `TIERS_DE_ZONA.md` (tiers, niveles y jefes).
+Documento vivo para no perder el hilo. Última actualización: 4/11/2026. El detalle técnico está en `MAPAS_FLARE.md` (importador, relleno, licencias) y en `TIERS_DE_ZONA.md` (tiers, niveles y jefes).
 
 ## 1. El mundo hoy
 
@@ -45,6 +45,9 @@ Aparte: **Arena** (34x34, claro plano con 4 piedras bajas) para el 1v1 y el 2v2.
    - [x] Salidas a los primeros niveles: cada ciudad tiene el portón a pie hacia el Campos de Sal de su nación (nivel 1-2) y el portal de la plaza como atajo; lo vigila `salidas.test.ts`. **Regla para todo mapa nuevo de inicio** (Román, 3/11).
    - [x] **Primeros niveles lejos y por nación** (Román, 3/11): `campos_de_sal` (Solmar) y `campos_de_sal_vhar` (Vhar), unidos en el Bosque de Piedra; el atajo de la plaza y el Portal de Frontera a ese campo se abren después de llegar a pie una vez; cada nación entra solo a su campo (`CIUDADES.md` §8).
    - [ ] Falta el OK de Román mirando el juego (no solo `maps:render`), pulir los sprites (ver `CIUDADES.md` §5.1) y C8: borrar las fachadas viejas `sm_*`/`vh_*` y su código en `town.ts`/`atlas.ts`.
+4b. **Mapas de PvP abiertos y planos (Román, 4/11).** Los 14 mapas de caza con PvP revisados uno por uno con Román y aprobados: sin agua ni paredes que traben, árboles solo en el borde, zonas de caza en lugares despejados, cuevas ensanchadas con variedad de piezas. Detalle en `MAPAS_FLARE.md` («PvP más plano»). Rama `rediseno-ciudades-y-mapas-pvp`.
+   - [ ] Falta verlos corriendo en el juego (no solo `maps:render`), sobre todo Paso de Stormrock y Lago Kuuma con las piedras y estructuras nuevas de la nieve.
+   - [ ] Las zonas de caza quedaron menos en los mapas de pasto (Cañón Goblin pasó de ~23 a 13): repasar la densidad de mobs jugando.
 5. **Auditoría de NPC de las ciudades.** Hay 38 (19 por ciudad) y nadie revisó que estén bien configurados. Resultado de la primera pasada en `CIUDADES.md` §7; falta: un test que cuide que cada ciudad tenga los 8 roles con servicio, decidir qué hacen la sanadora y el mago (hoy solo hablan), y sumar los NPC que faltan (maestro de arena, teletransporte, quests extra).
 6. **Mini-cuevas de mini-jefe** (opcional, de `MUNDO.md`): `mog_caverns`, `nazia_underground`, `nazia_mines` y `blackmire_mines`.
 7. **Borrar Tierras de Solmar del todo**: hay que migrar los tests del server que la usan de mundo genérico (~10 archivos). Ojo: el mapa viejo comparte ids de NPC con las ciudades nuevas (ver punto 5).
