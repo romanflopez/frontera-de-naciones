@@ -18,7 +18,7 @@ Se entra por la **Villa de Solmar** o por la **Ciudadela de Vhar**. El **Portal 
 
 Cadena a pie: Campos de Sal (el de Solmar o el de Vhar, se juntan acá) → Bosque de Piedra → Cañón goblin → Pantano → (Altas de Nazia | Cementerio → Risco del Sur → La Brecha) → Paso de Stormrock → Cenizas I → II → III → Granja de Roble Negro → Oasis de Ceniza → Lago Kuuma → Laguna de la Gruta → Minas abandonadas.
 
-Aparte: **Arena** (34x34, claro plano con 4 piedras bajas) para el 1v1 y el 2v2. Todavía sin entrada: es de pruebas hasta que exista la cola.
+Aparte: las **arenas** 2v2 y 3v3 (claro plano de 34x34): sin portal, se entra por la cola y el Maestro de Arena de cada ciudad (`PARTY_Y_ARENAS.md`).
 
 ## 2. Hecho
 
@@ -39,7 +39,7 @@ Aparte: **Arena** (34x34, claro plano con 4 piedras bajas) para el 1v1 y el 2v2.
 
 1. **Probar los jefes en grupo**, D7 incluido: nadie probó el balance todavía.
 2. **Recorrido de los tiers (prueba E).** Subir del 1 al 40 jugando o con un bot, para ver que cada tier tenga mobs suficientes y que no te pases de nivel antes de salir de él.
-3. **Arenas: la parte de juego.** Cola, emparejador, partida y puntaje (`PARTY_Y_ARENAS.md`); el mapa ya está.
+3. **Arenas: probarlas jugando.** La cola, el emparejador, la partida y el puntaje ya están en `main` (4/11); falta jugarlas de verdad (`PARTY_Y_ARENAS.md`).
 4. **Rediseño de las ciudades (entra al MVP).** Solmar y Vhar de cero: arte propio renderizado en Blender y mapas de 58×58 (Solmar 64×64 por el mar; antes 128×128) con una sola planta para las dos. Antes tenían 62 y 100 edificios y solo 8 por ciudad hacían algo; ahora son 8 con función, 3 casas, muralla con 4 torres, portón y 2 fuentes. Solmar recupera la costa con muelle y Vhar pasa de lava a nieve. Detalle en `CIUDADES.md`.
    - [x] C1 cámara y ancla verificadas; C2 piloto; C3 render por lotes; C4 los 17 sprites por ciudad; C5-C6 los dos mapas integrados (puertas, interiores y NPC intactos; 393 tests ok) (3/11).
    - [x] Salidas a los primeros niveles: cada ciudad tiene el portón a pie hacia el Campos de Sal de su nación (nivel 1-2) y el portal de la plaza como atajo; lo vigila `salidas.test.ts`. **Regla para todo mapa nuevo de inicio** (Román, 3/11).
@@ -49,7 +49,7 @@ Aparte: **Arena** (34x34, claro plano con 4 piedras bajas) para el 1v1 y el 2v2.
    - [ ] Confirmar que el deploy a prod tomó `main` (el 4/11 no se veían los cambios; ver con quien administra el hosting) y que las cuentas viejas aparecen bien en las ciudades nuevas.
    - [ ] Falta verlos corriendo en el juego (no solo `maps:render`), sobre todo Paso de Stormrock y Lago Kuuma con las piedras y estructuras nuevas de la nieve.
    - [ ] Las zonas de caza quedaron menos en los mapas de pasto (Cañón Goblin pasó de ~23 a 13): repasar la densidad de mobs jugando.
-5. **Auditoría de NPC de las ciudades.** Hay 38 (19 por ciudad) y nadie revisó que estén bien configurados. Resultado de la primera pasada en `CIUDADES.md` §7; falta: un test que cuide que cada ciudad tenga los 8 roles con servicio, decidir qué hacen la sanadora y el mago (hoy solo hablan), y sumar los NPC que faltan (maestro de arena, teletransporte, quests extra).
+5. **Auditoría de NPC de las ciudades.** Hay 38 (19 por ciudad) y nadie revisó que estén bien configurados. Resultado de la primera pasada en `CIUDADES.md` §7; falta: un test que cuide que cada ciudad tenga los 8 roles con servicio, decidir qué hacen la sanadora y el mago (hoy solo hablan), y sumar los NPC que faltan (teletransporte, quests extra). El maestro de arena ya está (`arenero_s`/`arenero_v`, en la plaza de cada ciudad desde el 4/11).
 6. **Mini-cuevas de mini-jefe** (opcional, de `MUNDO.md`): `mog_caverns`, `nazia_underground`, `nazia_mines` y `blackmire_mines`.
 7. **Borrar Tierras de Solmar del todo**: hay que migrar los tests del server que la usan de mundo genérico (~10 archivos). Ojo: el mapa viejo comparte ids de NPC con las ciudades nuevas (ver punto 5).
 8. **Pulido de mapas.**
