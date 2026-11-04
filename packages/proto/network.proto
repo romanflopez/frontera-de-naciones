@@ -536,6 +536,8 @@ message ServerMessage {
     // Party (ver docs/PARTY_Y_ARENAS.md). Rango propio de tags desde 600.
     PartyState party_state = 600;
     PartyInvited party_invited = 601;
+    ArenaInvited arena_invited = 603;
+    ArenaInfo arena_info = 604;
     PartyStatsUpdate party_stats_update = 602;
     // Texto flotante de combate (daño / cura). Rango propio de tags desde 700.
     CombatTextEvent combat_text_event = 700;
@@ -639,6 +641,31 @@ message PartyInvited {
   string from_name = 1;
   int64 expires_ms = 2;
   string party_id = 3;
+}
+
+// Hay partida de arena: la party tiene hasta expires_ms para aceptar (/arena aceptar) o rechazar.
+message ArenaInvited {
+  string mode = 1;       // "2v2" | "3v3"
+  int64 expires_ms = 2;  // epoch ms
+  string arena = 3;      // nombre de la arena sorteada
+}
+
+// Estado de la arena para la ventana del cliente (respuesta a "/arena info").
+message ArenaRating { string mode = 1; int32 rating = 2; int32 wins = 3; int32 losses = 4; int32 draws = 5; int32 games_left = 6; }
+message ArenaRank { string mode = 1; int32 pos = 2; string name = 3; int32 rating = 4; int32 wins = 5; int32 losses = 6; int32 draws = 7; }
+message ArenaInfo {
+  string season = 1;
+  string state = 2;            // "" | "cola" | "invitacion" | "partida"
+  string queued_mode = 3;      // en cola: "2v2" | "3v3"
+  int64 queued_ms = 4;         // en cola: hace cuánto
+  int32 queued_parties = 5;    // en cola: parties esperando en ese modo
+  string match_phase = 6;      // en partida: "prep" | "fight" | "end"
+  int64 penalty_ms = 7;        // > 0: penalizado, cuánto falta
+  int32 party_size = 8;        // tamaño de tu party (0 = sin party)
+  bool leader = 9;             // sos el líder (o no tenés party)
+  repeated ArenaRating ratings = 10;
+  repeated ArenaRank top = 11; // ranking de los dos modos
+  int32 ranked_min = 12;       // partidas para entrar al ranking
 }
 
 // Solo los stats de un compañero, para no mandar el estado completo en cada golpe o regen.

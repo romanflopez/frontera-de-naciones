@@ -123,6 +123,7 @@ export const SHOPS: Record<string, ShopDef> = {
     capitan: { label: 'Capitán', col: '#ffd24a', greet: '', stock: [] },
     guardia: { label: 'Guardia', col: '#9fa8b0', greet: '', stock: [] },
     /** Casa de subastas compartida entre facciones (no compra ni vende: ver docs/SUBASTAS.md). */
+    arenero: { label: 'Maestro de arena', col: '#8fd4ff', greet: 'La arena no distingue naciones: 2v2 y 3v3 con tu party armada. El que se va a mitad de camino, espera diez minutos.', stock: [] },
     subastador: { label: 'Subastador', col: '#d6a445', greet: 'La casa de subastas es una sola para Solmar y Vhar: publicá, comprá y retirá lo tuyo acá.', stock: [] },
     /** Depósito por cuenta: guarda equipo, oro, pociones y llaves (no compra ni vende: ver docs/DEPOSITO.md). */
     depositario: { label: 'Depositario', col: '#9fc48a', greet: 'Lo que dejes acá queda a tu nombre, a salvo, en cualquier depósito del reino.', stock: [] },

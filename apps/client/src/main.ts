@@ -19,12 +19,12 @@ import { mountCastBar } from './ui/CastBar';
 import { useCastStore } from './ui/castStore';
 import { spellTypeOf, type SpellType } from './ui/colors';
 import { chatBus, logToChat, type ChatChannel } from './ui/chatStore';
-import { drawPortalFloor, drawPortalFx, PORTAL_CITY, PORTAL_ZONE } from './portal';
+import { drawPortalFloor, drawPortalFx, setPortalSheet, PORTAL_CITY, PORTAL_ZONE } from './portal';
 import { checkSkill, skillDeniedText, canUseSkill, skillLevel } from '@fdn/world';
 import { DEFAULT_MAP, RECALL, STAT_CAP, classBaseHp, itemDfTotal, itemRmTotal, STAT_DESC, STAT_IDS, STAT_BASE, STAT_RESET_FREE_LVL, statTip, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, traitLabel, traitHpMult, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
 import { UNIQUE_BY_NAME, UP_MAX, UP_MAX_BY_QUALITY, EXTRAS_BY_QUALITY, FX_INFO, JUNK_MATS, MAT_REFORJA, junkValue, reforgeGold, reforgeStones, activeSets, setOfPiece, slotsFor, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, fitsSlot, TALK_RANGE, roleOf, trainingLockedMsg, trainingOfMap, sellPrice, type AttrId, type Base, type KeyId, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
-import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
+import type { ArenaInfo, InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
 import { DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, MAIN_QUESTS, type MainQuest, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, dailyGold, rewardUniques, type QuestBookView, type QuestGoal, KEY_RECIPES, KEY_MAT_NAMES, keyMissing, TRAIT_ELITE } from '@fdn/world';
 import { spellIcon } from './icons.ts';
 import { bookListHtml, bookTreeHtml, bookTipHtml } from './spellbook.ts';
@@ -343,6 +343,8 @@ function onServer(m: ServerPayload) {
         case 'combatTextEvent': onCombatText(m.value); break;
         case 'partyStatsUpdate': updatePartyStats(m.value.name, m.value.hp, m.value.mp); break;
         case 'partyInvited': showPartyInvite(m.value.fromName, Number(m.value.expiresMs)); break;
+        case 'arenaInvited': showArenaInvite(m.value.mode, Number(m.value.expiresMs)); break;
+        case 'arenaInfo': renderArena(m.value); break;
         case 'econResult': deposit.onResult(m.value.ok, m.value.text); if (m.value.ok) { log(esc(m.value.text), ['daily_done', 'quest_ready'].includes(m.value.code)); if (m.value.code === 'daily_done') notify('Encargo cumplido', m.value.text); else if (m.value.code === 'quest_ready') notify('Misión', m.value.text); } else { toast(m.value.text); log(esc(m.value.text)); } break;
         case 'killReward': onKillReward(m.value); break;
         case 'statusUpdate': onStatusUpdate(m.value); break;
@@ -698,7 +700,7 @@ function blinkDest(max = 7): Cell | null {
 }
 const skillSend = (skill: string, targetId = 0n, mobId = 0) => net.send({ $case: 'skillRequest', value: { skill, targetId, mobId } });
 /** Aliado elegido para las curas (click en alguien de tu nación): sigue valiendo mientras esté a la vista y no sea enemigo acá. */
-const isAlly = (o: Other) => !o.gone && others.has(o.id) && facOf(o.profile) === selectedFaction && !isEnemy(o);
+const isAlly = (o: Other) => !o.gone && others.has(o.id) && sameSide(o) && !isEnemy(o);
 function allyTarget(): Other | null { if (P.ally && !isAlly(P.ally)) P.ally = null; return P.ally; }
 /** Cura o bendición: al aliado elegido si está a tiro; si no hay aliado, a vos. */
 function healCast(skill: string, range: number): false | void {
@@ -1078,8 +1080,12 @@ const efx = (n: string, x: number, y: number, dy = 0) => { efxLocal(n, x, y, dy)
 // ---------- PvP: bandos enemigos (y todos contra todos en la arena) ----------
 const inArena = (x: number, y: number) => !!MAP_DEF.ffaRect && inMapRect(MAP_DEF.ffaRect, Math.floor(x), Math.floor(y));
 const facOf = (profile: string) => profile.split(';')[0];
-const unseen = (o: Other) => !!o.inv && !P.det && facOf(o.profile) !== selectedFaction;
-const isEnemy = (o: Other) => MAP_DEF.pvp !== 'off' && !o.gone && !unseen(o) && !isSafe(o.x, o.y) && !isSafe(P.x, P.y) && (MAP_DEF.pvp === 'ffa' || facOf(o.profile) !== selectedFaction || (inArena(P.x, P.y) && inArena(o.x, o.y)));
+/** Arenas 2v2 / 3v3 (`/arena`): el equipo es la party; el resto es rival aunque sea de tu nación. El server decide igual (y no deja pegar en la preparación). */
+const onArenaMap = () => MAP_DEF.region === 'arena';
+const teammate = (o: Other) => partyRows.has(o.name);
+const sameSide = (o: Other) => (onArenaMap() ? teammate(o) : facOf(o.profile) === selectedFaction);
+const unseen = (o: Other) => !!o.inv && !P.det && !sameSide(o);
+const isEnemy = (o: Other) => MAP_DEF.pvp !== 'off' && !o.gone && !unseen(o) && !isSafe(o.x, o.y) && !isSafe(P.x, P.y) && (onArenaMap() ? !teammate(o) : MAP_DEF.pvp === 'ffa' || facOf(o.profile) !== selectedFaction || (inArena(P.x, P.y) && inArena(o.x, o.y)));
 const enemiesNear = (x: number, y: number, r: number) => [...others.values()].filter((o) => isEnemy(o) && Math.hypot(o.x - x, o.y - y) <= r);
 /** Avisa al server qué hechizo lancé y sobre quién; el daño lo calcula el server (el campo dmg ya no se usa). */
 function pvpSend(fx: string, x: number, y: number, targetId = 0n, spell = '', secs = 0, r = 0) { net.send({ $case: 'pvpHitRequest', value: { fx, x, y, targetId, dmg: 0, secs, r, spell } }); }
@@ -1362,7 +1368,7 @@ cv.addEventListener('pointerleave', () => { mouse = { x: -1, y: -1 }; });
 // ---------- chat por canales: Global, Nación (tu facción), Party; Guild llega más adelante ----------
 const CHAT_NET = new Set<ChatChannel>(['global', 'comercio', 'area', 'party', 'guild', 'nacion']);
 function chatChannel(c: string): ChatChannel { const k = (c || 'global') as ChatChannel; return CHAT_NET.has(k) ? k : 'global'; }
-const CHAT_HELP = () => `Comandos: /meditar${DEBUG ? ', /look' : ''}; chat: /g global, /c comercio, /a área, /n nación, /p party, /gu guild (pronto); party: /invitar /aceptar /rechazar /salir /expulsar /lider`;
+const CHAT_HELP = () => `Comandos: /meditar${DEBUG ? ', /look' : ''}; chat: /g global, /c comercio, /a área, /n nación, /p party, /gu guild (pronto); party: /invitar /aceptar /rechazar /salir /expulsar /lider; arena: /arena (2v2, 3v3, salir, aceptar, rechazar, ranking, rating)`;
 /** Lo que se escribe en el ChatBox: comandos locales, o mensaje al server por el canal de la pestaña (o el del prefijo). */
 chatBus.on('chat:send', ({ text, channel }) => {
     cv.focus({ preventScroll: true });
@@ -1371,6 +1377,7 @@ chatBus.on('chat:send', ({ text, channel }) => {
     if (DEBUG && /^\/look(\s|$)/i.test(text)) { lookCommand(text); return; }
     if (partyCommand(text)) return;
     if (/^\/gm(\s|$)/i.test(text)) { net.send({ $case: 'chatMessageSendRequest', value: { message: text } }); return; } // comandos de GM: los resuelve el server (FDN_GM)
+    if (/^\/arena(\s|$)/i.test(text)) { net.send({ $case: 'chatMessageSendRequest', value: { message: text } }); return; } // arenas 2v2 / 3v3: los resuelve el server
     const pre = /^\/(gu|g|n|p|a|c)\s+/i.exec(text);
     if (pre) { const ch = ({ gu: 'guild', g: 'global', n: 'nacion', p: 'party', a: 'area', c: 'comercio' } as Record<string, string>)[pre[1].toLowerCase()]; net.send({ $case: 'clientChatMessage', value: { channel: ch, text: text.slice(pre[0].length) } }); return; }
     if (text.startsWith('/')) { log(CHAT_HELP()); return; }
@@ -1445,6 +1452,23 @@ function showPartyInvite(from: string, expiresMs: number, mock = false): void {
     clearTimeout(inviteTimer); inviteTimer = window.setTimeout(hidePartyInvite, ms);
 }
 
+/** Partida de arena encontrada: mismo cartel que la invitación de party, más el aviso grande al centro. Aceptar/Rechazar mandan el comando /arena. */
+function showArenaInvite(mode: string, expiresMs: number, mock = false): void {
+    const el = $('partyInvite'), ms = Math.max(1000, Math.min(INVITE_SHOW_MS, expiresMs ? expiresMs - Date.now() : INVITE_SHOW_MS));
+    el.innerHTML = `<p>¡Partida de <b>arena ${esc(mode)}</b> encontrada!</p><p class="sub">Rechazar o no contestar penaliza 10 min.</p><div class="pib"><button type="button" class="ok">Aceptar</button><button type="button" class="no">Rechazar</button></div><div class="pit"><i></i></div>`;
+    const bar = el.querySelector('.pit i') as HTMLElement; bar.style.transitionDuration = ms + 'ms';
+    const answer = (action: 'aceptar' | 'rechazar') => {
+        const req = { $case: 'chatMessageSendRequest' as const, value: { message: `/arena ${action}` } };
+        if (mock) console.info('[arena] (simulado, no se envía)', req); else net.send(req);
+        hidePartyInvite();
+    };
+    (el.querySelector('.ok') as HTMLElement).onclick = () => answer('aceptar');
+    (el.querySelector('.no') as HTMLElement).onclick = () => answer('rechazar');
+    el.hidden = false; void bar.offsetWidth; bar.style.width = '0%';
+    clearTimeout(inviteTimer); inviteTimer = window.setTimeout(hidePartyInvite, ms);
+    notify(`Arena ${mode}`, '¡Partida encontrada! Aceptá en el cartel de la derecha.');
+}
+
 window.addEventListener('keydown', (e) => {
     if (!connected) return;
     if (e.target instanceof HTMLInputElement) return;
@@ -1468,6 +1492,7 @@ window.addEventListener('keydown', (e) => {
     if (e.code === 'Space' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); pickupNearest(); return; }
     // ?debug: Shift+I simula una invitación de KingLuthor (la I sola sigue abriendo la bolsa).
     if (DEBUG && e.shiftKey && e.code === 'KeyI' && !e.repeat) { showPartyInvite('KingLuthor', Date.now() + 30_000, true); return; }
+    if (DEBUG && e.shiftKey && e.code === 'KeyA' && !e.repeat) { showArenaInvite('2v2', Date.now() + 30_000, true); return; }
     // ?debug: K simula un golpe de 326 y una cura de +92 sobre mi personaje.
     if (DEBUG && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'k' || e.key === 'K')) {
         const me = myId.toString(), sp = SPELLS.find((x) => x.id && x.id !== 'ataque');
@@ -2281,6 +2306,8 @@ const NPC_LOOKS: Record<string, string[]> = {
     depositario_v: ['chain_boots', 'leather_pants', 'leather_gloves', 'cloth_shirt', 'head_bald', 'leather_hood'],
     sanador_v: ['mage_boots', 'mage_skirt', 'mage_sleeves', 'mage_vest', 'head_bald', 'mage_hood'],
     mago_v: ['mage_boots', 'mage_skirt', 'mage_sleeves', 'mage_vest', 'head_bald', 'mage_hood', 'wand'],
+    arenero_s: ['chain_boots', 'leather_pants', 'leather_gloves', 'leather_chest', 'head_short', 'longsword'],
+    arenero_v: ['chain_boots', 'leather_pants', 'leather_gloves', 'leather_chest', 'head_bald', 'longsword'],
     sanador_s: ['mage_boots', 'mage_skirt', 'mage_sleeves', 'mage_vest', 'head_short', 'mage_hood'],
     mago_s: ['mage_boots', 'mage_skirt', 'mage_sleeves', 'mage_vest', 'head_short', 'mage_hood', 'staff'],
 };
@@ -2551,6 +2578,7 @@ function openShop(n: Npc = MAP.npcs[0]) {
     if (role === 'subastador') { closeShop(); shopNpc = n; talkNpc = null; auction.open(n); return; }
     if (role === 'depositario') { if (shopNpc !== n) closeShop(); shopNpc = n; talkNpc = null; deposit.open(n); return; }
     if (role === 'capitan') { openQuestDlg(n); return; }
+    if (role === 'arenero') { if (shopNpc !== n) closeShop(); openArena(n); return; }
     if (role === 'guardia' || ROLE_LINES[role]) { openTalk(n); return; }
     const def = SHOPS[role]; if (!def) return;
     shopNpc = n; talkNpc = null; $('qdlg').hidden = true; $('shopName').textContent = n.name; $('shopRole').textContent = def.label; $('shop').hidden = false; renderShop();
@@ -2563,7 +2591,41 @@ function openTalk(n: Npc) {
     $('qdName').textContent = n.name; setDlgAvatar(n); $('qdlg').hidden = false; $('qdForges').innerHTML = ''; $('qdBtn').hidden = true;
     $('qdBody').innerHTML = `<small>${(SHOPS[role] ?? SHOPS.guardia).label}</small><br>${lines[Math.floor(R() * lines.length)]}`;
 }
-function closeShop() { shopNpc = null; bubble = null; $('npcBubble').hidden = true; $('shop').hidden = true; $('qdlg').hidden = true; auction.close(); deposit.close(); }
+function closeShop() { shopNpc = null; bubble = null; $('npcBubble').hidden = true; $('shop').hidden = true; $('qdlg').hidden = true; closeArena(); auction.close(); deposit.close(); }
+// ---------- ventana de arena (NPC maestro de arena): estado, anotarse, rating y ranking; los datos llegan con `/arena info` ----------
+let arenaTimer = 0, arenaTab: '2v2' | '3v3' = '2v2', arenaInfo: ArenaInfo | null = null;
+const arenaOpen = () => !$('arena').hidden;
+const arenaCmd = (c: string) => { net.send({ $case: 'chatMessageSendRequest', value: { message: `/arena ${c}` } }); setTimeout(() => arenaCmdInfo(), 150); };
+const arenaCmdInfo = () => { if (arenaOpen() && connected) net.send({ $case: 'chatMessageSendRequest', value: { message: '/arena info' } }); };
+function openArena(n: Npc) {
+    shopNpc = n; talkNpc = null; $('shop').hidden = true; $('qdlg').hidden = true;
+    $('arena').hidden = false; renderArena(arenaInfo); arenaCmdInfo();
+    clearInterval(arenaTimer); arenaTimer = window.setInterval(arenaCmdInfo, 4000); // el estado de la cola cambia solo
+}
+function closeArena() { clearInterval(arenaTimer); $('arena').hidden = true; }
+function renderArena(v: ArenaInfo | null) {
+    arenaInfo = v; if (!arenaOpen()) return;
+    const fm = (ms: number) => { const m = Math.ceil(ms / 60_000); return m >= 1 ? `${m} min` : `${Math.ceil(ms / 1000)} s`; };
+    $('arSeason').textContent = v ? `Temporada ${v.season}` : 'Cargando…';
+    const st = $('arState'); st.classList.toggle('pen', !!v && Number(v.penaltyMs) > 0);
+    if (!v) st.innerHTML = 'Pidiendo el estado al server…';
+    else if (Number(v.penaltyMs) > 0) st.innerHTML = `<b>Penalizado</b>: faltan ${fm(Number(v.penaltyMs))} para poder anotarte.`;
+    else if (v.state === 'cola') st.innerHTML = `<b>En cola de ${esc(v.queuedMode)}</b> hace ${fm(Number(v.queuedMs))} · ${v.queuedParties} ${v.queuedParties === 1 ? 'party esperando' : 'parties esperando'}.`;
+    else if (v.state === 'invitacion') st.innerHTML = `<b>¡Partida encontrada!</b> Aceptá en el cartel de la derecha.`;
+    else if (v.state === 'partida') st.innerHTML = `<b>En partida</b> (${v.matchPhase === 'prep' ? 'preparación' : v.matchPhase === 'fight' ? 'pelea' : 'terminada'}).`;
+    else st.innerHTML = v.partySize ? `Tu party tiene <b>${v.partySize}</b>${v.leader ? '' : ' · solo el líder la anota'}.` : 'Sin party: armala con <b>/invitar nombre</b> para anotarte.';
+    const can = !!v && !v.state && Number(v.penaltyMs) <= 0 && v.leader;
+    $('arModes').innerHTML = v?.state === 'cola' || v?.state === 'invitacion'
+        ? `<button type="button" class="qw-btn leave" data-ar="salir">Salir de la cola</button>`
+        : `<button type="button" class="qw-btn" data-ar="2v2" ${can && (v!.partySize === 2 || !v!.partySize) ? '' : 'disabled'}>Anotar 2v2</button><button type="button" class="qw-btn" data-ar="3v3" ${can && v!.partySize === 3 ? '' : 'disabled'}>Anotar 3v3</button>`;
+    $('arModes').querySelectorAll<HTMLElement>('[data-ar]').forEach((b) => (b.onclick = () => arenaCmd(b.dataset.ar!)));
+    $('arRatings').innerHTML = (v?.ratings ?? []).map((r) => `<div class="ar-rt"><b>${esc(r.mode)}</b><em>${r.rating}</em><span>${r.wins}G ${r.losses}P ${r.draws}E</span><small>${r.gamesLeft ? `${r.gamesLeft} más para el ranking` : 'en el ranking'}</small></div>`).join('');
+    document.querySelectorAll<HTMLElement>('#arTabs [data-mode]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mode === arenaTab)));
+    const top = (v?.top ?? []).filter((r) => r.mode === arenaTab);
+    $('arTop').innerHTML = top.length ? top.map((r) => `<div class="ar-row"><i>${r.pos}.</i><span>${esc(r.name)}</span><em>${r.rating}</em><small>${r.wins}G ${r.losses}P ${r.draws}E</small></div>`).join('') : `<div class="ar-empty">Todavía nadie tiene ${v?.rankedMin ?? 10} partidas de ${arenaTab} esta temporada.</div>`;
+}
+$('arClose').addEventListener('click', closeShop);
+document.querySelectorAll<HTMLElement>('#arTabs [data-mode]').forEach((b) => (b.onclick = () => { arenaTab = b.dataset.mode as '2v2' | '3v3'; renderArena(arenaInfo); }));
 /** Oferta del día (global, la manda el server): líneas comunes con descuento y, cada tanto, la estrella con el roll ya tirado (stock 1 de todo el server). */
 let daily: { base: string; quality: number; attrs: Item['attrs']; price: number; star: boolean; sold: boolean }[] = [];
 const dailyItem = (o: (typeof daily)[number]): Item => ({ ...(ALL_BASES.find((x) => x.name === o.base) ?? ALL_BASES[0]), id: -1, rar: RAR[o.quality], attrs: o.attrs });
@@ -3076,10 +3138,12 @@ async function boot() {
     $('loading').hidden = true;
     // Atlas privado (opcional, mismo tamaño de celda): si no está, efxLocal usa FX_FALLBACK
     if (FXM) try { const pm = await (await fetch('assets/fx_priv.json')).json() as NonNullable<typeof FXM>; IMG.fxp = await load('assets/fx_priv.webp'); for (const [n, r] of Object.entries(pm.rows)) FXM.rows[n] = { ...r, img: 'fxp' }; } catch { /* sin atlas privado */ }
+    // Vórtice de los portales (Frostwindz, misma situación de licencia que fx_priv): si falta, queda el haz dibujado por código
+    try { setPortalSheet(await load('assets/portal_priv.png')); } catch { /* sin tira del portal */ }
     loadBuildingImages();
     refreshLook(); void initKnight();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, toScreen, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, perf: () => ({ ...perf }), setQb: (v: QuestBookView | null) => { QB = v; renderQuest(); }, questDlg: (name: string) => openQuestDlg({ id: 'capitan_s', name, x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), questLog: toggleQuestLog, shopDbg: (role = 'mercader') => openShop({ id: role + '_s', name: 'Mercader', x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), uid: () => uid++, RARS: RAR, mobCount: () => mobs.length, arrows: () => arrows.length });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, perf: () => ({ ...perf }), setQb: (v: QuestBookView | null) => { QB = v; renderQuest(); }, questDlg: (name: string) => openQuestDlg({ id: 'capitan_s', name, x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), questLog: toggleQuestLog, arenaInvite: (mode = '2v2') => showArenaInvite(mode, Date.now() + 30_000, true), arenaDbg: (v: ArenaInfo | null) => { $('arena').hidden = false; renderArena(v); }, shopDbg: (role = 'mercader') => openShop({ id: role + '_s', name: 'Mercader', x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), uid: () => uid++, RARS: RAR, mobCount: () => mobs.length, arrows: () => arrows.length });
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5), recall: () => ({ on: !!recall, k: recallK(now()), cd: Math.max(0, recallCdEnd - now()) }) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();

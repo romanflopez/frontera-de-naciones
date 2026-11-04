@@ -61,7 +61,7 @@ export function buildSolmarVilla(): WorldMap {
         lamp: TOWN_PROPS.farol, flag: TOWN_PROPS.bandera,
         guards: [
             ['guardia_s1', 'Guardia del Portón', 46, 28, 4], ['guardia_s2', 'Guardia del Portón', 46, 31, 4],
-            ['guardia_s3', 'Guardia de la Plaza', 33, 30, 6], ['guardia_s4', 'Guardia de la Muralla', 12, 29, 2], ['guardia_s5', 'Vigía de la Torre', 46, 22, 2],
+            ['arenero_s', 'Maestro de Arena Brando', 33, 35, 6], ['guardia_s3', 'Guardia de la Plaza', 33, 30, 6], ['guardia_s4', 'Guardia de la Muralla', 12, 29, 2], ['guardia_s5', 'Vigía de la Torre', 46, 22, 2],
         ],
     });
 }

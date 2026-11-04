@@ -60,7 +60,7 @@ export function buildVharCiudadela(): WorldMap {
         lamp: TOWN_PROPS.brasero, flag: TOWN_PROPS.estandarte, treeDensity: { out: 0.045, in: 0.012 },
         guards: [
             ['guardia_v1', 'Guardia del Portón', 28, 46, 6], ['guardia_v2', 'Guardia del Portón', 31, 46, 2],
-            ['guardia_v3', 'Guardia de la Plaza', 33, 30, 6], ['guardia_v4', 'Guardia de la Fragua', 43, 28, 2], ['guardia_v5', 'Centinela de la Muralla', 12, 29, 4],
+            ['arenero_v', 'Maestra de Arena Sigrun', 33, 35, 2], ['guardia_v3', 'Guardia de la Plaza', 33, 30, 6], ['guardia_v4', 'Guardia de la Fragua', 43, 28, 2], ['guardia_v5', 'Centinela de la Muralla', 12, 29, 4],
         ],
     });
 }

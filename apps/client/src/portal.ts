@@ -1,11 +1,11 @@
 /**
- * Portal de piedra gris (plataforma circular en perspectiva isométrica) con aros entrelazados; el cristal está gris apagado y se enciende violeta-cian al pisarlo.
- * Todo se dibuja por código. El sprite base se pre-renderiza UNA vez en canvas offscreen (en capas) y por frame solo se
+ * Portal: vórtice animado de Frostwindz (`assets/portal_priv.png`) sobre un charco de luz. Si la tira no carga, queda el portal anterior
+ * de piedra gris dibujado por código (plataforma con aros entrelazados y haz de luz). El sprite base se pre-renderiza UNA vez en canvas offscreen (en capas) y por frame solo se
  * componen esas capas con alpha (brillo del cristal y de los aros) más un haz de luz y partículas livianas.
  */
 const R = 200, SW = 480, SH = 290, CX = 240, CY = 150, FLAT = 0.5;
-/** Paleta violeta/neón: cristal de cian a violeta; encendido pasa a magenta-blanco. */
-const CYAN = '#4de8ff', VIOLET = '#9a5cff', HOT = '#ff7bf0';
+/** Paleta violeta (a tono con el vórtice de Frostwindz): cristal de lila a violeta; encendido pasa a magenta-blanco. */
+const CYAN = '#b9a0ff', VIOLET = '#8a4cff', HOT = '#ff7bf0';
 
 interface Layers { under: HTMLCanvasElement; crystal: HTMLCanvasElement; over: HTMLCanvasElement; glow: HTMLCanvasElement }
 let layers: Layers | null = null;
@@ -135,8 +135,17 @@ export const PORTAL_ZONE: PortalStyle = { rx: 36, beam: 85 };
 
 /** Plataforma en el suelo: sprite base + brillo del cristal y de los aros según `act` (0 apagado .. 1 encendido). */
 export function drawPortalFloor(ctx: CanvasRenderingContext2D, x: number, y: number, st: PortalStyle, act: number, T: number, reduce: boolean, seed: number) {
-    layers ||= build();
     const k = st.rx / R, pulse = reduce ? 0.5 : 0.5 + 0.5 * Math.sin(T * 1.3 + seed);
+    if (sheet) { // con el vórtice no hay plataforma de piedra: solo una sombra de contacto y un charco de luz violeta en el pasto
+        const rb = 0.5 * R * k;
+        ctx.save();
+        ctx.fillStyle = `rgba(10,4,24,${0.28 + act * 0.1})`; ctx.beginPath(); ctx.ellipse(x, y + 2, rb * 1.15, rb * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.globalCompositeOperation = 'lighter';
+        const g = ctx.createRadialGradient(x, y, 0, x, y, rb * 1.3); g.addColorStop(0, `rgba(150,100,255,${0.18 + pulse * 0.08 + act * 0.3})`); g.addColorStop(0.6, `rgba(120,70,255,${0.06 + act * 0.12})`); g.addColorStop(1, 'rgba(120,70,255,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y, rb * 1.3, rb * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore(); return;
+    }
+    layers ||= build();
     ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.translate(-CX, -CY);
     ctx.drawImage(layers.under, 0, 0);
     ctx.globalAlpha = Math.min(1, 0.03 + pulse * 0.04 + act * 0.95); ctx.drawImage(layers.crystal, 0, 0);
@@ -147,14 +156,32 @@ export function drawPortalFloor(ctx: CanvasRenderingContext2D, x: number, y: num
     ctx.restore();
 }
 
-/** Haz de luz y partículas (encima del suelo): suaves en reposo, intensos al activarse. */
+/** Tira del vórtice animado (Frostwindz, `assets/portal_priv.png`): celdas cuadradas en fila. Si no carga, queda el haz dibujado por código. */
+let sheet: { img: HTMLImageElement; n: number; c: number } | null = null;
+const PORTAL_FPS = 9;
+export function setPortalSheet(img: HTMLImageElement) { sheet = { img, n: Math.max(1, Math.round(img.width / img.height)), c: img.height }; }
+
+/** Vórtice violeta parado sobre la plataforma: tenue en reposo, entero y con bloom al activarse. */
+function drawVortex(ctx: CanvasRenderingContext2D, bx: number, by: number, rb: number, act: number, T: number, reduce: boolean, seed: number) {
+    const s = sheet!, i = reduce ? 0 : Math.floor(T * PORTAL_FPS + seed * 3) % s.n, w = rb * 5, h = w; // el óvalo ocupa ~60 % de la celda: queda del alto de un personaje en la ciudad
+    const bob = reduce ? 0 : Math.sin(T * 1.6 + seed) * 2 * act;
+    const dx = bx - w / 2, dy = by - h * 0.9 - bob; // la base del óvalo apoya en el piso
+    ctx.save();
+    ctx.globalAlpha = 0.55 + act * 0.45;
+    ctx.drawImage(s.img, i * s.c, 0, s.c, s.c, dx, dy, w, h);
+    if (act > 0.01) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = act * (0.35 + (reduce ? 0 : 0.15 * Math.sin(T * 5 + seed))); ctx.drawImage(s.img, i * s.c, 0, s.c, s.c, dx, dy, w, h); }
+    ctx.restore();
+}
+
+/** Vórtice (o haz de luz si no hay tira) y partículas encima del suelo: suaves en reposo, intensos al activarse. */
 export function drawPortalFx(ctx: CanvasRenderingContext2D, x: number, y: number, st: PortalStyle, act: number, T: number, reduce: boolean, seed: number) {
-    const k = st.rx / R, bx = x, by = y - 12 * k, rb = 0.5 * R * k, H = st.beam;
+    const k = st.rx / R, bx = x, by = sheet ? y : y - 12 * k, rb = 0.5 * R * k, H = st.beam;
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     // halo en el suelo
-    const hg = ctx.createRadialGradient(bx, by, 0, bx, by, rb * 1.5); hg.addColorStop(0, `rgba(120,200,255,${0.04 + act * 0.12})`); hg.addColorStop(1, 'rgba(120,80,255,0)');
+    const hg = ctx.createRadialGradient(bx, by, 0, bx, by, rb * 1.5); hg.addColorStop(0, `rgba(${sheet ? '150,110,255' : '120,200,255'},${0.05 + act * 0.14})`); hg.addColorStop(1, 'rgba(120,80,255,0)');
     ctx.fillStyle = hg; ctx.beginPath(); ctx.ellipse(bx, by, rb * 1.5, rb * 0.75, 0, 0, Math.PI * 2); ctx.fill();
-    if (act > 0.01) {
+    if (sheet) { ctx.globalCompositeOperation = 'source-over'; drawVortex(ctx, bx, by, rb, act, T, reduce, seed); ctx.globalCompositeOperation = 'lighter'; }
+    else if (act > 0.01) {
         const flick = reduce ? 1 : 0.85 + 0.15 * Math.sin(T * 5 + seed);
         const g = ctx.createLinearGradient(0, by, 0, by - H);
         g.addColorStop(0, `rgba(110,200,255,${0.06 * act})`); g.addColorStop(0.2, `rgba(110,200,255,${0.3 * act * flick})`); g.addColorStop(0.5, `rgba(150,110,255,${0.22 * act})`); g.addColorStop(1, 'rgba(140,80,255,0)');
@@ -172,9 +199,9 @@ export function drawPortalFx(ctx: CanvasRenderingContext2D, x: number, y: number
         const n = 7 + Math.round(act * 15), sp = 0.16 + act * 0.4;
         for (let j = 0; j < n; j++) {
             const t = (T * sp + j * 0.6180339 + seed) % 1, a = j * 2.399 + seed, r = rb * (0.15 + 0.7 * ((j * 0.37) % 1)) * (1 - act * 0.5 * t);
-            const rise = t * H * (0.35 + act * 0.65);
+            const rise = t * (sheet ? rb * 2.2 : H) * (0.35 + act * 0.65);
             ctx.globalAlpha = Math.sin(t * Math.PI) * (0.35 + act * 0.6);
-            ctx.fillStyle = j % 3 ? CYAN : '#d9b8ff';
+            ctx.fillStyle = j % 3 ? (sheet ? '#a67cff' : CYAN) : '#d9b8ff';
             ctx.beginPath(); ctx.arc(bx + Math.cos(a + T * 0.4) * r, by + Math.sin(a + T * 0.4) * r * FLAT - rise, (1 + (j % 3) * 0.5) * Math.max(0.8, k * 1.6), 0, Math.PI * 2); ctx.fill();
         }
     }

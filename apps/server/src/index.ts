@@ -23,6 +23,7 @@ import { AuctionHouse, setAuctionHouse } from './auction.ts';
 import { Depot, setDepot } from './deposit.ts';
 import { TradeService, setTradeService } from './trade.ts';
 import { PartyService, setParties } from './party.ts';
+import { ArenaService } from './arena.ts';
 import { ChatManager } from './systems/chat.ts';
 
 const MAX_INCOMING_BYTES = 24576;
@@ -114,9 +115,25 @@ const parties = new PartyService({
         const s = sessionsById.get(sid), w = s ? worldOf(s) : undefined, p = w?.playerOf(sid); if (!s || !w || !p) return undefined;
         return { name: s.characterName, faction: p.profile.split(';')[0], level: p.econ?.lvl ?? 1, hp: Math.round(p.hp), maxHp: Math.round(p.maxHp), mp: Math.round(p.mp), maxMp: Math.round(p.combat.maxMp), map: w.mapId, online: !!s.socket };
     },
+    left: (sid, by) => arena.partyLeft(sid, by), // arena se crea más abajo; esto corre recién cuando alguien deja una party
 });
 setParties(parties);
 setInterval(() => parties.tick(), 1000).unref();
+
+// Arenas 2v2 / 3v3 (docs/PARTY_Y_ARENAS.md §2): cola, invitación, partida y ranking por temporada. Se maneja con /arena en el chat.
+// FDN_ARENA_TEMPORADA = número de temporada (al cambiarlo, los ratings vuelven hacia el medio); FDN_ARENA_PRUEBA=1 deja entrar sin party
+// o con una party más chica que el modo (para probar con menos gente).
+const arena = new ArenaService({
+    send: (sid, m) => { const s = sessionsById.get(sid); if (s?.socket && s.socket.readyState === s.socket.OPEN) s.socket.send(encode(m)); },
+    session: (sid) => { const s = sessionsById.get(sid); return s && { name: s.characterName, accountKey: s.networkId.replace(/^acc:/, ''), worldKey: s.worldId, online: !!s.socket }; },
+    partyMembers: (sid) => parties.partyMembers(sid),
+    isLeader: (sid) => parties.isLeader(sid),
+    world: (key) => registry.get(key),
+    ensure: (map, iid) => registry.ensure(map, iid),
+    transfer: (sid, dest) => { const s = sessionsById.get(sid); return !!s && registry.beginTransfer(s, dest, saveOf(s)); },
+    pending: (sid) => !!registry.pendingOf(sid),
+}, storage, { season: Number(process.env.FDN_ARENA_TEMPORADA) || 1, allowSmallTeams: process.env.FDN_ARENA_PRUEBA === '1' });
+setInterval(() => arena.tick(), 1000).unref();
 
 /** Saca del mundo a los que se desconectaron y no volvieron dentro de la gracia. */
 setInterval(() => {
@@ -127,6 +144,7 @@ setInterval(() => {
         world?.persistVitals(s.sessionId);
         saveChar(s.networkId, world?.removePlayer(s.sessionId));
         storage.flush();
+        arena.sessionGone(s.sessionId, s.networkId.replace(/^acc:/, ''));
         parties.leave(s.sessionId);
         sessionsByNetworkId.delete(s.networkId); sessionsById.delete(s.sessionId);
     }
@@ -325,7 +343,7 @@ wss.on('connection', (ws, req) => {
         saveChar(session.networkId, world?.snapshot(session.sessionId));
         storage.flush(); // la economía se guarda ya al desconectar
         world?.playerDisconnected(session.sessionId, remainsActive);
-        if (!remainsActive) { parties.leave(session.sessionId); chat.forget(session.sessionId); sessionsByNetworkId.delete(session.networkId); sessionsById.delete(session.sessionId); }
+        if (!remainsActive) { arena.sessionGone(session.sessionId, session.networkId.replace(/^acc:/, '')); parties.leave(session.sessionId); chat.forget(session.sessionId); sessionsByNetworkId.delete(session.networkId); sessionsById.delete(session.sessionId); }
     });
 
     ws.on('error', (err) => console.error(`[Server] Error de WebSocket (${remote}):`, err.message));
@@ -342,7 +360,7 @@ const isGm = (name: string) => GM_ENV === '1' || GM_ENV === 'all' || GM_ENV.spli
 function gmMaps() {
     const cities = new Set(['solmar', 'vhar'].map((f) => factionHome(f)?.map));
     const kindOf = (d: MapDef): 'ciudad' | 'caza' | 'mazmorra' | 'sin_entrada' | null =>
-        d.debugOnly ? (d.id === 'arena' ? 'sin_entrada' : null) : d.safe ? (cities.has(d.id) ? 'ciudad' : null) : d.temporary ? 'mazmorra' : 'caza';
+        d.debugOnly ? (d.region === 'arena' ? 'sin_entrada' : null) : d.safe ? (cities.has(d.id) ? 'ciudad' : null) : d.temporary ? 'mazmorra' : 'caza';
     return Object.values(MAPS).flatMap((d) => { const kind = kindOf(d); return kind ? [{ d, kind }] : []; })
         .sort((a, b) => (a.d.tier ?? 0) - (b.d.tier ?? 0) || (a.d.lvl?.[0] ?? 0) - (b.d.lvl?.[0] ?? 0))
         .map(({ d, kind }) => ({ id: d.id, name: d.name, lvl: d.lvl ? `${d.lvl[0]}-${d.lvl[1]}` : '', tier: d.tier ?? 0, kind, dungeon: kind === 'mazmorra' }));
@@ -422,6 +440,7 @@ function handleGm(s: Session, text: string, reply: (m: ServerMessage) => void): 
 function handleChat(sender: Session, raw: string, reply: (m: ServerMessage) => void): void {
     let text = raw.trim(), channel = 'global';
     if (/^\/gm(\s|$)/i.test(text)) { handleGm(sender, text, reply); return; } // comandos de GM (modo GM)
+    if (/^\/arena(\s|$)/i.test(text)) { arena.command(sender.sessionId, text); return; } // arenas 2v2 / 3v3
     const pre = /^\/(gu|g|n|p|a|c)\s+/i.exec(text);
     if (pre) { channel = ({ gu: 'guild', g: 'global', n: 'nacion', p: 'party', a: 'area', c: 'comercio' } as Record<string, string>)[pre[1].toLowerCase()]; text = text.slice(pre[0].length); }
     const err = chat.handle(chatSender(sender), channel, text);

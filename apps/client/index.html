@@ -300,7 +300,7 @@ canvas:focus{outline:none}
 #party .pp i{background:linear-gradient(#2d4fa8,#1a2d66)}
 #party .pb em{position:absolute;left:3px;top:-2px;font-size:9px;font-style:normal;color:#eee;text-shadow:0 1px 1px #000}
 #partyInvite{top:100px;right:max(20px,env(safe-area-inset-right,0px));width:230px;background:var(--panel);border:1px solid rgba(214,164,69,.55);border-radius:4px;padding:10px 12px;font-size:13px;color:var(--text);pointer-events:auto}
-#partyInvite p{margin:0 0 8px}
+#partyInvite p{margin:0 0 8px} #partyInvite p.sub{font-size:11px;color:var(--muted);margin-top:-4px}
 #partyInvite b{color:var(--brass)}
 #partyInvite .pib{display:flex;gap:8px}
 #partyInvite button{flex:1;padding:5px 0;border-radius:3px;font:inherit;font-size:12px;cursor:pointer;color:#f2ead2}
@@ -406,6 +406,23 @@ canvas:focus{outline:none}
       <div id="qdBook"></div>
     </div>
     <button id="qdBtn" class="qw-accept" type="button" hidden>Aceptar</button>
+  </div>
+  <div id="arena" class="hud cw" role="dialog" aria-label="Arena" hidden>
+    <header class="cw-head"><h2>ARENA</h2><button class="cw-x" id="arClose" type="button" aria-label="Cerrar Arena">&times;</button></header>
+    <div class="cw-body">
+      <section class="ar-left">
+        <div class="ar-season" id="arSeason"></div>
+        <div class="ar-state" id="arState"></div>
+        <div class="ar-modes" id="arModes"></div>
+        <div class="qw-rwh">TU RATING</div>
+        <div class="ar-ratings" id="arRatings"></div>
+        <p class="ar-help">Se entra con la party armada: 2 para 2v2, 3 para 3v3. Salir de la cola, rechazar o abandonar penaliza 10 min.</p>
+      </section>
+      <section class="ar-right">
+        <div class="tabs" role="tablist" id="arTabs"><button type="button" role="tab" data-mode="2v2" aria-selected="true">Ranking 2v2</button><button type="button" role="tab" data-mode="3v3" aria-selected="false">Ranking 3v3</button></div>
+        <div class="ar-top" id="arTop"></div>
+      </section>
+    </div>
   </div>
   <div id="qlog" class="hud cw" role="dialog" aria-label="Misiones" hidden>
     <header class="cw-head"><h2>MISIONES</h2><button class="cw-x" id="qlClose" type="button" aria-label="Cerrar Misiones">&times;</button></header>
