@@ -300,3 +300,20 @@ test('modo de prueba (FDN_ARENA_PRUEBA): se puede entrar solo para probar con do
         assert.equal(arena.stateOf(a.session.sessionId), 'invitacion');
     } finally { setParties(undefined); }
 });
+
+test('movimiento libre en la arena: en la preparación no se sale de la jaula (playerPositionRequest) y en la pelea sí se mueve', () => {
+    const { js: [a, b, c, d], arena, me, world, step, startMatch } = setup(['ana', 'beto', 'cami', 'dani']);
+    try {
+        startMatch([a, b], [c, d], '2v2');
+        const w = world(a), A = me(a), start = { x: A.posX, y: A.posY };
+        const pos = (x: number, y: number) => w.handleClientPacket(a.session.sessionId, { payload: { $case: 'playerPositionRequest', value: { x, y } } } as never);
+        // a la vuelta de la esquina de la jaula: fuera del radio, el server lo devuelve al último punto válido
+        pos(start.x + 0.5 + ARENA_RULES.cageR + 3, start.y + 0.5);
+        assert.deepEqual([A.posX, A.posY], [start.x, start.y], 'fuera de la jaula no avanza');
+        // pasada la preparación, un paso corto y legal sí se acepta
+        step(ARENA_RULES.prepMs);
+        assert.equal(arena.matchInfo(a.session.sessionId)!.phase, 'fight');
+        pos(start.x + 0.5 + 0.2, start.y + 0.5);
+        assert.ok(Math.abs(A.fx - (start.x + 0.7)) < 1e-6, `en la pelea el movimiento libre avanza (fx ${A.fx})`);
+    } finally { setParties(undefined); }
+});
