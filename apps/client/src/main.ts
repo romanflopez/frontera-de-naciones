@@ -20,6 +20,7 @@ import { useCastStore } from './ui/castStore';
 import { spellTypeOf, type SpellType } from './ui/colors';
 import { chatBus, logToChat, type ChatChannel } from './ui/chatStore';
 import { drawPortalFloor, drawPortalFx, setPortalSheet, PORTAL_CITY, PORTAL_ZONE } from './portal';
+import { stepFree } from '@fdn/world';
 import { checkSkill, skillDeniedText, canUseSkill, skillLevel } from '@fdn/world';
 import { DEFAULT_MAP, RECALL, STAT_CAP, classBaseHp, itemDfTotal, itemRmTotal, STAT_DESC, STAT_IDS, STAT_BASE, STAT_RESET_FREE_LVL, statTip, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, traitLabel, traitHpMult, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
 import { UNIQUE_BY_NAME, UP_MAX, UP_MAX_BY_QUALITY, EXTRAS_BY_QUALITY, FX_INFO, JUNK_MATS, MAT_REFORJA, junkValue, reforgeGold, reforgeStones, activeSets, setOfPiece, slotsFor, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, fitsSlot, TALK_RANGE, roleOf, trainingLockedMsg, trainingOfMap, sellPrice, type AttrId, type Base, type KeyId, type Slot, type Stock } from '@fdn/world';
@@ -148,7 +149,7 @@ interface Mob extends Omit<Ent, 'ref'>, MobDef {
 interface Casting { i: number; start: number; end: number; len: number }
 const P = {
     x: MAP.spawn.x + 0.5, y: MAP.spawn.y + 0.5, dir: 6, ang: undefined as number | undefined, moving: false, phase: 0, ref: 3.4, one: null as OneShot | null, t0: 0, flash: 0,
-    name: '', cell: { x: MAP.spawn.x, y: MAP.spawn.y }, path: [] as Cell[], step: null as Step | null, stepMs: 270, lastStepEnd: 0, frozenUntil: 0, foe: null as Other | null, ally: null as Other | null, med: false, medHp: 0,
+    name: '', cell: { x: MAP.spawn.x, y: MAP.spawn.y }, path: [] as Cell[], mv: false, stepMs: 270, sendT: 0, sentX: 0, sentY: 0, hx: 0, hy: 0, frozenUntil: 0, foe: null as Other | null, ally: null as Other | null, med: false, medHp: 0,
     target: null as Mob | null, engage: false, pickup: null as Drop | null, repath: 0, queued: null as number | null,
     lvl: 1, exp: 0, hp: 100, mp: 60, fury: 0, shield: 0, shieldEnd: 0, slowEnd: 0, blessEnd: 0, poisonEnd: 0, inv: false, det: false, invEnd: 0, detEnd: 0, immEnd: 0, gold: 0, nextAtk: 0, dead: false, deadT: 0,
     bag: [] as Item[], eq: { arma: null, armadura: null, cabeza: null, guantes: null, botas: null, amuleto: null, anillo: null, anillo2: null } as Record<Slot, Item | null>,
@@ -156,7 +157,7 @@ const P = {
 };
 
 /** Otros jugadores, según lo que manda el server. */
-interface Other extends Ent { hp?: number; maxHp?: number; shield?: number; fury?: boolean; inv?: boolean; profile: string; id: bigint; name: string; cell: Cell; queue: Cell[]; step: Step | null; stepMs: number; gone: boolean }
+interface Other extends Ent { hp?: number; maxHp?: number; shield?: number; fury?: boolean; inv?: boolean; profile: string; id: bigint; name: string; cell: Cell; queue: Cell[]; step: Step | null; stepMs: number; gone: boolean; buf: { t: number; x: number; y: number }[] }
 const others = new Map<bigint, Other>();
 
 /** Botín en el suelo (lo manda el server con `groundItemSpawned`). `lockedUntil`: hasta cuándo (reloj local) no lo puedo recoger; 0 = es mío o ya está libre. */
@@ -252,19 +253,19 @@ function sendFacing() {
     // de vuelta de ángulo de pantalla a delta de grilla: dx-dy = cos, (dx+dy)/2 = sin
     const sx = Math.cos(a), sy = Math.sin(a) * 2;
     const d = gridDir((sx + sy) / 2, (sy - sx) / 2);
-    if (d !== P.sentDir && !P.step) { P.sentDir = d; net.send({ $case: 'changePlayerIdleDirectionRequest', value: { direction: d } }); }
+    if (d !== P.sentDir && !P.mv) { P.sentDir = d; net.send({ $case: 'changePlayerIdleDirectionRequest', value: { direction: d } }); }
 }
 
 function addOther(p: { profile?: string; playerId: bigint; x: number; y: number; direction: number; characterName: string; movementSpeedMs: number }) {
     if (p.playerId === myId) return;
     const [dx, dy] = GRID_VEC[p.direction] ?? [0, 1];
-    const o: Other = { profile: p.profile ?? '', id: p.playerId, name: p.characterName, x: p.x + 0.5, y: p.y + 0.5, cell: { x: p.x, y: p.y }, queue: [], step: null, stepMs: p.movementSpeedMs || 270, dir: 6, moving: false, one: null, flash: 0, phase: 0, ref: 3.4, t0: R() * 5, gone: false };
+    const o: Other = { profile: p.profile ?? '', id: p.playerId, name: p.characterName, x: p.x + 0.5, y: p.y + 0.5, cell: { x: p.x, y: p.y }, queue: [], step: null, buf: [], stepMs: p.movementSpeedMs || 270, dir: 6, moving: false, one: null, flash: 0, phase: 0, ref: 3.4, t0: R() * 5, gone: false };
     turnTo(o, dx, dy, 0, true);
     others.set(o.id, o);
 }
 
 function snapTo(x: number, y: number) {
-    P.step = null; P.path = []; P.cell = { x, y }; P.x = x + 0.5; P.y = y + 0.5;
+    P.mv = false; P.path = []; P.cell = { x, y }; P.x = x + 0.5; P.y = y + 0.5; P.sentX = P.x; P.sentY = P.y; P.sendT = 0;
 }
 
 function onServer(m: ServerPayload) {
@@ -360,8 +361,15 @@ function onServer(m: ServerPayload) {
         case 'playerMoved': {
             const o = others.get(m.value.playerId); if (!o) break;
             o.stepMs = m.value.movementSpeedMs || o.stepMs;
-            if (m.value.teleport) { o.queue = []; o.step = null; o.cell = { x: m.value.destX, y: m.value.destY }; o.x = o.cell.x + 0.5; o.y = o.cell.y + 0.5; break; }
-            o.queue.push({ x: m.value.destX, y: m.value.destY });
+            // el movimiento normal llega por playerPositionUpdate (posición decimal); acá solo los saltos
+            if (m.value.teleport) { o.queue = []; o.step = null; o.buf = []; o.cell = { x: m.value.destX, y: m.value.destY }; o.x = o.cell.x + 0.5; o.y = o.cell.y + 0.5; }
+            break;
+        }
+        case 'playerPositionUpdate': {
+            const o = others.get(m.value.playerId); if (!o) break;
+            o.buf.push({ t: now(), x: m.value.x, y: m.value.y });
+            if (o.buf.length > 24) o.buf.splice(0, o.buf.length - 24);
+            o.cell = { x: Math.floor(m.value.x), y: Math.floor(m.value.y) };
             break;
         }
         case 'playerIdleDirectionChanged': {
@@ -957,7 +965,7 @@ renderRecall();
 function stopMeditating(msg?: string) { if (!P.med) return; P.med = false; if (msg) log(msg, true); syncHp(); }
 function toggleMeditate() {
     if (P.med) { stopMeditating('Dejaste de meditar.'); return; }
-    if (P.dead || P.casting || P.step || P.path.length) { log('Tenés que estar quieto para meditar.', true); return; }
+    if (P.dead || P.casting || P.mv || P.path.length) { log('Tenés que estar quieto para meditar.', true); return; }
     if (P.mp >= maxMp()) { log('Ya tenés el maná lleno.', true); return; }
     P.med = true; P.medHp = P.hp; syncHp(); log('Meditás… el maná sube rápido mientras estés quieto. (/meditar de nuevo para cortar)', true);
 }
@@ -1336,7 +1344,7 @@ const freeForMe = (x: number, y: number) => walk(x, y) && !occupiedByOther(x, y)
 
 /** Camino de celdas hasta (gx, gy); el paso que está en curso termina igual. */
 function moveTo(gx: number, gy: number) {
-    const from = P.step ? { x: P.step.tx, y: P.step.ty } : P.cell;
+    const from = P.cell;
     let tx = Math.floor(gx), ty = Math.floor(gy);
     if (!freeForMe(tx, ty)) {
         // si el destino está ocupado, la celda libre más cercana alrededor
@@ -1363,54 +1371,40 @@ window.addEventListener('keydown', (e) => {
 });
 window.addEventListener('keyup', (e) => { moveKeys.delete(e.key.toLowerCase()); });
 window.addEventListener('blur', () => { moveKeys.clear(); holding = false; });
-/** A 8 direcciones de grilla (-1/0/1) por ángulo (teclado). */
-function quant8(dx: number, dy: number): Cell | null {
-    if (Math.hypot(dx, dy) < 1e-6) return null;
-    const a = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4);
-    return { x: Math.round(Math.cos(a)), y: Math.round(Math.sin(a)) };
-}
-/** Celda del cursor hacia la que se corre con el clic mantenido (el `m_sCommX/Y` del cliente clásico). */
-let steerGoal: Cell | null = null;
-/** Dirección del "volante": teclado, o con el clic mantenido hacia la celda del cursor. null = quieto. */
-function steerDir(): Cell | null {
-    steerGoal = null;
+/** Vector de intención en grilla (longitud 0..1): teclado, o clic mantenido hacia el cursor. null = quieto. */
+function inputVec(): { dx: number; dy: number } | null {
     if (moveKeys.size) {
         let u = 0, v = 0; for (const k of moveKeys) { const m = MOVE_KEY[k]; u += m[0]; v += m[1]; }
         // de pantalla a grilla (inversa de faceAngle): dx-dy = u, (dx+dy)/2 = v
-        return quant8((u + 2 * v) / 2, (2 * v - u) / 2);
+        const gx = (u + 2 * v) / 2, gy = (2 * v - u) / 2, l = Math.hypot(gx, gy);
+        return l < 1e-6 ? null : { dx: gx / l, dy: gy / l };
     }
     if (holding && mouse.x >= 0) {
-        const g = toGrid(mouse.x, mouse.y), gc = { x: Math.floor(g.x), y: Math.floor(g.y) };
-        if (gc.x === P.cell.x && gc.y === P.cell.y) return null; // el cursor está en mi celda: quieto
-        steerGoal = gc;
-        // Regla clásica (cGetNextMoveDir): por signo, no por ángulo. Si el cursor está a 5 celdas a la derecha y 1 arriba,
-        // se va en diagonal hasta alinear y después derecho. Eso es lo que hace que un mínimo desvío del mouse ya "caderee".
-        return { x: Math.sign(gc.x - P.cell.x), y: Math.sign(gc.y - P.cell.y) };
+        // Sin celdas ni esperas: la dirección es "del cuerpo al cursor" en este mismo frame, así que mover el mouse un poco ya cambia el rumbo (caderear).
+        const g = toGrid(mouse.x, mouse.y), vx = g.x - P.x, vy = g.y - P.y, l = Math.hypot(vx, vy);
+        if (l < 0.06) return null;
+        const k = Math.min(1, l / 0.3) / l; // frena suave al llegar al cursor, sin zona muerta
+        return { dx: vx * k, dy: vy * k };
     }
     return null;
 }
-const DIR8: Cell[] = [{ x: 0, y: -1 }, { x: 1, y: -1 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, { x: -1, y: 1 }, { x: -1, y: 0 }, { x: -1, y: -1 }];
-const dirIndex = (d: Cell) => DIR8.findIndex((e) => e.x === d.x && e.y === d.y);
-/** Un paso de volante hacia d: si la celda está tomada, prueba girando 45° y 90° (como el cliente clásico), del lado que queda más cerca del objetivo. */
-function steerStep(d: Cell): Cell | null {
-    const c = P.cell, i = dirIndex(d); if (i < 0) return null;
-    const free = (n: Cell) => freeForMe(n.x, n.y) && !occupiedByOther(n.x, n.y);
-    const at = (k: number) => { const e = DIR8[((k % 8) + 8) % 8]; return { x: c.x + e.x, y: c.y + e.y }; };
-    const first = at(i); if (free(first)) return first;
-    const goal = steerGoal ?? { x: c.x + d.x * 8, y: c.y + d.y * 8 };
-    const dist2 = (n: Cell) => (n.x - goal.x) ** 2 + (n.y - goal.y) ** 2;
-    const sides = dist2(at(i + 1)) <= dist2(at(i - 1)) ? [1, 2, -1, -2] : [-1, -2, 1, 2];
-    for (const k of sides) { const n = at(i + k); if (free(n)) return n; }
-    return null;
+/** Celdas libres para el cuerpo: paredes y otros jugadores. */
+const freeBody = (cx: number, cy: number) => freeForMe(cx, cy);
+/** Mueve a P continuo hacia (dx,dy) este frame y avisa al server unas 20 veces por segundo como mucho. */
+function moveFree(dx: number, dy: number, dt: number, T: number) {
+    const sp = (1000 / P.stepMs) / (P.slowEnd > T ? 1.7 : 1);
+    const r = stepFree({ x: P.x, y: P.y, dx, dy, speed: sp, dt, free: freeBody });
+    if (r.moved > 0) {
+        turnTo(P, r.x - P.x, r.y - P.y, dt);
+        P.phase = (P.phase || 0) + r.moved / (P.ref || 3.4);
+        P.x = r.x; P.y = r.y; P.cell = { x: Math.floor(r.x), y: Math.floor(r.y) }; P.moving = true; P.mv = true;
+    } else if (Math.hypot(dx, dy) > 0.01) turnTo(P, dx, dy, dt);
 }
-/** Arranca un paso a la celda vecina `next`: lo pide al server y lo dibuja ya (el server lo valida). Giro instantáneo. */
-function startStep(next: Cell, T: number) {
-    T = P.lastStepEnd > 0 && T - P.lastStepEnd < 0.05 ? P.lastStepEnd : T; // encadenado: no se pierde el resto del frame entre paso y paso
-    net.send({ $case: 'requestMovement', value: { curX: P.cell.x, curY: P.cell.y, destX: next.x, destY: next.y, gameWorldId: MAP_WORLD_ID, dashAttack: false } });
-    P.step = { fx: P.cell.x, fy: P.cell.y, tx: next.x, ty: next.y, t0: T, dur: (P.stepMs / 1000) * (P.slowEnd > T ? 1.7 : 1) + STEP_MARGIN };
-    turnTo(P, next.x - P.cell.x, next.y - P.cell.y, 0, true);
-    P.cell = { x: next.x, y: next.y };
-    advanceStep(P, T, 0);
+function sendPosition(T: number, force = false) {
+    if (!connected) return;
+    if (!force && (T - P.sendT < 0.1 || (Math.abs(P.x - P.sentX) < 1e-4 && Math.abs(P.y - P.sentY) < 1e-4))) return;
+    P.sendT = T; P.sentX = P.x; P.sentY = P.y;
+    net.send({ $case: 'playerPositionRequest', value: { x: P.x, y: P.y } });
 }
 cv.addEventListener('pointerdown', (e) => {
     cv.focus({ preventScroll: true });
@@ -1447,7 +1441,7 @@ cv.addEventListener('contextmenu', (e) => {
     const r = cv.getBoundingClientRect(), al = pickAlly(e.clientX - r.left, e.clientY - r.top);
     if (al) trade.menuFor({ id: al.id, name: al.name }, e.clientX, e.clientY);
 });
-cv.addEventListener('pointerup', () => { holding = false; });
+cv.addEventListener('pointerup', () => { if (holding && mouse.x >= 0 && !P.dead) { const g = toGrid(mouse.x, mouse.y); moveTo(g.x, g.y); } holding = false; }); // al soltar, termina el camino hasta donde quedó el cursor (el toque suelto va a la celda)
 cv.addEventListener('pointercancel', () => { holding = false; });
 cv.addEventListener('pointermove', (e) => { const r = cv.getBoundingClientRect(); mouse = { x: e.clientX - r.left, y: e.clientY - r.top }; });
 cv.addEventListener('pointerleave', () => { mouse = { x: -1, y: -1 }; });
@@ -1600,17 +1594,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 // ---------- update ----------
-/** Avanza un paso celda a celda (jugadores): posición interpolada, giro y fase de la animación. */
-function advanceStep(e: Ent & { step: Step | null }, T: number, dt: number) {
-    const s = e.step!; const k = Math.min(1, (T - s.t0) / s.dur);
-    e.x = s.fx + (s.tx - s.fx) * k + 0.5; e.y = s.fy + (s.ty - s.fy) * k + 0.5;
-    turnTo(e, s.tx - s.fx, s.ty - s.fy, dt);
-    e.phase = (e.phase || 0) + (dt * (Math.hypot(s.tx - s.fx, s.ty - s.fy) / s.dur)) / (e.ref || 3.4);
-    e.moving = true;
-    if (k >= 1) { e.step = null; if (e === P) P.lastStepEnd = s.t0 + s.dur; }
-}
-/** Margen sobre la velocidad del server para que la latencia no haga parecer que vamos rápido de más. */
-const STEP_MARGIN = 0.015;
+const PLAYER_DELAY = 0.15;
 let regenT = 0, pingSeq = 0, pveT = 0, pveSent = { dead: false, lvl: 0 };
 /** El ping va por un timer propio (no por el bucle de dibujo, que el navegador frena en pestañas ocultas) para que no te desconecten. */
 setInterval(() => { if (connected) net.send({ $case: 'pingRequest', value: { sequence: ++pingSeq } }); }, 1000);
@@ -1629,7 +1613,7 @@ function update(dt: number) {
         if (!P.casting && P.engage && alive(m)) {
             const d = dist(P, m);
             if (d > 1.6) { P.repath -= dt; if (P.repath <= 0 || !P.path.length) { moveTo(m.x, m.y); P.repath = 0.35; } }
-            else if (!P.step) {
+            else if (!P.mv) {
                 P.path = []; turnTo(P, m.x - P.x, m.y - P.y, dt);
                 if (T >= P.nextAtk && T >= P.frozenUntil) { const iv = meleeIntervalSecs(tot.aspd); P.nextAtk = T + iv; sendFacing(); oneShot(P, 'swing', Math.min(0.4, iv)); later(0.18, () => { if (mobs.includes(m) && dist(P, m) < 1.9 && !P.dead) meleeHit(m); }); }
             }
@@ -1638,40 +1622,49 @@ function update(dt: number) {
         if (P.foe && !P.casting && !P.dead) {
             const f = P.foe, d = dist(P, f);
             if (d > 1.6) { P.repath -= dt; if (P.repath <= 0 || !P.path.length) { moveTo(f.x, f.y); P.repath = 0.35; } }
-            else if (!P.step) {
+            else if (!P.mv) {
                 P.path = []; turnTo(P, f.x - P.x, f.y - P.y, dt);
                 if (T >= P.nextAtk && T >= P.frozenUntil) { const iv = meleeIntervalSecs(tot.aspd); P.nextAtk = T + iv; sendFacing(); oneShot(P, 'swing', Math.min(0.4, iv)); later(0.18, () => { if (isEnemy(f) && dist(P, f) < 1.9 && !P.dead) { pvpDamage(f, 'ataque', ''); } }); }
             }
         }
-        // caminar: un paso por vez; el server valida cada uno
-        if (P.step) advanceStep(P, T, dt);
-        // volante (teclado o clic mantenido): cada paso sale hacia donde apuntás en este instante, sin camino ni espera
-        if (!P.step && !P.casting && !P.target && !P.foe && T >= P.frozenUntil) {
-            const d = steerDir();
-            if (d) { P.path = []; const n = steerStep(d); if (n) startStep(n, T); else turnTo(P, d.x, d.y, 0, true); }
+        // movimiento continuo: cada frame se mueve hacia donde apuntás ahora (teclado, clic mantenido o camino), el server valida la velocidad
+        P.mv = false;
+        if (!P.casting && T >= P.frozenUntil) {
+            let v = (!P.target && !P.foe) || moveKeys.size ? inputVec() : null;
+            if (v) P.path = [];
+            else if (P.path.length) {
+                // seguir un camino de celdas: apuntar al centro de la siguiente; se da por llegada al acercarse (sin frenar entre celdas)
+                let n = P.path[0];
+                if (occupiedByOther(n.x, n.y)) { const end = P.path[P.path.length - 1]; P.path = []; if (end !== n) moveTo(end.x + 0.5, end.y + 0.5); n = P.path[0]; }
+                while (n && P.path.length > 1 && Math.hypot(n.x + 0.5 - P.x, n.y + 0.5 - P.y) < 0.35) { P.path.shift(); n = P.path[0]; }
+                if (n) {
+                    const vx = n.x + 0.5 - P.x, vy = n.y + 0.5 - P.y, l = Math.hypot(vx, vy);
+                    if (l < 0.08) P.path.shift(); else v = { dx: vx / l, dy: vy / l };
+                }
+            }
+            if (v) moveFree(v.dx, v.dy, dt, T);
         }
-        if (!P.step && P.path.length && !P.casting && T >= P.frozenUntil) {
-            const next = P.path[0];
-            if (occupiedByOther(next.x, next.y)) { const end = P.path[P.path.length - 1]; P.path = []; if (end !== next) moveTo(end.x + 0.5, end.y + 0.5); }
-            else { P.path.shift(); startStep(next, T); }
-        }
-        if (!P.step && !P.path.length && !P.moving) sendFacing();
+        if (P.mv) sendPosition(T); else if (P.sentX !== P.x || P.sentY !== P.y) sendPosition(T, true);
+        if (!P.mv && !P.path.length) sendFacing();
         if (P.pickup) { if (!drops.includes(P.pickup)) P.pickup = null; else if (dist(P, P.pickup) < 1.4) { requestPickup(P.pickup); P.pickup = null; } }
         regenT += dt; if (regenT >= 1) { regenT = 0; const inCity = isSafe(P.x, P.y); P.hp = Math.min(maxHp(), P.hp + (inCity ? 8 : 1)); P.mp = Math.min(maxMp(), P.mp + (P.med ? Math.max(6, Math.round(maxMp() * 0.08)) : inCity ? 8 : 2)); if (P.med && P.mp >= maxMp()) stopMeditating('Terminaste de meditar: maná lleno.'); syncHp(); }
-        if (P.med && (P.step || P.path.length || P.casting || P.hp < P.medHp || P.dead)) stopMeditating(P.hp < P.medHp ? 'Te sacaron de la meditación.' : 'Dejaste de meditar.');
+        if (P.med && (P.mv || P.path.length || P.casting || P.hp < P.medHp || P.dead)) stopMeditating(P.hp < P.medHp ? 'Te sacaron de la meditación.' : 'Dejaste de meditar.');
         if (P.med) P.medHp = P.hp;
     }
-    // otros jugadores: siguen los pasos que manda el server
+    // otros jugadores: se dibujan 0,15 s atrás, interpolando entre las posiciones que manda el server (sin saltos aunque la red tiemble)
     for (const o of others.values()) {
         o.moving = false;
-        if (!o.step && o.queue.length) {
-            if (o.queue.length > 3) { const last = o.queue.splice(0, o.queue.length - 1)[0]; o.cell = { ...last }; }
-            const next = o.queue.shift()!;
-            o.step = { fx: o.cell.x, fy: o.cell.y, tx: next.x, ty: next.y, t0: T, dur: o.stepMs / 1000 };
-            turnTo(o, next.x - o.cell.x, next.y - o.cell.y, 0, true);
-            o.cell = next;
-        }
-        if (o.step) advanceStep(o, T, dt);
+        const rt = T - PLAYER_DELAY, b = o.buf;
+        if (!b.length) continue;
+        let k = b.length - 1; while (k > 0 && b[k - 1].t >= rt) k--;
+        let tx: number, ty: number;
+        if (k + 1 < b.length && b[k].t < rt) { const a = b[k], c = b[k + 1], u = Math.min(1, (rt - a.t) / Math.max(0.001, c.t - a.t)); tx = a.x + (c.x - a.x) * u; ty = a.y + (c.y - a.y) * u; }
+        else { tx = b[k].x; ty = b[k].y; }
+        if (k > 1) b.splice(0, k - 1);
+        const dx = tx - o.x, dy = ty - o.y, d = Math.hypot(dx, dy);
+        if (d > 4) { o.x = tx; o.y = ty; continue; }
+        o.x = tx; o.y = ty;
+        if (d > 0.002 && dt > 0 && d / dt > 0.3) { o.moving = true; turnTo(o, dx, dy, dt); o.phase = (o.phase || 0) + d / (o.ref || 3.4); }
     }
     for (const m of mobs.slice()) {
         m.flash = Math.max(0, m.flash - dt); m.moving = false;
@@ -2759,8 +2752,8 @@ function sellItem(i: number) {
 }
 /** Abre la tienda al llegar y la cierra si te alejás. */
 function npcTick() {
-    if (talkNpc && !P.step && npcDist(talkNpc) <= TALK_RANGE) openShop(talkNpc);
-    else if (talkNpc && !P.step && !P.path.length) { talkNpc = null; }
+    if (talkNpc && !P.mv && npcDist(talkNpc) <= TALK_RANGE) openShop(talkNpc);
+    else if (talkNpc && !P.mv && !P.path.length) { talkNpc = null; }
     if (shopNpc && (npcDist(shopNpc) > TALK_RANGE + 1.5 || P.dead)) closeShop();
 }
 $('shopClose').addEventListener('click', closeShop); $('pothp').addEventListener('click', () => { usePotion('hp'); cv.focus({ preventScroll: true }); }); $('potmp').addEventListener('click', () => { usePotion('mp'); cv.focus({ preventScroll: true }); }); renderPots(); $('qdClose').addEventListener('click', closeShop);
@@ -2790,7 +2783,7 @@ function loadMap(def: MapDef): string {
     P.target = null; P.engage = false; P.pickup = null; P.queued = null; // checklist de instancia: al cambiar de mapa no queda nada apuntando al mapa viejo
     mobs.length = 0; mobMap.clear(); others.clear(); drops.length = 0; corpses.length = 0; projs.length = 0; scorch.length = 0; floats.length = 0; fx.length = 0; bossCasts.clear(); bossMarks.length = 0; bossZones.clear(); bossRage.clear();
     portalAct.clear(); wpInside = ''; closeWp(); closeShop(); talkNpc = null; talkWpTarget = null;
-    P.target = null; P.engage = false; P.pickup = null; P.queued = null; P.foe = null; P.path = []; P.step = null; hover = null; hoverDrop = null;
+    P.target = null; P.engage = false; P.pickup = null; P.queued = null; P.foe = null; P.path = []; P.mv = false; hover = null; hoverDrop = null;
     cancelCast(); pveT = 0; // el server de este mapa todavía no sabe si estoy muerto ni mi nivel
     portalLock = now() + 2.5; // llegás al lado del portal de vuelta: que no te rebote
     refreshNpcLook(); // los NPC del mapa nuevo (por ejemplo los de un interior) arman su muñeco acá
@@ -2821,7 +2814,7 @@ function failMapLoading(msg: string) {
 /** El server me sacó del mundo anterior: pantalla de carga, armo el mapa, verifico el hash y aviso MapReady (recién ahí me mete en el nuevo). */
 function onMapTransfer(v: { mapId: string; name: string; x: number; y: number; direction: number; mapHash: string; gameWorldId: string; lvlMin: number; lvlMax: number }) {
     mapLoading = true;
-    P.path = []; P.step = null; P.target = null; P.engage = false;
+    P.path = []; P.mv = false; P.target = null; P.engage = false;
     showMapLoading(v.name || v.mapId, v.lvlMax ? [v.lvlMin, v.lvlMax] : null, getMapDef(v.mapId)?.tier);
     // dejar que el navegador pinte la pantalla de carga antes de armar el mapa
     requestAnimationFrame(() => setTimeout(() => {
@@ -2839,7 +2832,7 @@ function onMapTransfer(v: { mapId: string; name: string; x: number; y: number; d
 }
 /** Cruce de un vínculo entre mapas: el cliente solo pide por id; el server valida distancia, requisitos y estado. */
 function checkLinks() {
-    if (!connected || P.dead || P.step || now() < portalLock) return;
+    if (!connected || P.dead || P.mv || now() < portalLock) return;
     const l = LINKS.find((q) => q.x === P.cell.x && q.y === P.cell.y); if (!l) return;
     const why = linkGateReason(l, portalProgress(), (i) => QUESTS[i]?.name);
     if (why) { portalLock = now() + 2; toast(why); log(why, true); return; }
@@ -2850,7 +2843,7 @@ function checkLinks() {
 // ---------- escaleras entre zonas (el server valida el teletransporte; la celda de destino tiene que estar libre) ----------
 let portalLock = 0;
 function checkPortals() {
-    if (!MAP.portals || !connected || P.dead || P.step || now() < portalLock) return;
+    if (!MAP.portals || !connected || P.dead || P.mv || now() < portalLock) return;
     const p = MAP.portals.find((q) => q.x === P.cell.x && q.y === P.cell.y); if (!p) return;
     if (p.train) {
         const why = portalGate(p, portalProgress());
@@ -2920,12 +2913,12 @@ function wpGo(id: string) {
 }
 /** Abre el menú al llegar (click) o al pisar el waypoint, y lo cierra si te alejás. */
 function wpTick() {
-    if (talkWpTarget && !P.step && wpDist(talkWpTarget) <= WP_OPEN_DIST) openWp(talkWpTarget);
-    else if (talkWpTarget && !P.step && !P.path.length) talkWpTarget = null;
+    if (talkWpTarget && !P.mv && wpDist(talkWpTarget) <= WP_OPEN_DIST) openWp(talkWpTarget);
+    else if (talkWpTarget && !P.mv && !P.path.length) talkWpTarget = null;
     if (wpOpen && (wpDist(wpOpen) > WP_CLOSE_DIST || P.dead || !connected)) closeWp();
     const on = connected && !P.dead ? MY_WPS().find((q) => q.x === P.cell.x && q.y === P.cell.y) : undefined;
     if (!on) wpInside = '';
-    else if (wpInside !== on.id && !P.step && now() >= portalLock) { wpInside = on.id; if (!wpOpen) openWp(on); }
+    else if (wpInside !== on.id && !P.mv && now() >= portalLock) { wpInside = on.id; if (!wpOpen) openWp(on); }
 }
 $('wpClose').addEventListener('click', closeWp);
 
@@ -3228,7 +3221,7 @@ async function boot() {
     try { setPortalSheet(await load('assets/portal_priv.png')); } catch { /* sin tira del portal */ }
     loadBuildingImages();
     refreshLook(); void initKnight();
-    if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, toScreen, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
+    if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, toScreen, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.mv = false; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, perf: () => ({ ...perf }), setQb: (v: QuestBookView | null) => { QB = v; renderQuest(); }, questDlg: (name: string) => openQuestDlg({ id: 'capitan_s', name, x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), questLog: toggleQuestLog, arenaInvite: (mode = '2v2') => showArenaInvite(mode, Date.now() + 30_000, true), arenaDbg: (v: ArenaInfo | null) => { $('arena').hidden = false; renderArena(v); }, shopDbg: (role = 'mercader') => openShop({ id: role + '_s', name: 'Mercader', x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), uid: () => uid++, RARS: RAR, mobCount: () => mobs.length, arrows: () => arrows.length });
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5), recall: () => ({ on: !!recall, k: recallK(now()), cd: Math.max(0, recallCdEnd - now()) }) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;

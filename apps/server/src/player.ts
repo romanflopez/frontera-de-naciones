@@ -2,6 +2,7 @@
  * Estado de un jugador dentro de un mundo (basado en el server MIT de base (ver LICENSE.base-game)):
  * posición, apariencia, velocidad, controles anti-trampa de movimiento y ping.
  */
+import { MoveBudget } from '@fdn/world';
 import { CAST_NORMAL_MS, DEFAULT_STATS, MOVE_CAP_MS, PvpLimiter, RUN_MS, WALK_MS, type CombatStats } from './systems/pvpCombat.ts';
 import { createDefaultStatus } from './systems/statusSystem.ts';
 import type { ServerMessage } from '@fdn/proto';
@@ -194,6 +195,11 @@ export class Player {
         return delta;
     }
 
+    /** Movimiento libre: posición decimal que el server tiene del jugador, la celda para la que vale y su presupuesto de velocidad. */
+    fx = 0; fy = 0; fCell = { x: -1, y: -1 };
+    readonly moveBudget = new MoveBudget(2.5);
+    /** Cuenta una violación de velocidad; false = ya son demasiadas en la ventana (hay que paralizar). */
+    registerSpeedViolation(now: number): boolean { return this.violations.tryAcquire(now); }
     /** Deuda de movimiento en ms: cada paso cuesta lo que tarda una celda y el tiempo que pasa la va pagando. */
     private moveDebtMs = 0;
     /**

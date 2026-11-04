@@ -143,6 +143,9 @@ export interface ClientMessage {
     { $case: "portalRequest"; value: PortalRequest }
     | { $case: "mapReady"; value: MapReady }
     | //
+    /** Movimiento libre (ver PlayerPositionRequest). */
+    { $case: "playerPositionRequest"; value: PlayerPositionRequest }
+    | //
     /** Casa de subastas (ver docs/SUBASTAS.md). Rango propio de tags desde 300. */
     { $case: "auctionRequest"; value: AuctionRequest }
     | //
@@ -548,6 +551,9 @@ export interface ServerMessage {
     | { $case: "skillEffect"; value: SkillEffect }
     | { $case: "characterLoaded"; value: CharacterLoaded }
     | { $case: "characterList"; value: CharacterList }
+    | //
+    /** Movimiento libre: posición decimal de un jugador que veo (ver PlayerPositionUpdate). */
+    { $case: "playerPositionUpdate"; value: PlayerPositionUpdate }
     | { $case: "mobsSnapshot"; value: MobsSnapshot }
     | { $case: "mobDamaged"; value: MobDamaged }
     | { $case: "mobAttack"; value: MobAttack }
@@ -1528,6 +1534,22 @@ export interface PlayerMoved {
   teleport: boolean;
 }
 
+/**
+ * Movimiento libre: el cliente se mueve continuo y manda su posición decimal (en celdas; el centro de la celda n es n + 0,5).
+ * La celda del server es floor(x), floor(y). El server valida la velocidad con un presupuesto, no paso por paso.
+ */
+export interface PlayerPositionRequest {
+  x: number;
+  y: number;
+}
+
+/** El server repite a los que lo ven la posición decimal de un jugador (≈10 por segundo mientras se mueve). */
+export interface PlayerPositionUpdate {
+  playerId: bigint;
+  x: number;
+  y: number;
+}
+
 export interface ResetPosition {
   x: number;
   y: number;
@@ -2283,6 +2305,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "mapReady":
         MapReady.encode(message.payload.value, writer.uint32(994).fork()).join();
         break;
+      case "playerPositionRequest":
+        PlayerPositionRequest.encode(message.payload.value, writer.uint32(10410).fork()).join();
+        break;
       case "auctionRequest":
         AuctionRequest.encode(message.payload.value, writer.uint32(2402).fork()).join();
         break;
@@ -2950,6 +2975,17 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "mapReady", value: MapReady.decode(reader, reader.uint32()) };
             continue;
           }
+          case 1301: {
+            if (tag !== 10410) {
+              break;
+            }
+
+            message.payload = {
+              $case: "playerPositionRequest",
+              value: PlayerPositionRequest.decode(reader, reader.uint32()),
+            };
+            continue;
+          }
           case 300: {
             if (tag !== 2402) {
               break;
@@ -3527,6 +3563,15 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "mapReady": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "mapReady", value: MapReady.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "playerPositionRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "playerPositionRequest",
+            value: PlayerPositionRequest.fromPartial(object.payload.value),
+          };
         }
         break;
       }
@@ -7520,6 +7565,9 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "characterList":
         CharacterList.encode(message.payload.value, writer.uint32(11202).fork()).join();
         break;
+      case "playerPositionUpdate":
+        PlayerPositionUpdate.encode(message.payload.value, writer.uint32(11210).fork()).join();
+        break;
       case "mobsSnapshot":
         MobsSnapshot.encode(message.payload.value, writer.uint32(962).fork()).join();
         break;
@@ -8270,6 +8318,17 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             }
 
             message.payload = { $case: "characterList", value: CharacterList.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 1401: {
+            if (tag !== 11210) {
+              break;
+            }
+
+            message.payload = {
+              $case: "playerPositionUpdate",
+              value: PlayerPositionUpdate.decode(reader, reader.uint32()),
+            };
             continue;
           }
           case 120: {
@@ -9101,6 +9160,15 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "characterList": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "characterList", value: CharacterList.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "playerPositionUpdate": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "playerPositionUpdate",
+            value: PlayerPositionUpdate.fromPartial(object.payload.value),
+          };
         }
         break;
       }
@@ -19796,6 +19864,155 @@ export const PlayerMoved: MessageFns<PlayerMoved> = {
     message.runningMode = object.runningMode ?? false;
     message.dashAttack = object.dashAttack ?? false;
     message.teleport = object.teleport ?? false;
+    return message;
+  },
+};
+
+function createBasePlayerPositionRequest(): PlayerPositionRequest {
+  return { x: 0, y: 0 };
+}
+
+export const PlayerPositionRequest: MessageFns<PlayerPositionRequest> = {
+  encode(message: PlayerPositionRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.x !== 0) {
+      writer.uint32(13).float(message.x);
+    }
+    if (message.y !== 0) {
+      writer.uint32(21).float(message.y);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PlayerPositionRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBasePlayerPositionRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 13) {
+              break;
+            }
+
+            message.x = reader.float();
+            continue;
+          }
+          case 2: {
+            if (tag !== 21) {
+              break;
+            }
+
+            message.y = reader.float();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<PlayerPositionRequest>, I>>(base?: I): PlayerPositionRequest {
+    return PlayerPositionRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PlayerPositionRequest>, I>>(object: I): PlayerPositionRequest {
+    const message = createBasePlayerPositionRequest();
+    message.x = object.x ?? 0;
+    message.y = object.y ?? 0;
+    return message;
+  },
+};
+
+function createBasePlayerPositionUpdate(): PlayerPositionUpdate {
+  return { playerId: 0n, x: 0, y: 0 };
+}
+
+export const PlayerPositionUpdate: MessageFns<PlayerPositionUpdate> = {
+  encode(message: PlayerPositionUpdate, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.playerId !== 0n) {
+      if (BigInt.asIntN(64, message.playerId) !== message.playerId) {
+        throw new globalThis.Error("value provided for field message.playerId of type int64 too large");
+      }
+      writer.uint32(8).int64(message.playerId);
+    }
+    if (message.x !== 0) {
+      writer.uint32(21).float(message.x);
+    }
+    if (message.y !== 0) {
+      writer.uint32(29).float(message.y);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PlayerPositionUpdate {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBasePlayerPositionUpdate();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.playerId = reader.int64() as bigint;
+            continue;
+          }
+          case 2: {
+            if (tag !== 21) {
+              break;
+            }
+
+            message.x = reader.float();
+            continue;
+          }
+          case 3: {
+            if (tag !== 29) {
+              break;
+            }
+
+            message.y = reader.float();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<PlayerPositionUpdate>, I>>(base?: I): PlayerPositionUpdate {
+    return PlayerPositionUpdate.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PlayerPositionUpdate>, I>>(object: I): PlayerPositionUpdate {
+    const message = createBasePlayerPositionUpdate();
+    message.playerId = (object.playerId !== undefined && object.playerId !== null) ? BigInt(object.playerId) : 0n;
+    message.x = object.x ?? 0;
+    message.y = object.y ?? 0;
     return message;
   },
 };

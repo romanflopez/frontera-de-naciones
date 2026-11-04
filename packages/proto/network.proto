@@ -121,6 +121,8 @@ message ClientMessage {
     // Cambio de mapa (ver docs/MUNDO.md 2.3): el cliente pisa un vínculo y pide cruzar por su id estable; cuando terminó de armar el mapa nuevo avisa MapReady.
     PortalRequest portal_request = 123;
     MapReady map_ready = 124;
+    // Movimiento libre (ver PlayerPositionRequest).
+    PlayerPositionRequest player_position_request = 1301;
     // Casa de subastas (ver docs/SUBASTAS.md). Rango propio de tags desde 300.
     AuctionRequest auction_request = 300;
     // Depósito por cuenta (ver docs/DEPOSITO.md). Rango propio de tags desde 400.
@@ -505,6 +507,8 @@ message ServerMessage {
     SkillEffect skill_effect = 66;
     CharacterLoaded character_loaded = 80;
     CharacterList character_list = 1400;
+    // Movimiento libre: posición decimal de un jugador que veo (ver PlayerPositionUpdate).
+    PlayerPositionUpdate player_position_update = 1401;
     MobsSnapshot mobs_snapshot = 120;
     MobDamaged mob_damaged = 121;
     MobAttack mob_attack = 122;
@@ -1316,6 +1320,20 @@ message PlayerMoved {
   bool dash_attack = 8;
   // When true, observers snap the avatar to dest (e.g. server admin teleport); when false, one-cell step animation.
   bool teleport = 9;
+}
+
+// Movimiento libre: el cliente se mueve continuo y manda su posición decimal (en celdas; el centro de la celda n es n + 0,5).
+// La celda del server es floor(x), floor(y). El server valida la velocidad con un presupuesto, no paso por paso.
+message PlayerPositionRequest {
+  float x = 1;
+  float y = 2;
+}
+
+// El server repite a los que lo ven la posición decimal de un jugador (≈10 por segundo mientras se mueve).
+message PlayerPositionUpdate {
+  int64 player_id = 1;
+  float x = 2;
+  float y = 3;
 }
 
 message ResetPosition {

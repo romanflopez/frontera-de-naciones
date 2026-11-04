@@ -103,6 +103,9 @@ export const playersEnteredRange = (players: Iterable<Player>): ServerMessage =>
 export const playersLeftRange = (ids: Iterable<bigint>): ServerMessage =>
     msg({ $case: 'playersLeftRange', value: { playerIds: [...ids] } });
 
+export const playerPositionUpdate = (id: bigint, x: number, y: number): ServerMessage =>
+    msg({ $case: 'playerPositionUpdate', value: { playerId: id, x, y } });
+
 export const playerMoved = (id: bigint, curX: number, curY: number, destX: number, destY: number, movementSpeedMs: number, runningMode: boolean, dashAttack: boolean, teleport = false): ServerMessage =>
     msg({ $case: 'playerMoved', value: { playerId: id, curX, curY, destX, destY, movementSpeedMs, runningMode, dashAttack, teleport } });
 

@@ -572,6 +572,7 @@ export class GameWorld {
                     if (payload.value.gameWorldId && payload.value.gameWorldId !== this.id) break;
                     this.handleRequestMovement(p, payload.value);
                     break;
+                case 'playerPositionRequest': this.handlePositionRequest(p, payload.value.x, payload.value.y); break;
                 case 'spellCastStartRequest': this.startCast(p, payload.value.spell); break;
                 case 'spellCastCancelRequest': if (p.cast && !p.cast.fired) p.cast = null; break;
                 case 'playerMovementStateChangeRequest': {
@@ -732,6 +733,48 @@ export class GameWorld {
 
     // ---------- movimiento ----------
     /** Port de Movement.HandleRequestMovement (sin combate ni efectos de suelo todavía). */
+    /** Vuelve al jugador a la celda que el server conoce (y reinicia su posición decimal y su presupuesto). */
+    private snapBack(p: Player, now: number): void {
+        p.fx = p.posX + 0.5; p.fy = p.posY + 0.5; p.fCell = { x: p.posX, y: p.posY }; p.moveBudget.reset(now);
+        p.send(M.resetPosition(this.id, p.posX, p.posY));
+    }
+
+    /**
+     * Movimiento libre: el cliente manda su posición decimal. El server no aprueba paso por paso: valida que la velocidad
+     * entre en un presupuesto (ver MoveBudget), que la celda nueva sea contigua y esté libre, y lo repite a los que lo ven.
+     */
+    private handlePositionRequest(p: Player, x: number, y: number): void {
+        if (p.isDead || !Number.isFinite(x) || !Number.isFinite(y)) return;
+        const now = Date.now();
+        if (p.spawnProtection) this.disableSpawnProtection(p);
+        // si la posición del server cambió por otra vía (teletransporte, respawn, pedido por celdas), la decimal vuelve al centro
+        if (p.fCell.x !== p.posX || p.fCell.y !== p.posY) { p.fx = p.posX + 0.5; p.fy = p.posY + 0.5; p.fCell = { x: p.posX, y: p.posY }; p.moveBudget.reset(now); }
+        if (p.isParalyzed(now)) return this.snapBack(p, now);
+        const nx = Math.floor(x), ny = Math.floor(y);
+        if (!this.inCage(p, nx, ny)) return this.snapBack(p, now);
+        const dist = Math.hypot(x - p.fx, y - p.fy);
+        if (dist < 1e-4) return;
+        if (!p.moveBudget.spend(dist, now, 1000 / p.movementSpeedMs)) {
+            if (!p.registerSpeedViolation(now)) {
+                const secs = this.settings.movementSpeedViolationsChecker.paralysisDuration;
+                p.paralyzeFor(secs, now);
+                p.send(M.playerParalyzed(secs));
+                p.send(M.sendMessage(`Te movés demasiado rápido. Si estás tocando cosas que no deberías, frená: por ahora te quedás quieto ${secs} segundos.`));
+            }
+            return this.snapBack(p, now);
+        }
+        if (nx !== p.posX || ny !== p.posY) {
+            if (distance(nx, ny, p.posX, p.posY) !== 1 || !this.occupancy.isFree(nx, ny)) return this.snapBack(p, now);
+            this.moveTo(p, p.posX, p.posY, nx, ny, false);
+        }
+        // dirección que mira: hacia donde se movió (mismo criterio de 8 sectores que el cliente)
+        const mx = x - p.fx, my = y - p.fy;
+        if (Math.hypot(mx, my) > 0.01) p.facingDirection = (((Math.round(Math.atan2(my, mx) / (Math.PI / 4)) + 2) % 8) + 8) % 8;
+        p.fx = x; p.fy = y; p.fCell = { x: p.posX, y: p.posY };
+        if (p.cast && !p.cast.fired) p.cast = null; // moverse cancela el cast que no salió
+        this.broadcastNear(p, M.playerPositionUpdate(p.playerId, x, y));
+    }
+
     private handleRequestMovement(p: Player, req: { curX: number; curY: number; destX: number; destY: number; dashAttack: boolean }): void {
         if (p.isDead) return;
         const now = Date.now();
