@@ -18,7 +18,7 @@ Desde la auditoría original se resolvieron varios bloqueantes. Lo que sigue abi
 | Atribución CC-BY-SA visible dentro del juego | **Resuelto (3/11):** botón "Créditos" en el login que muestra `CREDITS.txt` y `CREDITS-CC0.txt`, con test que lo cuida |
 | Avisos de licencia de las dependencias | **Resuelto (3/11):** `THIRD_PARTY_NOTICES.txt` generado con `pnpm legal:notices`, con test |
 | Repo público | **Abierto:** sigue público |
-| Bosses 3D (`barbaro`, `arana`, `golem`, `demonio`) | **Abierto:** siguen en el repo, origen sin probar |
+| Bosses 3D (`barbaro`, `arana`, `golem`, `demonio`) | **Resuelto (3/11):** sacados del repo por decisión de Román. Los mobs que los usaban apuntan a sprites de Flare como provisorio (`sprite` en `mobs.ts`). Se rearmarán con arte de origen conocido. Siguen en el historial de git |
 | `fantasy_house.webp` | **Abierto:** sigue en el repo y en uso (`meta.json` → `buildings`) |
 | Efectos TOMAS (`fx.webp`) | **Abierto:** licencia sin verificar |
 | Íconos de hechizos generados con IA | **Abierto:** falta registrar herramienta y términos |

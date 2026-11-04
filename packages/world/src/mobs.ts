@@ -27,10 +27,10 @@ export interface MobDef { name: string; lvl: number; hp: number; dmg: [number, n
 export const MOBS: Record<MobType, MobDef> = {
     goblin: { name: 'Goblin lancero', lvl: 1, hp: 42, dmg: [4, 7], spd: 1.8, ref: 2.6, exp: 14, hitR: 20, head: 42, atk: 1.3 },
     zombie: { name: 'Zombi del pantano', lvl: 3, hp: 85, dmg: [7, 11], spd: 1.0, ref: 1.5, exp: 30, hitR: 22, head: 50, atk: 1.6 },
-    barbaro: { name: 'Bárbaro sangriento', lvl: 8, hp: 900, dmg: [18, 28], spd: 1.3, ref: 2.4, exp: 420, hitR: 40, head: 90, atk: 1.8, boss: { respawn: 120, minRar: 2, gold: [60, 110], special: { name: 'Rugido', every: 11, range: 3.2, r: 3, stun: 1.2, dmg: [8, 12], col: '#ff8a4a' } } },
-    arana: { name: 'Reina araña', lvl: 7, hp: 720, dmg: [14, 22], spd: 1.7, ref: 2.8, exp: 520, hitR: 52, head: 88, atk: 1.4, boss: { respawn: 150, minRar: 2, gold: [70, 120], special: { name: 'Telaraña', every: 9, range: 4, r: 3.5, stun: 1.8, col: '#9fe8ff' } } },
-    golem: { name: 'Gólem de hielo', lvl: 10, hp: 1300, dmg: [24, 34], spd: 1.0, ref: 1.8, exp: 900, hitR: 50, head: 112, atk: 2.0, boss: { respawn: 180, minRar: 2, gold: [110, 170], special: { name: 'Grito helado', every: 10, range: 3, r: 3, dmg: [30, 42], stun: 0.8, col: '#7fd6ff' } } },
-    demonio: { name: 'Demonio del foso', lvl: 12, hp: 1900, dmg: [30, 44], spd: 1.4, ref: 2.4, exp: 1500, hitR: 44, head: 120, atk: 1.7, boss: { respawn: 240, minRar: 3, gold: [180, 260], special: { name: 'Salto sísmico', every: 12, range: 4.5, r: 3.2, dmg: [45, 60], stun: 1, col: '#ff5a3c' } } },
+    barbaro: { name: 'Bárbaro sangriento', lvl: 8, hp: 900, dmg: [18, 28], spd: 1.3, ref: 2.4, exp: 420, hitR: 21, head: 46, sprite: 'goblin_elite', atk: 1.8, boss: { respawn: 120, minRar: 2, gold: [60, 110], special: { name: 'Rugido', every: 11, range: 3.2, r: 3, stun: 1.2, dmg: [8, 12], col: '#ff8a4a' } } },
+    arana: { name: 'Reina araña', lvl: 7, hp: 720, dmg: [14, 22], spd: 1.7, ref: 2.8, exp: 520, hitR: 24, head: 40, sprite: 'antlion', atk: 1.4, boss: { respawn: 150, minRar: 2, gold: [70, 120], special: { name: 'Telaraña', every: 9, range: 4, r: 3.5, stun: 1.8, col: '#9fe8ff' } } },
+    golem: { name: 'Gólem de hielo', lvl: 10, hp: 1300, dmg: [24, 34], spd: 1.0, ref: 1.8, exp: 900, hitR: 40, head: 130, sprite: 'minotaur', atk: 2.0, boss: { respawn: 180, minRar: 2, gold: [110, 170], special: { name: 'Grito helado', every: 10, range: 3, r: 3, dmg: [30, 42], stun: 0.8, col: '#7fd6ff' } } },
+    demonio: { name: 'Demonio del foso', lvl: 12, hp: 1900, dmg: [30, 44], spd: 1.4, ref: 2.4, exp: 1500, hitR: 32, head: 90, sprite: 'wyvern_fire', atk: 1.7, boss: { respawn: 240, minRar: 3, gold: [180, 260], special: { name: 'Salto sísmico', every: 12, range: 4.5, r: 3.2, dmg: [45, 60], stun: 1, col: '#ff5a3c' } } },
     skeleton: { name: 'Esqueleto guerrero', lvl: 5, hp: 150, dmg: [11, 17], spd: 1.5, ref: 2.1, exp: 62, hitR: 23, head: 53, atk: 1.4 },
     goblin_elite: { name: 'Goblin de élite', lvl: 2, hp: 62, dmg: [5, 9], spd: 1.9, ref: 2.6, exp: 22, hitR: 21, head: 46, atk: 1.2 },
     antlion: { name: 'Hormiga león', lvl: 4, hp: 115, dmg: [9, 14], spd: 1.5, ref: 2.0, exp: 45, hitR: 24, head: 40, atk: 1.5 },
@@ -59,7 +59,7 @@ export const MOBS: Record<MobType, MobDef> = {
     // Jefe de las Cámaras de tortura (D7, el tope del juego): diseñado directo a su nivel (~13 veces la vida de un mob común Nv 40), reusa el
     // sprite del minotauro de Flare. Sus mecánicas están en bosses.ts (BOSS_KITS); `special` queda de respaldo.
     verdugo: { name: 'Gran Verdugo', lvl: 40, hp: 70000, dmg: [92, 138], spd: 1.5, ref: 2.4, exp: 9000, hitR: 40, head: 130, atk: 1.8, sprite: 'minotaur', boss: { respawn: 420, minRar: 3, gold: [700, 1100], special: { name: 'Hachazo', every: 10, range: 4, r: 3.4, dmg: [120, 170], stun: 1.2, col: '#c0392b' } } },
-    demonio_foso: { name: 'Señor del Foso', lvl: 12, hp: 6200, dmg: [40, 60], spd: 1.5, ref: 2.4, exp: 2000, hitR: 44, head: 120, atk: 1.7, sprite: 'demonio', boss: { respawn: 360, minRar: 3, gold: [220, 340], special: { name: 'Salto sísmico', every: 10, range: 4.5, r: 3.4, dmg: [50, 70], stun: 1.2, col: '#ff5a3c' } } },
+    demonio_foso: { name: 'Señor del Foso', lvl: 12, hp: 6200, dmg: [40, 60], spd: 1.5, ref: 2.4, exp: 2000, hitR: 32, head: 90, atk: 1.7, sprite: 'wyvern_fire', boss: { respawn: 360, minRar: 3, gold: [220, 340], special: { name: 'Salto sísmico', every: 10, range: 4.5, r: 3.4, dmg: [50, 70], stun: 1.2, col: '#ff5a3c' } } },
 };
 
 /** Segundos hasta que reaparece un mob muerto. */

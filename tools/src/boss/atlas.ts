@@ -1,4 +1,9 @@
 /**
+ * NOTA (3/11/2026): los presets `barbaro`, `arana`, `golem` y `demonio` quedaron SIN USO: sus atlas se sacaron del repo porque
+ * no se registró de qué pack salieron (docs/LICENCIAS_AUDITORIA.md). Los mobs que los usaban apuntan por ahora a sprites de Flare
+ * (campo `sprite` en packages/world/src/mobs.ts). Si se vuelven a armar, anotar antes autor, pack y licencia.
+ */
+/**
  * Arma el atlas de un boss a partir de un pack de spritesheets 3D (carpetas Anim/Anim_Body_<ángulo>.png,
  * cada hoja = grilla de cuadros de 256 px, 16 ángulos). Se queda con los 8 ángulos de la grilla del juego
  * y algunos cuadros por animación para que el atlas pese poco.

@@ -3063,7 +3063,9 @@ async function boot() {
         PAPER = meta.paper; delete meta.paper; SPR.hero = SPR.hero_other = PAPER as unknown as SpriteMeta;
         SPR.hero.hum = true; // el muñeco por capas del jugador también entra en la escala de humanoides (ver HS)
         Object.assign(SPR, meta);
-        const names = ['world', 'goblin', 'zombie', 'skeleton', 'barbaro', 'goblin_elite', 'antlion', 'skeleton_mage', 'fire_ant', 'wyvern', 'minotaur', 'arana', 'golem', 'demonio', 'hobgoblin', 'hobgoblin_archer', 'skeleton_archer', 'zombie_dark', 'cursed_grave', 'ice_ant', 'antlion_small', 'wyvern_fire', 'wyvern_ice'];
+        // Sin barbaro, arana, golem ni demonio: eran atlas de origen no registrado y se sacaron del repo (docs/LICENCIAS_AUDITORIA.md).
+        // Los mobs que los usaban apuntan por ahora a sprites de Flare (ver `sprite` en packages/world/src/mobs.ts).
+        const names = ['world', 'goblin', 'zombie', 'skeleton', 'goblin_elite', 'antlion', 'skeleton_mage', 'fire_ant', 'wyvern', 'minotaur', 'hobgoblin', 'hobgoblin_archer', 'skeleton_archer', 'zombie_dark', 'cursed_grave', 'ice_ant', 'antlion_small', 'wyvern_fire', 'wyvern_ice'];
         ldTotal = 2 + atlases.length + names.length + 1;
         const imgs = await Promise.all(names.map((n) => loadT(`assets/${n}.webp`)));
         names.forEach((n, i) => (IMG[n] = imgs[i]));
