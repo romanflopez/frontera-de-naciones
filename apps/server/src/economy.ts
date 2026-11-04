@@ -13,7 +13,7 @@ import {
     SHOPS, SLOTS, slotsFor, fitsSlot, TRAINING, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, sellPrice, trainingUnlocked,
     BOSS_UNIQUES, UNIQUES_BY_TIER, SET_PIECES_BY_TIER, UNIQUE_BASES, UP_MAX, UP_MAX_BY_QUALITY, QUALITY_NAMES, EXTRAS_BY_QUALITY, rollExtra, rollExtras, uniqueIlvl, EXTRA_POOL, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, tierOfLvl, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
-    DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, junkValue, MAT_REFORJA, reforgeGold, reforgeStones, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
+    DAILY_BY_ID, DAILY_EXP_PCT, DUNGEON_KEY, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, junkValue, MAT_REFORJA, reforgeGold, reforgeStones, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
     mainComplete, newQuestBook, repeatGold, rewardUniques, rollDailies, type QuestBook, type QuestEvent, type QuestHave, type QuestReward,
 } from '@fdn/world';
 import { DAILY_INDEX_BASE, dailyOffers, dayKey } from './dailyShop.ts';
@@ -80,9 +80,9 @@ function newItem(st: Econ, base: string, r: number, a: SItem['a']): SItem { retu
  */
 export const UNIQUE_PIT_CHANCE = [0.04, 0.021, 0.015, 0.012, 0.009, 0.007, 0.004];
 export const UNIQUE_DUNGEON_CHANCE = [0.08, 0.05, 0.041, 0.041, 0.036, 0.036, 0.034];
-export const uniqueChance = (tier: number, origin: 'loose' | 'pit' | 'dungeon'): number => {
+export const uniqueChance = (tier: number, origin: 'loose' | 'pit' | 'dungeon' | 'world'): number => {
     const i = Math.min(7, Math.max(1, Math.round(tier))) - 1;
-    return origin === 'dungeon' ? UNIQUE_DUNGEON_CHANCE[i] : origin === 'loose' ? UNIQUE_PIT_CHANCE[i] / 3 : UNIQUE_PIT_CHANCE[i];
+    return origin === 'dungeon' || origin === 'world' ? UNIQUE_DUNGEON_CHANCE[i] : origin === 'loose' ? UNIQUE_PIT_CHANCE[i] / 3 : UNIQUE_PIT_CHANCE[i];
 };
 /** Piezas de set: parte de los únicos de los mobs de mazmorra, y chance de que un jefe de mazmorra suelte una pieza de set de su tramo ADEMÁS de su ítem. */
 export const SET_PIECE_SHARE = 0.5, BOSS_SET_CHANCE = 0.5;
@@ -93,7 +93,7 @@ export function pickSetPiece(st: Econ, pool: UniqueBase[]): UniqueBase {
     return pick(fresh.length ? fresh : pool);
 }
 /** Piedras de forja: chance por muerte según el origen del mob, y cantidad que suelta un jefe. */
-export const FORGE_CHANCE = { loose: 0.05, pit: 0.08, dungeon: 0.18 };
+export const FORGE_CHANCE = { loose: 0.05, pit: 0.08, dungeon: 0.18, world: 0.18 };
 export const FORGE_BOSS: [number, number] = [3, 5];
 /**
  * Probabilidad de éxito de cada mejora (+1 .. +11): arranca en 33 % para que la gente pueda "limar". Solo vive en el server.
@@ -109,9 +109,9 @@ const pick = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
 
 // ---------- calidad del botín (docs/ITEMS.md: la calidad define extras y tope de mejora) ----------
 /** Calidad de un único de banda al caer de un mob común: casi siempre Verde; Azul con suerte (más en mazmorra). Violeta y Dorado son de jefes. */
-export function rollQuality(origin: 'loose' | 'pit' | 'dungeon'): number {
+export function rollQuality(origin: 'loose' | 'pit' | 'dungeon' | 'world'): number {
     const r = Math.random();
-    return r < (origin === 'dungeon' ? 0.4 : origin === 'pit' ? 0.15 : 0.1) ? 2 : 1;
+    return r < (origin === 'dungeon' || origin === 'world' ? 0.4 : origin === 'pit' ? 0.15 : 0.1) ? 2 : 1;
 }
 /**
  * Escalera de los jefes de mazmorra: cada uno garantiza una calidad base y tira la chance de la siguiente (Común < Verde < Azul < Violeta < Dorado).
@@ -305,7 +305,7 @@ export interface EconCtx {
     /** Botín en el suelo del mundo del jugador. */
     ground: GroundApi;
 }
-export interface KillInfo { /** rasgos del mob (mobTraits.ts): multiplican la exp (mutante ×3, habilidades ×1,3-1,5, salvaje ×1,25) y el botín del mutante (×2) */ traits?: number; mobId: number; type: MobType; def: MobDef; zoneName: string; /** de dónde sale el mob: suelto, de un pit o de una mazmorra (docs/ITEMS.md) */ origin?: 'loose' | 'pit' | 'dungeon'; x: number; y: number; /** esquirla que suelta el boss de la zona (Zone.drops); si falta, se decide por el nombre */ shard?: KeyId; /** id del mapa donde murió (objetivos de misión por mapa) */ map?: string }
+export interface KillInfo { /** rasgos del mob (mobTraits.ts): multiplican la exp (mutante ×3, habilidades ×1,3-1,5, salvaje ×1,25) y el botín del mutante (×2) */ traits?: number; mobId: number; type: MobType; def: MobDef; zoneName: string; /** de dónde sale el mob: suelto, de un pit o de una mazmorra (docs/ITEMS.md) */ origin?: 'loose' | 'pit' | 'dungeon' | 'world'; x: number; y: number; /** esquirla que suelta el boss de la zona (Zone.drops); si falta, se decide por el nombre */ shard?: KeyId; /** id del mapa donde murió (objetivos de misión por mapa) */ map?: string }
 
 const fail = (code: string, text: string) => ({ ok: false as const, code, text });
 type Outcome = { ok: true; code: string; text: string; stats?: boolean } | { ok: false; code: string; text: string };
@@ -695,6 +695,9 @@ export class Economy {
         const r = this.payReward(st, { expPct: DAILY_EXP_PCT, gold: dailyGold(st.lvl) }, ''); if (!r.ok) return;
         let ess = '';
         if (!b.d.ess) { b.d.ess = true; const mats = (st.mats ??= {}); mats.esencia = Math.min(9999, (mats.esencia ?? 0) + 1); ess = ' Y por ser el primero del día, una Esencia.'; }
+        // encargo de dungeon: devuelve una llave de ese dungeon, así la corrida que armaste con materiales se repite una vez gratis
+        const key = dq.goal.k === 'dungeon' ? DUNGEON_KEY[dq.goal.d] : undefined;
+        if (key) { const mats = (st.mats ??= {}); mats[key] = Math.min(99, (mats[key] ?? 0) + 1); ess += ` Y una ${keyMatName(key)} para volver a entrar.`; }
         const left = DAILY_LIMIT - b.d.done.length;
         p.send(M.econResult(true, r.ups ? 'level_up' : 'daily_done', `Encargo cumplido: «${dq.name}»: ${r.text}${ess}${left > 0 ? ` (te quedan ${left} hoy)` : ' Ya cobraste los 3 de hoy.'}`));
 
@@ -810,6 +813,23 @@ export class Economy {
         return true;
     }
 
+    /** Avance de misión por un mob muerto: el objetivo de matar y, si es el jefe en su piso, el dungeon. Lo usa `reward` y `questCredit`. */
+    private questKill(p: Player, st: Econ, k: KillInfo): void {
+        this.questEvent(p, st, { k: 'kill', type: k.type, map: k.map ?? '', pit: k.origin === 'pit', tier: tierOfLevel(k.def.lvl), myTier: tierOfLevel(st.lvl), mutant: ((k.traits ?? 0) & TRAIT_MUTANT) !== 0 });
+        // el dungeon cuenta solo si el jefe muere en su piso (la instancia de la party), no si aparece en otro mapa
+        if (k.def.boss) for (const d of DUNGEON_IDS) if (DUNGEON_BOSS[d] === k.type && k.map === DUNGEON_MAP[d]) this.questEvent(p, st, { k: 'dungeon', d });
+    }
+
+    /**
+     * Quests en party [DM]: un compañero cerca que no cobra botín (está muerto) igual avanza sus misiones con el mob que mató la party.
+     * Sin exp, oro ni ítems: solo la misión (y el encargo del día, que se cobra solo y sí puede dar exp y subir de nivel).
+     */
+    questCredit(p: Player, k: KillInfo): void {
+        const st = p.econ; if (!st) return;
+        this.questKill(p, st, k); // si un encargo sube de nivel, el aviso ya sale de payDaily; el restat lo hace el mundo
+        this.touch(p); this.snapshot(p);
+    }
+
     reward(p: Player, ctx: EconCtx, k: KillInfo, expMult = 1): void {
         const st = p.econ; if (!st) return;
         const def = k.def, boss = def.boss, lvl0 = st.lvl; // un encargo del día cobrado en este kill también puede subir de nivel
@@ -838,7 +858,7 @@ export class Economy {
             else { bagFull = true; ctx.ground.add(item, Math.floor(p.posX) + 0.5, Math.floor(p.posY) + 0.5, [p.accountKey], LOOT_FREE_MS); } // nada se destruye: cae junto al jugador
         }
         let forge = 0;
-        if (boss ? bossU : Math.random() < FORGE_CHANCE[k.origin ?? 'pit']) { forge = boss ? rint(FORGE_BOSS[0], FORGE_BOSS[1]) : 1; st.forge = (st.forge ?? 0) + forge; }
+        if (boss ? (bossU || k.origin === 'world') : Math.random() < FORGE_CHANCE[k.origin ?? 'pit']) { forge = boss ? rint(FORGE_BOSS[0], FORGE_BOSS[1]) : 1; st.forge = (st.forge ?? 0) + forge; }
         if (boss && bossU) { // pieza de set extra (jefes de mazmorra): la banda es la de su mazmorra (D1 = T1 … D7 = T7), no la del nivel del jefe
             const di = DUNGEON_IDS.findIndex((d) => DUNGEON_BOSS[d] === k.type && k.map === DUNGEON_MAP[d]), pool = di >= 0 ? SET_PIECES_BY_TIER[di + 1] : undefined;
             if (pool && Math.random() < BOSS_SET_CHANCE) {
@@ -852,7 +872,7 @@ export class Economy {
             p.send(M.econResult(true, 'quest_mat', `Conseguiste ${n} piedra${n > 1 ? 's' : ''} de reforja.`));
         }
         if (Math.random() < 0.14) { const kind: PotKind = Math.random() < 0.6 ? 'hp' : 'mp'; if (st.pots[kind] < POT_MAX) { st.pots[kind]++; potion = kind; } }
-        if (boss && !bossU) { const kid: KeyId = k.shard ?? (k.zoneName === 'Cripta olvidada' ? 'foso' : 'cripta'); st.q.shards[kid] = Math.min(99, st.q.shards[kid] + 1); shard = kid; }
+        if (boss && !bossU && k.origin !== 'world') { const kid: KeyId = k.shard ?? (k.zoneName === 'Cripta olvidada' ? 'foso' : 'cripta'); st.q.shards[kid] = Math.min(99, st.q.shards[kid] + 1); shard = kid; }
         // materiales de las llaves: cada uno en los pits de su tier de zona (T1-T7, sin el tope 6 de la banda de ítems; ×2 en mutantes, como el resto del botín)
         const qmats: string[] = [];
         if (!boss && k.origin === 'pit') for (const [id, mt] of Object.entries(QUEST_MATS)) {
@@ -865,9 +885,7 @@ export class Economy {
             const mats = (st.mats ??= {}); mats[keyDrop] = Math.min(99, (mats[keyDrop] ?? 0) + 1);
             p.send(M.econResult(true, 'quest_mat', `Conseguiste una ${keyMatName(keyDrop)}.`));
         }
-        this.questEvent(p, st, { k: 'kill', type: k.type, map: k.map ?? '', pit: k.origin === 'pit', tier, myTier: tierOfLevel(st.lvl), mutant: ((k.traits ?? 0) & TRAIT_MUTANT) !== 0 });
-        // el dungeon cuenta solo si el jefe muere en su piso (la instancia de la party), no si aparece en otro mapa
-        if (boss) for (const d of DUNGEON_IDS) if (DUNGEON_BOSS[d] === k.type && k.map === DUNGEON_MAP[d]) this.questEvent(p, st, { k: 'dungeon', d });
+        this.questKill(p, st, k);
         const questReady = false, questProg = 0; // la cadena vieja de 10 quedó jubilada: los avisos de misión van por questEvent
         levelUp(st); const ups = st.lvl - lvl0;
         this.touch(p);

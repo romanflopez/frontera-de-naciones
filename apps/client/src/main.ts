@@ -2531,7 +2531,7 @@ function renderBook(n: Npc) {
     }
     // los encargos del día no pasan por el Capitán: se ven en el HUD y se cobran solos
     const ess = QB.d.ess ? '' : ' El primero del día paga además una Esencia.';
-    add(`<b>Encargos del día</b>: se cobran solos al cumplirlos, hasta ${DAILY_LIMIT} por día (${dailyGold(P.lvl)} oro y 10 % de tu nivel cada uno).${ess}`);
+    add(`<b>Encargos del día</b>: se cobran solos al cumplirlos, hasta ${DAILY_LIMIT} por día (${dailyGold(P.lvl)} oro y 10 % de tu nivel cada uno; los de dungeon dan además una llave de ese dungeon para volver a entrar).${ess}`);
     // repetible
     const extra = Object.entries(QB.mats).filter(([id, c]) => c >= REPEAT_MATS && !RESERVED_MATS.has(id));
     add(`<b>Sobrantes</b>: ${REPEAT_MATS} materiales iguales por oro o una piedra de forja.${extra.length ? '' : ' Todavía no juntaste suficientes.'}`);

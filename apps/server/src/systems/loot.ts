@@ -15,7 +15,26 @@ export const LOOT_DROP_CHANCE = 0.35;
 /** Dentro de lo que cae: chance de que sea oro en vez del material. */
 const GOLD_SHARE = 0.3;
 
-export interface LootEntry { lootId: string; x: number; y: number; itemId: string; itemName: string; amount: number; expiresAt: number }
+/** [DM] El botín de un kill es de la party que lo mató durante este tiempo; después, de cualquiera (como los ítems tirados). */
+export const LOOT_OWNED_MS = 30_000;
+
+export interface LootEntry {
+    lootId: string; x: number; y: number; itemId: string; itemName: string; amount: number; expiresAt: number;
+    /** sesiones que pueden levantarlo hasta `freeAt` (la party del que mató, en rango); vacío = de cualquiera */
+    owners?: string[]; freeAt?: number;
+}
+
+/**
+ * [DM] Reparto entre la party: el oro se divide en partes iguales (lo que sobra, de a 1 a compañeros al azar) y un material
+ * le toca entero a uno al azar. Devuelve cuánto le toca a cada índice de `n` (solo los que reciben algo).
+ */
+export function splitLoot(itemId: string, amount: number, n: number, rnd: () => number = Math.random): { i: number; amount: number }[] {
+    if (n <= 1) return [{ i: 0, amount }];
+    if (itemId !== 'gold') return [{ i: Math.min(n - 1, Math.floor(rnd() * n)), amount }];
+    const share = Math.floor(amount / n), parts = Array.from({ length: n }, () => share), idx = [...Array(n).keys()];
+    for (let left = amount - share * n; left > 0; left--) { const j = Math.floor(rnd() * idx.length); parts[idx[j]]++; idx.splice(j, 1); }
+    return parts.map((a, i) => ({ i, amount: a })).filter((x) => x.amount > 0);
+}
 
 /** Material (basura vendible) por tipo de mob; nombres y valores en JUNK_MATS (@fdn/world). El resto cae como trofeo genérico. */
 const MATERIALS: Partial<Record<MobType, string>> = {
@@ -42,7 +61,7 @@ export function rollLoot(type: MobType, name: string, lvl: number, rnd: () => nu
     return { itemId: m.id, itemName: m.name, amount: 1 };
 }
 
-export type PickupResult = { ok: true; loot: LootEntry } | { ok: false; reason: 'gone' | 'far' };
+export type PickupResult = { ok: true; loot: LootEntry } | { ok: false; reason: 'gone' | 'far' | 'locked' };
 
 export class LootManager {
     readonly items = new Map<string, LootEntry>();
@@ -51,16 +70,18 @@ export class LootManager {
     private seq = 0;
     constructor(private readonly prefix: string, private readonly now: () => number = Date.now) {}
 
-    spawn(x: number, y: number, r: LootRoll): LootEntry {
+    spawn(x: number, y: number, r: LootRoll, owners: string[] = []): LootEntry {
         const e: LootEntry = { lootId: `${this.prefix}-${(++this.seq).toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`, x: Math.floor(x), y: Math.floor(y), ...r, expiresAt: this.now() + LOOT_TTL_MS };
+        if (owners.length) { e.owners = owners; e.freeAt = this.now() + LOOT_OWNED_MS; }
         this.items.set(e.lootId, e);
         return e;
     }
 
     /** Valida y saca el botín. `px, py`: celda del jugador. */
-    pickup(lootId: string, px: number, py: number): PickupResult {
+    pickup(lootId: string, px: number, py: number, sid = ''): PickupResult {
         const e = this.items.get(lootId); if (!e) return { ok: false, reason: 'gone' };
         if (Math.hypot(px - e.x, py - e.y) > LOOT_PICKUP_RANGE) return { ok: false, reason: 'far' };
+        if (e.owners && (e.freeAt ?? 0) > this.now() && !e.owners.includes(sid)) return { ok: false, reason: 'locked' };
         this.items.delete(lootId);
         for (const s of this.seen.values()) s.delete(lootId);
         return { ok: true, loot: e };

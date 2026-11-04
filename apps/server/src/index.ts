@@ -15,6 +15,7 @@ import { MAPS, MOB_TYPES, canonicalMapId, factionHome, getMapDef, type MapDef } 
 import { loadPosition, resolveSaved, savePosition } from './persist.ts';
 import * as M from './messages.ts';
 import type { PersistedPlayer } from './player.ts';
+import { WorldBossService } from './worldBoss.ts';
 import { WorldRegistry } from './registry.ts';
 import { authenticate, charKeysOf, createCharacter, deleteCharacter, findChar, MAX_CHARS } from './accounts.ts';
 import { Economy, newEconChecked, toCharSave } from './economy.ts';
@@ -42,6 +43,12 @@ if (!getMapDef(settings.initialMap)) throw new Error(`initialMap '${settings.ini
 const registry = new WorldRegistry({ settings, economy });
 registry.ensure(settings.initialMap); // el mapa de entrada ya listo; los demás se crean la primera vez que alguien llega
 registry.start();
+// jefe de mundo (docs/JEFE_DE_MUNDO.md): una vez por día, a hora y en mapa del T4 al azar; se anuncia a todos los conectados
+const worldBoss = new WorldBossService({
+    ensure: (id) => registry.ensure(id), get: (id) => registry.get(id),
+    announce: (text) => { const m = encode(M.sendMessage(`[Jefe de mundo] ${text}`)); for (const s of sessionsById.values()) if (s.socket?.readyState === s.socket?.OPEN) s.socket?.send(m); },
+});
+setInterval(() => worldBoss.tick(), 5000).unref();
 const worldConfigs: GameWorldConfig[] = Object.values(MAPS).map((d) => ({ id: d.id, name: d.name, map: d.id, spawn: d.spawn }));
 console.log(`[Server] ${worldConfigs.length} mapas registrados (${worldConfigs.map((w) => w.id).join(', ')}); mundo inicial '${settings.initialMap}'.`);
 // casa de subastas compartida por todos los mundos (docs/SUBASTAS.md): mismo Storage; avisa a los vendedores conectados
@@ -369,6 +376,7 @@ function gmMaps() {
 const GM_HELP = [
     'Comandos GM: /gm mapas · /gm ir <mapa> [x y] · /gm pos [x y] · /gm nivel <n> · /gm oro <n> · /gm curar · /gm dios',
     '/gm mobs · /gm mob <tipo> [nivel] [cantidad] · /gm limpiar · /gm llaves [n] · /gm espada [crit] · /gm traer <jugador> · /gm ira <jugador> · /gm menu (o F9)',
+    '/gm jefemundo (estado) · /gm jefemundo aca (sale al lado tuyo) · /gm jefemundo ya (sale ahora en un mapa al azar)',
 ];
 /** Prefijo con el que el server le manda al cliente el contenido del menú GM (el cliente lo abre en vez de mostrarlo en el chat). */
 const GM_MENU_TAG = '\u0001GMMENU';
@@ -393,6 +401,12 @@ function handleGm(s: Session, text: string, reply: (m: ServerMessage) => void): 
     const [, cmd = 'ayuda', ...args] = text.split(/\s+/);
     const c = cmd.toLowerCase();
     if (c === 'ayuda' || c === 'help') { say(...GM_HELP); return; }
+    if (c === 'jefemundo') {
+        const sub = (args[0] ?? '').toLowerCase(), w = worldOf(s), p = w?.playerOf(s.sessionId);
+        if (sub === 'aca') { if (!w || !p) { say('No estás en un mundo.'); return; } say(worldBoss.spawn(Date.now(), w.id, { x: p.posX, y: p.posY })); return; }
+        if (sub === 'ya') { say(worldBoss.spawn()); return; }
+        say(worldBoss.status()); return;
+    }
     if (c === 'mapas') {
         say(...gmMaps().map((d) => `${d.id} — ${d.name} (${d.lvl ? `Nv ${d.lvl}` : 'sin nivel'}${d.dungeon ? ', mazmorra' : ''})`), 'Los interiores y los mapas de prueba no se listan, pero /gm ir los acepta igual.');
         return;

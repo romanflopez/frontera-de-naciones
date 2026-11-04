@@ -9,10 +9,10 @@ Estado: **implementado para los siete dungeons** (2/11/2026; D7 con los mapas T7
 | **Llave de la cueva** (abre D1, Cueva goblin) | 8 colmillos + 60 de oro | Colmillos: 8 % en los pits de nivel 1-5 (~100 kills) |
 | **Llave gastada** | — | La suelta el **jefe goblin** al 100 %, **una para cada uno** de la party que esté cerca, solo si muere en su piso (Minas goblin) |
 | **Llave del nido** (abre D2, Nido de hormiga león) | 1 llave gastada + 1 esencia + 120 de oro | Esencia: 3 % en los pits de nivel 6-10, o 1 por día con el primer encargo |
-| **Llave de la cripta olvidada** (abre D3) | 8 huesos antiguos + 200 de oro | Hueso antiguo: 6 % en los pits de nivel 11-15 (Cementerio de Lochport, donde está la entrada) |
-| **Llave de la torre** (abre D4, Torre del hechicero) | 8 tintas arcanas + 300 de oro | Tinta arcana: 6 % en los pits de nivel 16-20 (La Brecha) |
-| **Llave del templo** (abre D5, Templo de Mez) | 8 plumas de tormenta + 450 de oro | Pluma de tormenta: 6 % en los pits de nivel 21-25 (Cenizas II) |
-| **Llave de la fortaleza** (abre D6, el Foso) | 8 brasas infernales + 650 de oro | Brasa infernal: 6 % en los pits de nivel 26-30 (Cenizas III) |
+| **Llave de la cripta olvidada** (abre D3) | 8 huesos antiguos + 200 de oro | Hueso antiguo: 8 % en los pits de nivel 11-15 (Cementerio de Lochport, donde está la entrada) |
+| **Llave de la torre** (abre D4, Torre del hechicero) | 8 tintas arcanas + 300 de oro | Tinta arcana: 8 % en los pits de nivel 16-20 (La Brecha) |
+| **Llave del templo** (abre D5, Templo de Mez) | 8 plumas de tormenta + 450 de oro | Pluma de tormenta: 8 % en los pits de nivel 21-25 (Cenizas II) |
+| **Llave de la fortaleza** (abre D6, el Foso) | 8 brasas infernales + 650 de oro | Brasa infernal: 8 % en los pits de nivel 26-30 (Cenizas III) |
 | **Llave del Fuerte Amir** (abre D7, las Cámaras de tortura) | 8 eslabones malditos + 900 de oro | Eslabón maldito: en los pits de nivel 31-40 (Oasis de Ceniza, Lago Kuuma, Laguna de la Gruta, Minas abandonadas) |
 
 **Cadena solo en D1 → D2** (es el tutorial). De D3 en adelante cada llave sale de los pits del mismo tramo y del mapa de la entrada: un jugador alto nunca vuelve a contenido bajo por una llave (fue de las quejas más fuertes en Dreadmyst).
@@ -35,3 +35,9 @@ Estado: **implementado para los siete dungeons** (2/11/2026; D7 con los mapas T7
 
 - Íconos propios en la bolsa de materiales (ya generados en `assets/items/misc/llave_*.png`, PR #37; falta mostrarlos).
 - Si en la prueba se ven más de ~2 corridas por hora sostenidas: "botín del jefe 1 vez cada 20 h".
+
+
+## Encargo del día de dungeon: una llave de vuelta
+Cada encargo del día de dungeon (D1 a D7, el de tu tramo) se puede cumplir una vez por día y, al cobrarse, además del oro y la exp **devuelve una llave de ese dungeon** (`DUNGEON_KEY` en `quests.ts`). El ciclo: farmeás los materiales, armás la llave, matás al jefe, el encargo te da otra y repetís la corrida gratis; para una tercera, a farmear. En party le toca a cada uno (las quests cuentan para todos los cercanos). Entra dentro del tope de 3 encargos por día.
+
+**Ritmo de las llaves** (Román, 3/11): materiales de llave de D3 a D7 al 8 % (8 materiales ≈ 100 mobs, parecido a lo que dura una corrida). Con la llave del encargo, las 2 primeras corridas del día salen ~50 mobs cada una y de la tercera en adelante ~100. Se probó 4 % (~200 mobs) y se descartó por largo. D1 y D2 no cambian (son el tutorial).

@@ -20,18 +20,18 @@ import { BOSS_UNIQUES, UNIQUES_BY_TIER, type UniqueBase } from './uniques';
 export const MAT_COLMILLO = 'colmillo';
 /** Esencia: 3 % en los pits T2 (nivel 6-10) o 1 por día con el primer encargo entregado. Va en la llave del nido (D2). */
 export const MAT_ESENCIA = 'esencia';
-/** Materiales de las llaves de D3 a D6: 6 % en los pits de su tramo (8 ≈ 130 kills, más o menos lo que dura la corrida). */
+/** Materiales de las llaves de D3 a D6: 8 % en los pits de su tramo (8 ≈ 100 kills, parecido a lo que dura la corrida; el encargo del día devuelve una llave, así las 2 primeras salen ~50 cada una). */
 export const MAT_HUESO = 'hueso_antiguo', MAT_TINTA = 'tinta_arcana', MAT_PLUMA = 'pluma_tormenta', MAT_BRASA = 'brasa_infernal';
-/** Material de la llave de D7: 6 % en los pits del T7 (nivel 31-40). */
+/** Material de la llave de D7: 8 % en los pits del T7 (nivel 31-40). */
 export const MAT_ESLABON = 'eslabon_maldito';
 export const QUEST_MATS: Record<string, { name: string; tier: number; chance: number }> = {
     [MAT_COLMILLO]: { name: 'Colmillo', tier: 1, chance: 0.08 },
     [MAT_ESENCIA]: { name: 'Esencia', tier: 2, chance: 0.03 },
-    [MAT_HUESO]: { name: 'Hueso antiguo', tier: 3, chance: 0.06 },
-    [MAT_TINTA]: { name: 'Tinta arcana', tier: 4, chance: 0.06 },
-    [MAT_PLUMA]: { name: 'Pluma de tormenta', tier: 5, chance: 0.06 },
-    [MAT_BRASA]: { name: 'Brasa infernal', tier: 6, chance: 0.06 },
-    [MAT_ESLABON]: { name: 'Eslabón maldito', tier: 7, chance: 0.06 },
+    [MAT_HUESO]: { name: 'Hueso antiguo', tier: 3, chance: 0.08 },
+    [MAT_TINTA]: { name: 'Tinta arcana', tier: 4, chance: 0.08 },
+    [MAT_PLUMA]: { name: 'Pluma de tormenta', tier: 5, chance: 0.08 },
+    [MAT_BRASA]: { name: 'Brasa infernal', tier: 6, chance: 0.08 },
+    [MAT_ESLABON]: { name: 'Eslabón maldito', tier: 7, chance: 0.08 },
 };
 // ---------- llaves de las mazmorras (docs/LLAVES.md) ----------
 /** Llave de la cueva (D1), llave gastada (la suelta el jefe de D1, una por jugador) y llave del nido (D2). Viven en los materiales del personaje. */
@@ -55,6 +55,10 @@ export const BOSS_KEY_DROPS: Partial<Record<MobType, string>> = { goblin_jefe: M
 export const DUNGEON_ENTRY_KEYS: Record<string, string> = {
     cueva_goblin: MAT_LLAVE_CUEVA, nido_hormiga_leon: MAT_LLAVE_NIDO,
     cripta_olvidada: MAT_LLAVE_CRIPTA, torre_del_hechicero: MAT_LLAVE_TORRE, templo_de_mez: MAT_LLAVE_TEMPLO, fortaleza_infernal: MAT_LLAVE_FORTALEZA, fuerte_amir: MAT_LLAVE_AMIR,
+};
+/** Llave de cada dungeon: la que pide su puerta. El encargo del día de ese dungeon devuelve una (una vez por día). */
+export const DUNGEON_KEY: Record<string, string> = {
+    d1: MAT_LLAVE_CUEVA, d2: MAT_LLAVE_NIDO, d3: MAT_LLAVE_CRIPTA, d4: MAT_LLAVE_TORRE, d5: MAT_LLAVE_TEMPLO, d6: MAT_LLAVE_FORTALEZA, d7: MAT_LLAVE_AMIR,
 };
 /** Lo que falta para armar `key` con `mats` y `gold`, o null si alcanza. */
 export function keyMissing(key: string, mats: Record<string, number>, gold: number): string | null {

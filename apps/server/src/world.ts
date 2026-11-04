@@ -27,7 +27,7 @@ import { auctionHouse } from './auction.ts';
 import { depotService } from './deposit.ts';
 import { tradeService } from './trade.ts';
 import { canPickup, GroundLoot, type GroundApi } from './ground.ts';
-import { LootManager, rollLoot } from './systems/loot.ts';
+import { LootManager, rollLoot, splitLoot } from './systems/loot.ts';
 
 interface Timer { at: number; fn: () => void }
 
@@ -61,6 +61,8 @@ export class GameWorld {
     private hibernated = false;
     /** Lo setea el registro de mundos: saca al jugador de este mundo y lo manda a otro mapa (portal, respawn). */
     transferHook?: (sessionId: string, dest: { map: string; x: number; y: number }, why: 'respawn' | 'waypoint' | 'home' | 'recall') => void;
+    /** Jefe de mundo (worldBoss.ts): avisa cuando muere, con el que dio el golpe final y cuántos pelearon. */
+    worldBossHook?: (ev: { kind: 'died'; name: string; killer: string; fighters: number }) => void;
     /** Botín en el suelo de este mundo (solo en memoria). */
     private readonly loot = new GroundLoot();
     private lastGroundSync = 0;
@@ -113,21 +115,29 @@ export class GameWorld {
                     if (f && (f.x !== p.posX || f.y !== p.posY)) { this.moveTo(p, p.posX, p.posY, f.x, f.y, false, true); p.send(M.playerTeleported(f.x, f.y)); }
                 },
                 dispel: (p) => { clearBuffs(p.status); if (p.status.statDirty) { p.status.statDirty = false; this.restat(p); } this.announceStatus(p); this.sendVitals(p, true); },
+                worldBossDied: (info, fighters, killer) => {
+                    // jefe de mundo: cobran todos los que pelearon (pegaron, curaron o tanquearon), cada uno con su botín propio, sin reparto de exp
+                    if (this.econ) for (const f of fighters) this.econ.reward(f, this.econCtx, { ...info, zoneName: 'Jefe de mundo', origin: 'world', traits: 0, map: this.mapId }, 1);
+                    this.worldBossHook?.({ kind: 'died', name: info.def.name, killer: killer?.characterName ?? '', fighters: fighters.length });
+                },
                 mobDied: (info) => {
-                    if (!info.gm) this.dropLoot(info.type, info.def.name, info.def.lvl, info.x, info.y);
+                    if (!info.gm) this.dropLoot(info.type, info.def.name, info.def.lvl, info.x, info.y, info.killer);
                     if (!info.gm && info.def.boss && this.isDungeonRun) this.runCleared(info.def.name);
                 },
                 reward: (p, info) => {
                     if (!this.econ) return;
                     // party: cada compañero cerca (mismo mundo, vivo) recibe su propio botín y una parte de la exp (docs/PARTY_Y_ARENAS.md §1)
-                    const near = partyMates(p.sessionId).map((sid) => this.players.get(sid)).filter((m): m is Player => !!m && (m === p || (m.hp > 0 && Math.hypot(m.posX - p.posX, m.posY - p.posY) <= PARTY_SHARE_RANGE)));
-                    const mult = partyExpMult(near.length), got = new Set<Player>(near.length ? near : [p]);
-                    for (const m of got) this.econ.reward(m, this.econCtx, { ...info, map: this.mapId }, mult);
-                    // élites y jefes de mundo: botín personal también para los que participaron sin party (amenaza), si siguen vivos y en la zona
+                    // quests en party [DM]: el compañero cerca que está muerto no cobra botín ni exp, pero el mob le cuenta para sus misiones
+                    const inRange = this.partyInRange(p), near = inRange.filter((m) => m === p || m.hp > 0), dead = inRange.filter((m) => m !== p && m.hp <= 0);
+                    const mult = partyExpMult(near.length), k = { ...info, map: this.mapId };
+                    for (const m of near) this.econ.reward(m, this.econCtx, k, mult);
+                    for (const m of dead) { const lvl0 = m.econ?.lvl; this.econ.questCredit(m, k); if (m.econ && m.econ.lvl !== lvl0) this.restat(m); }
+                    // élites y jefes: botín personal también para los que participaron sin party (amenaza), si siguen vivos y en la zona
+                    const got = new Set<Player>(near);
                     for (const id of info.participants ?? []) {
                         const q = this.playersById.get(id);
                         if (!q || got.has(q) || q.hp <= 0 || Math.hypot(q.posX + 0.5 - info.x, q.posY + 0.5 - info.y) > BOSS_SHARE_RANGE) continue;
-                        got.add(q); this.econ.reward(q, this.econCtx, { ...info, map: this.mapId }, 1);
+                        got.add(q); this.econ.reward(q, this.econCtx, k, 1);
                     }
                 },
             }, { noRespawn: this.isDungeonRun, elites: !!this.def?.temporary });
@@ -222,6 +232,24 @@ export class GameWorld {
         const p = this.players.get(sessionId); if (!p) return [];
         return [p.sessionId, ...this.nearbyPlayers(p.posX, p.posY, p.sessionId).filter((o) => !this.hiddenFrom(o, p)).map((o) => o.sessionId)];
     }
+
+    /** ¿Hay un jefe de mundo vivo acá? Un mundo con jefe no hiberna aunque esté vacío. */
+    get hasWorldBoss(): boolean { return !!this.mobSim?.worldBoss(); }
+    /**
+     * Jefe de mundo (docs/JEFE_DE_MUNDO.md): lo pone cerca de `at` o, si no se pasa, en el centro de una zona de mobs al azar del mapa.
+     * Devuelve dónde quedó, o undefined si el mapa no tiene mobs o lugar.
+     */
+    spawnWorldBoss(type: MobType, at?: { x: number; y: number }): { x: number; y: number } | undefined {
+        if (!this.mobSim || !this.map) return undefined;
+        const zs = this.map.zones; if (!zs.length) return undefined;
+        const z = at ? undefined : zs[Math.floor(Math.random() * zs.length)], c = at ?? { x: z!.x, y: z!.y };
+        let zi = zs.findIndex((q) => q.type === type);
+        if (zi < 0) { let bd = Infinity; zs.forEach((q, i) => { const d = Math.hypot(q.x - c.x, q.y - c.y); if (d < bd) { bd = d; zi = i; } }); }
+        const r = this.mobSim.spawnWorldBoss(type, c.x, c.y, zi);
+        return r && { x: Math.floor(r.x), y: Math.floor(r.y) };
+    }
+    /** Saca al jefe de mundo (se le terminó el tiempo). */
+    removeWorldBoss(): boolean { return this.mobSim?.removeWorldBoss() ?? false; }
 
     /** Duerme el mundo vacío: se tiran los temporizadores y los mobs (al despertar nacen de nuevo con la vida llena). */
     hibernate(): void {
@@ -1314,7 +1342,7 @@ export class GameWorld {
         p.pvp.meleeGapMs = meleeIntervalSecs(p.combat.aspd) * 1000; // la velocidad de ataque la fija el equipo que guarda el server
         p.prog = progressFromEcon(st);
         if (login) { p.hp = p.combat.savedHp; p.mp = p.combat.savedMp; }
-        else if (p.combat.lvl > prevLvl) { p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; }
+        else if (p.combat.lvl > prevLvl && !p.isDead) { p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; } // subir de nivel muerto (encargo de la party) no te revive
         else { if (p.hp > p.combat.maxHp) p.hp = p.combat.maxHp; if (p.mp > p.combat.maxMp) p.mp = p.combat.maxMp; }
         this.sendVitals(p, true);
     }
@@ -1349,21 +1377,40 @@ export class GameWorld {
     }
     /** Le saca vida a un jugador: DF (físico) o RM (mágico) del server, daño × 100/(100+X); si llega a 0 muere. Devuelve el daño aplicado. */
     /** Tirada de botín de suelo al morir un mob: si cae algo, lo ven en el acto los jugadores cercanos. */
-    private dropLoot(type: MobType, name: string, lvl: number, x: number, y: number): void {
+    private dropLoot(type: MobType, name: string, lvl: number, x: number, y: number, killer?: Player): void {
         const r = rollLoot(type, name, lvl); if (!r) return;
-        const e = this.floorLoot.spawn(x, y, r), m = M.lootSpawn(e);
+        // [DM] sin "ninjas": durante LOOT_OWNED_MS solo lo levanta la party del que lo mató (los que estaban cerca)
+        const owners = killer && !killer.disconnected ? this.partyInRange(killer).map((m) => m.sessionId) : [];
+        const e = this.floorLoot.spawn(x, y, r, owners), m = M.lootSpawn(e);
         for (const o of this.nearbyPlayers(e.x, e.y)) { this.floorLoot.markSeen(o.sessionId, e.lootId); o.send(m); }
     }
-    /** ClientPickupItem: vivo, a ≤ 1,5 celdas y que siga ahí. Lo levanta, lo suma a la cuenta y avisa a los que lo ven y a la party. */
+    /**
+     * ClientPickupItem: vivo, a ≤ 1,5 celdas, que siga ahí y que no sea todavía de otra party. [DM] Lo que levanta alguien de una
+     * party se reparte solo entre los compañeros vivos cerca del que lo levantó: el oro en partes iguales y el material, a uno al azar.
+     */
     private pickupLoot(p: Player, lootId: string): void {
         if (p.isDead || !this.econ) return;
         const viewers = this.floorLoot.viewersOf(lootId);
-        const r = this.floorLoot.pickup(lootId, p.posX, p.posY);
-        if (!r.ok) { if (r.reason === 'far') p.send(M.sendMessage('Estás muy lejos para levantarlo.')); return; }
-        const e = r.loot;
-        const lvl0 = p.econ?.lvl; this.econ.addLoot(p, e.itemId, e.amount);
-        if (p.econ && p.econ.lvl !== lvl0) this.restat(p); // un encargo del día cobrado al levantar puede subir de nivel
-        const m = M.itemPickedUp(e.lootId, M.pid(p.playerId), e.itemName, e.amount, p.characterName), to = new Set([p.sessionId, ...viewers, ...this.nearbyPlayers(e.x, e.y).map((o) => o.sessionId), ...partyMates(p.sessionId)]);
+        const r = this.floorLoot.pickup(lootId, p.posX, p.posY, p.sessionId);
+        if (!r.ok) {
+            if (r.reason === 'far') p.send(M.sendMessage('Estás muy lejos para levantarlo.'));
+            else if (r.reason === 'locked') p.send(M.sendMessage('Ese botín es de la party que mató al monstruo. En unos segundos queda libre.'));
+            return;
+        }
+        const e = r.loot, mates = this.partyInRange(p).filter((m) => !m.isDead);
+        const shares = splitLoot(e.itemId, e.amount, mates.length);
+        for (const { i, amount } of shares) {
+            const m = mates[i], lvl0 = m.econ?.lvl; this.econ.addLoot(m, e.itemId, amount);
+            if (m.econ && m.econ.lvl !== lvl0) this.restat(m); // un encargo del día cobrado al levantar puede subir de nivel
+        }
+        if (mates.length > 1) { // el aviso del reparto, a cada compañero que entró
+            const text = e.itemId === 'gold'
+                ? `Reparto de la party: ${e.amount} de oro entre ${mates.length} (${shares.map((x) => `${mates[x.i].characterName} ${x.amount}`).join(', ')}).`
+                : `Reparto de la party: ${e.itemName} le tocó a ${mates[shares[0].i].characterName}.`;
+            for (const m of mates) m.send(M.sendMessage(text));
+        }
+        // avisos de botín: a los que lo veían, a los cercanos y a la party solo si está cerca (en Dreadmyst llegaban desde cualquier distancia)
+        const m = M.itemPickedUp(e.lootId, M.pid(p.playerId), e.itemName, e.amount, p.characterName), to = new Set([p.sessionId, ...viewers, ...this.nearbyPlayers(e.x, e.y).map((o) => o.sessionId), ...this.partyInRange(p).map((o) => o.sessionId)]);
         for (const sid of to) this.players.get(sid)?.send(m);
     }
     /** Número flotante (daño o cura) para el objetivo y todos los que lo ven. */
@@ -1589,9 +1636,22 @@ export class GameWorld {
     private pvpQuestCredit(victim: Player, killerId?: bigint): void {
         if (!killerId || this.def?.pvp !== 'faction') return;
         const killer = this.playersById.get(killerId); if (!killer || killer === victim || !killer.econ || !victim.econ) return;
-        if (this.factionOf(killer) === this.factionOf(victim) || victim.econ.lvl < killer.econ.lvl - 5) return;
-        const lvl0 = killer.econ.lvl; this.econ?.questPvp(killer, victim.accountKey || victim.characterName);
-        if (killer.econ.lvl !== lvl0) this.restat(killer);
+        if (this.factionOf(killer) === this.factionOf(victim)) return;
+        // quests en party [DM]: le cuenta a cada compañero cerca (vivo o muerto), con sus propias reglas (nivel y una vez por rival)
+        for (const m of this.partyInRange(killer)) {
+            if (m === victim || !m.econ || this.factionOf(m) === this.factionOf(victim) || victim.econ.lvl < m.econ.lvl - 5) continue;
+            const lvl0 = m.econ.lvl; this.econ?.questPvp(m, victim.accountKey || victim.characterName);
+            if (m.econ.lvl !== lvl0) this.restat(m);
+        }
+    }
+    /** El jugador y sus compañeros de party en este mundo a PARTY_SHARE_RANGE celdas o menos (vivos o muertos). Él siempre va primero. */
+    private partyInRange(p: Player): Player[] {
+        const out = [p];
+        for (const sid of partyMates(p.sessionId)) {
+            const m = this.players.get(sid);
+            if (m && m !== p && Math.hypot(m.posX - p.posX, m.posY - p.posY) <= PARTY_SHARE_RANGE) out.push(m);
+        }
+        return out;
     }
     private respawn(p: Player): void {
         if (!p.isDead || Date.now() - p.deadAt < 1800) return;
