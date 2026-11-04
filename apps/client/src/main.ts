@@ -148,7 +148,7 @@ interface Mob extends Omit<Ent, 'ref'>, MobDef {
 interface Casting { i: number; start: number; end: number; len: number }
 const P = {
     x: MAP.spawn.x + 0.5, y: MAP.spawn.y + 0.5, dir: 6, ang: undefined as number | undefined, moving: false, phase: 0, ref: 3.4, one: null as OneShot | null, t0: 0, flash: 0,
-    name: '', cell: { x: MAP.spawn.x, y: MAP.spawn.y }, path: [] as Cell[], step: null as Step | null, stepMs: 270, frozenUntil: 0, foe: null as Other | null, ally: null as Other | null, med: false, medHp: 0,
+    name: '', cell: { x: MAP.spawn.x, y: MAP.spawn.y }, path: [] as Cell[], step: null as Step | null, stepMs: 270, lastStepEnd: 0, frozenUntil: 0, foe: null as Other | null, ally: null as Other | null, med: false, medHp: 0,
     target: null as Mob | null, engage: false, pickup: null as Drop | null, repath: 0, queued: null as number | null,
     lvl: 1, exp: 0, hp: 100, mp: 60, fury: 0, shield: 0, shieldEnd: 0, slowEnd: 0, blessEnd: 0, poisonEnd: 0, inv: false, det: false, invEnd: 0, detEnd: 0, immEnd: 0, gold: 0, nextAtk: 0, dead: false, deadT: 0,
     bag: [] as Item[], eq: { arma: null, armadura: null, cabeza: null, guantes: null, botas: null, amuleto: null, anillo: null, anillo2: null } as Record<Slot, Item | null>,
@@ -1377,9 +1377,10 @@ function steerDir(): Cell | null {
         return quant8((u + 2 * v) / 2, (2 * v - u) / 2);
     }
     if (holding && mouse.x >= 0) {
-        const g = toGrid(mouse.x, mouse.y), dx = g.x - P.x, dy = g.y - P.y;
-        if (Math.hypot(dx, dy) < 0.6) return null; // llegaste al cursor
-        return quant8(dx, dy);
+        const g = toGrid(mouse.x, mouse.y), gc = { x: Math.floor(g.x), y: Math.floor(g.y) };
+        if (gc.x === P.cell.x && gc.y === P.cell.y) return null; // el cursor está en mi celda: quieto
+        // hacia la celda del cursor (no hacia el punto): un clic apenas al lado del cuerpo ya es un paso
+        return quant8(gc.x - P.cell.x, gc.y - P.cell.y);
     }
     return null;
 }
@@ -1394,6 +1395,7 @@ function steerStep(d: Cell): Cell | null {
 }
 /** Arranca un paso a la celda vecina `next`: lo pide al server y lo dibuja ya (el server lo valida). Giro instantáneo. */
 function startStep(next: Cell, T: number) {
+    T = P.lastStepEnd > 0 && T - P.lastStepEnd < 0.05 ? P.lastStepEnd : T; // encadenado: no se pierde el resto del frame entre paso y paso
     net.send({ $case: 'requestMovement', value: { curX: P.cell.x, curY: P.cell.y, destX: next.x, destY: next.y, gameWorldId: MAP_WORLD_ID, dashAttack: false } });
     P.step = { fx: P.cell.x, fy: P.cell.y, tx: next.x, ty: next.y, t0: T, dur: (P.stepMs / 1000) * (P.slowEnd > T ? 1.7 : 1) + STEP_MARGIN };
     turnTo(P, next.x - P.cell.x, next.y - P.cell.y, 0, true);
@@ -1595,7 +1597,7 @@ function advanceStep(e: Ent & { step: Step | null }, T: number, dt: number) {
     turnTo(e, s.tx - s.fx, s.ty - s.fy, dt);
     e.phase = (e.phase || 0) + (dt * (Math.hypot(s.tx - s.fx, s.ty - s.fy) / s.dur)) / (e.ref || 3.4);
     e.moving = true;
-    if (k >= 1) e.step = null;
+    if (k >= 1) { e.step = null; if (e === P) P.lastStepEnd = s.t0 + s.dur; }
 }
 /** Margen sobre la velocidad del server para que la latencia no haga parecer que vamos rápido de más. */
 const STEP_MARGIN = 0.015;
