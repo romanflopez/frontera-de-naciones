@@ -54,6 +54,9 @@ const WIND_BREAKERS: Record<string, string> = {
 /** Efecto con el que se ve el impacto de cada proyectil. */
 const IMPACT_FX: Record<string, string> = { proyectil: 'splash', bola: 'eruption' };
 
+/** Contadores de movimiento desde el arranque (para `/gm movstats`): cuántas veces el server corrigió al jugador y por qué. */
+export const moveStats = { ok: 0, paralizado: 0, jaula: 0, velocidad: 0, salto: 0, ocupada: 0 };
+export const moveStatsLine = (): string => { const m = moveStats, c = m.paralizado + m.jaula + m.velocidad + m.salto + m.ocupada; return `Posiciones aceptadas: ${m.ok} · correcciones del server: ${c}${m.ok + c > 0 ? ` (${((100 * c) / (m.ok + c)).toFixed(2)} %)` : ''} → velocidad ${m.velocidad}, celda ocupada por otro jugador ${m.ocupada}, salto de más de una celda ${m.salto}, paralizado ${m.paralizado}, jaula de arena ${m.jaula}`; };
 export class GameWorld {
     private readonly players = new Map<string, Player>();
     private readonly playersById = new Map<bigint, Player>();
@@ -726,7 +729,8 @@ export class GameWorld {
     // ---------- movimiento ----------
     /** Port de Movement.HandleRequestMovement (sin combate ni efectos de suelo todavía). */
     /** Vuelve al jugador a la celda que el server conoce (y reinicia su posición decimal y su presupuesto). */
-    private snapBack(p: Player, now: number): void {
+    private snapBack(p: Player, now: number, why: keyof typeof moveStats = 'velocidad'): void {
+        moveStats[why]++;
         p.fx = p.posX + 0.5; p.fy = p.posY + 0.5; p.fCell = { x: p.posX, y: p.posY }; p.moveBudget.reset(now);
         p.send(M.resetPosition(this.id, p.posX, p.posY));
     }
@@ -741,9 +745,9 @@ export class GameWorld {
         if (p.spawnProtection) this.disableSpawnProtection(p);
         // si la posición del server cambió por otra vía (teletransporte, respawn, pedido por celdas), la decimal vuelve al centro
         if (p.fCell.x !== p.posX || p.fCell.y !== p.posY) { p.fx = p.posX + 0.5; p.fy = p.posY + 0.5; p.fCell = { x: p.posX, y: p.posY }; p.moveBudget.reset(now); }
-        if (p.isParalyzed(now)) return this.snapBack(p, now);
+        if (p.isParalyzed(now)) return this.snapBack(p, now, 'paralizado');
         const nx = Math.floor(x), ny = Math.floor(y);
-        if (!this.inCage(p, nx, ny)) return this.snapBack(p, now);
+        if (!this.inCage(p, nx, ny)) return this.snapBack(p, now, 'jaula');
         const dist = Math.hypot(x - p.fx, y - p.fy);
         if (dist < 1e-4) return;
         if (!p.moveBudget.spend(dist, now, 1000 / p.movementSpeedMs)) {
@@ -754,15 +758,17 @@ export class GameWorld {
                 p.send(M.playerParalyzed(secs));
                 p.send(M.sendMessage(`Te movés demasiado rápido. Si estás tocando cosas que no deberías, frená: por ahora te quedás quieto ${secs} segundos.`));
             }
-            return this.snapBack(p, now);
+            return this.snapBack(p, now, 'velocidad');
         }
         if (nx !== p.posX || ny !== p.posY) {
-            if (distance(nx, ny, p.posX, p.posY) !== 1 || !this.occupancy.isFree(nx, ny)) return this.snapBack(p, now);
+            if (distance(nx, ny, p.posX, p.posY) !== 1) return this.snapBack(p, now, 'salto');
+            if (!this.occupancy.isFree(nx, ny)) return this.snapBack(p, now, 'ocupada');
             this.moveTo(p, p.posX, p.posY, nx, ny, false);
         }
         // dirección que mira: hacia donde se movió (mismo criterio de 8 sectores que el cliente)
         const mx = x - p.fx, my = y - p.fy;
         if (Math.hypot(mx, my) > 0.01) p.facingDirection = (((Math.round(Math.atan2(my, mx) / (Math.PI / 4)) + 2) % 8) + 8) % 8;
+        moveStats.ok++;
         p.fx = x; p.fy = y; p.fCell = { x: p.posX, y: p.posY };
         if (p.cast && !p.cast.fired) p.cast = null; // moverse cancela el cast que no salió
         this.broadcastNear(p, M.playerPositionUpdate(p.playerId, x, y));

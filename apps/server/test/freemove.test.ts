@@ -198,3 +198,25 @@ test('MoveBudget: velocidad legal pasa, el doble no; la ráfaga tiene tope', () 
     const d = new MoveBudget(2, 0);
     assert.equal(d.spend(2.5, 0, 3), false, 'no se pueden juntar más de 2 celdas de una');
 });
+
+test('presupuesto: caminar a velocidad legal a 20 Hz con jitter de red y tirones de hasta 300 ms no dispara correcciones', () => {
+    const speed = 1000 / 300; // celdas/s
+    let seed = 7; const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+    const b = new MoveBudget(1.6, 0);
+    let arrive = 0, sentAt = 0, violations = 0, n = 0;
+    for (let k = 1; k <= 600; k++) {                       // 30 s de caminata
+        const gap = (k % 97 === 0 ? 300 : 50);             // de vez en cuando un tirón de 300 ms sin enviar
+        sentAt += gap;
+        arrive = Math.max(arrive, sentAt + rnd() * 80);    // la red demora hasta 80 ms y nunca desordena
+        if (!b.spend(speed * (gap / 1000), arrive, speed)) violations++;
+        n++;
+    }
+    assert.equal(violations, 0, `${violations} de ${n} posiciones rechazadas`);
+});
+
+test('presupuesto: el que va al doble de la velocidad legal sí queda al descubierto, aunque mande a 20 Hz', () => {
+    const speed = 1000 / 300, b = new MoveBudget(1.6, 0);
+    let t = 0, rejected = 0;
+    for (let k = 0; k < 200; k++) { t += 50; if (!b.spend(speed * 2 * 0.05, t, speed)) rejected++; }
+    assert.ok(rejected > 50, `solo ${rejected} rechazos`);
+});

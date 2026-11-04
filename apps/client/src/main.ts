@@ -401,10 +401,10 @@ function onServer(m: ServerPayload) {
             else { const o = others.get(m.value.playerId); if (o) o.stepMs = m.value.movementSpeedMs || o.stepMs; }
             break;
         case 'resetPosition':
-            snapTo(m.value.x, m.value.y);
+            diag.snaps.push(now()); snapTo(m.value.x, m.value.y);
             break;
         case 'positionCorrected':
-            snapTo(m.value.destX, m.value.destY);
+            diag.snaps.push(now()); snapTo(m.value.destX, m.value.destY);
             break;
         case 'playerTeleported': {
             snapTo(m.value.x, m.value.y);
@@ -423,6 +423,7 @@ function onServer(m: ServerPayload) {
         case 'serverChatMessage': logToChat(chatChannel(m.value.channel), m.value.senderName, m.value.text); break;
             break;
         case 'pingResponse':
+            diag.pong(m.value.sequence);
             playersOnline = m.value.playersInMap;
             break;
         default:
@@ -1441,10 +1442,12 @@ function moveFree(dx: number, dy: number, dt: number, T: number) {
         P.x = r.x; P.y = r.y; P.cell = { x: Math.floor(r.x), y: Math.floor(r.y) }; P.moving = true; P.mv = true;
     } else if (Math.hypot(dx, dy) > 0.01) turnTo(P, dx, dy, dt);
 }
+/** Cada cuánto se manda la posición al server mientras te movés (20 por segundo; los demás te ven con PLAYER_DELAY de atraso). */
+const POS_SEND_S = 0.05;
 function sendPosition(T: number, force = false) {
     if (!connected) return;
-    if (!force && (T - P.sendT < 0.1 || (Math.abs(P.x - P.sentX) < 1e-4 && Math.abs(P.y - P.sentY) < 1e-4))) return;
-    P.sendT = T; P.sentX = P.x; P.sentY = P.y;
+    if (!force && (T - P.sendT < POS_SEND_S || (Math.abs(P.x - P.sentX) < 1e-4 && Math.abs(P.y - P.sentY) < 1e-4))) return;
+    P.sendT = T; P.sentX = P.x; P.sentY = P.y; diag.posSent.push(T);
     net.send({ $case: 'playerPositionRequest', value: { x: P.x, y: P.y } });
 }
 cv.addEventListener('pointerdown', (e) => {
@@ -1490,12 +1493,13 @@ cv.addEventListener('pointerleave', () => { mouse = { x: -1, y: -1 }; });
 // ---------- chat por canales: Global, Nación (tu facción), Party; Guild llega más adelante ----------
 const CHAT_NET = new Set<ChatChannel>(['global', 'comercio', 'area', 'party', 'guild', 'nacion']);
 function chatChannel(c: string): ChatChannel { const k = (c || 'global') as ChatChannel; return CHAT_NET.has(k) ? k : 'global'; }
-const CHAT_HELP = () => `Comandos: /meditar${DEBUG ? ', /look' : ''}; chat: /g global, /c comercio, /a área, /n nación, /p party, /gu guild (pronto); party: /invitar /aceptar /rechazar /salir /expulsar /lider; arena: /arena (2v2, 3v3, salir, aceptar, rechazar, ranking, rating)`;
+const CHAT_HELP = () => `Comandos: /meditar, /diag (fps, ping y correcciones de movimiento)${DEBUG ? ', /look' : ''}; chat: /g global, /c comercio, /a área, /n nación, /p party, /gu guild (pronto); party: /invitar /aceptar /rechazar /salir /expulsar /lider; arena: /arena (2v2, 3v3, salir, aceptar, rechazar, ranking, rating)`;
 /** Lo que se escribe en el ChatBox: comandos locales, o mensaje al server por el canal de la pestaña (o el del prefijo). */
 chatBus.on('chat:send', ({ text, channel }) => {
     cv.focus({ preventScroll: true });
     if (!connected) return;
     if (/^\/meditar$/i.test(text)) { toggleMeditate(); return; }
+    if (/^\/diag$/i.test(text)) { diag.toggle(); return; }
     if (DEBUG && /^\/look(\s|$)/i.test(text)) { lookCommand(text); return; }
     if (partyCommand(text)) return;
     if (/^\/gm(\s|$)/i.test(text)) { net.send({ $case: 'chatMessageSendRequest', value: { message: text } }); return; } // comandos de GM: los resuelve el server (FDN_GM)
@@ -1635,10 +1639,11 @@ window.addEventListener('keydown', (e) => {
 });
 
 // ---------- update ----------
-const PLAYER_DELAY = 0.15;
+/** Atraso con que se dibuja a los demás jugadores: ~2,4 intervalos de envío (20 Hz), así un paquete tardío no los frena. */
+const PLAYER_DELAY = 0.12;
 let regenT = 0, pingSeq = 0, pveT = 0, pveSent = { dead: false, lvl: 0 };
 /** El ping va por un timer propio (no por el bucle de dibujo, que el navegador frena en pestañas ocultas) para que no te desconecten. */
-setInterval(() => { if (connected) net.send({ $case: 'pingRequest', value: { sequence: ++pingSeq } }); }, 1000);
+setInterval(() => { if (connected) { diag.ping(pingSeq + 1); net.send({ $case: 'pingRequest', value: { sequence: ++pingSeq } }); } }, 1000);
 function update(dt: number) {
     const T = now(), tot = totals();
     for (const p of pending.slice()) if (T >= p.t) { pending.splice(pending.indexOf(p), 1); p.fn(); }
@@ -2823,6 +2828,32 @@ let mapLoading = false;
  * mismo mapa con el mismo código; la comparación de `mapHash` lo verifica. Devuelve el hash del mapa armado.
  */
 /** Mediciones (Fase 3): ms de armar el último mapa (`def.build()` + estado) y de pintar su minimapa; cuadros por segundo. */
+/** Diagnóstico de fluidez (`/diag`): cuadros, ping y correcciones del server, de los últimos segundos. Siempre junta datos (barato); solo se dibuja si se prende. */
+const diag = {
+    on: false, el: null as HTMLElement | null, timer: 0,
+    frames: [] as { t: number; ms: number }[], snaps: [] as number[], posSent: [] as number[], rtts: [] as { t: number; ms: number }[], sent: new Map<number, number>(),
+    frame(tf: number, t: number, dt: number) { this.frames.push({ t, ms: dt * 1000 }); void tf; },
+    ping(seq: number) { this.sent.set(seq, performance.now()); if (this.sent.size > 20) this.sent.delete(this.sent.keys().next().value as number); },
+    pong(seq: number) { const t0 = this.sent.get(seq); if (t0 === undefined) return; this.sent.delete(seq); this.rtts.push({ t: now(), ms: performance.now() - t0 }); },
+    text(): string {
+        const t = now(), cut = (a: { t: number }[], s: number) => { while (a.length && t - a[0].t > s) a.shift(); };
+        cut(this.frames, 5); cut(this.rtts, 30);
+        while (this.snaps.length && t - this.snaps[0] > 60) this.snaps.shift();
+        while (this.posSent.length && t - this.posSent[0] > 2) this.posSent.shift();
+        const f = this.frames.map((x) => x.ms), avg = f.reduce((a, b) => a + b, 0) / Math.max(1, f.length), max = Math.max(0, ...f), long = f.filter((x) => x > 25).length;
+        const r = this.rtts.map((x) => x.ms), ra = r.reduce((a, b) => a + b, 0) / Math.max(1, r.length), rm = Math.max(0, ...r);
+        return `cuadros: ${(1000 / Math.max(1, avg)).toFixed(0)} fps · peor cuadro ${max.toFixed(0)} ms · tirones >25 ms: ${long} (5 s)\nping: ${r.length ? ra.toFixed(0) : '?'} ms (máx ${rm.toFixed(0)}) · posiciones enviadas: ${(this.posSent.length / 2).toFixed(0)}/s\ncorrecciones del server: ${this.snaps.length} (último minuto)`;
+    },
+    toggle() {
+        this.on = !this.on;
+        if (!this.on) { this.el?.remove(); this.el = null; clearInterval(this.timer); log('Diagnóstico apagado.'); return; }
+        const el = document.createElement('pre'); this.el = el;
+        el.style.cssText = 'position:fixed;left:8px;top:8px;z-index:9999;margin:0;padding:6px 8px;background:#000a;color:#9fe8a8;font:12px/1.4 monospace;border-radius:4px;pointer-events:none;white-space:pre';
+        document.body.appendChild(el);
+        const tick = () => { if (this.el) this.el.textContent = this.text(); }; tick(); this.timer = window.setInterval(tick, 500);
+        log('Diagnóstico prendido (arriba a la izquierda). /diag lo apaga. Si algo se siente mal, sacá una captura con los números.');
+    },
+};
 const perf = { build: 0, minimap: 0, fps: 0, frames: 0, since: 0 };
 function loadMap(def: MapDef): string {
     const t0 = performance.now();
@@ -3038,8 +3069,9 @@ function minimapTick() {
         mobs, npcs: MAP.npcs.map((n) => ({ x: n.x, y: n.y, role: roleOf(n) })),
     }));
 }
-function frame() {
-    const T = now(); let dt = Math.min(0.05, T - last); last = T;
+function frame(ts: number = performance.now()) {
+    // El paso de simulación sale del reloj del propio cuadro (rAF), que es parejo; performance.now() dentro del callback varía con la carga y mete temblor al moverse.
+    const T = now(); const tf = ts / 1000; let dt = Math.min(0.1, Math.max(0, tf - last)); diag.frame(tf, T, dt); last = tf;
     if (hitstop > 0) { hitstop -= dt; dt = 0; }
     if (!mapLoading) { update(dt); checkPortals(); checkLinks(); wpTick(); npcTick(); }
     updateCam(Math.min(0.05, T - lastCam)); lastCam = T;

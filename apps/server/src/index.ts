@@ -14,6 +14,7 @@ import { dropLines, loadDropsFile, setDrop } from './drops.ts';
 import { RestartCountdown, changelogLines, handleClientReport } from './ops.ts';
 import { alert, alerts, buildInfo } from './alerts.ts';
 import { VersionConfig, handleVersion } from './version.ts';
+import { moveStats, moveStatsLine } from './world.ts';
 import { DATA_DIR, loadSettings, type GameWorldConfig } from './config.ts';
 import { MAPS, MOB_TYPES, canonicalMapId, factionHome, getMapDef, type MapDef } from '@fdn/world';
 import { loadPosition, resolveSaved, savePosition } from './persist.ts';
@@ -392,6 +393,7 @@ const GM_HELP = [
     'Comandos GM: /gm mapas · /gm ir <mapa> [x y] · /gm pos [x y] · /gm nivel <n> · /gm oro <n> · /gm curar · /gm dios',
     '/gm mobs · /gm mob <tipo> [nivel] [cantidad] · /gm limpiar · /gm llaves [n] · /gm espada [crit] · /gm traer <jugador> · /gm ira <jugador> · /gm menu (o F9)',
     '/gm drops (ver) · /gm drops <clave> <valor> (botín en vivo: mode personal|suelo, goldChance, floorChance, potionChance, uniqueMult, forgeMult)',
+    '/gm movstats [reset] (cuántas veces el server corrigió el movimiento de los jugadores y por qué)',
     '/gm minclient [versión|off] · /gm latestclient [versión|off] (versión mínima y última del cliente: bloquea a los clientes viejos hasta que se actualicen)',
     '/gm reiniciar [segundos] (cuenta regresiva y reinicio; por defecto 300) · /gm reiniciar cancelar',
     '/gm jefemundo (estado) · /gm jefemundo aca (sale al lado tuyo) · /gm jefemundo ya (sale ahora en un mapa al azar)',
@@ -424,6 +426,10 @@ function handleGm(s: Session, text: string, reply: (m: ServerMessage) => void): 
         const err = setDrop(args[0], args[1] ?? '');
         if (!err) alert('event', 'GM cambió los drops', { gm: s.characterName, clave: args[0], valor: args[1] });
         say(err ?? 'Listo (en vivo, hasta el próximo reinicio).', ...dropLines()); return;
+    }
+    if (c === 'movstats') {
+        if ((args[0] ?? '').toLowerCase() === 'reset') { for (const k of Object.keys(moveStats) as (keyof typeof moveStats)[]) moveStats[k] = 0; say('Contadores de movimiento en cero.'); return; }
+        say(moveStatsLine(), 'Para medir: /gm movstats reset, jugá unos minutos y volvé a correrlo.'); return;
     }
     if (c === 'minclient' || c === 'latestclient') {
         const key = c === 'minclient' ? 'minClient' : 'latestClient';
