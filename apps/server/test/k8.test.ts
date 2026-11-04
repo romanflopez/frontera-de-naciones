@@ -11,6 +11,7 @@ import { loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
 import { WorldRegistry } from '../src/registry.ts';
+import { PartyService, setParties } from '../src/party.ts';
 import type { PersistedPlayer, Player } from '../src/player.ts';
 import type { GameWorld } from '../src/world.ts';
 import { MobSim, type MobHost } from '../src/mobs.ts';
@@ -181,7 +182,7 @@ test('Aura de represalia: devuelve ⅓ del golpe al monstruo que pegó (en el ti
     assert.deepEqual(hits, [[5, 30, 'represalia']]);
 });
 
-test('Bendición de poder (id grito): cast 0,8 s, +16 al Daño base a los aliados a 14 celdas, no al enemigo; dura 60 s', () => {
+test('Bendición de poder (id grito): cast 0,8 s, +16 al Daño base a los aliados a 14 celdas, no al enemigo; dura 15 min fuera de la arena', () => {
     const { w, mago, pala, healer, enemigo } = setup();
     skill(w, pala.sid, 'grito');
     assert.equal(denied(pala.log, 'grito'), 1, 'sin cast no sale');
@@ -194,7 +195,9 @@ test('Bendición de poder (id grito): cast 0,8 s, +16 al Daño base a los aliado
         assert.ok(with_ > without, `${with_} > ${without}`);
         assert.equal(rollSpellDamage('bola', mago.p.combat, false) - rollSpellDamage('bola', { ...mago.p.combat, dmgBonus: 0 }, false), Math.round(16 * 3 * mago.p.combat.magicMult), 'bola: ×3 del bonus');
     } finally { r.mock.restore(); }
-    advance(w, 60_200);
+    advance(w, 899_000);
+    assert.ok(hasBuff(pala.p.status, 'poder', clock), 'a los 15 min menos 1 s todavía está');
+    advance(w, 1_200);
     assert.equal(pala.p.combat.dmgBonus, 0, 'al vencer se recalculan los stats');
 });
 
@@ -206,6 +209,82 @@ test('Bendición de amparo: −6 % de daño recibido', () => {
     assert.ok(hasBuff(mago.p.status, 'amparo', clock));
     const d = before();
     assert.ok(Math.abs(d - base * 0.94) <= 1, `${d} vs ${base}`);
+});
+
+// ---------- bendiciones de grupo: toda la party, 15 min afuera, cortas en la arena ----------
+const ARENA_AT = { x: 50, y: 30 }; // dentro de `ffaRect` de solmar_legacy (46-60, 26-38)
+function withParty(w: GameWorld, members: { sid: string; p: Player }[], fn: () => void) {
+    const by = (n: string) => members.find((m) => m.p.characterName.toLowerCase() === n.toLowerCase());
+    const svc = new PartyService({
+        sessionByName: (n) => by(n)?.sid, send: () => {},
+        info: (sid) => ({ name: members.find((m) => m.sid === sid)!.p.characterName, faction: 'solmar', level: 35, hp: 100, maxHp: 100, mp: 0, maxMp: 0, map: w.mapId, online: true }),
+    });
+    setParties(svc);
+    try { for (const m of members.slice(1)) { svc.handle(members[0].sid, 'invite', m.p.characterName); svc.handle(m.sid, 'accept', ''); } fn(); } finally { setParties(undefined); }
+}
+
+test('Bendiciones de grupo: llegan a toda la party aunque esté lejos; a los de cerca sin party también; al enemigo y a los de lejos sin party no', () => {
+    const { w, pala, mago, healer, enemigo, join } = setup();
+    const lejos = join('lejos', { x: 30, y: 52 }, 'solmar', 'guerrero'), ajeno = join('ajeno', { x: 31, y: 52 }, 'solmar', 'mago');
+    assert.ok(Math.hypot(lejos.p.posX - pala.p.posX, lejos.p.posY - pala.p.posY) > 14, 'el de la party está fuera de las 14 celdas');
+    withParty(w, [pala, healer, lejos], () => {
+        castFor(w, pala.sid, 'grito'); skill(w, pala.sid, 'grito');
+        for (const o of [pala, healer, lejos]) assert.ok(hasBuff(o.p.status, 'poder', clock), `${o.p.characterName} (party)`);
+        assert.equal(lejos.p.combat.dmgBonus, 16, 'se recalculan sus stats');
+        assert.ok(hasBuff(mago.p.status, 'poder', clock), 'el de cerca sin party sigue recibiéndola (14 celdas)');
+        assert.equal(hasBuff(ajeno.p.status, 'poder', clock), false, 'lejos y sin party: no');
+        assert.equal(hasBuff(enemigo.p.status, 'poder', clock), false, 'el enemigo no');
+        // las otras tres también
+        castFor(w, healer.sid, 'grupo'); skill(w, healer.sid, 'grupo');
+        assert.ok(hasBuff(lejos.p.status, 'fortaleza', clock) && hasBuff(lejos.p.status, 'espiritu', clock));
+        castFor(w, pala.sid, 'amparo'); skill(w, pala.sid, 'amparo');
+        assert.ok(hasBuff(lejos.p.status, 'amparo', clock));
+        castFor(w, mago.sid, 'intelecto'); skill(w, mago.sid, 'intelecto');
+        assert.ok(hasBuff(pala.p.status, 'intelecto', clock) && hasBuff(healer.p.status, 'intelecto', clock), 'el mago (sin party) llega a los de cerca');
+        assert.equal(hasBuff(lejos.p.status, 'intelecto', clock), false, 'pero el lejano no está en SU party');
+    });
+});
+
+test('Bendiciones de grupo: se renuevan sin apilarse (la nueva pisa la duración de 15 min)', () => {
+    const { w, pala } = setup();
+    castFor(w, pala.sid, 'grito'); skill(w, pala.sid, 'grito');
+    advance(w, 600_000);
+    clock += 11_000; castFor(w, pala.sid, 'grito'); skill(w, pala.sid, 'grito');
+    advance(w, 899_000);
+    assert.ok(hasBuff(pala.p.status, 'poder', clock), 'a los 15 min de la segunda tirada sigue');
+    assert.equal(pala.p.combat.dmgBonus, 16, 'una sola vez +16');
+    advance(w, 2_000);
+    assert.equal(hasBuff(pala.p.status, 'poder', clock), false);
+});
+
+test('Bendiciones de grupo: dentro de la arena duran lo de Valdrys (60 y 90 s)', () => {
+    const { w, pala, healer } = setup();
+    pala.p.setPosition(ARENA_AT.x, ARENA_AT.y); advance(w, 100);
+    castFor(w, pala.sid, 'grito'); skill(w, pala.sid, 'grito');
+    assert.ok(hasBuff(pala.p.status, 'poder', clock));
+    advance(w, 59_000); assert.ok(hasBuff(pala.p.status, 'poder', clock), 'a los 59 s sigue');
+    advance(w, 1_200); assert.equal(hasBuff(pala.p.status, 'poder', clock), false, 'a los 60 s se fue');
+    healer.p.setPosition(ARENA_AT.x + 2, ARENA_AT.y); advance(w, 100);
+    castFor(w, healer.sid, 'grupo'); skill(w, healer.sid, 'grupo');
+    advance(w, 89_000); assert.ok(hasBuff(healer.p.status, 'fortaleza', clock));
+    advance(w, 1_200); assert.equal(hasBuff(healer.p.status, 'fortaleza', clock), false, 'Bendición de grupo: 90 s adentro');
+});
+
+test('Bendiciones de grupo: se sacan al entrar a la arena y no vuelven al salir; las auras de 10 s y los escudos no se tocan', () => {
+    const { w, pala } = setup();
+    const refill = () => { pala.p.mp = pala.p.combat.maxMp; };
+    castFor(w, pala.sid, 'grito'); skill(w, pala.sid, 'grito'); refill(); castFor(w, pala.sid, 'amparo'); skill(w, pala.sid, 'amparo');
+    refill(); skill(w, pala.sid, 'represalia'); refill(); skill(w, pala.sid, 'escudodivino');
+    assert.ok(hasBuff(pala.p.status, 'poder', clock) && hasBuff(pala.p.status, 'amparo', clock));
+    pala.p.setPosition(ARENA_AT.x, ARENA_AT.y); advance(w, 100);
+    assert.equal(hasBuff(pala.p.status, 'poder', clock), false, 'poder fuera');
+    assert.equal(hasBuff(pala.p.status, 'amparo', clock), false, 'amparo fuera');
+    assert.equal(pala.p.combat.dmgBonus, 0, 'y los stats se recalculan');
+    assert.ok(hasBuff(pala.p.status, 'represalia', clock), 'el aura de 10 s sigue');
+    assert.ok(shieldOf(pala.p.status, clock) > 0, 'el escudo sigue');
+    assert.ok(!lastBuffs(pala.log).includes('poder'), 'se anuncia');
+    pala.p.setPosition(30, 21); advance(w, 100);
+    assert.equal(hasBuff(pala.p.status, 'poder', clock), false, 'al salir no vuelve sola');
 });
 
 // ---------- mago ----------
@@ -239,14 +318,16 @@ test('Clarividencia: el mago se la pone a sí mismo por 10 s, recarga 30 s', () 
     assert.equal(denied(mago.log, 'clarividencia'), 1);
 });
 
-test('Intelecto arcano: +8 de Magia de equipo 90 s a los aliados (más Daño mágico y más poder de curación)', () => {
+test('Intelecto arcano: +8 de Magia de equipo 15 min a los aliados (más Daño mágico y más poder de curación)', () => {
     const { w, mago, healer } = setup();
     const mag0 = healer.p.combat.mag;
     castFor(w, mago.sid, 'intelecto'); skill(w, mago.sid, 'intelecto');
     assert.equal(healer.p.combat.mag, mag0 + 8);
     assert.equal(mago.p.combat.mag, statsFromChar(mago.p.econ!).mag + 8);
     assert.ok(healAmount(0.4, healer.p.combat, 1000) > healAmount(0.4, { ...healer.p.combat, mag: mag0 }, 1000));
-    advance(w, 90_200);
+    advance(w, 899_000);
+    assert.equal(healer.p.combat.mag, mag0 + 8, 'a los 15 min menos 1 s sigue');
+    advance(w, 1_200);
     assert.equal(healer.p.combat.mag, mag0);
 });
 
@@ -263,7 +344,7 @@ test('Purga (remover): saca el frenado y el congelado, recarga 24 s', () => {
 });
 
 // ---------- healer ----------
-test('Bendición de grupo (Fortaleza): +6 % de vida máxima 90 s; al vencer la vida se recorta al máximo', () => {
+test('Bendición de grupo (Fortaleza): +6 % de vida máxima, 15 min; al vencer la vida se recorta al máximo', () => {
     const { w, healer, pala } = setup();
     const max0 = pala.p.combat.maxHp;
     castFor(w, healer.sid, 'grupo'); skill(w, healer.sid, 'grupo');
@@ -271,19 +352,19 @@ test('Bendición de grupo (Fortaleza): +6 % de vida máxima 90 s; al vencer la v
     assert.deepEqual(lastBuffs(pala.log).sort(), ['espiritu', 'fortaleza']);
     assert.equal(pala.p.combat.maxHp, Math.round(max0 * 1.06));
     pala.p.hp = pala.p.combat.maxHp;
-    advance(w, 90_200);
+    advance(w, 900_200);
     assert.equal(pala.p.combat.maxHp, max0);
     assert.ok(pala.p.hp <= max0);
 });
 
-test('Bendición de grupo (Espíritu divino): +50 % de regeneración de maná 90 s', () => {
+test('Bendición de grupo (Espíritu divino): +50 % de regeneración de maná, 15 min fuera de la arena', () => {
     const { w, healer, mago } = setup();
     const regen = () => { mago.p.mp = 0; mago.p.nextMpRegenAt = 0; priv(w).regenMana(mago.p, clock); return mago.p.mp; };
     const base = regen();
     castFor(w, healer.sid, 'grupo'); skill(w, healer.sid, 'grupo');
     assert.ok(hasBuff(mago.p.status, 'espiritu', clock));
     assert.equal(regen(), Math.round(base * 1.5));
-    advance(w, 89_000); assert.ok(hasBuff(mago.p.status, 'espiritu', clock), 'dura 90 s');
+    advance(w, 899_000); assert.ok(hasBuff(mago.p.status, 'espiritu', clock), 'dura 15 min');
     advance(w, 1_200); assert.equal(hasBuff(mago.p.status, 'espiritu', clock), false);
 });
 

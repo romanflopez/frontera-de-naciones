@@ -91,8 +91,12 @@ export interface ClassSkill extends PvpSpell { cls: ClassId;
     /** El que lanza se cura esta fracción del daño de área (Nova sagrada 12 %). */ selfHeal?: number; /** aturdimiento (s) al llegar */ stun?: number; /** congelado (s) a los que alcanza (Nova) */ freeze?: number; /** barridos seguidos (Barrido: 2, a 0,25 s) */ sweeps?: number; /** pulsos de un aura (Aura sagrada: 20, uno cada `every` s) */ pulses?: number;
     /** K8. Escudo: fracción de la vida máxima del que lo recibe, dura SHIELD_MS. */ shield?: number;
     /** K8. Bendición o aura que deja (a uno mismo, o a los aliados a `aoe` celdas si tiene `aoe`) y cuánto dura (s). Bendición de grupo: dos a la vez. */ buff?: BuffId | BuffId[]; buffSecs?: number;
+    /** K8. Bendición de grupo: dura esto (s) fuera de la arena; `buffSecs` queda para adentro de la arena. */ buffSecsLong?: number;
+    /** K8. Bendición de grupo: además de los aliados a `aoe` celdas, le llega a toda la party que esté en este mundo (sin importar la distancia). */ party?: boolean;
     /** K8. Despertar: revive a un aliado caído con esta fracción de vida y maná. */ revive?: number;
     /** K8. Esfera celestial: cantidad de curas y salto máximo (celdas) entre un aliado y el siguiente. */ bounce?: { n: number; jump: number } }
+/** Bendiciones de grupo (poder, amparo, intelecto, grupo): duración fuera de la arena, para no tener que repetirlas todo el tiempo. En la arena valen las de Valdrys (60-90 s). */
+export const BLESSING_LONG_S = 15 * 60;
 export const SKILLS: Record<string, ClassSkill> = {
     blink: { cls: 'mago', mp: 0, range: 7.25, cd: 12 },                                                                  // Parpadeo: sin maná (Valdrys)
     pasoluz: { cls: 'healer', mp: 0, range: 6.25, cd: 15 },                                                              // Paso de luz (K8): hasta 6 celdas, se saca el frenado
@@ -104,11 +108,11 @@ export const SKILLS: Record<string, ClassSkill> = {
     // K8 (nivel 15 a 35). Id interno `grito` = Bendición de poder (reemplaza al Grito de guerra; el id queda por las barras guardadas).
     represalia: { cls: 'guerrero', mp: 48, range: 0, cd: 30, cast: false, buff: 'represalia', buffSecs: 10 },             // Aura de represalia: 10 s
     escudodivino: { cls: 'guerrero', mp: 45, range: 0, cd: 20, cast: false, shield: 0.6 },                                // Escudo divino: 60 % de la vida
-    grito: { cls: 'guerrero', mp: 48, range: 0, cd: 10, cast: true, aoe: 14, buff: 'poder', buffSecs: 60 },               // Bendición de poder: +Daño 60 s
-    amparo: { cls: 'guerrero', mp: 48, range: 0, cd: 10, cast: true, aoe: 14, buff: 'amparo', buffSecs: 60 },             // Bendición de amparo: −6 % de daño 60 s
+    grito: { cls: 'guerrero', mp: 48, range: 0, cd: 10, cast: true, aoe: 14, party: true, buff: 'poder', buffSecs: 60, buffSecsLong: BLESSING_LONG_S }, // Bendición de poder: +Daño (60 s en la arena, 15 min afuera)
+    amparo: { cls: 'guerrero', mp: 48, range: 0, cd: 10, cast: true, aoe: 14, party: true, buff: 'amparo', buffSecs: 60, buffSecsLong: BLESSING_LONG_S }, // Bendición de amparo: −6 % de daño (60 s en la arena, 15 min afuera)
     escudomana: { cls: 'mago', mp: 45, range: 0, cd: 10, cast: false, shield: 0.33 },                                     // Escudo de maná: 33 % de la vida
     clarividencia: { cls: 'mago', mp: 60, range: 0, cd: 30, cast: false, buff: 'clarividencia', buffSecs: 10 },           // Clarividencia: +25 % de crítico de hechizos
-    intelecto: { cls: 'mago', mp: 60, range: 0, cd: 10, cast: true, aoe: 14, buff: 'intelecto', buffSecs: 90 },           // Intelecto arcano: +Magia 90 s
+    intelecto: { cls: 'mago', mp: 60, range: 0, cd: 10, cast: true, aoe: 14, party: true, buff: 'intelecto', buffSecs: 90, buffSecsLong: BLESSING_LONG_S }, // Intelecto arcano: +Magia (90 s en la arena, 15 min afuera)
     // Healer (K5). Maná: los costos de Valdrys escalados al pool de ERIS (Castigo queda igual: 18).
     curacion: { cls: 'healer', mp: 48, range: 12, cd: 5, cast: true, heal: 0.4 },                                         // Curación: cast 1,5 s, 40 % de la vida
     renovar: { cls: 'healer', mp: 26, range: 12, cd: 3, cast: false, hot: { ticks: 4, every: 3, frac: 0.03 }, burn: true }, // Renovar: aliado 12 % en 12 s (1 %/s, no se reaplica hasta que termine); enemigo, quemadura
@@ -118,7 +122,7 @@ export const SKILLS: Record<string, ClassSkill> = {
     guardian: { cls: 'healer', mp: 28, range: 12, cd: 12, cast: false, shield: 0.4 },                                    // Escudo guardián: 40 % de la vida del aliado
     esfera: { cls: 'healer', mp: 34, range: 12, cd: 8, cast: false, heal: 0.13, bounce: { n: 8, jump: 6 } },             // Esfera celestial: 8 curas del 13 %
     despertar: { cls: 'healer', mp: 54, range: 10, cd: 20, cast: true, revive: 0.5 },                                   // Despertar: cast 2,4 s, revive con 50 %
-    grupo: { cls: 'healer', mp: 28, range: 0, cd: 10, cast: true, aoe: 14, buff: ['fortaleza', 'espiritu'], buffSecs: 90 }, // Bendición de grupo: Fortaleza + Espíritu divino 90 s
+    grupo: { cls: 'healer', mp: 28, range: 0, cd: 10, cast: true, aoe: 14, party: true, buff: ['fortaleza', 'espiritu'], buffSecs: 90, buffSecsLong: BLESSING_LONG_S }, // Bendición de grupo: Fortaleza + Espíritu divino (90 s en la arena, 15 min afuera)
 };
 /** K8: habilidades de nivel 15 a 35 que se piden por skillRequest (escudos, bendiciones, auras, Esfera y Despertar). Paso de luz va por blinkRequest. */
 export const K8_SKILLS = ['represalia', 'escudodivino', 'grito', 'amparo', 'escudomana', 'clarividencia', 'intelecto', 'guardian', 'esfera', 'despertar', 'grupo'] as const;

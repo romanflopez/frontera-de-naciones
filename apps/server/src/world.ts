@@ -12,7 +12,7 @@ import { dailyOffers } from './dailyShop.ts';
 const BOSS_SHARE_RANGE = 30;
 import { AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, MEDITATE, pvpMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionLockMs, potionMp, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, POTION_LOCK_PVP_MS, PVP_COMBAT_MS, pvpCap, pvpScale, pvpVsCtrl, RECALL_PVP_LOCK_MS, INVIS_CD_MS, DETECT_CD_MS, SECOND_WIND, secondWindHeal, progressFromEcon, PVP_SPELLS, BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, POISON_HEAL_TAKEN, HEAL_THREAT, HEALER_SKILLS, STUN_SPELLS, healAmount, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, K8_SKILLS, skillMpCost, SHIELD_MS, BUFF, withBuffs, buffTakenMult, type DmgKind } from './systems/pvpCombat.ts';
 import { HUBS, QUESTS, RECALL, TRAINING, trainingLockedMsg, trainingOfMap, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef, checkSkill, skillDeniedText } from '@fdn/world';
-import { applyParalysis, applySlow, applyBless, applyPoison, applyBuff, applyShield, absorbShield, activeBuffs, clearBuffs, hasBuff, shieldOf, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, isBlessed, isPoisoned, isSlowed, updateStatus } from './systems/statusSystem.ts';
+import { applyParalysis, applySlow, applyBless, applyPoison, applyBuff, applyShield, absorbShield, activeBuffs, clearBuffs, hasBuff, shieldOf, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, isBlessed, isPoisoned, isSlowed, updateStatus, clearBlessings } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import type { GameWorldConfig, Settings } from './config.ts';
 import { adjacentCellsAt45, distance, findNearestFreeLocation, nextGridDirection } from './location.ts';
@@ -314,6 +314,7 @@ export class GameWorld {
             }
             this.changeStatus(pl, () => updateStatus(pl.status, now));
             expireTimed(pl.status, now);
+            const ia = this.inArenaAt(pl); if (ia && !pl.wasInArena) clearBlessings(pl.status); pl.wasInArena = ia; // las bendiciones de 15 min no entran a la arena
             if (pl.status.statDirty) { pl.status.statDirty = false; this.restat(pl); } // K8: venció una bendición que tocaba los stats
             if (pl.status.vitalsDirty) this.flushShield(pl);
             if (pl.status.dirty) { pl.status.dirty = false; this.announceStatus(pl); }
@@ -1462,6 +1463,11 @@ export class GameWorld {
         for (const o of [p, ...this.nearbyPlayers(x, y, p.sessionId)]) if (this.isAlly(p, o) && (o === p || !this.hiddenFrom(p, o)) && Math.hypot(o.posX - x, o.posY - y) <= r) out.push(o);
         return out;
     }
+    /** Está dentro de la arena (mapa todos contra todos o el recinto `ffaRect`). Las mazmorras no cuentan. */
+    private inArenaAt(o: Player): boolean {
+        const ffa = this.def?.ffaRect;
+        return this.def?.pvp === 'ffa' || (!!ffa && inMapRect(ffa, o.posX, o.posY));
+    }
     /** En mazmorras (instancias o mapas temporales) y arenas, Despertar solo vale dentro de los 10 s de la caída. */
     private reviveLimited(o: Player): boolean {
         const ffa = this.def?.ffaRect;
@@ -1513,8 +1519,12 @@ export class GameWorld {
         }
         // bendiciones y auras: a uno mismo, o a los aliados alrededor si la habilidad tiene `aoe`
         this.skillCommit(p, skill);
-        const ms = (sp.buffSecs ?? 10) * 1000, ids = Array.isArray(sp.buff) ? sp.buff : [sp.buff!];
-        for (const o of sp.aoe ? this.alliesNear(p, p.posX, p.posY, sp.aoe) : [p]) {
+        const ids = Array.isArray(sp.buff) ? sp.buff : [sp.buff!];
+        const to = new Set<Player>(sp.aoe ? this.alliesNear(p, p.posX, p.posY, sp.aoe) : [p]);
+        // bendiciones de grupo: toda la party de este mundo (aunque esté lejos o invisible), no solo los de las 14 celdas
+        if (sp.party) for (const sid of partyMates(p.sessionId)) { const o = this.players.get(sid); if (o && this.isAlly(p, o)) to.add(o); }
+        for (const o of to) {
+            const ms = ((sp.buffSecsLong && !this.inArenaAt(o)) ? sp.buffSecsLong : (sp.buffSecs ?? 10)) * 1000; // 15 min afuera, la de Valdrys en la arena
             for (const id of ids) applyBuff(o.status, id, now, ms);
             if (o.status.statDirty) { o.status.statDirty = false; this.restat(o); }
             o.status.dirty = false; this.announceStatus(o);
