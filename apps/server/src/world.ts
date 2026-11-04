@@ -10,7 +10,7 @@ import { PARTY_SHARE_RANGE, partyExpMult, partyMates } from './party.ts';
 import { dailyOffers } from './dailyShop.ts';
 /** Hasta dónde llega el botín personal de un élite o jefe de mundo para los que participaron (celdas desde donde murió). */
 const BOSS_SHARE_RANGE = 30;
-import { AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, pvpMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionLockMs, potionMp, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, POTION_LOCK_PVP_MS, PVP_COMBAT_MS, pvpCap, pvpScale, pvpVsCtrl, RECALL_PVP_LOCK_MS, INVIS_CD_MS, DETECT_CD_MS, SECOND_WIND, secondWindHeal, progressFromEcon, PVP_SPELLS, BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, POISON_HEAL_TAKEN, HEAL_THREAT, HEALER_SKILLS, STUN_SPELLS, healAmount, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, K8_SKILLS, skillMpCost, SHIELD_MS, BUFF, withBuffs, buffTakenMult, type DmgKind } from './systems/pvpCombat.ts';
+import { AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, MEDITATE, pvpMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionLockMs, potionMp, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, POTION_LOCK_PVP_MS, PVP_COMBAT_MS, pvpCap, pvpScale, pvpVsCtrl, RECALL_PVP_LOCK_MS, INVIS_CD_MS, DETECT_CD_MS, SECOND_WIND, secondWindHeal, progressFromEcon, PVP_SPELLS, BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, POISON_HEAL_TAKEN, HEAL_THREAT, HEALER_SKILLS, STUN_SPELLS, healAmount, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, K8_SKILLS, skillMpCost, SHIELD_MS, BUFF, withBuffs, buffTakenMult, type DmgKind } from './systems/pvpCombat.ts';
 import { HUBS, QUESTS, RECALL, TRAINING, trainingLockedMsg, trainingOfMap, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef, checkSkill, skillDeniedText } from '@fdn/world';
 import { applyParalysis, applySlow, applyBless, applyPoison, applyBuff, applyShield, absorbShield, activeBuffs, clearBuffs, hasBuff, shieldOf, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, isBlessed, isPoisoned, isSlowed, updateStatus } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
@@ -1723,7 +1723,7 @@ export class GameWorld {
         if (cost > 0) { p.mp -= cost; p.meditating = false; this.sendVitals(p, false); }
         return true;
     }
-    /** Regeneración con las reglas del server: ciudad 8/s, meditando quieto 8 % de la máxima por s (mín. 6), afuera 1 %/s (mín. 2, combatMpRegen; mín. 5 en combate PvP). */
+    /** Regeneración con las reglas del server: ciudad 8/s, meditando quieto 8 % de la máxima por s (mín. 6), afuera 2 %/s (mín. 3, combatMpRegen, etapa 6b); en combate PvP 1 %/s con piso de 5 (pvpMpRegen). */
     private regenMana(p: Player, now: number): void {
         if (now < p.nextMpRegenAt) return;
         p.nextMpRegenAt = now + 1000;
@@ -1731,7 +1731,7 @@ export class GameWorld {
         if (p.meditating && (p.isDead || p.posX !== p.medX || p.posY !== p.medY)) p.meditating = false;
         const max = p.combat.maxMp; if (p.isDead || p.mp >= max) return;
         const inCity = !!this.map?.safe[Math.floor(p.posY)]?.[Math.floor(p.posX)];
-        let add = p.meditating ? Math.max(6, Math.round(max * 0.08)) : inCity ? 8 : this.inPvp(p, now) ? pvpMpRegen(max) : combatMpRegen(max); // K7: piso de 5/s peleando contra jugadores
+        let add = p.meditating ? Math.max(MEDITATE.min, Math.round(max * MEDITATE.pct)) : inCity ? 8 : this.inPvp(p, now) ? pvpMpRegen(max) : combatMpRegen(max); // K7: piso de 5/s peleando contra jugadores
         if (hasBuff(p.status, 'espiritu', now)) add = Math.round(add * BUFF.espirituRegen); // Espíritu divino (K8)
         p.mp = Math.min(max, p.mp + add);
         this.sendVitals(p, false);

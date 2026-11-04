@@ -12,7 +12,7 @@ import { WorldRegistry } from '../src/registry.ts';
 import type { PersistedPlayer } from '../src/player.ts';
 import type { GameWorld } from '../src/world.ts';
 import {
-    DETECT_CD_MS, INVIS_CD_MS, mitigate, POTION_LOCK_PVE_MS, POTION_LOCK_PVP_MS, potionHp, PVP_COMBAT_MS, PVP_DMG_MULT, PVP_HIT_CAP, pvpMpRegen, pvpCap, pvpScale, pvpVsCtrl,
+    DETECT_CD_MS, INVIS_CD_MS, mitigate, POTION_LOCK_PVE_MS, POTION_LOCK_PVP_MS, potionHp, PVP_COMBAT_MS, PVP_DMG_MULT, PVP_HIT_CAP, pvpMpRegen, combatMpRegen, pvpCap, pvpScale, pvpVsCtrl,
     RECALL_PVP_LOCK_MS, rollSpellDamage, SECOND_WIND, secondWindHeal, statsFromChar,
 } from '../src/systems/pvpCombat.ts';
 
@@ -202,12 +202,13 @@ test('invisibilidad: recarga de 60 s y se corta al recibir daño o al castear; d
 });
 
 // ---------- K7: maná en combate PvP ----------
-test('K7: en combate PvP el maná regenera al menos 5 por segundo; fuera del PvP, la regla de siempre (1 %, mínimo 2)', () => {
+test('K7: en combate PvP el maná regenera al menos 5 por segundo (1 %); fuera del PvP, la regla de PvE de la etapa 6b (2 %, mínimo 3)', () => {
     const { w, A, B, hit } = setup('guerrero', 'guerrero');
-    assert.equal(pvpMpRegen(84), 5); assert.equal(pvpMpRegen(1000), 10);
+    assert.equal(pvpMpRegen(84), 5); assert.equal(pvpMpRegen(1000), 10); // el PvP no cambia con la etapa 6b
+    assert.equal(combatMpRegen(84), 3); assert.equal(combatMpRegen(1000), 20);
     A.p.combat.maxMp = 84; // un paladín de nivel 12
     A.p.mp = 0; advance(w, 1100);
-    const calm = A.p.mp; assert.ok(calm >= 1 && calm <= 4, `fuera del PvP: ${calm}`);
+    const calm = A.p.mp; assert.ok(calm >= 3 && calm <= 6, `fuera del PvP: ${calm}`);
     hit('ataque', A, B); A.p.mp = 0; advance(w, 1100);
     assert.ok(A.p.mp >= 5, `en PvP: ${A.p.mp}`);
 });

@@ -71,7 +71,27 @@ export const MOB_AGGRO = 4.5, MOB_ASSIST = 3.2;
 
 /** Curvas de referencia por nivel (mob común): vida, daño promedio por golpe y exp por kill. Los tipos base ya las siguen; sirven para reescalar un tipo a otro nivel. */
 export const mobHpCurve = (l: number): number => 29 + 10.5 * l + 2.75 * l * l;
-export const mobDmgCurve = (l: number): number => 2.5 * l + 3;
+/**
+ * Etapa 6b del roadmap: multiplicador del daño de los mobs según su nivel, calibrado con `sim:pve` (tools/src/sim/pve).
+ * La vida de las clases se multiplicó ×4,24 para el PvP (docs/COMBATE.md) y el daño de los mobs no: hasta el 15 un común le
+ * sacaba al paladín 1-3 % de la vida y no había peligro. Al revés, desde el 25 las peleas se alargan y el élite le ganaba.
+ * Con esta curva un común de tu nivel le saca al paladín ~3 % de la vida al nivel 1, ~9 % al 10 y ~10-13 % del 20 al 40
+ * (la referencia de Dreadmyst: el común gasta una parte chica pero real de la vida; el élite, 3× su vida, pide una poción).
+ * Puntos [nivel, multiplicador]; entre puntos se interpola en línea recta.
+ */
+export const MOB_DMG_KNOTS: readonly (readonly [number, number])[] = [[1, 3.5], [6, 3.3], [12, 2.6], [20, 1.4], [25, 1], [30, 0.75], [40, 0.6]];
+export function mobDmgMult(l: number): number {
+    const k = MOB_DMG_KNOTS; if (l <= k[0][0]) return k[0][1];
+    for (let i = 1; i < k.length; i++) if (l <= k[i][0]) { const [a, ma] = k[i - 1], [b, mb] = k[i]; return ma + ((mb - ma) * (l - a)) / (b - a); }
+    return k[k.length - 1][1];
+}
+/**
+ * Los jefes ya tienen su daño pensado a mano (y el motor de jefes les suma mecánicas): llevan la raíz del multiplicador, así un
+ * jefe de mazmorra sigue siendo ganable de a uno con el escalado para jugar solo (sim:pve) sin quedar sin peligro.
+ */
+export const bossDmgMult = (l: number): number => Math.sqrt(mobDmgMult(l));
+/** Daño promedio por golpe de un mob común de nivel `l` (ya con `mobDmgMult`). */
+export const mobDmgCurve = (l: number): number => (2.5 * l + 3) * mobDmgMult(l);
 /** Exp por kill de un mob común de nivel `l` (curva de referencia para reescalar tipos; los MOBS base ya la siguen: ~60·l^1,5 / 11). */
 export const mobExpCurve = (l: number): number => (60 * Math.pow(l, 1.5)) / 11;
 /**
@@ -80,9 +100,14 @@ export const mobExpCurve = (l: number): number => (60 * Math.pow(l, 1.5)) / 11;
  * comunes (vida, daño, exp, daño de la habilidad y oro), así que conservan su peso relativo (~11 veces un mob común de su nivel).
  */
 export const BOSS_LEVELS: Partial<Record<MobType, number>> = { goblin_jefe: 5, antlion_reina: 10, caballero_cripta: 15, mago_mayor: 20, wyvern_aire: 25, demonio_foso: 30, verdugo: 40 };
+// Los números de MOBS son los de diseño (sin el multiplicador): se lo aplica a cada tipo a su propio nivel, también al golpe especial del jefe.
+for (const t of MOB_TYPES) {
+    const b = MOBS[t], k = b.boss ? bossDmgMult(b.lvl) : mobDmgMult(b.lvl), sp = b.boss?.special;
+    MOBS[t] = { ...b, dmg: [Math.max(1, Math.round(b.dmg[0] * k)), Math.max(1, Math.round(b.dmg[1] * k))], ...(b.boss && sp?.dmg ? { boss: { ...b.boss, special: { ...sp, dmg: [Math.round(sp.dmg[0] * k), Math.round(sp.dmg[1] * k)] as [number, number] } } } : {}) };
+}
 for (const [t, L] of Object.entries(BOSS_LEVELS) as [MobType, number][]) {
     const b = MOBS[t], o = b.lvl; if (o === L || !b.boss) continue;
-    const kh = mobHpCurve(L) / mobHpCurve(o), kd = mobDmgCurve(L) / mobDmgCurve(o), ke = mobExpCurve(L) / mobExpCurve(o), kg = L / o, sp = b.boss.special;
+    const kh = mobHpCurve(L) / mobHpCurve(o), kd = ((2.5 * L + 3) * bossDmgMult(L)) / ((2.5 * o + 3) * bossDmgMult(o)), ke = mobExpCurve(L) / mobExpCurve(o), kg = L / o, sp = b.boss.special;
     MOBS[t] = {
         ...b, lvl: L, hp: Math.round(b.hp * kh), dmg: [Math.round(b.dmg[0] * kd), Math.round(b.dmg[1] * kd)], exp: Math.round(b.exp * ke),
         boss: { ...b.boss, gold: [Math.round(b.boss.gold[0] * kg), Math.round(b.boss.gold[1] * kg)], special: { ...sp, ...(sp.dmg ? { dmg: [Math.round(sp.dmg[0] * kd), Math.round(sp.dmg[1] * kd)] as [number, number] } : {}) } },

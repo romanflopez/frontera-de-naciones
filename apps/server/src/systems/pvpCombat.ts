@@ -5,7 +5,7 @@
  */
 import { KEY_RECIPES } from '@fdn/world';
 import { hasBuff, type BuffId, type CharacterStatus } from './statusSystem.ts';
-import { isClass, type ClassId, BASE_BY_NAME, UNIQUE_BY_NAME, activeSets, fitsSlot, CLASS_HP, CLASS_MP, CRIT_BASE, MAX_LEVEL, aspdTotal, critTotal, itemDfTotal, itemRmTotal, leechTotal, meleeIntervalSecs, statBonus, upMult, type Stats } from '@fdn/world';
+import { isClass, type ClassId, BASE_BY_NAME, UNIQUE_BY_NAME, activeSets, fitsSlot, CLASS_HP, CLASS_MP, CRIT_BASE, MAX_LEVEL, PVE_MP_REGEN, MEDITATE, aspdTotal, critTotal, itemDfTotal, itemRmTotal, leechTotal, meleeIntervalSecs, statBonus, upMult, type Stats } from '@fdn/world';
 export type Stat = 'mag' | 'wdmg' | 'melee';
 export interface PvpSpell {
     dmg?: [number, number]; lvlK?: number; stat?: Stat;
@@ -189,10 +189,15 @@ export const FURY_MULT: Record<string, number> = { mago: 1.35, guerrero: 1.15, h
 /** Costos de maná de los hechizos de utilidad que cobra el server (iguales a los del cliente). */
 export const UTIL_MP = { furia: 15, invisibilidad: 40, detectar: 30, remover: 30 } as const;
 /** Maná por clase (base, por nivel) y poción: mismas cuentas que el cliente. */
-/** Regen de maná fuera de ciudad (incluye combate): 1 % del pool por segundo, mínimo 2/s (el piso viejo). */
+/** Regen de maná en combate contra jugadores (base de `pvpMpRegen`, calibrada en K7): 1 % del pool por segundo. */
 export const COMBAT_MP_REGEN_PCT = 0.01;
-export const combatMpRegen = (maxMp: number): number => Math.max(2, Math.round(maxMp * COMBAT_MP_REGEN_PCT));
-
+/**
+ * Regen de maná fuera de ciudad y fuera de combate PvP (contra monstruos y caminando): etapa 6b, calibrada con `sim:pve`.
+ * Con el 1 % (mínimo 2) el mago, con los costos de Valdrys y su pool de ERIS, se pasaba 30-45 % del tiempo meditando entre el
+ * nivel 1 y el 20. No toca el PvP: ahí manda `pvpMpRegen`.
+ */
+export const combatMpRegen = (maxMp: number): number => Math.max(PVE_MP_REGEN.min, Math.round(maxMp * PVE_MP_REGEN.pct));
+export { PVE_MP_REGEN, MEDITATE };
 export const potionMp = (maxMp: number, pvp = false) => Math.max(pvp ? 20 : 40, Math.round(maxMp * 0.5 * (pvp ? POTION_PVP_MULT : 1)));
 
 export interface CombatStats { lvl: number; cls: string; /** multiplicadores de daño por Fuerza (físico) y Magia (hechizos) */ meleeMult: number; magicMult: number; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; /** crítico total %, velocidad de ataque %, robo de vida % y chance de veneno % (ya con topes) */ crit: number; aspd: number; leech: number; poison: number; savedHp: number; maxMp: number; savedMp: number; /** K8: Daño base extra (Bendición de poder) */ dmgBonus: number; /** efectos especiales de los ítems Dorado de jefe puestos (docs/ITEMS.md): quemadura, aturdir, vampirismo */ fx?: string[] }
@@ -298,7 +303,7 @@ export const PVP_HIT_CAP = 0.25;
  * pasaba más de la mitad de la pelea sin poder usar nada (K7). Solo vale mientras estás en combate contra jugadores.
  */
 export const PVP_MP_REGEN_MIN = 5;
-export const pvpMpRegen = (maxMp: number): number => Math.max(PVP_MP_REGEN_MIN, combatMpRegen(maxMp));
+export const pvpMpRegen = (maxMp: number): number => Math.max(PVP_MP_REGEN_MIN, Math.round(maxMp * COMBAT_MP_REGEN_PCT));
 /** Tope de los multiplicadores "sobre controlado" contra jugadores (Juicio y Escudo 1,5× → 1,2×; Esquirla 2× → 1,2×). */
 export const PVP_VS_CTRL_MAX = 1.2;
 /** Daño que llega a un jugador desde otro: primero el multiplicador PvP (antes de la defensa) y después el tope por golpe. */
