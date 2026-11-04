@@ -1363,14 +1363,17 @@ window.addEventListener('keydown', (e) => {
 });
 window.addEventListener('keyup', (e) => { moveKeys.delete(e.key.toLowerCase()); });
 window.addEventListener('blur', () => { moveKeys.clear(); holding = false; });
-/** A 8 direcciones de grilla (-1/0/1). */
+/** A 8 direcciones de grilla (-1/0/1) por ángulo (teclado). */
 function quant8(dx: number, dy: number): Cell | null {
     if (Math.hypot(dx, dy) < 1e-6) return null;
     const a = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4);
     return { x: Math.round(Math.cos(a)), y: Math.round(Math.sin(a)) };
 }
-/** Dirección del "volante": hacia donde apunta el teclado o, con el clic mantenido, hacia el cursor. null = quieto. */
+/** Celda del cursor hacia la que se corre con el clic mantenido (el `m_sCommX/Y` del cliente clásico). */
+let steerGoal: Cell | null = null;
+/** Dirección del "volante": teclado, o con el clic mantenido hacia la celda del cursor. null = quieto. */
 function steerDir(): Cell | null {
+    steerGoal = null;
     if (moveKeys.size) {
         let u = 0, v = 0; for (const k of moveKeys) { const m = MOVE_KEY[k]; u += m[0]; v += m[1]; }
         // de pantalla a grilla (inversa de faceAngle): dx-dy = u, (dx+dy)/2 = v
@@ -1379,18 +1382,25 @@ function steerDir(): Cell | null {
     if (holding && mouse.x >= 0) {
         const g = toGrid(mouse.x, mouse.y), gc = { x: Math.floor(g.x), y: Math.floor(g.y) };
         if (gc.x === P.cell.x && gc.y === P.cell.y) return null; // el cursor está en mi celda: quieto
-        // hacia la celda del cursor (no hacia el punto): un clic apenas al lado del cuerpo ya es un paso
-        return quant8(gc.x - P.cell.x, gc.y - P.cell.y);
+        steerGoal = gc;
+        // Regla clásica (cGetNextMoveDir): por signo, no por ángulo. Si el cursor está a 5 celdas a la derecha y 1 arriba,
+        // se va en diagonal hasta alinear y después derecho. Eso es lo que hace que un mínimo desvío del mouse ya "caderee".
+        return { x: Math.sign(gc.x - P.cell.x), y: Math.sign(gc.y - P.cell.y) };
     }
     return null;
 }
-/** Un paso de volante hacia d: si la celda está tomada, resbala por una vecina (como contra una pared en los MMO clásicos). */
+const DIR8: Cell[] = [{ x: 0, y: -1 }, { x: 1, y: -1 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, { x: -1, y: 1 }, { x: -1, y: 0 }, { x: -1, y: -1 }];
+const dirIndex = (d: Cell) => DIR8.findIndex((e) => e.x === d.x && e.y === d.y);
+/** Un paso de volante hacia d: si la celda está tomada, prueba girando 45° y 90° (como el cliente clásico), del lado que queda más cerca del objetivo. */
 function steerStep(d: Cell): Cell | null {
-    const c = P.cell, cand: Cell[] = [{ x: c.x + d.x, y: c.y + d.y }];
-    if (d.x && d.y) cand.push({ x: c.x + d.x, y: c.y }, { x: c.x, y: c.y + d.y });
-    else if (d.x) cand.push({ x: c.x + d.x, y: c.y - 1 }, { x: c.x + d.x, y: c.y + 1 });
-    else cand.push({ x: c.x - 1, y: c.y + d.y }, { x: c.x + 1, y: c.y + d.y });
-    for (const n of cand) if (freeForMe(n.x, n.y) && !occupiedByOther(n.x, n.y)) return n;
+    const c = P.cell, i = dirIndex(d); if (i < 0) return null;
+    const free = (n: Cell) => freeForMe(n.x, n.y) && !occupiedByOther(n.x, n.y);
+    const at = (k: number) => { const e = DIR8[((k % 8) + 8) % 8]; return { x: c.x + e.x, y: c.y + e.y }; };
+    const first = at(i); if (free(first)) return first;
+    const goal = steerGoal ?? { x: c.x + d.x * 8, y: c.y + d.y * 8 };
+    const dist2 = (n: Cell) => (n.x - goal.x) ** 2 + (n.y - goal.y) ** 2;
+    const sides = dist2(at(i + 1)) <= dist2(at(i - 1)) ? [1, 2, -1, -2] : [-1, -2, 1, 2];
+    for (const k of sides) { const n = at(i + k); if (free(n)) return n; }
     return null;
 }
 /** Arranca un paso a la celda vecina `next`: lo pide al server y lo dibuja ya (el server lo valida). Giro instantáneo. */
@@ -1731,7 +1741,7 @@ function cursorTick() {
     });
 }
 function updateCam(dt: number) {
-    const pt = iso(P.x, P.y); const k = 1 - Math.exp(-dt * 7); cam.x += (pt.x - cam.x) * k; cam.y += (pt.y - cam.y) * k;
+    const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y; // cámara clavada al jugador (como el cliente clásico): el mundo se mueve, el personaje queda en el centro
     shake = Math.max(0, shake - dt); const s = shake * 14; cam.sx = (R() * 2 - 1) * s; cam.sy = (R() * 2 - 1) * s;
 }
 
