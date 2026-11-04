@@ -24,7 +24,7 @@ import { checkSkill, skillDeniedText, canUseSkill, skillLevel } from '@fdn/world
 import { DEFAULT_MAP, RECALL, STAT_CAP, classBaseHp, itemDfTotal, itemRmTotal, STAT_DESC, STAT_IDS, STAT_BASE, STAT_RESET_FREE_LVL, statTip, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, traitLabel, traitHpMult, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
 import { UNIQUE_BY_NAME, UP_MAX, UP_MAX_BY_QUALITY, EXTRAS_BY_QUALITY, FX_INFO, JUNK_MATS, MAT_REFORJA, junkValue, reforgeGold, reforgeStones, activeSets, setOfPiece, slotsFor, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, fitsSlot, TALK_RANGE, roleOf, sellPrice, type AttrId, type Base, type KeyId, type Slot, type Stock } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
-import type { InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
+import type { ArenaInfo, InvItem as InvItemMsg, InventoryState } from '@fdn/proto';
 import { DAILY_BY_ID, DAILY_EXP_PCT, DAILY_LIMIT, MAIN_QUESTS, type MainQuest, QUEST_MATS, REPEAT_MATS, RESERVED_MATS, dailyGold, rewardUniques, type QuestBookView, type QuestGoal, KEY_RECIPES, KEY_MAT_NAMES, keyMissing, TRAIT_ELITE } from '@fdn/world';
 import { spellIcon } from './icons.ts';
 import { bookListHtml, bookTreeHtml, bookTipHtml } from './spellbook.ts';
@@ -344,6 +344,7 @@ function onServer(m: ServerPayload) {
         case 'partyStatsUpdate': updatePartyStats(m.value.name, m.value.hp, m.value.mp); break;
         case 'partyInvited': showPartyInvite(m.value.fromName, Number(m.value.expiresMs)); break;
         case 'arenaInvited': showArenaInvite(m.value.mode, Number(m.value.expiresMs)); break;
+        case 'arenaInfo': renderArena(m.value); break;
         case 'econResult': deposit.onResult(m.value.ok, m.value.text); if (m.value.ok) { log(esc(m.value.text), ['daily_done', 'quest_ready'].includes(m.value.code)); if (m.value.code === 'daily_done') notify('Encargo cumplido', m.value.text); else if (m.value.code === 'quest_ready') notify('Misión', m.value.text); } else { toast(m.value.text); log(esc(m.value.text)); } break;
         case 'killReward': onKillReward(m.value); break;
         case 'statusUpdate': onStatusUpdate(m.value); break;
@@ -2305,6 +2306,8 @@ const NPC_LOOKS: Record<string, string[]> = {
     depositario_v: ['chain_boots', 'leather_pants', 'leather_gloves', 'cloth_shirt', 'head_bald', 'leather_hood'],
     sanador_v: ['mage_boots', 'mage_skirt', 'mage_sleeves', 'mage_vest', 'head_bald', 'mage_hood'],
     mago_v: ['mage_boots', 'mage_skirt', 'mage_sleeves', 'mage_vest', 'head_bald', 'mage_hood', 'wand'],
+    arenero_s: ['chain_boots', 'leather_pants', 'leather_gloves', 'leather_chest', 'head_short', 'longsword'],
+    arenero_v: ['chain_boots', 'leather_pants', 'leather_gloves', 'leather_chest', 'head_bald', 'longsword'],
     sanador_s: ['mage_boots', 'mage_skirt', 'mage_sleeves', 'mage_vest', 'head_short', 'mage_hood'],
     mago_s: ['mage_boots', 'mage_skirt', 'mage_sleeves', 'mage_vest', 'head_short', 'mage_hood', 'staff'],
 };
@@ -2575,6 +2578,7 @@ function openShop(n: Npc = MAP.npcs[0]) {
     if (role === 'subastador') { closeShop(); shopNpc = n; talkNpc = null; auction.open(n); return; }
     if (role === 'depositario') { if (shopNpc !== n) closeShop(); shopNpc = n; talkNpc = null; deposit.open(n); return; }
     if (role === 'capitan') { openQuestDlg(n); return; }
+    if (role === 'arenero') { if (shopNpc !== n) closeShop(); openArena(n); return; }
     if (role === 'guardia' || ROLE_LINES[role]) { openTalk(n); return; }
     const def = SHOPS[role]; if (!def) return;
     shopNpc = n; talkNpc = null; $('qdlg').hidden = true; $('shopName').textContent = n.name; $('shopRole').textContent = def.label; $('shop').hidden = false; renderShop();
@@ -2587,7 +2591,41 @@ function openTalk(n: Npc) {
     $('qdName').textContent = n.name; setDlgAvatar(n); $('qdlg').hidden = false; $('qdForges').innerHTML = ''; $('qdBtn').hidden = true;
     $('qdBody').innerHTML = `<small>${(SHOPS[role] ?? SHOPS.guardia).label}</small><br>${lines[Math.floor(R() * lines.length)]}`;
 }
-function closeShop() { shopNpc = null; bubble = null; $('npcBubble').hidden = true; $('shop').hidden = true; $('qdlg').hidden = true; auction.close(); deposit.close(); }
+function closeShop() { shopNpc = null; bubble = null; $('npcBubble').hidden = true; $('shop').hidden = true; $('qdlg').hidden = true; closeArena(); auction.close(); deposit.close(); }
+// ---------- ventana de arena (NPC maestro de arena): estado, anotarse, rating y ranking; los datos llegan con `/arena info` ----------
+let arenaTimer = 0, arenaTab: '2v2' | '3v3' = '2v2', arenaInfo: ArenaInfo | null = null;
+const arenaOpen = () => !$('arena').hidden;
+const arenaCmd = (c: string) => { net.send({ $case: 'chatMessageSendRequest', value: { message: `/arena ${c}` } }); setTimeout(() => arenaCmdInfo(), 150); };
+const arenaCmdInfo = () => { if (arenaOpen() && connected) net.send({ $case: 'chatMessageSendRequest', value: { message: '/arena info' } }); };
+function openArena(n: Npc) {
+    shopNpc = n; talkNpc = null; $('shop').hidden = true; $('qdlg').hidden = true;
+    $('arena').hidden = false; renderArena(arenaInfo); arenaCmdInfo();
+    clearInterval(arenaTimer); arenaTimer = window.setInterval(arenaCmdInfo, 4000); // el estado de la cola cambia solo
+}
+function closeArena() { clearInterval(arenaTimer); $('arena').hidden = true; }
+function renderArena(v: ArenaInfo | null) {
+    arenaInfo = v; if (!arenaOpen()) return;
+    const fm = (ms: number) => { const m = Math.ceil(ms / 60_000); return m >= 1 ? `${m} min` : `${Math.ceil(ms / 1000)} s`; };
+    $('arSeason').textContent = v ? `Temporada ${v.season}` : 'Cargando…';
+    const st = $('arState'); st.classList.toggle('pen', !!v && Number(v.penaltyMs) > 0);
+    if (!v) st.innerHTML = 'Pidiendo el estado al server…';
+    else if (Number(v.penaltyMs) > 0) st.innerHTML = `<b>Penalizado</b>: faltan ${fm(Number(v.penaltyMs))} para poder anotarte.`;
+    else if (v.state === 'cola') st.innerHTML = `<b>En cola de ${esc(v.queuedMode)}</b> hace ${fm(Number(v.queuedMs))} · ${v.queuedParties} ${v.queuedParties === 1 ? 'party esperando' : 'parties esperando'}.`;
+    else if (v.state === 'invitacion') st.innerHTML = `<b>¡Partida encontrada!</b> Aceptá en el cartel de la derecha.`;
+    else if (v.state === 'partida') st.innerHTML = `<b>En partida</b> (${v.matchPhase === 'prep' ? 'preparación' : v.matchPhase === 'fight' ? 'pelea' : 'terminada'}).`;
+    else st.innerHTML = v.partySize ? `Tu party tiene <b>${v.partySize}</b>${v.leader ? '' : ' · solo el líder la anota'}.` : 'Sin party: armala con <b>/invitar nombre</b> para anotarte.';
+    const can = !!v && !v.state && Number(v.penaltyMs) <= 0 && v.leader;
+    $('arModes').innerHTML = v?.state === 'cola' || v?.state === 'invitacion'
+        ? `<button type="button" class="qw-btn leave" data-ar="salir">Salir de la cola</button>`
+        : `<button type="button" class="qw-btn" data-ar="2v2" ${can && (v!.partySize === 2 || !v!.partySize) ? '' : 'disabled'}>Anotar 2v2</button><button type="button" class="qw-btn" data-ar="3v3" ${can && v!.partySize === 3 ? '' : 'disabled'}>Anotar 3v3</button>`;
+    $('arModes').querySelectorAll<HTMLElement>('[data-ar]').forEach((b) => (b.onclick = () => arenaCmd(b.dataset.ar!)));
+    $('arRatings').innerHTML = (v?.ratings ?? []).map((r) => `<div class="ar-rt"><b>${esc(r.mode)}</b><em>${r.rating}</em><span>${r.wins}G ${r.losses}P ${r.draws}E</span><small>${r.gamesLeft ? `${r.gamesLeft} más para el ranking` : 'en el ranking'}</small></div>`).join('');
+    document.querySelectorAll<HTMLElement>('#arTabs [data-mode]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mode === arenaTab)));
+    const top = (v?.top ?? []).filter((r) => r.mode === arenaTab);
+    $('arTop').innerHTML = top.length ? top.map((r) => `<div class="ar-row"><i>${r.pos}.</i><span>${esc(r.name)}</span><em>${r.rating}</em><small>${r.wins}G ${r.losses}P ${r.draws}E</small></div>`).join('') : `<div class="ar-empty">Todavía nadie tiene ${v?.rankedMin ?? 10} partidas de ${arenaTab} esta temporada.</div>`;
+}
+$('arClose').addEventListener('click', closeShop);
+document.querySelectorAll<HTMLElement>('#arTabs [data-mode]').forEach((b) => (b.onclick = () => { arenaTab = b.dataset.mode as '2v2' | '3v3'; renderArena(arenaInfo); }));
 /** Oferta del día (global, la manda el server): líneas comunes con descuento y, cada tanto, la estrella con el roll ya tirado (stock 1 de todo el server). */
 let daily: { base: string; quality: number; attrs: Item['attrs']; price: number; star: boolean; sold: boolean }[] = [];
 const dailyItem = (o: (typeof daily)[number]): Item => ({ ...(ALL_BASES.find((x) => x.name === o.base) ?? ALL_BASES[0]), id: -1, rar: RAR[o.quality], attrs: o.attrs });
@@ -3105,7 +3143,7 @@ async function boot() {
     loadBuildingImages();
     refreshLook(); void initKnight();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, toScreen, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.step = null; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, perf: () => ({ ...perf }), setQb: (v: QuestBookView | null) => { QB = v; renderQuest(); }, questDlg: (name: string) => openQuestDlg({ id: 'capitan_s', name, x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), questLog: toggleQuestLog, arenaInvite: (mode = '2v2') => showArenaInvite(mode, Date.now() + 30_000, true), shopDbg: (role = 'mercader') => openShop({ id: role + '_s', name: 'Mercader', x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), uid: () => uid++, RARS: RAR, mobCount: () => mobs.length, arrows: () => arrows.length });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, perf: () => ({ ...perf }), setQb: (v: QuestBookView | null) => { QB = v; renderQuest(); }, questDlg: (name: string) => openQuestDlg({ id: 'capitan_s', name, x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), questLog: toggleQuestLog, arenaInvite: (mode = '2v2') => showArenaInvite(mode, Date.now() + 30_000, true), arenaDbg: (v: ArenaInfo | null) => { $('arena').hidden = false; renderArena(v); }, shopDbg: (role = 'mercader') => openShop({ id: role + '_s', name: 'Mercader', x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), uid: () => uid++, RARS: RAR, mobCount: () => mobs.length, arrows: () => arrows.length });
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5), recall: () => ({ on: !!recall, k: recallK(now()), cd: Math.max(0, recallCdEnd - now()) }) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();

@@ -197,6 +197,7 @@ export function buildSolmarVilla(): WorldMap {
         else if (r < 0.2) t.prop(pick(FLOWERS), x, y, false);
     });
     // ---------- 12) NPCs de la calle (guardias) ----------
+    t.npc('arenero_s', 'Maestro de Arena Brando', 80, 69, 6); // patio de armas: abre la ventana de arenas 2v2/3v3
     t.npc('guardia_s1', 'Guardia del Portón', 114, 50, 4);
     t.npc('guardia_s2', 'Guardia del Portón', 114, 54, 4);
     t.npc('guardia_s3', 'Guardia de la Plaza', 66, 47, 6);

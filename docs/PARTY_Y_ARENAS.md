@@ -34,8 +34,10 @@ Decisión del 3/11/2026 (reemplaza el borrador de 1v1/2v2): **2v2 y 3v3, sin col
 
 Código: `apps/server/src/arena.ts` (`ArenaService`: cola, invitación, partida, ranking), `apps/server/src/glicko.ts` (Glicko-2), reglas dentro del mapa en `GameWorld` (sección "arena 2v2 / 3v3" de `apps/server/src/world.ts`) y mapas y constantes en `packages/world/src/arena.ts` (`ARENA_MAPS`, `ARENA_RULES`). Tests: `apps/server/test/arena.test.ts`.
 
-### Comandos (chat)
-`/arena` (ayuda y estado) · `/arena 2v2` · `/arena 3v3` (el líder, con la party armada) · `/arena salir` · `/arena aceptar` · `/arena rechazar` · `/arena ranking [2v2|3v3]` · `/arena rating`. No hace falta protocolo nuevo: el cliente los reenvía como chat y el server contesta con mensajes del sistema.
+### Ventana de arena (NPC) y comandos
+- **Maestro de arena**: NPC `arenero_s` (Brando, patio de armas de Solmar) y `arenero_v` (Sigrun, patio de armas de Vhar). Al hablarle se abre la ventana de arena del cliente: estado (sin party / en cola / partida encontrada / en partida / penalizado), botones **Anotar 2v2 / 3v3** o **Salir de la cola**, tu rating por modo y el ranking de la temporada con pestañas 2v2/3v3. Los datos llegan con `ArenaInfo` (proto 604), que el server manda al recibir `/arena info`; la ventana lo pide al abrirse, después de cada botón y cada 4 s mientras está abierta. Los botones mandan los mismos comandos de chat.
+- **Partida encontrada**: el server manda `ArenaInvited` (proto 603) a cada jugador; el cliente muestra el cartel con **Aceptar / Rechazar** y la barra de 30 s (el mismo de la invitación de party) más el aviso grande al centro. Al aceptar todos, el server transfiere a las dos parties a la instancia.
+- **Comandos (chat)**, siguen valiendo: `/arena` (ayuda y estado) · `/arena 2v2` · `/arena 3v3` (el líder, con la party armada) · `/arena salir` · `/arena aceptar` · `/arena rechazar` · `/arena ranking [2v2|3v3]` · `/arena rating` · `/arena info` (estado para la ventana).No hace falta protocolo nuevo: el cliente los reenvía como chat y el server contesta con mensajes del sistema.
 
 ### Cola
 - La anota el **líder** de una party de **exactamente 2 (2v2) o 3 (3v3)**. Cada miembro tiene que estar conectado, vivo, fuera de mazmorras y arenas, sin penalización y **sin haber peleado con un jugador en los últimos 15 s** (la cola no sirve para escapar de una pelea).
@@ -69,7 +71,7 @@ Código: `apps/server/src/arena.ts` (`ArenaService`: cola, invitación, partida,
 `FDN_ARENA_PRUEBA=1` deja anotarse sin party o con una party más chica que el modo (por ejemplo, dos personas solas en la cola de 2v2 juegan un 1v1). Un GM puede mirar las arenas con `/gm ir arena_ruinas` (sin partida son todos contra todos).
 
 ### Queda para después
-Ventana propia en el cliente (hoy es por chat); "10 s quieto y visible" para aceptar; evitar la revancha inmediata contra la misma party; normalizar el equipo dentro de la arena (decisión abierta, ver §4).
+"10 s quieto y visible" para aceptar; evitar la revancha inmediata contra la misma party; normalizar el equipo dentro de la arena (decisión abierta, ver §4).
 
 ## 3. Orden de implementación
 

@@ -194,6 +194,7 @@ export function buildVharCiudadela(): WorldMap {
         else if (r < 0.125) { t.tile(x, y, pick(CRUST)); }
     });
     // ---------- 11) NPCs de la calle (guardias) ----------
+    t.npc('arenero_v', 'Maestra de Arena Sigrun', 105, 46, 2); // patio de armas: abre la ventana de arenas 2v2/3v3
     t.npc('guardia_v1', 'Guardia del Portón', 60, 111, 6);
     t.npc('guardia_v2', 'Guardia del Portón', 67, 111, 2);
     t.npc('guardia_v3', 'Guardia de la Plaza', 67, 60, 6);

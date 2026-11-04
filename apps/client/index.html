@@ -407,6 +407,23 @@ canvas:focus{outline:none}
     </div>
     <button id="qdBtn" class="qw-accept" type="button" hidden>Aceptar</button>
   </div>
+  <div id="arena" class="hud cw" role="dialog" aria-label="Arena" hidden>
+    <header class="cw-head"><h2>ARENA</h2><button class="cw-x" id="arClose" type="button" aria-label="Cerrar Arena">&times;</button></header>
+    <div class="cw-body">
+      <section class="ar-left">
+        <div class="ar-season" id="arSeason"></div>
+        <div class="ar-state" id="arState"></div>
+        <div class="ar-modes" id="arModes"></div>
+        <div class="qw-rwh">TU RATING</div>
+        <div class="ar-ratings" id="arRatings"></div>
+        <p class="ar-help">Se entra con la party armada: 2 para 2v2, 3 para 3v3. Salir de la cola, rechazar o abandonar penaliza 10 min.</p>
+      </section>
+      <section class="ar-right">
+        <div class="tabs" role="tablist" id="arTabs"><button type="button" role="tab" data-mode="2v2" aria-selected="true">Ranking 2v2</button><button type="button" role="tab" data-mode="3v3" aria-selected="false">Ranking 3v3</button></div>
+        <div class="ar-top" id="arTop"></div>
+      </section>
+    </div>
+  </div>
   <div id="qlog" class="hud cw" role="dialog" aria-label="Misiones" hidden>
     <header class="cw-head"><h2>MISIONES</h2><button class="cw-x" id="qlClose" type="button" aria-label="Cerrar Misiones">&times;</button></header>
     <div class="cw-body">

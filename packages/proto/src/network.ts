@@ -586,6 +586,7 @@ export interface ServerMessage {
     { $case: "partyState"; value: PartyState }
     | { $case: "partyInvited"; value: PartyInvited }
     | { $case: "arenaInvited"; value: ArenaInvited }
+    | { $case: "arenaInfo"; value: ArenaInfo }
     | { $case: "partyStatsUpdate"; value: PartyStatsUpdate }
     | //
     /** Texto flotante de combate (daño / cura). Rango propio de tags desde 700. */
@@ -725,6 +726,51 @@ export interface ArenaInvited {
   expiresMs: bigint;
   /** nombre de la arena sorteada */
   arena: string;
+}
+
+/** Estado de la arena para la ventana del cliente (respuesta a "/arena info"). */
+export interface ArenaRating {
+  mode: string;
+  rating: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  gamesLeft: number;
+}
+
+export interface ArenaRank {
+  mode: string;
+  pos: number;
+  name: string;
+  rating: number;
+  wins: number;
+  losses: number;
+  draws: number;
+}
+
+export interface ArenaInfo {
+  season: string;
+  /** "" | "cola" | "invitacion" | "partida" */
+  state: string;
+  /** en cola: "2v2" | "3v3" */
+  queuedMode: string;
+  /** en cola: hace cuánto */
+  queuedMs: bigint;
+  /** en cola: parties esperando en ese modo */
+  queuedParties: number;
+  /** en partida: "prep" | "fight" | "end" */
+  matchPhase: string;
+  /** > 0: penalizado, cuánto falta */
+  penaltyMs: bigint;
+  /** tamaño de tu party (0 = sin party) */
+  partySize: number;
+  /** sos el líder (o no tenés party) */
+  leader: boolean;
+  ratings: ArenaRating[];
+  /** ranking de los dos modos */
+  top: ArenaRank[];
+  /** partidas para entrar al ranking */
+  rankedMin: number;
 }
 
 /** Solo los stats de un compañero, para no mandar el estado completo en cada golpe o regen. */
@@ -7552,6 +7598,9 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "arenaInvited":
         ArenaInvited.encode(message.payload.value, writer.uint32(4826).fork()).join();
         break;
+      case "arenaInfo":
+        ArenaInfo.encode(message.payload.value, writer.uint32(4834).fork()).join();
+        break;
       case "partyStatsUpdate":
         PartyStatsUpdate.encode(message.payload.value, writer.uint32(4818).fork()).join();
         break;
@@ -8434,6 +8483,14 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "arenaInvited", value: ArenaInvited.decode(reader, reader.uint32()) };
             continue;
           }
+          case 604: {
+            if (tag !== 4834) {
+              break;
+            }
+
+            message.payload = { $case: "arenaInfo", value: ArenaInfo.decode(reader, reader.uint32()) };
+            continue;
+          }
           case 602: {
             if (tag !== 4818) {
               break;
@@ -9203,6 +9260,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "arenaInvited": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "arenaInvited", value: ArenaInvited.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "arenaInfo": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "arenaInfo", value: ArenaInfo.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -10258,6 +10321,454 @@ export const ArenaInvited: MessageFns<ArenaInvited> = {
     message.mode = object.mode ?? "";
     message.expiresMs = (object.expiresMs !== undefined && object.expiresMs !== null) ? BigInt(object.expiresMs) : 0n;
     message.arena = object.arena ?? "";
+    return message;
+  },
+};
+
+function createBaseArenaRating(): ArenaRating {
+  return { mode: "", rating: 0, wins: 0, losses: 0, draws: 0, gamesLeft: 0 };
+}
+
+export const ArenaRating: MessageFns<ArenaRating> = {
+  encode(message: ArenaRating, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mode !== "") {
+      writer.uint32(10).string(message.mode);
+    }
+    if (message.rating !== 0) {
+      writer.uint32(16).int32(message.rating);
+    }
+    if (message.wins !== 0) {
+      writer.uint32(24).int32(message.wins);
+    }
+    if (message.losses !== 0) {
+      writer.uint32(32).int32(message.losses);
+    }
+    if (message.draws !== 0) {
+      writer.uint32(40).int32(message.draws);
+    }
+    if (message.gamesLeft !== 0) {
+      writer.uint32(48).int32(message.gamesLeft);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaRating {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseArenaRating();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.mode = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.rating = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.wins = reader.int32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.losses = reader.int32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.draws = reader.int32();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.gamesLeft = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<ArenaRating>, I>>(base?: I): ArenaRating {
+    return ArenaRating.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaRating>, I>>(object: I): ArenaRating {
+    const message = createBaseArenaRating();
+    message.mode = object.mode ?? "";
+    message.rating = object.rating ?? 0;
+    message.wins = object.wins ?? 0;
+    message.losses = object.losses ?? 0;
+    message.draws = object.draws ?? 0;
+    message.gamesLeft = object.gamesLeft ?? 0;
+    return message;
+  },
+};
+
+function createBaseArenaRank(): ArenaRank {
+  return { mode: "", pos: 0, name: "", rating: 0, wins: 0, losses: 0, draws: 0 };
+}
+
+export const ArenaRank: MessageFns<ArenaRank> = {
+  encode(message: ArenaRank, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.mode !== "") {
+      writer.uint32(10).string(message.mode);
+    }
+    if (message.pos !== 0) {
+      writer.uint32(16).int32(message.pos);
+    }
+    if (message.name !== "") {
+      writer.uint32(26).string(message.name);
+    }
+    if (message.rating !== 0) {
+      writer.uint32(32).int32(message.rating);
+    }
+    if (message.wins !== 0) {
+      writer.uint32(40).int32(message.wins);
+    }
+    if (message.losses !== 0) {
+      writer.uint32(48).int32(message.losses);
+    }
+    if (message.draws !== 0) {
+      writer.uint32(56).int32(message.draws);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaRank {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseArenaRank();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.mode = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.pos = reader.int32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.name = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.rating = reader.int32();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.wins = reader.int32();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.losses = reader.int32();
+            continue;
+          }
+          case 7: {
+            if (tag !== 56) {
+              break;
+            }
+
+            message.draws = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<ArenaRank>, I>>(base?: I): ArenaRank {
+    return ArenaRank.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaRank>, I>>(object: I): ArenaRank {
+    const message = createBaseArenaRank();
+    message.mode = object.mode ?? "";
+    message.pos = object.pos ?? 0;
+    message.name = object.name ?? "";
+    message.rating = object.rating ?? 0;
+    message.wins = object.wins ?? 0;
+    message.losses = object.losses ?? 0;
+    message.draws = object.draws ?? 0;
+    return message;
+  },
+};
+
+function createBaseArenaInfo(): ArenaInfo {
+  return {
+    season: "",
+    state: "",
+    queuedMode: "",
+    queuedMs: 0n,
+    queuedParties: 0,
+    matchPhase: "",
+    penaltyMs: 0n,
+    partySize: 0,
+    leader: false,
+    ratings: [],
+    top: [],
+    rankedMin: 0,
+  };
+}
+
+export const ArenaInfo: MessageFns<ArenaInfo> = {
+  encode(message: ArenaInfo, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.season !== "") {
+      writer.uint32(10).string(message.season);
+    }
+    if (message.state !== "") {
+      writer.uint32(18).string(message.state);
+    }
+    if (message.queuedMode !== "") {
+      writer.uint32(26).string(message.queuedMode);
+    }
+    if (message.queuedMs !== 0n) {
+      if (BigInt.asIntN(64, message.queuedMs) !== message.queuedMs) {
+        throw new globalThis.Error("value provided for field message.queuedMs of type int64 too large");
+      }
+      writer.uint32(32).int64(message.queuedMs);
+    }
+    if (message.queuedParties !== 0) {
+      writer.uint32(40).int32(message.queuedParties);
+    }
+    if (message.matchPhase !== "") {
+      writer.uint32(50).string(message.matchPhase);
+    }
+    if (message.penaltyMs !== 0n) {
+      if (BigInt.asIntN(64, message.penaltyMs) !== message.penaltyMs) {
+        throw new globalThis.Error("value provided for field message.penaltyMs of type int64 too large");
+      }
+      writer.uint32(56).int64(message.penaltyMs);
+    }
+    if (message.partySize !== 0) {
+      writer.uint32(64).int32(message.partySize);
+    }
+    if (message.leader !== false) {
+      writer.uint32(72).bool(message.leader);
+    }
+    for (const v of message.ratings) {
+      ArenaRating.encode(v!, writer.uint32(82).fork()).join();
+    }
+    for (const v of message.top) {
+      ArenaRank.encode(v!, writer.uint32(90).fork()).join();
+    }
+    if (message.rankedMin !== 0) {
+      writer.uint32(96).int32(message.rankedMin);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ArenaInfo {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseArenaInfo();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.season = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.state = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.queuedMode = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.queuedMs = reader.int64() as bigint;
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.queuedParties = reader.int32();
+            continue;
+          }
+          case 6: {
+            if (tag !== 50) {
+              break;
+            }
+
+            message.matchPhase = reader.string();
+            continue;
+          }
+          case 7: {
+            if (tag !== 56) {
+              break;
+            }
+
+            message.penaltyMs = reader.int64() as bigint;
+            continue;
+          }
+          case 8: {
+            if (tag !== 64) {
+              break;
+            }
+
+            message.partySize = reader.int32();
+            continue;
+          }
+          case 9: {
+            if (tag !== 72) {
+              break;
+            }
+
+            message.leader = reader.bool();
+            continue;
+          }
+          case 10: {
+            if (tag !== 82) {
+              break;
+            }
+
+            message.ratings.push(ArenaRating.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 11: {
+            if (tag !== 90) {
+              break;
+            }
+
+            message.top.push(ArenaRank.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 12: {
+            if (tag !== 96) {
+              break;
+            }
+
+            message.rankedMin = reader.int32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<ArenaInfo>, I>>(base?: I): ArenaInfo {
+    return ArenaInfo.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ArenaInfo>, I>>(object: I): ArenaInfo {
+    const message = createBaseArenaInfo();
+    message.season = object.season ?? "";
+    message.state = object.state ?? "";
+    message.queuedMode = object.queuedMode ?? "";
+    message.queuedMs = (object.queuedMs !== undefined && object.queuedMs !== null) ? BigInt(object.queuedMs) : 0n;
+    message.queuedParties = object.queuedParties ?? 0;
+    message.matchPhase = object.matchPhase ?? "";
+    message.penaltyMs = (object.penaltyMs !== undefined && object.penaltyMs !== null) ? BigInt(object.penaltyMs) : 0n;
+    message.partySize = object.partySize ?? 0;
+    message.leader = object.leader ?? false;
+    message.ratings = object.ratings?.map((e) => ArenaRating.fromPartial(e)) || [];
+    message.top = object.top?.map((e) => ArenaRank.fromPartial(e)) || [];
+    message.rankedMin = object.rankedMin ?? 0;
     return message;
   },
 };

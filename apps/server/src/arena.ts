@@ -143,6 +143,7 @@ export class ArenaService {
             case 'rechazar': return this.decline(sid);
             case 'ranking': return this.showRanking(sid, MODE_ALIASES[arg.toLowerCase()] ?? '2v2');
             case 'rating': return this.showRating(sid);
+            case 'info': return this.sendInfo(sid); // la ventana del cliente
             case '': case 'estado': case 'ayuda': return this.showStatus(sid);
             default: this.say(sid, 'Comando de arena desconocido. Escribí /arena para ver la ayuda.');
         }
@@ -156,6 +157,17 @@ export class ArenaService {
         if (st === 'partida') { const m = this.matchOf.get(sid)!; lines.push(`Estás en una partida de ${m.mode} (${m.phase === 'prep' ? 'preparación' : m.phase === 'fight' ? 'pelea' : 'terminada'}).`); }
         if (pen > 0) lines.push(`Penalizado: faltan ${fmtMin(pen)} para poder entrar.`);
         for (const l of lines) this.say(sid, l);
+    }
+    /** Estado completo para la ventana de arena del cliente (`/arena info`). */
+    private sendInfo(sid: string): void {
+        const s = this.h.session(sid); if (!s) return;
+        const st = this.stateOf(sid), e = this.entryOf.get(sid), m = this.matchOf.get(sid), party = this.h.partyMembers(sid);
+        this.h.send(sid, M.arenaInfo({
+            season: String(this.ladder.season), state: st ?? '', queuedMode: e?.mode ?? '', queuedMs: e ? this.now() - e.since : 0, queuedParties: e ? this.queued(e.mode) : 0,
+            matchPhase: m?.phase ?? '', penaltyMs: this.penaltyLeft(s.accountKey), partySize: party.length, leader: !party.length || this.h.isLeader(sid), rankedMin: ARENA_RULES.rankedMin,
+            ratings: ARENA_MODES.map((mode) => { const r = this.ratingOf(s.accountKey, mode); return { mode, rating: Math.round(r.r), wins: r.w, losses: r.l, draws: r.d, gamesLeft: Math.max(0, ARENA_RULES.rankedMin - r.n) }; }),
+            top: ARENA_MODES.flatMap((mode) => this.top(mode).map((r, i) => ({ mode, pos: i + 1, name: r.name, rating: Math.round(r.r), wins: r.w, losses: r.l, draws: r.d }))),
+        }));
     }
     private showRating(sid: string): void {
         const key = this.h.session(sid)?.accountKey; if (!key) return;
