@@ -1,0 +1,13 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 301e6db..2d2443d 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -35,5 +35,8 @@ jobs:
+       - name: Tests del server
+         run: pnpm --filter @fdn/server test
+ 
++      - name: Tests de la app de escritorio (actualizador)
++        run: pnpm --filter @fdn/desktop test
++
+       - name: Build del cliente
+         run: pnpm --filter @fdn/client build

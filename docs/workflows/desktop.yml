@@ -1,0 +1,39 @@
+name: Instalador de escritorio
+
+# Se dispara al subir un tag `vX.Y.Z` (el mismo número que `version` en apps/client/package.json).
+# Arma el instalador de Windows y lo publica en GitHub Releases del repo de releases (ver publish en apps/desktop/electron-builder.yml):
+# de ahí lo bajan las apps ya instaladas (electron-updater) y los jugadores nuevos.
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  windows:
+    name: Windows (NSIS)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: El tag tiene que coincidir con la versión del cliente
+        shell: bash
+        run: |
+          V=$(node -p "require('./apps/client/package.json').version")
+          if [ "v$V" != "${GITHUB_REF_NAME}" ]; then echo "El tag ${GITHUB_REF_NAME} no coincide con la versión del cliente (v$V)"; exit 1; fi
+
+      - name: Tests de la app de escritorio
+        run: pnpm --filter @fdn/desktop test
+
+      - name: Armar y publicar el instalador
+        run: pnpm --filter @fdn/desktop release:win
+        env:
+          # Token con permiso de escritura sobre el repo de releases (secret RELEASES_TOKEN del repo del juego).
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          # El server al que se conecta el juego instalado (sale en server.json junto al .exe; ver apps/desktop/src/main.cjs).
+          FDN_SERVER: ${{ vars.FDN_SERVER }}

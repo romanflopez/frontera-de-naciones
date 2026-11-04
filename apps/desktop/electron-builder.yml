@@ -7,6 +7,13 @@ copyright: ERIS
 directories:
   output: release
   buildResources: build
+# Auto-update: electron-updater baja de acá. Tiene que ser un repo de GitHub con releases PÚBLICOS (los clientes no llevan token),
+# separado del repo del juego (que puede ser privado). Hay que crearlo y poner owner/repo reales. Ver docs/DESKTOP.md.
+publish:
+  provider: github
+  owner: romanflopez
+  repo: eris-releases
+  releaseType: release
 # Solo el proceso principal: el cliente entra como recurso (ver extraResources).
 files:
   - src/**/*

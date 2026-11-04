@@ -11,10 +11,11 @@
  * Dirección del server, en orden: --server=<url> en la línea de comandos, la variable FDN_SERVER, un `server.json` junto al
  * ejecutable (para poder cambiarla sin recompilar), y por último DEFAULT_SERVER.
  */
-const { app, BrowserWindow, protocol, net, shell } = require('electron');
+const { app, BrowserWindow, protocol, net, shell, ipcMain } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
+const { createUpdater } = require('./updater.cjs');
 
 /** Server al que se conecta el juego si no se configura nada. */
 const DEFAULT_SERVER = 'ws://localhost:1337/ws';
@@ -63,7 +64,7 @@ function createWindow() {
         show: false,
         autoHideMenuBar: true,
         title: 'ERIS',
-        webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+        webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: path.join(__dirname, 'preload.cjs') },
     });
     win.once('ready-to-show', () => win.show());
 
@@ -82,6 +83,24 @@ function createWindow() {
     return win;
 }
 
+/**
+ * Actualizaciones: solo en la app instalada (en desarrollo no hay nada que actualizar). FDN_NO_UPDATE=1 las apaga.
+ * Los instaladores se publican en GitHub Releases (ver `publish` en electron-builder.yml).
+ */
+let updater = null;
+function startUpdater() {
+    if (!app.isPackaged || process.env.FDN_NO_UPDATE) return;
+    try {
+        const { autoUpdater } = require('electron-updater');
+        updater = createUpdater({ autoUpdater, send: (s) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('eris:update', s); } });
+        updater.start();
+    } catch (e) { console.warn('[desktop] no se pudo iniciar el actualizador:', e?.message ?? e); }
+}
+ipcMain.on('eris:version', (e) => { e.returnValue = app.getVersion(); });
+ipcMain.handle('eris:update-state', () => updater ? updater.state : { state: 'none' });
+ipcMain.handle('eris:update-check', () => updater?.check());
+ipcMain.handle('eris:update-install', () => updater?.install());
+
 // Una sola instancia: si ya hay una abierta, se trae al frente en vez de abrir otra.
 if (!app.requestSingleInstanceLock()) {
     app.quit();
@@ -94,6 +113,7 @@ if (!app.requestSingleInstanceLock()) {
     app.whenReady().then(() => {
         if (!DEV_URL) protocol.handle('app', serveClient);
         createWindow();
+        startUpdater();
         app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) createWindow(); }); // macOS
     });
 

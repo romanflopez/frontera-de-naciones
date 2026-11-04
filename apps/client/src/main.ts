@@ -39,8 +39,11 @@ import { createDepositUI } from './deposit.ts';
 import { createTradeUI } from './trade.ts';
 import { createCursor } from './cursor.ts';
 import { installErrorReporting, watchForNewVersion } from './ops.ts';
+import { checkVersionNow, desktopBridge, isBlocked, watchClientVersion } from './version.ts';
 installErrorReporting();
-watchForNewVersion(() => log('Hay una versión nueva del juego. Cuando termines lo que estás haciendo, recargá la página (F5) para jugar con los últimos cambios.', true));
+// En el navegador, el aviso por bundle (F5). En la app de escritorio no hay F5: la versión se compara con la mínima del server y Electron baja las actualizaciones.
+if (!desktopBridge()) watchForNewVersion(() => log('Hay una versión nueva del juego. Cuando termines lo que estás haciendo, recargá la página (F5) para jugar con los últimos cambios.', true));
+watchClientVersion(() => log(desktopBridge() ? 'Hay una actualización del juego lista: se instala sola cuando cierres el juego.' : 'Hay una versión nueva del juego. Cuando termines, recargá la página (F5).', true));
 const ico = (it: { name: string; look?: string; slot: string; rar: { c: string; k: number } }) => `<img class="iico" alt="" src="${itemIcon(it.look, it.slot, it.rar.c, it.rar.k, UNIQUE_BY_NAME.get(it.name)?.uniq.set, setPieceOf(it.slot, it.name))}">`;
 
 // ---------- utilidades ----------
@@ -3184,6 +3187,7 @@ $('loginForm').addEventListener('submit', async (e) => {
         }
         showLogin(was ? `Se cortó la conexión: ${reason}` : reason); btn.disabled = false;
     };
+    if (isBlocked() || await checkVersionNow()) { btn.disabled = false; return; } // versión vieja: la pantalla de actualización ya está arriba
     try { await net.connect(serverUrl(), storedId(name), name, password); }
     catch (err) { $('loginErr').textContent = `${(err as Error).message} ¿Está corriendo el server (pnpm dev)?`; btn.disabled = false; }
 });

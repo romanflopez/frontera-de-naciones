@@ -13,6 +13,7 @@ import { ClientMessage, ServerMessage } from '@fdn/proto';
 import { dropLines, loadDropsFile, setDrop } from './drops.ts';
 import { RestartCountdown, changelogLines, handleClientReport } from './ops.ts';
 import { alert, alerts, buildInfo } from './alerts.ts';
+import { VersionConfig, handleVersion } from './version.ts';
 import { DATA_DIR, loadSettings, type GameWorldConfig } from './config.ts';
 import { MAPS, MOB_TYPES, canonicalMapId, factionHome, getMapDef, type MapDef } from '@fdn/world';
 import { loadPosition, resolveSaved, savePosition } from './persist.ts';
@@ -40,6 +41,7 @@ const settings = loadSettings();
 const SAVE_DIR = process.env.DATA_DIR || DATA_DIR;
 for (const e of loadDropsFile(SAVE_DIR)) console.warn(`[Drops] ${e}`);
 // con DATABASE_URL las cuentas van a Postgres (sobreviven a los redeploys); sin ella, archivos JSON
+const versions = new VersionConfig(SAVE_DIR);
 const storage: Storage & { close?: () => Promise<void> } = process.env.DATABASE_URL ? await PgStorage.create(process.env.DATABASE_URL) : new FileStorage(SAVE_DIR);
 const economy = new Economy(storage);
 // Los mundos se crean a pedido desde el registro de mapas de @fdn/world (un GameWorld por mapa), con un solo reloj; ver registry.ts.
@@ -166,6 +168,7 @@ const CLIENT_DIST = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'c
 const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webp': 'image/webp', '.png': 'image/png', '.txt': 'text/plain; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
 const http = createServer((req, res) => {
     if (handleClientReport(req, res, SAVE_DIR)) return;
+    if (handleVersion(req, res, versions, buildInfo())) return;
     if ((req.url ?? '').split('?')[0] === '/health') {
         const ok = !storageHealth.failing;
         const online = [...sessionsById.values()].filter((x) => x.socket && x.socket.readyState === x.socket.OPEN).length;
@@ -389,6 +392,7 @@ const GM_HELP = [
     'Comandos GM: /gm mapas · /gm ir <mapa> [x y] · /gm pos [x y] · /gm nivel <n> · /gm oro <n> · /gm curar · /gm dios',
     '/gm mobs · /gm mob <tipo> [nivel] [cantidad] · /gm limpiar · /gm llaves [n] · /gm espada [crit] · /gm traer <jugador> · /gm ira <jugador> · /gm menu (o F9)',
     '/gm drops (ver) · /gm drops <clave> <valor> (botín en vivo: mode personal|suelo, goldChance, floorChance, potionChance, uniqueMult, forgeMult)',
+    '/gm minclient [versión|off] · /gm latestclient [versión|off] (versión mínima y última del cliente: bloquea a los clientes viejos hasta que se actualicen)',
     '/gm reiniciar [segundos] (cuenta regresiva y reinicio; por defecto 300) · /gm reiniciar cancelar',
     '/gm jefemundo (estado) · /gm jefemundo aca (sale al lado tuyo) · /gm jefemundo ya (sale ahora en un mapa al azar)',
 ];
@@ -420,6 +424,14 @@ function handleGm(s: Session, text: string, reply: (m: ServerMessage) => void): 
         const err = setDrop(args[0], args[1] ?? '');
         if (!err) alert('event', 'GM cambió los drops', { gm: s.characterName, clave: args[0], valor: args[1] });
         say(err ?? 'Listo (en vivo, hasta el próximo reinicio).', ...dropLines()); return;
+    }
+    if (c === 'minclient' || c === 'latestclient') {
+        const key = c === 'minclient' ? 'minClient' : 'latestClient';
+        if (args.length === 0) { say(...versions.lines(), 'Cambiar: /gm minclient <versión> (los clientes más viejos quedan bloqueados hasta actualizar; publicá primero el instalador) · /gm latestclient <versión> · "off" lo saca.'); return; }
+        const err = versions.set(key, args[0]);
+        if (err && !/no se pudo guardar/.test(err)) { say(err); return; }
+        alert('event', c === 'minclient' ? 'GM cambió la versión mínima del cliente' : 'GM cambió la última versión del cliente', { gm: s.characterName, valor: args[0] });
+        say(err ?? 'Listo.', ...versions.lines()); return;
     }
     if (c === 'reiniciar') {
         if ((args[0] ?? '').toLowerCase() === 'cancelar') { if (restart.cancel()) { broadcastChat('Se canceló el reinicio del servidor.'); say('Reinicio cancelado.'); } else say('No hay un reinicio en marcha.'); return; }

@@ -178,3 +178,4 @@ export { VHAR_INTERIORS, VHAR_RESPAWN } from './vhar/interiors';
 export { FLARE_DATA, FLARE_FIRST, FLARE_FIELD, FLARE_ARRIVAL, FLARE_BACK, flareTile, FLARE_BASE, type FlareMapData } from './flare';
 export * from './freeMove';
 export * from './projectiles';
+export * from './version';

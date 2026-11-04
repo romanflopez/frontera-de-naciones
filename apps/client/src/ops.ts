@@ -2,6 +2,7 @@
  * Operación del cliente para abrir a gente de afuera: aviso de versión nueva y reporte de errores al server.
  */
 import { serverUrl } from './net.ts';
+import { CLIENT_VERSION } from './version.ts';
 
 /** Archivo del bundle principal que cargó esta pestaña (`index-AbC123.js`), o '' en desarrollo (Vite no hashea). */
 export function loadedBuild(doc: ParentNode = document): string {
@@ -36,7 +37,7 @@ export function reportUrl(): string {
 export function installErrorReporting(): void {
     const url = reportUrl(); if (!url) return;
     const sent = new Set<string>(); let count = 0;
-    const ver = loadedBuild() || 'dev';
+    const ver = `${CLIENT_VERSION}${loadedBuild() ? `/${loadedBuild()}` : ''}${(window as unknown as { erisDesktop?: unknown }).erisDesktop ? ' desktop' : ' web'}`;
     const send = (msg: string, src: string, stack: string) => {
         const key = msg + src; if (sent.has(key) || count >= 5) return;
         sent.add(key); count++;

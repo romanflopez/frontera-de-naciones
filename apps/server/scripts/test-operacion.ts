@@ -3,7 +3,7 @@
  *   DATA_DIR=<carpeta vacía> PORT=8116 FDN_GM=gmoperacion pnpm --filter @fdn/server start
  *   DATA_DIR=<la misma carpeta> npx tsx scripts/test-operacion.ts [ws://localhost:8116/ws]
  * Verifica: /novedades, POST /report (anota, rechaza lo grande y limita por IP), y /gm reiniciar (aviso a todos, cancelar,
- * cuenta regresiva real hasta el cierre del server), GET /health y, si se pasa WEBHOOK_PORT, las alertas a Discord (el script
+ * cuenta regresiva real hasta el cierre del server), GET /version y /gm minclient, GET /health y, si se pasa WEBHOOK_PORT, las alertas a Discord (el script
  * hace de Discord falso). Para eso el server tiene que arrancar con
  *   DISCORD_WEBHOOK_URL=http://127.0.0.1:8117/a DISCORD_WEBHOOK_LOG=http://127.0.0.1:8117/l
  * y el script correrse con WEBHOOK_PORT=8117. OJO: la última prueba APAGA el server.
@@ -87,6 +87,25 @@ async function main() {
     // ---------- 2b. /health y alertas ----------
     const hr = await fetch(`${HTTP}/health`); const hj = await hr.json() as Record<string, unknown>;
     check(hr.status === 200 && hj.ok === true && typeof hj.build === 'string' && Number(hj.online) >= 2 && hj.storage === 'archivos', `/health responde ok con build, conectados y storage (${JSON.stringify(hj)})`);
+    // ---------- 2c. versión mínima del cliente ----------
+    const ver = async () => (await (await fetch(`${HTTP}/version`)).json()) as Record<string, string>;
+    const vr = await fetch(`${HTTP}/version`);
+    check(vr.status === 200 && vr.headers.get('access-control-allow-origin') === '*' && typeof (await ver()).server === 'string', 'GET /version responde con CORS y el build del server');
+    const minNow = async (want: string, ms = 2000) => { for (let i = 0; i < ms / 50; i++) { if ((await ver()).minClient === want) return true; await sleep(50); } return false; };
+    pj.lines.length = 0; pj.say('/gm minclient 9.9.9');
+    check(await pj.waitFor(/no sos gm/i) && (await ver()).minClient !== '9.9.9', 'un jugador común no puede cambiar la versión mínima');
+    pj.lines.length = 0;
+    gm.say('/gm minclient 0.3.1');
+    check(await minNow('0.3.1'), '/gm minclient 0.3.1 se refleja en /version al instante');
+    gm.say('/gm minclient abc');
+    check(await gm.waitFor(/tipo 0\.3\.1/) && (await ver()).minClient === '0.3.1', 'una versión inválida se rechaza y no cambia nada');
+    gm.say('/gm latestclient 0.4.0');
+    for (let i = 0; i < 40 && (await ver()).latestClient !== '0.4.0'; i++) await sleep(50);
+    check((await ver()).latestClient === '0.4.0', '/gm latestclient publica la última versión');
+    gm.say('/gm minclient off');
+    check(await minNow(''), '/gm minclient off saca el mínimo (no queda a nadie bloqueado)');
+    gm.say('/gm latestclient off');
+
     if (WEBHOOK_PORT) {
         check(await hookHas('/a', /Error del cliente[\s\S]*TypeError: x is undefined/), 'un error del cliente por /report llegó a Discord (canal de alertas)');
         const n = hooks.filter((h) => h.path === '/a' && /repetido igual/.test(h.body)).length;

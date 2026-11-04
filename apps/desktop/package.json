@@ -1,18 +1,23 @@
 {
   "name": "@fdn/desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Cliente de escritorio de ERIS: envuelve el cliente web en Electron (Chromium propio) y lo empaqueta para Windows.",
   "main": "src/main.cjs",
   "scripts": {
     "dev": "node src/dev.cjs",
     "start": "electron src/main.cjs",
-    "pack:win": "pnpm --filter @fdn/client build && electron-builder --win --publish never",
-    "pack:dir": "pnpm --filter @fdn/client build && electron-builder --dir --publish never"
+    "pack:win": "node scripts/sync-version.cjs && pnpm --filter @fdn/client build && electron-builder --win --publish never",
+    "pack:dir": "node scripts/sync-version.cjs && pnpm --filter @fdn/client build && electron-builder --dir --publish never",
+    "release:win": "node scripts/sync-version.cjs && pnpm --filter @fdn/client build && electron-builder --win --publish always",
+    "test": "node --test test/*.test.cjs"
   },
   "devDependencies": {
     "electron": "^34.2.0",
     "electron-builder": "^25.1.8"
   },
-  "author": "ERIS"
+  "author": "ERIS",
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  }
 }
