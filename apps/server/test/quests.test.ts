@@ -228,8 +228,8 @@ test('encargo PvP: cuenta ganarle a la otra nación en mapa de facción, una vez
         return p;
     };
     const credit = (w: GameWorld, victim: ReturnType<typeof mk>, killer: ReturnType<typeof mk>) => (w as unknown as { pvpQuestCredit(v: unknown, id: bigint): void }).pvpQuestCredit(victim, killer.playerId);
-    const faction = reg.ensure('pantano_de_merrimead'), safe = reg.ensure('campos_de_sal');
-    assert.equal(MAPS.pantano_de_merrimead.pvp, 'faction'); assert.equal(MAPS.campos_de_sal.pvp, 'off');
+    const faction = reg.ensure('paso_de_stormrock'), safe = reg.ensure('campos_de_sal');
+    assert.equal(MAPS.paso_de_stormrock.pvp, 'faction'); assert.equal(MAPS.campos_de_sal.pvp, 'off');
     const a = mk(faction, 'sol', 'solmar'), v = mk(faction, 'vh', 'vhar'), ally = mk(faction, 'sol2', 'solmar');
     a.econ!.lvl = 10; v.econ!.lvl = 4; credit(faction, v, a); assert.equal(a.econ!.qb!.d.prog.frontera, 0, '6 niveles abajo no cuenta');
     ally.econ!.lvl = 10; credit(faction, ally, a); assert.equal(a.econ!.qb!.d.prog.frontera, 0, 'misma nación no cuenta');
@@ -298,7 +298,7 @@ test('quests en party: un encargo que se cobra estando muerto puede subir de niv
 });
 
 test('quests en party: el encargo PvP le cuenta a cada compañero cerca con sus propias reglas', () => {
-    const { w, ps: [A, B, C], mk } = partyWorld('pantano_de_merrimead', ['sol', 'sol2', 'sol3']);
+    const { w, ps: [A, B, C], mk } = partyWorld('paso_de_stormrock', ['sol', 'sol2', 'sol3']);
     try {
         const V = mk('vh', 'vhar');
         for (const p of [A, B, C, V]) { p.econ!.lvl = 10; p.econ!.qb!.d = { day: questDay(Date.now()), ids: ['frontera'], prog: { frontera: 0 }, done: [], ess: false, pvp: [] }; }

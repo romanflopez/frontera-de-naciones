@@ -44,7 +44,7 @@ for (const c of CIUDADES) {
         const seen = new Set<string>([c.id]), cola: string[] = [c.id];
         const ok = (l: Link) => l.kind !== 'enter' && !l.gate?.unlocked && !l.gate?.key && !(l.gate?.lvl && l.gate.lvl > 5) && (!l.gate?.faction || l.gate.faction === c.faccion);
         for (let i = 0; i < cola.length; i++) for (const l of getMapDef(cola[i])!.links) if (ok(l) && !seen.has(l.to.map)) { seen.add(l.to.map); cola.push(l.to.map); }
-        for (const id of [campo.eris, 'bosque_de_piedra', mapForNation('canon_goblin', c.faccion), 'pantano_de_merrimead']) assert.ok(seen.has(id), `a pie desde ${c.id} no se llega a ${id}`);
+        for (const id of [campo.eris, 'bosque_de_piedra', mapForNation('canon_goblin', c.faccion), mapForNation('pantano_de_merrimead', c.faccion)]) assert.ok(seen.has(id), `a pie desde ${c.id} no se llega a ${id}`);
         const otro = FLARE_FIELD[c.faccion === 'solmar' ? 'vhar' : 'solmar'];
         assert.ok(!seen.has(otro.eris), `desde ${c.id} no se tiene que poder entrar al campo de la otra nación`);
     });

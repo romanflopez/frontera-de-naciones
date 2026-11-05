@@ -17,7 +17,7 @@ test('tiers: el grafo real cumple las reglas y cada tier con contenido (1-4) tie
     const built = new Map<string, WorldMap>(Object.keys(MAPS).map((id) => [id, buildMap(id)]));
     assert.deepEqual(tierErrors(MAPS, built), []);
     for (const t of [1, 2, 3, 4]) {
-        const open = Object.values(MAPS).filter((d) => d.tier === t && !d.debugOnly && !built.get(d.id)!.dungeon);
+        const open = Object.values(MAPS).filter((d) => d.lvl && d.lvl[0] <= TIERS[t as keyof typeof TIERS][1] && d.lvl[1] >= TIERS[t as keyof typeof TIERS][0] && !d.debugOnly && !built.get(d.id)!.dungeon);
         assert.ok(open.length >= 1, `T${t}: mapas abiertos`);
     }
     // hay contenido de caza hasta el nivel 30

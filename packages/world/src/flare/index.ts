@@ -67,26 +67,33 @@ const STONEWOOD_2: FlareMapData = {
  * porque el validador no admite el mismo nombre de zona en dos mapas) con sus salidas y mazmorras hacia las copias de Vhar. Los puntos de
  * contacto con mapas compartidos (el Bosque de Piedra y el Pantano de Merrimead) tienen una puerta aparte para cada nación.
  */
-const SPLIT_BASE = [GOBLIN_CAMP, GOBLIN_CAVE, PERDITION_MINES];
+const SPLIT_BASE = [GOBLIN_CAMP, GOBLIN_CAVE, PERDITION_MINES, MERRIMEAD_SWAMP, NAZIA_HIGHLANDS, ANTLION_NEST, STORMROCK_RUINS, LOCHPORT_CEMETERY, SOUTHERN_RIDGE, THE_BREACH, ST_MARIA_2, ST_MARIA_3, WIZARDS_TOWER_1, WIZARDS_TOWER_2];
 const SPLIT_IDS = new Set(SPLIT_BASE.map((d) => d.id)), SPLIT_ERIS = new Set(SPLIT_BASE.map((d) => d.eris));
+/** `linkTo`: celda de llegada propia de la copia en un mapa compartido, por destino (`id`) o por destino y celda del vínculo (`id@x,y`). */
 const vharCopy = (d: FlareMapData, linkTo: Record<string, Partial<{ tx: number; ty: number }>> = {}): FlareMapData => ({
     ...d, id: d.id + VHAR_SUFFIX, eris: d.eris + VHAR_SUFFIX, name: `${d.name} (Vhar)`,
     ...(d.respawnMap ? { respawnMap: d.respawnMap + VHAR_SUFFIX } : {}),
     zones: d.zones.map((z) => ({ ...z, name: `${z.name} (Vhar)` })),
-    links: d.links.map((l) => (SPLIT_IDS.has(l.to) ? { ...l, to: l.to + VHAR_SUFFIX } : { ...l, ...linkTo[l.to] })),
+    links: d.links.map((l) => (SPLIT_IDS.has(l.to) ? { ...l, to: l.to + VHAR_SUFFIX } : { ...l, ...linkTo[l.to], ...linkTo[`${l.to}@${l.cell.x},${l.cell.y}`] })),
     extras: d.extras.map((e) => (SPLIT_ERIS.has(e.to) ? { ...e, to: e.to + VHAR_SUFFIX } : e)),
 });
-// llega a los mapas compartidos junto a la puerta de su nación, no junto a la de Solmar
-const GOBLIN_CAMP_VHAR = vharCopy(GOBLIN_CAMP, { stonewood: { tx: 51, ty: 76 }, merrimead_swamp: { tx: 3, ty: 19 } });
-const GOBLIN_CAVE_VHAR = vharCopy(GOBLIN_CAVE), PERDITION_MINES_VHAR = vharCopy(PERDITION_MINES);
-const MERRIMEAD_SWAMP_2: FlareMapData = {
-    ...MERRIMEAD_SWAMP,
-    extras: [...MERRIMEAD_SWAMP.extras, { to: GOBLIN_CAMP_VHAR.eris, cell: { x: 1, y: 19 }, kind: 'walk', arrive: { x: 52, y: 17 } }],
+// llega a los mapas compartidos (el Bosque de Piedra y el Paso de Stormrock) junto a la puerta de su nación, no junto a la de Solmar
+const VHAR_OVER: Record<string, Parameters<typeof vharCopy>[1]> = {
+    goblin_camp: { stonewood: { tx: 51, ty: 76 } },
+    the_breach: { 'stormrock_pass@7,62': { tx: 28, ty: 81 }, 'stormrock_pass@92,89': { tx: 100, ty: 106 } },
+};
+const VHAR_COPIES = SPLIT_BASE.map((d) => vharCopy(d, VHAR_OVER[d.id]));
+const THE_BREACH_VHAR = VHAR_COPIES.find((d) => d.id === 'the_breach_vhar')!;
+const STORMROCK_PASS_2: FlareMapData = {
+    ...STORMROCK_PASS,
+    extras: [...STORMROCK_PASS.extras,
+        { to: THE_BREACH_VHAR.eris, cell: { x: 28, y: 80 }, kind: 'walk', arrive: { x: 5, y: 59 } },
+        { to: THE_BREACH_VHAR.eris, cell: { x: 100, y: 105 }, kind: 'walk', arrive: { x: 89, y: 87 } }],
 };
 export type { FlareMapData } from './types';
 
 /** En el orden de la cadena: la primera es la que une el portal de las ciudades. */
-export const FLARE_DATA: FlareMapData[] = [SALTED_FIELD, SALTED_FIELD_VHAR, STONEWOOD_2, GOBLIN_CAMP, MERRIMEAD_SWAMP_2, NAZIA_HIGHLANDS, LOCHPORT_CEMETERY, SOUTHERN_RIDGE, THE_BREACH, GOBLIN_CAVE, PERDITION_MINES, ANTLION_NEST, STORMROCK_RUINS, ST_MARIA_2, ST_MARIA_3, WIZARDS_TOWER_1, WIZARDS_TOWER_2, TEMPLE_OF_MEZ_1, TEMPLE_OF_MEZ_2, UNDERWORLD_STRONGHOLD_1, THE_PIT, STORMROCK_PASS, UNDERWORLD, UNDERWORLD_CATACOMBS, UNDERWORLD_MINES, BLACK_OAK_FARM, OASIS, LAKE_KUUMA, GROT_LAGOON, ABANDONED_MINES, FORT_AMIR, TORTURE_CHAMBERS, GOBLIN_CAMP_VHAR, GOBLIN_CAVE_VHAR, PERDITION_MINES_VHAR];
+export const FLARE_DATA: FlareMapData[] = [SALTED_FIELD, SALTED_FIELD_VHAR, STONEWOOD_2, GOBLIN_CAMP, MERRIMEAD_SWAMP, NAZIA_HIGHLANDS, LOCHPORT_CEMETERY, SOUTHERN_RIDGE, THE_BREACH, GOBLIN_CAVE, PERDITION_MINES, ANTLION_NEST, STORMROCK_RUINS, ST_MARIA_2, ST_MARIA_3, WIZARDS_TOWER_1, WIZARDS_TOWER_2, TEMPLE_OF_MEZ_1, TEMPLE_OF_MEZ_2, UNDERWORLD_STRONGHOLD_1, THE_PIT, STORMROCK_PASS_2, UNDERWORLD, UNDERWORLD_CATACOMBS, UNDERWORLD_MINES, BLACK_OAK_FARM, OASIS, LAKE_KUUMA, GROT_LAGOON, ABANDONED_MINES, FORT_AMIR, TORTURE_CHAMBERS, ...VHAR_COPIES];
 const byFlareId = new Map(FLARE_DATA.map((d) => [d.id, d]));
 const byEris = new Map(FLARE_DATA.map((d) => [d.eris, d]));
 export const FLARE_FIRST = FLARE_DATA[0];
@@ -117,7 +124,7 @@ export const DUNGEON_DENSITY: Record<string, { every: number; n: number }> = {
     fuerte_amir: { every: 2, n: 4 }, camaras_de_tortura: { every: 2, n: 4 },
 };
 function thinZones<T extends { kind: string; n: number }>(eris: string, zones: T[]): T[] {
-    const k = DUNGEON_DENSITY[eris]; if (!k) return zones;
+    const k = DUNGEON_DENSITY[baseMapId(eris)]; if (!k) return zones;
     let pit = 0;
     return zones.flatMap((z) => (z.kind === 'boss' ? [z] : z.kind === 'pit' && pit++ % k.every === 0 ? [{ ...z, n: Math.min(z.n, k.n) }] : []));
 }
@@ -147,7 +154,8 @@ function flareLinks(d: FlareMapData): Link[] {
     for (const e of d.extras) {
         const to = byEris.get(e.to); if (!to) throw new Error(`${d.id}: la conexión extra apunta a '${e.to}', que no existe`);
         const avoid = [...to.links.map((b) => b.cell), ...to.extras.map((b) => b.cell), ...(FIELD_ERIS.has(to.eris) ? [FLARE_BACK] : [])];
-        out.push({ id: `${d.eris}_a_${to.eris}`, map: d.eris, x: e.cell.x, y: e.cell.y, to: { map: to.eris, ...nearestWalkable(to, e.arrive?.x ?? to.entry.x, e.arrive?.y ?? to.entry.y, avoid) }, kind: e.kind, ...(e.gate ? { gate: { lvl: e.gate } } : {}), msg: e.kind === 'walk' ? `Seguís el camino hacia ${to.name}.` : e.kind === 'door' ? `Bajás a ${to.name}.` : `Cruzás el portal hacia ${to.name}.` });
+        const n = seen.get(to.eris) ?? 0; seen.set(to.eris, n + 1);
+        out.push({ id: `${d.eris}_a_${to.eris}${n ? `_${n + 1}` : ''}`, map: d.eris, x: e.cell.x, y: e.cell.y, to: { map: to.eris, ...nearestWalkable(to, e.arrive?.x ?? to.entry.x, e.arrive?.y ?? to.entry.y, avoid) }, kind: e.kind, ...(e.gate ? { gate: { lvl: e.gate } } : {}), msg: e.kind === 'walk' ? `Seguís el camino hacia ${to.name}.` : e.kind === 'door' ? `Bajás a ${to.name}.` : `Cruzás el portal hacia ${to.name}.` });
     }
     return out;
 }

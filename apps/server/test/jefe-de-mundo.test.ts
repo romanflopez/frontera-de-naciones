@@ -1,7 +1,7 @@
 /** Jefe de mundo del MVP (docs/JEFE_DE_MUNDO.md): uno por día, a hora y mapa del T4 al azar, botín para todos los que pelearon. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MAPS, MOBS, WORLD_BOSS } from '@fdn/world';
+import { MAPS, MOBS, WORLD_BOSS, nationOfMap } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
 import type { Player } from '../src/player.ts';
@@ -35,10 +35,10 @@ function setup() {
     return { reg, svc, said, mk, setRnd: (v: number) => { r = v; } };
 }
 
-test('mapas: los abiertos de nivel 55-66, ninguna mazmorra; el jefe es de nivel 66 con su motor', () => {
+test('mapas: los abiertos compartidos de nivel 61-74, ninguna mazmorra ni mapa de una nación; el jefe es de nivel 66 con su motor', () => {
     const maps = worldBossMaps();
     assert.ok(maps.length >= 2, 'al menos dos mapas para que sea errante');
-    for (const id of maps) { assert.ok(MAPS[id].lvl![0] >= 55 && MAPS[id].lvl![1] <= 66); assert.ok(!MAPS[id].temporary); }
+    for (const id of maps) { assert.ok(MAPS[id].lvl![0] >= 61 && MAPS[id].lvl![1] <= 74); assert.ok(!MAPS[id].temporary); assert.equal(nationOfMap(id), undefined); }
     assert.equal(MOBS[WORLD_BOSS.type].lvl, 66); assert.ok(MOBS[WORLD_BOSS.type].boss);
 });
 
