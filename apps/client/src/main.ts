@@ -77,7 +77,7 @@ function turnTo(e: Ent, dx: number, dy: number, dt: number, instant = false) {
     if (Math.abs(dx) + Math.abs(dy) < 1e-4) return;
     const a = faceAngle(dx, dy);
     if (e.ang == null || instant) e.ang = a;
-    else { let d = a - e.ang; d = Math.atan2(Math.sin(d), Math.cos(d)); e.ang += d * Math.min(1, dt * 12); }
+    else { let d = a - e.ang; d = Math.atan2(Math.sin(d), Math.cos(d)); e.ang += d * Math.min(1, dt * (e === (P as Ent) ? 30 : 12)); } // el propio personaje gira casi al instante; los demás suavizados
     e.dir = angToDir(e.ang);
 }
 /** Dirección del server (0 = norte de la grilla, en sentido horario) a partir de un delta. */
