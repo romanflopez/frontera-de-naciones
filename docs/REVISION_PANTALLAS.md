@@ -78,12 +78,12 @@ Código: `apps/client/index.html` (bloque `#login`), `apps/client/src/loginui.ts
 **Estado:** HUD centrado abajo (`#hudroot`: orbes, hotbar 1-0, pociones, exp), con una franja reservada de 200 px (`--hud-h`). El chat (`#chat`, entrada + selector de canal) y el log (`#log`) están **arriba de esa franja**, a la izquierda, apilados sobre el HUD. Botones de ventanas (`#bagBtn`) sueltos. Buffs, toast, ayuda y party también se posicionan contra `--hud-h`.
 
 **A corregir**
-- [ ] **Chat al lado del HUD, no arriba** (Román, 5/11): como en todos los MMO, el chat va **abajo a la izquierda, a la misma altura que el HUD**, y el HUD queda centrado (o corrido a la derecha si no entra). Propuesta:
+- [x] **Chat al lado del HUD, no arriba** (D.15, hecho; falta que Román lo pruebe) (Román, 5/11): como en todos los MMO, el chat va **abajo a la izquierda, a la misma altura que el HUD**, y el HUD queda centrado (o corrido a la derecha si no entra). Propuesta:
   - `#chatPanel` abajo-izquierda, `bottom: 8px`, ancho 340-380 px, alto 150-180 px, con **log e input juntos** en un solo panel con fondo del GUI kit (hoy el log flota sin fondo y no se puede scrollear).
   - **Pestañas de canal** en el borde superior del panel (General / Nación / Party / Guild / Sistema) en lugar del selector chico `#chatCh`; el combate (daño, drops) va a una pestaña Sistema para no tapar la charla.
   - En pantallas angostas (< 1400 px) el HUD ya se escala con `--hud-scale`; si igual se pisan, el chat se achica a 280 px antes de que el HUD baje de escala.
   - Buffs, toast, ayuda y party dejan de depender de `--hud-h` y se posicionan contra el HUD real.
-- [ ] Botones de ventanas (`Personaje`, `Bolsa`, `Misiones`, `Libro`, `Guild`, `Salir`): pasan a una **barra de íconos** del GUI kit al lado del HUD (derecha), con la tecla en el tooltip.
+- [ ] (sin hacer, no entra en D.15) Botones de ventanas (`Personaje`, `Bolsa`, `Misiones`, `Libro`, `Guild`, `Salir`): pasan a una **barra de íconos** del GUI kit al lado del HUD (derecha), con la tecla en el tooltip.
 
 **Falta**
 - [ ] **Orbes de vida y maná sin efecto** (Román, 5/11): hoy tienen líquido con burbujas por CSS pero no se sienten. Propuesta: ola doble en el borde del líquido, brillo que respira cuando estás lleno, pulso rojo y viñeta cuando la vida baja del 25 %, y "sacudón" del orbe al recibir un golpe grande. Nada que cueste rendimiento: CSS y un canvas chico.

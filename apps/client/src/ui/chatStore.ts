@@ -38,6 +38,11 @@ const MAX = 100;
 
 interface ChatState {
     messages: ChatMessage[];
+    /** Panel abierto (pestañas, historial y entrada) o colapsado (solo las últimas líneas, sin fondo). Enter lo abre, Esc lo cierra. */
+    open: boolean;
+    /** Sube cada vez que se pide escribir (Enter): el ChatBox enfoca la entrada recién abierta. */
+    focusReq: number;
+    setOpen: (open: boolean) => void;
     activeTab: ChatTab;
     /** Mensajes sin leer por pestaña (solo chat de jugadores; el log de combate y del sistema no cuenta). */
     unread: Partial<Record<ChatTab, number>>;
@@ -47,6 +52,9 @@ interface ChatState {
 
 export const useChatStore = create<ChatState>((set) => ({
     messages: [],
+    open: false,
+    focusReq: 0,
+    setOpen: (open) => set({ open }),
     activeTab: loadTab(),
     unread: {},
     addMessage: (msg) => set((s) => {
@@ -59,6 +67,9 @@ export const useChatStore = create<ChatState>((set) => ({
     }),
     setActiveTab: (tab) => { saveTab(tab); set((s) => ({ activeTab: tab, unread: { ...s.unread, [tab]: 0 } })); },
 }));
+
+/** Enter: abre el chat y pone el cursor en la entrada (para que el juego no dependa de que el input exista mientras está colapsado). */
+export const openChat = (): void => useChatStore.setState((s) => ({ open: true, focusReq: s.focusReq + 1 }));
 
 /** Qué canales muestra cada pestaña. */
 export function tabShows(tab: ChatTab, ch: ChatChannel): boolean {
