@@ -135,6 +135,7 @@ test('cadena completa en el server: de Campos de Sal a la Reina, con premios, ni
                     for (let n = 0; n < g.n; n++) kill(g.mobs[n % g.mobs.length], { map: g.map });
                 } else if (g.k === 'upgraded') {
                     const it = st.bag.find((x) => x.n === prize)!; p.setPosition(smith.x + 1, smith.y + 1);
+                    (eco as unknown as { storage: { get(k: string): { vault?: unknown } | undefined } }).storage.get(p.accountKey)!.vault = { v: 1, items: [], gold: 0, stacks: { zem: 99 }, nextUid: 1, ops: [] }; // D.9: la forja usa el zem del depósito
                     Math.random = () => 0; unthrottle(); eco.upgrade(p, ctxOf(smithy), smith.id, it.u); Math.random = () => 0.99;
                     assert.equal(it.up, 1); p.setPosition(cap.x + 1, cap.y + 1); // de vuelta con el Capitán
                 } else if (g.k === 'collect') {
@@ -147,7 +148,7 @@ test('cadena completa en el server: de Campos de Sal a la Reina, con premios, ni
             }
             assert.equal(st.qb!.m.st, 'ready', q.name);
             st.bag = st.bag.filter((x) => x.n === prize); // los jefes (ahora los seis) sueltan ítems: que la bolsa no se llene en la prueba
-            const gold = st.gold, forge = st.forge ?? 0, bag = st.bag.length;
+            const gold = st.gold, forge = st.zem ?? 0, bag = st.bag.length;
             if (q.reward.unique?.endsWith('_choice')) {
                 assert.equal(ask('m_turnin').code, 'choose');
                 assert.equal(ask('m_turnin', 'Vara de raíz').code, 'choose', 'un paladín no elige el báculo');
@@ -157,7 +158,7 @@ test('cadena completa en el server: de Campos de Sal a la Reina, con premios, ni
                 const r = ask('m_turnin'); assert.equal(r.ok, true, `${q.name}: ${r.text}`);
                 if (q.reward.unique) { prize = st.bag.at(-1)!.n; assert.ok(rewardUniques('class_t1_random', 'paladin').some((u) => u.name === prize)); assert.equal(st.bag.length, bag + 1); }
             }
-            assert.equal(st.gold, gold + q.reward.gold, q.name); assert.equal(st.forge ?? 0, forge + (q.reward.forge ?? 0));
+            assert.equal(st.gold, gold + q.reward.gold, q.name); assert.equal(st.zem ?? 0, forge + (q.reward.forge ?? 0));
             if (q.id === 'colmillos') assert.ok((st.mats?.colmillo ?? 0) >= 8, 'entregar no gasta los colmillos');
         }
         assert.equal(st.qb!.m.i, MAIN_QUESTS.length);
@@ -202,7 +203,7 @@ test('repetible: 10 materiales iguales por oro o piedra; los de las llaves no se
     assert.equal(ask('r_turnin', 'colmillo|gold').code, 'bad_mat');
     assert.equal(ask('r_turnin', 'goblin_ear|nada').code, 'bad_action');
     const g = st.gold; assert.equal(ask('r_turnin', 'goblin_ear|gold').ok, true); assert.ok(st.gold > g);
-    const f = st.forge ?? 0; assert.equal(ask('r_turnin', 'goblin_ear|forge').ok, true); assert.equal(st.forge, f + 1);
+    const f = st.zem ?? 0; assert.equal(ask('r_turnin', 'goblin_ear|forge').ok, true); assert.equal(st.zem, f + 1);
     assert.equal(ask('r_turnin', 'goblin_ear|gold').code, 'mats'); assert.equal(st.mats.goblin_ear, 3);
 });
 

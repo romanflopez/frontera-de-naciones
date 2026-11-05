@@ -82,10 +82,12 @@ function amountOf(raw: unknown): number | null {
 /** Cuánto hay de un stack encima del personaje. */
 function carried(st: Econ, d: DepotStackDef): number {
     if (d.kind === 'pot') return st.pots[d.ref as 'hp' | 'mp'] ?? 0;
+    if (d.kind === 'zem') return st.zem ?? 0;
     return (d.kind === 'key' ? st.q.keys : st.q.shards)[d.ref as 'cripta' | 'foso'] ?? 0;
 }
 function setCarried(st: Econ, d: DepotStackDef, n: number): void {
     if (d.kind === 'pot') st.pots[d.ref as 'hp' | 'mp'] = n;
+    else if (d.kind === 'zem') st.zem = n;
     else (d.kind === 'key' ? st.q.keys : st.q.shards)[d.ref as 'cripta' | 'foso'] = n;
 }
 
