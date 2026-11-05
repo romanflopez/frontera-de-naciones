@@ -11,7 +11,7 @@
 import { DROPS } from './drops.ts';
 import {
     ATTR_RANGES, traitExpMult, traitDropMult, BAG_MAX, BASE_BY_NAME, BASES, KEY_IDS, KEYDEFS, POT_MAX, POTS, QUESTS, roleOf, SHARDS_PER_KEY, SHOP_SERVER_RANGE,
-    SHOPS, SLOTS, slotsFor, fitsSlot, TRAINING, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, sellPrice, trainingUnlocked,
+    SHOPS, SLOTS, slotsFor, fitsSlot, TRAINING, cleanStats, defaultStats, expToLevel, expToLevelV8, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, sellPrice, trainingUnlocked,
     BOSS_UNIQUES, UNIQUES_BY_TIER, SET_PIECES_BY_TIER, UNIQUE_BASES, UP_MAX, UP_MAX_BY_QUALITY, QUALITY_NAMES, EXTRAS_BY_QUALITY, rollExtra, rollExtras, pickExtra, uniqueIlvl, EXTRA_POOL, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, itemBandOfLevel, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
     DAILY_BY_ID, DAILY_EXP_PCT, DUNGEON_KEY, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, junkValue, MAT_REFORJA, reforgeGold, reforgeStones, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
@@ -25,7 +25,7 @@ import type { Player } from './player.ts';
 import type { AccountRecord, Storage } from './storage.ts';
 
 /** v3: nivel máximo 40 y curva de exp nueva (migra la exp guardada conservando la fracción del nivel). v4: puntos de stats. */
-export const ECON_VERSION = 8;
+export const ECON_VERSION = 9;
 export const MAX_LVL = MAX_LEVEL;
 /** Sin límite de oro de juego: el único techo es el técnico (entero exacto en JS / double del protocolo). */
 export const MAX_GOLD = Number.MAX_SAFE_INTEGER;
@@ -77,10 +77,11 @@ function newItem(st: Econ, base: string, r: number, a: SItem['a']): SItem { retu
 /**
  * Chance de único por muerte, por banda (docs/ITEMS.md, balance 3/11). Idea: en cada banda caen unos ~14 únicos en total mientras
  * subís por ella (8-18 según la banda), así que la chance baja a medida que la banda necesita más muertes (muertes por banda con
- * la curva de nivel: 202, 473, 801, 1153, 1531, 1933 y 4574). En mazmorra se apunta a ~2 únicos por corrida (chance = 2 / mobs de
+ * la curva de nivel D.1, ~30 h al 120: 346, 498, 701, 909, 1117, 1326 y 1533; con la curva anterior eran 677, 1758, 2610, 3873, 5362, 6486 y 8794, y la chance
+ * se subió en esa proporción para que los únicos por banda sigan siendo los mismos). En mazmorra se apunta a ~2 únicos por corrida (chance = 2 / mobs de
  * la mazmorra: 25, 40, 49, 49, 55, 55 y 58); los sueltos van a un tercio del pit. Mutantes y élites multiplican encima.
  */
-export const UNIQUE_PIT_CHANCE = [0.018, 0.0079, 0.0054, 0.0036, 0.0026, 0.0022, 0.0016];
+export const UNIQUE_PIT_CHANCE = [0.035, 0.028, 0.02, 0.0153, 0.0125, 0.0108, 0.0092];
 export const UNIQUE_DUNGEON_CHANCE = [0.08, 0.05, 0.041, 0.041, 0.036, 0.036, 0.034];
 export const uniqueChance = (tier: number, origin: 'loose' | 'pit' | 'dungeon' | 'world'): number => {
     const i = Math.min(7, Math.max(1, Math.round(tier))) - 1;
@@ -270,6 +271,12 @@ export function migrateEcon(st: Econ): boolean {
     // v7 (D.0): guerrero -> paladin, healer -> clerigo.
     st.cls = canonicalClass(st.cls);
     // v8 (D.3): sin Inteligencia. `cleanStats` (más arriba, corre en toda migración) descarta la clave `int` y los puntos que tenía vuelven a libres (statPointsFree recalcula contra el total por nivel).
+    // v9 (D.1): curva de nivel a ~30 h. La exp guardada es absoluta: se conserva la fracción del nivel para no regalar ni quitar progreso.
+    // (Las cuentas anteriores a v3 ya quedaron calculadas contra la curva actual arriba.)
+    if (st.v >= 3 && st.v < 9 && st.lvl < MAX_LVL) {
+        const frac = Math.min(0.999, Math.max(0, st.exp / Math.max(1, expToLevelV8(st.lvl))));
+        st.exp = Math.min(expToLevel(st.lvl) - 1, Math.floor(frac * expToLevel(st.lvl)));
+    }
     st.v = ECON_VERSION;
     refreshUnlocks(st);
     return true;

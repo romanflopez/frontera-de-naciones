@@ -125,10 +125,13 @@ for (const [t, L] of Object.entries(BOSS_LEVELS) as [MobType, number][]) {
 /** Nivel máximo del personaje: 120 desde la etapa E2 (12 tiers de 10 niveles; antes 40, docs/NIVEL_40_E_ITEMS.md §2.4). */
 export const MAX_LEVEL = 120;
 /**
- * Kills de un mob común del propio nivel que hacen falta para subir del nivel `l`: 11 en el nivel 1, ~120 en el 10, ~430 en el 30 y ~590 en el 39.
- * Meta: un veterano que farmea en área llega al 40 en ~30 h (≈ 2 días a full); un jugador a un mob por vez, en ~60 h. Es el único mando de la curva.
+ * Kills de un mob común del propio nivel que hacen falta para subir del nivel `l` (D.1): 11 en el nivel 1 y crece en línea recta, ~6.300 en total hasta el 120.
+ * Meta (DISEÑO.md §3): ~30 h hasta el 120 a un mob por vez y menos de 1 h hasta el 10; se mide con `pnpm --filter @fdn/tools sim:pve --horas`. Es el único mando de la curva.
  */
-export const killsToLevel = (l: number): number => { const p = powerLevel(l); return p < 40 ? Math.round(p * (11 + 0.1 * p)) : Math.round(590 + 3.5 * (p - 39)); };
+export const KILLS_PER_LEVEL = 0.72;
+export const killsToLevel = (l: number): number => Math.round(11 + KILLS_PER_LEVEL * (Math.max(1, l) - 1));
+/** Curva de kills anterior a D.1 (~32.000 en total): solo para migrar la exp guardada (`migrateEcon` v9). */
+const killsToLevelV8 = (l: number): number => { const p = powerLevel(l); return p < 40 ? Math.round(p * (11 + 0.1 * p)) : Math.round(590 + 3.5 * (p - 39)); };
 /** (Todas las curvas de este archivo van por el "nivel de poder" (`powerLevel`, escala vieja 1-40): cada nivel nuevo pide ~lo mismo que uno viejo, o sea ~3× más kills en total.) */
 /**
  * Multiplicador de la exp que da CUALQUIER mob según el nivel del jugador (a escala 40): 100 % al nivel 1 y baja en
@@ -148,8 +151,14 @@ export const levelGapMult = (playerLvl: number, mobLvl: number): number => {
 };
 /** Exp real de un mob común de nivel `l`: la del tipo base de ese nivel si existe (los de nivel bajo dan algo más que la curva), si no la curva. */
 const refExp = (l: number): number => Math.max(mobExpCurve(l), ...Object.values(MOBS).filter((m) => !m.boss && Math.round(powerLevel(m.lvl)) === Math.round(powerLevel(l)) && m.exp < 3 * mobExpCurve(l)).map((m) => m.exp));
-/** Exp que pide subir del nivel `l` al siguiente (cliente y server usan esta misma función). Ya incluye el multiplicador de exp del nivel. */
-export const expToLevel = (l: number): number => Math.round(refExp(l) * killsToLevel(l) * levelExpMult(l));
+const rawExpToLevel = (l: number): number => Math.round(refExp(l) * killsToLevel(l) * levelExpMult(l));
+let expTab: number[] | null = null;
+/** Tabla 1..MAX_LEVEL: con la curva de kills casi lineal (D.1) el multiplicador de exp a veces hace bajar la exp cruda un nivel; se fuerza que nunca baje (a lo sumo unos puntos). */
+const buildExpTab = (): number[] => { const t = [0]; for (let l = 1; l <= MAX_LEVEL; l++) t.push(Math.max(rawExpToLevel(l), t[l - 1] + 1)); return t; };
+/** Exp que pide subir del nivel `l` al siguiente (cliente y server usan esta misma función). Ya incluye el multiplicador de exp del nivel y es estrictamente creciente. */
+export const expToLevel = (l: number): number => Number.isInteger(l) && l >= 1 && l <= MAX_LEVEL ? (expTab ??= buildExpTab())[l] : rawExpToLevel(l);
+/** Exp que pedía subir del nivel `l` antes de D.1 (curva de ~60 h): solo para migrar la exp guardada conservando la fracción del nivel. */
+export const expToLevelV8 = (l: number): number => Math.round(refExp(l) * killsToLevelV8(l) * levelExpMult(l));
 /** Curva anterior (40·L kills sin multiplicador): solo para migrar la exp guardada de las cuentas viejas. */
 export const legacyExpToLevel = (l: number): number => Math.round(refExp(relevel(l)) * 40 * l);
 

@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { relevel, MAX_LEVEL, QUESTS, expToLevel, killsToLevel, legacyExpToLevel, levelExpMult, levelGapMult, mobDef } from '@fdn/world';
+import { relevel, MAX_LEVEL, QUESTS, expToLevel, expToLevelV8, killsToLevel, legacyExpToLevel, levelExpMult, levelGapMult, mobDef } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { ECON_VERSION, Economy, MAX_LVL, migrateEcon, newEcon, type EconCtx, type KillInfo } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
@@ -36,12 +36,12 @@ const ctx = (): EconCtx => ({ npcs: [], restat: () => {}, ground: { add: () => {
 const kill = (type: Parameters<typeof mobDef>[0], lvl: number): KillInfo => ({ mobId: 1, type, def: mobDef(type, { lvl }), zoneName: 'prueba', origin: 'pit', x: 0, y: 0 });
 
 // ---------- A. curvas ----------
-test('curva: killsToLevel crece, 11 kills en el nivel 1 y ~32.000 en total hasta el 120 (cada nivel nuevo pide lo de un nivel viejo)', () => {
+test('curva (D.1): killsToLevel crece, 11 kills en el nivel 1 y ~6.300 en total hasta el 120 (~30 h al tope, ver sim:pve --horas)', () => {
     assert.equal(killsToLevel(1), 11);
-    assert.ok(Math.abs(killsToLevel(relevel(10)) - 120) <= 6 && Math.abs(killsToLevel(relevel(30)) - 420) <= 12, 'los anclajes conservan los kills de la escala vieja');
+    assert.ok(killsToLevel(relevel(10)) < 60, 'los primeros niveles son rápidos');
     let total = 0, prev = 0;
     for (let l = 1; l < MAX_LEVEL; l++) { const k = killsToLevel(l); assert.ok(k >= prev, `nivel ${l}`); prev = k; total += k; }
-    assert.ok(total > 28_000 && total < 40_000, `kills totales hasta el ${MAX_LEVEL}: ${total}`);
+    assert.ok(total > 5_000 && total < 7_500, `kills totales hasta el ${MAX_LEVEL}: ${total}`);
 });
 
 test('curva: el multiplicador de exp baja en línea recta de 100 % a ~35 % y nunca sube', () => {
@@ -136,6 +136,19 @@ test('migración v2 -> v3: conserva la fracción de progreso del nivel y no rega
     assert.equal(st.v, ECON_VERSION); assert.equal(st.lvl, 5);
     assert.ok(Math.abs(st.exp / expToLevel(5) - 0.5) < 0.01, `fracción ${(st.exp / expToLevel(5)).toFixed(3)}`);
     assert.equal(migrateEcon(st), false, 'migrar dos veces no cambia nada');
+});
+
+test('F: migración v8 -> v9 (D.1): la curva de 30 h conserva la fracción de progreso del nivel', () => {
+    for (const [lvl, frac] of [[10, 0.5], [60, 0.8], [119, 0.1]] as const) {
+        const st = newEcon('paladin', 'solmar');
+        st.v = 8; st.lvl = lvl; st.exp = Math.round(expToLevelV8(lvl) * frac); st.gold = 321;
+        assert.equal(migrateEcon(st), true);
+        assert.equal(st.v, ECON_VERSION); assert.equal(st.lvl, lvl); assert.equal(st.gold, 321);
+        assert.ok(Math.abs(st.exp / expToLevel(lvl) - frac) < 0.01, `nivel ${lvl}: fracción ${(st.exp / expToLevel(lvl)).toFixed(3)}`);
+        assert.ok(st.exp < expToLevel(lvl), 'no sube de nivel sola');
+        assert.equal(migrateEcon(st), false, 'migrar dos veces no cambia nada');
+    }
+    assert.ok(expToLevelV8(60) > expToLevel(60) * 3, 'la curva nueva pide bastante menos');
 });
 
 test('migración: un nivel por encima del tope se recorta al tope (120) con exp 0, y la exp casi llena no sube de nivel sola', () => {

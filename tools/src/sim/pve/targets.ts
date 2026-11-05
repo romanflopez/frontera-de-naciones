@@ -1,10 +1,12 @@
 /**
- * Metas de PvE (etapa 6b del roadmap). Salen de lo ya decidido para ERIS (curva de exp: ~1 h hasta el 10 y ~60 h hasta el 40
- * a un mob por vez) y de las proporciones de Dreadmyst (`dreadmyst-referencia-balance.md`): élite = 3× la vida de un común,
+ * Metas de PvE (etapa 6b del roadmap). Salen de lo ya decidido para ERIS (curva de exp: ~1 h hasta el 10 y ~30 h hasta el 120
+ * a un mob por vez, D.1) y de las proporciones de Dreadmyst (`dreadmyst-referencia-balance.md`): élite = 3× la vida de un común,
  * un común te saca una parte chica pero real de la vida, y casi todo el tiempo se pelea, no se espera.
  */
 import type { Cls } from '../pvp/builds.ts';
 
+/** Meta de horas (D.1, DISEÑO.md §3): 1 → 10 en menos de 1 h y ~30 h hasta el 120 a un mob por vez, con ±25 % de margen sobre el promedio de las tres clases (la diferencia entre clases es balance, D.20). */
+export const HORAS_META = { hasta10Max: 1, total: 30, tol: 0.25 } as const;
 /** Segundos de caminar entre un mob y el siguiente en un pit. */
 export const TRAVEL_S = 2.5;
 export interface Measured { ttk: number; took: number; eliteWin: number; rest: number; deaths: number }

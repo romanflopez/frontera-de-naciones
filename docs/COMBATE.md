@@ -198,7 +198,7 @@ Jefes de a uno con el escalado solo del PR #17 (vida ×0,5, daño ×0,85): el pa
 - **Maná del mago:** se eligió subir el maná base a 200 (ver la tabla). Se probaron 150, 200 y 250; subir la regeneración no alcanzaba (al 4 %/s seguía en 26-35 % a nivel bajo y a nivel alto el maná quedaba infinito), y que el costo escale con el nivel (lo de Dreadmyst) movía más el PvP. Queda alto el nivel 10 (32 % meditando: a partir del 9 entra la Bola de fuego, 72 de maná). El Segundo aliento usado al descansar (equivale al Sleep de Dreadmyst: 40 % de vida y maná cada 3 min) baja 3-4 puntos, no más.
 - **Final de tramo del equipo típico (nivel 15 y 30):** el paladín pierde con el élite al 15 y con el Caballero (15) y el Señor del Foso (30) de a uno. Es el equipo de referencia: hasta el 15 lleva el de la tienda sin mejoras. Es el problema de `nivel-40-e-items.md` §5.1 (el poder del ítem no sigue al nivel); se arregla con los ítems, no con los mobs.
 - **Paladín del 5 al 15 para un 28-34 % del tiempo:** mata tan rápido (1,6-4,5 s) que la vida que pierde por minuto supera lo que repone. Con pociones a mano baja; si molesta en la prueba, la palanca es `HP_REGEN.pct`.
-- **Horas totales:** 65-90 h a un mob por vez contra las ~60 h del modelo de `nivel-40-e-items.md` §2.4. El paladín es el más lento del 20 en adelante (las peleas duran 8-22 s). Se mide en la prueba real antes de tocar `killsToLevel`.
+- **Horas totales (histórico, antes de D.1):** 65-90 h a un mob por vez contra las ~60 h del modelo de `nivel-40-e-items.md` §2.4. El paladín es el más lento del 20 en adelante (las peleas duran 8-22 s). Se mide en la prueba real antes de tocar `killsToLevel`.
 
 ## Progresión post-40: Veteranía (no reset)
 - Niveles 1–50 después del 40.
@@ -231,3 +231,5 @@ DR (statusSystem.ts `drApply`): por tipo (`paralisis`, `aturdir`, `slow`) y por 
 Reemplaza la inmunidad fija de 8s al terminar una parálisis (la del Remover se mantiene).
 
 Nota de calibración: los targets de combo (12–20%) se recalibraron cuando el HP subió ×3.5 (después ×4.24 para llevar la pelea a 20–30s; con ×4.24 los combos dan 12.8% Mago y 16.6% Paladín). El target viejo (40–55%) era para HP 302/180. Al cambiar el HP, siempre recalibrar los targets de % de barra.
+
+> **D.1 (5/11):** la curva de kills se redujo a ~6.300 en total; hoy `sim:pve --horas` da ~29 h promedio hasta el 120 (paladín 38 h, mago 23 h). Los números históricos de arriba ya no valen.
