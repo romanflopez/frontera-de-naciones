@@ -56,8 +56,8 @@ Código: `apps/client/index.html` (bloque `#login`), `apps/client/src/loginui.ts
 **Estado:** pantalla de carga inicial (`#loading`), pantalla "Viajando a" por mapa (`#maploading`), después el mundo.
 
 **A corregir**
-- [ ] **Al entrar se ven el HUD y el chat antes de que cargue el mundo** (Román, 5/11): el HUD se destapa al pasar el login, antes de recibir el estado inicial del mapa. Arreglo: el HUD, el chat y el minimapa quedan `hidden` hasta que llegue `InitialGameWorldState` **y** el mapa esté renderizado; la pantalla "Viajando a" se mantiene arriba de todo hasta ese momento y recién ahí se funde. Un solo estado `worldReady` en el cliente del que dependen los tres, en lugar de destaparlos por separado.
-- [ ] Revisar que al cambiar de mapa pase lo mismo (que no se vea el mapa viejo ni el HUD "vacío" mientras llega el nuevo).
+- [x] **Al entrar se ven el HUD (D.14, falta prueba manual) y el chat antes de que cargue el mundo** (Román, 5/11): el HUD se destapa al pasar el login, antes de recibir el estado inicial del mapa. Arreglo: el HUD, el chat y el minimapa quedan `hidden` hasta que llegue `InitialGameWorldState` **y** el mapa esté renderizado; la pantalla "Viajando a" se mantiene arriba de todo hasta ese momento y recién ahí se funde. Un solo estado `worldReady` en el cliente del que dependen los tres, en lugar de destaparlos por separado.
+- [x] Revisar que al cambiar de mapa pase lo mismo (D.14) (que no se vea el mapa viejo ni el HUD "vacío" mientras llega el nuevo).
 
 **Falta**
 - [ ] Primeros minutos / tutorial: pendiente (fase 6.1 del plan).

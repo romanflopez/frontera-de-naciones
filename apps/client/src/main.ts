@@ -296,7 +296,8 @@ function onServer(m: ServerPayload) {
             turnTo(P, dx, dy, 0, true);
             const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
             others.clear(); drops.length = 0; P.pickup = null; // el server vuelve a mandar el suelo cercano
-            hideMapLoading();
+            { const n = getMapDef(m.value.mapName)?.name; if (n) $('mlName').textContent = n; }
+            revealPending = true; // el telón se levanta recién después de dibujar este mapa (ver frame)
             break;
         }
         case 'playersEnteredRange':
@@ -1631,7 +1632,7 @@ function showArenaInvite(mode: string, expiresMs: number, mock = false): void {
 }
 
 window.addEventListener('keydown', (e) => {
-    if (!connected) return;
+    if (!connected || !worldReady) return;
     if (e.target instanceof HTMLInputElement) return;
     if (e.key === 'Enter') { e.preventDefault(); ($('chatIn') as HTMLInputElement).focus(); return; }
     if (e.key === 'F9') { e.preventDefault(); toggleGm(); return; }
@@ -2938,25 +2939,47 @@ function loadMap(def: MapDef): string {
 const loadEl = () => $('maploading');
 /** Barra de la pantalla de viaje: 0.1 al mostrarla, 0.7 con el mapa armado (esperando al server), 1 al entrar. */
 const setMapLoading = (k: number) => { ($('mlFill') as HTMLElement).style.width = `${Math.round(k * 100)}%`; };
+/**
+ * Único estado del que dependen HUD, chat y minimapa (`body.world-ready`, ver ui/loading-craftpix.css). Va a true recién con el estado
+ * inicial recibido y el mapa dibujado; al login, al elegir personaje y al cambiar de mapa vuelve a false.
+ */
+let worldReady = false;
+const setWorldReady = (v: boolean) => { worldReady = v; document.body.classList.toggle('world-ready', v); };
+/** Llegó el estado inicial y falta dibujar el mapa; el telón se levanta al final del próximo cuadro. */
+let revealPending = false;
+/** Hasta cuándo (segundos de `now()`) esperar el viaje a la ciudad propia antes de destapar, por si el server no lo hace. */
+let homeWaitUntil = 0;
+const HOME_WAIT_S = 3;
+let curtainTimer = 0;
 function showMapLoading(name: string, lvl: [number, number] | null, tier?: number) {
-    const el = loadEl(); el.classList.remove('err'); el.dataset.since = String(performance.now());
+    clearTimeout(curtainTimer); revealPending = false; homeWaitUntil = 0; mapLoading = true; setWorldReady(false);
+    const el = loadEl(); el.classList.remove('err', 'out'); el.dataset.since = String(performance.now());
     $('mlName').textContent = name; $('mlLvl').textContent = lvl ? `${tier ? `Zona T${tier} · ` : ''}Nivel recomendado ${lvl[0]}–${lvl[1]}` : ''; $('mlMsg').textContent = 'Loading...';
     setMapLoading(0.1);
-    el.hidden = false; requestAnimationFrame(() => el.classList.add('on'));
+    el.hidden = false; // sin fundido de entrada: tapa en el acto, para que no se vea el mapa viejo ni el nuevo a medio armar
 }
+/** Levanta el telón: destapa el mundo y funde la pantalla de viaje (se queda al menos 600 ms para que no parpadee). */
 function hideMapLoading() {
-    const el = loadEl(); if (el.hidden) return;
-    setMapLoading(1);
+    revealPending = false; homeWaitUntil = 0; clearTimeout(curtainTimer);
+    const el = loadEl(); setMapLoading(1);
     const wait = Math.max(0, 600 - (performance.now() - Number(el.dataset.since ?? 0)));
-    setTimeout(() => { el.classList.remove('on'); setTimeout(() => { el.hidden = true; }, 350); mapLoading = false; }, wait);
+    curtainTimer = window.setTimeout(() => {
+        mapLoading = false; setWorldReady(true); el.classList.add('out');
+        curtainTimer = window.setTimeout(() => { el.hidden = true; el.classList.remove('out'); }, 350);
+    }, wait);
+}
+/** Saca el telón sin entrar al mundo: se cortó la conexión o el server rechazó el personaje elegido. */
+function dropMapLoading() {
+    clearTimeout(curtainTimer); revealPending = false; homeWaitUntil = 0; mapLoading = false; setWorldReady(false);
+    const el = loadEl(); el.hidden = true; el.classList.remove('err', 'out');
 }
 function failMapLoading(msg: string) {
-    mapLoading = true; const el = loadEl(); el.classList.add('err', 'on'); el.hidden = false; $('mlMsg').textContent = msg; setMapLoading(1);
+    clearTimeout(curtainTimer); revealPending = false; homeWaitUntil = 0; mapLoading = true; setWorldReady(false);
+    const el = loadEl(); el.classList.remove('out'); el.classList.add('err'); el.hidden = false; $('mlMsg').textContent = msg; setMapLoading(1);
     net.close();
 }
 /** El server me sacó del mundo anterior: pantalla de carga, armo el mapa, verifico el hash y aviso MapReady (recién ahí me mete en el nuevo). */
 function onMapTransfer(v: { mapId: string; name: string; x: number; y: number; direction: number; mapHash: string; gameWorldId: string; lvlMin: number; lvlMax: number }) {
-    mapLoading = true;
     P.path = []; P.mv = false; P.target = null; P.engage = false;
     showMapLoading(v.name || v.mapId, v.lvlMax ? [v.lvlMin, v.lvlMax] : null, getMapDef(v.mapId)?.tier);
     // dejar que el navegador pinte la pantalla de carga antes de armar el mapa
@@ -3141,7 +3164,9 @@ function frame(ts: number = performance.now()) {
     if (hitstop > 0) { hitstop -= dt; dt = 0; }
     if (!mapLoading) { update(dt); checkPortals(); checkLinks(); wpTick(); npcTick(); }
     updateCam(Math.min(0.05, T - lastCam)); lastCam = T;
-    updateHover(); { const r0 = performance.now(); render(); diag.render(performance.now() - r0); } hud(); winTick(T); minimapTick(); requestAnimationFrame(frame);
+    updateHover(); { const r0 = performance.now(); render(); diag.render(performance.now() - r0); } hud(); winTick(T); minimapTick();
+    if (revealPending && T >= homeWaitUntil) hideMapLoading(); // el mapa ya se dibujó en este cuadro
+    requestAnimationFrame(frame);
     perf.frames++; { const t = performance.now(); if (t - perf.since >= 1000) { perf.fps = (perf.frames * 1000) / (t - perf.since); perf.frames = 0; perf.since = t; } }
 }
 
@@ -3260,6 +3285,7 @@ $('loginForm').addEventListener('submit', async (e) => {
     net.onMessage = (m) => {
         if (m.$case === 'characterList') {
             const chars = m.value.characters.map((c) => ({ name: c.name, cls: c.cls, faction: c.faction, lvl: c.level, zone: c.zone }));
+            lastChars = chars; dropMapLoading(); // si venía de elegir personaje, el server lo rechazó: vuelve a la selección
             if (flowActive) { inFlow = true; flow.update(chars, m.value.error); return; }
             // reconexión automática tras un corte: vuelve a entrar con el mismo personaje sin pasar por la selección
             const again = auto && playName ? chars.find((c) => c.name === playName) : undefined;
@@ -3274,7 +3300,7 @@ $('loginForm').addEventListener('submit', async (e) => {
     };
     let tries = 0;
     net.onClose = (reason) => {
-        const was = connected; saver.stop(); others.clear(); drops.length = 0; lastInv = null; mapLoading = false; loadEl().hidden = true;
+        const was = connected; saver.stop(); others.clear(); drops.length = 0; lastInv = null; dropMapLoading();
         inFlow = false; flowActive = false;
         if (backToLogin) { backToLogin = false; showLogin(); btn.disabled = false; return; }
         if (leaving) { leaving = false; connected = false; showLogin('Saliste del juego.'); btn.disabled = false; return; }
@@ -3292,10 +3318,14 @@ $('loginForm').addEventListener('submit', async (e) => {
 let autoEnter = false, inFlow = false, backToLogin = false;
 /** Pantallas de personajes abiertas en esta conexión / personaje con el que se juega / recién creado (arranca en su ciudad). */
 let flowActive = false, playName = '', creatingNew = false;
+let lastChars: { name: string; faction: string; zone: string }[] = [];
 const lastCharKey = (account: string) => `fdn:char:${account.toLowerCase()}`;
 /** Pide entrar al mundo con ese personaje; el mundo llega después (initialGameWorldState) y ahí se llama a enterWorld. */
 function playChar(name: string, isNew: boolean) {
     inFlow = false; creatingNew = isNew; playName = name;
+    // el telón sube antes de pedir el personaje; un personaje nuevo todavía no tiene zona guardada: va a la ciudad de su nación
+    const ch = lastChars.find((c) => c.name === name), homeMap = ch && factionHome(ch.faction)?.map;
+    showMapLoading(ch?.zone || (homeMap && getMapDef(homeMap)?.name) || '', null);
     try { localStorage.setItem(lastCharKey(($('nameIn') as HTMLInputElement).value.trim()), name); } catch { /* sin almacenamiento */ }
     net.send({ $case: 'selectCharacterRequest', value: { name } });
 }
@@ -3320,7 +3350,10 @@ function enterWorld(name: string) {
     // cada facción arranca en su ciudad (también si el guardado te dejó dentro de la del otro bando)
     // en una ciudad del otro bando (o un interior suyo): a la propia
     const home = factionHome(selectedFaction), inOther = MAP_DEF.safe && (MAP_DEF.region === 'solmar' || MAP_DEF.region === 'vhar') && MAP_DEF.region !== selectedFaction;
-    if (home && (!welcomeBack || inOther)) net.send({ $case: 'playerTeleportRequested', value: { x: home.x, y: home.y } });
+    if (home && (!welcomeBack || inOther)) {
+        net.send({ $case: 'playerTeleportRequested', value: { x: home.x, y: home.y } });
+        if (home.map !== MAP_DEF.id) homeWaitUntil = now() + HOME_WAIT_S; // viene un mapTransfer: no destapar el mapa de paso
+    }
     log(selectedFaction === 'vhar' ? 'Bienvenido a la Ciudadela de Vhar. El portón del sur lleva a los Campos de Sal; los edificios tienen interior.' : 'Bienvenido a la Villa de Solmar. Los edificios tienen interior: entrá por las puertas.', true);
     log('En la plaza está el Portal de Frontera: un menú con las zonas de entrenamiento. La primera ya está abierta; las demás se abren al subir de nivel. Para volver a la ciudad apretá H (tarda 8 s y se corta si te pegan).', true);
     log('Tocá un mob para atacarlo. Apretá un hechizo (1–4), esperá que cargue y hacé clic en el objetivo. Enter para chatear.');
@@ -3372,7 +3405,7 @@ async function boot() {
     loadBuildingImages();
     refreshLook(); void initKnight();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, toScreen, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.mv = false; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, perf: () => ({ ...perf }), setQb: (v: QuestBookView | null) => { QB = v; renderQuest(); }, questDlg: (name: string) => openQuestDlg({ id: 'capitan_s', name, x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), questLog: toggleQuestLog, arenaInvite: (mode = '2v2') => showArenaInvite(mode, Date.now() + 30_000, true), arenaDbg: (v: ArenaInfo | null) => { $('arena').hidden = false; renderArena(v); }, shopDbg: (role = 'mercader') => openShop({ id: role + '_s', name: 'Mercader', x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), uid: () => uid++, RARS: RAR, mobCount: () => mobs.length, arrows: () => arrows.length });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, worldReady: () => worldReady, perf: () => ({ ...perf }), setQb: (v: QuestBookView | null) => { QB = v; renderQuest(); }, questDlg: (name: string) => openQuestDlg({ id: 'capitan_s', name, x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), questLog: toggleQuestLog, arenaInvite: (mode = '2v2') => showArenaInvite(mode, Date.now() + 30_000, true), arenaDbg: (v: ArenaInfo | null) => { $('arena').hidden = false; renderArena(v); }, shopDbg: (role = 'mercader') => openShop({ id: role + '_s', name: 'Mercader', x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), uid: () => uid++, RARS: RAR, mobCount: () => mobs.length, arrows: () => arrows.length });
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5), recall: () => ({ on: !!recall, k: recallK(now()), cd: Math.max(0, recallCdEnd - now()) }) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();
