@@ -27,7 +27,7 @@ function setup() {
         world.playerConnected(session.sessionId, name, (m) => log.push(m), () => {}, persisted);
         mem.put(`acc-${name}`, { name, salt: '', hash: '', created: 0, lastLogin: 0 });
         world.bindAccount(session.sessionId, `acc-${name}`);
-        world.onClientSave(session.sessionId, JSON.stringify({ cls: 'guerrero', faction: 'solmar' }));
+        world.onClientSave(session.sessionId, JSON.stringify({ cls: 'pala', faction: 'solmar' }));
         return { log, p: world.playerOf(session.sessionId)! };
     };
     return { eco, reg, join };
@@ -57,13 +57,13 @@ test('equipar: el 2.º anillo va al lugar libre; con los dos llenos reemplaza al
 
 test('stats: la base del anillo y los atributos cuentan igual en el 2.º lugar; el amuleto va en su slot', () => {
     const eq = { anillo: { n: 'Anillo opaco', a: [] }, anillo2: { n: 'Anillo opaco', a: [{ id: 'hp', v: 50 }] }, amuleto: { n: 'Amuleto del cazador', a: [{ id: 'hp', v: 16 }] } };
-    const s0 = statsFromChar({ lvl: 10, cls: 'guerrero', eq: {} } as never), s = statsFromChar({ lvl: 10, cls: 'guerrero', eq } as never);
+    const s0 = statsFromChar({ lvl: 10, cls: 'pala', eq: {} } as never), s = statsFromChar({ lvl: 10, cls: 'pala', eq } as never);
     assert.equal(s.rm - s0.rm, 16, 'rm 8 base de cada Anillo opaco, también en anillo2');
     assert.equal(s.maxHp - s0.maxHp, 66, 'vida de los atributos de anillo2 y del amuleto');
 });
 
 test('migración v6: claves nuevas, amuleto mal ubicado y exp fuera de los ítems', () => {
-    const st = newEcon('guerrero', 'solmar');
+    const st = newEcon('pala', 'solmar');
     for (const sl of ['guantes', 'botas', 'amuleto', 'anillo2'] as const) delete (st.eq as Record<string, unknown>)[sl]; // cuenta vieja
     const am = { u: st.nextUid++, n: 'Amuleto del cazador', r: 0, a: [{ id: 'exp' as const, v: 5 }] };
     st.eq.anillo = am; st.v = 5;

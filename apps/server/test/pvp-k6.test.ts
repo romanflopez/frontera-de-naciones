@@ -32,7 +32,7 @@ const realNow = Date.now;
 mock.method(Date, 'now', () => realNow() + off);
 const advance = (w: GameWorld, ms: number) => { for (let t = 0; t < ms; t += 100) { off += Math.min(100, ms - t); w.tick(); } };
 
-function setup(clsA = 'mago', clsB = 'guerrero') {
+function setup(clsA = 'mago', clsB = 'pala') {
     const mem = new MemStorage(), eco = new Economy(mem), reg = new WorldRegistry({ settings, economy: eco });
     const w = reg.ensure('solmar_legacy');
     (w as unknown as { mobSim?: unknown }).mobSim = undefined; // sin mobs que molesten
@@ -73,7 +73,7 @@ test('Segundo aliento: recupera la mitad de vida y maná; envenenado, un 30 % me
 
 // ---------- daño contra jugadores ----------
 test('el daño contra un jugador pasa por el multiplicador PvP y la defensa', () => {
-    const { A, B, hit } = setup('guerrero', 'guerrero');
+    const { A, B, hit } = setup('pala', 'pala');
     mock.method(Math, 'random', () => 0.5);
     try {
         const raw = rollSpellDamage('ataque', A.p.combat, false), hp0 = B.p.hp;
@@ -83,7 +83,7 @@ test('el daño contra un jugador pasa por el multiplicador PvP y la defensa', ()
 });
 
 test('ningún golpe solo saca más del 25 % de la vida máxima de un jugador', () => {
-    const { A, B, hit } = setup('guerrero', 'mago');
+    const { A, B, hit } = setup('pala', 'mago');
     A.p.combat.wdmg = [100000, 100000];
     const hp0 = B.p.hp; hit('ataque');
     assert.equal(hp0 - B.p.hp, Math.floor(B.p.combat.maxHp * PVP_HIT_CAP));
@@ -91,7 +91,7 @@ test('ningún golpe solo saca más del 25 % de la vida máxima de un jugador', (
 });
 
 test('sin ventaja de abridor: la Furia no vale en el primer golpe a alguien fuera de combate, sí en los siguientes', () => {
-    const { w, A, B, hit } = setup('guerrero', 'guerrero');
+    const { w, A, B, hit } = setup('pala', 'pala');
     mock.method(Math, 'random', () => 0.5);
     try {
         A.p.pvp.castFury(Date.now());
@@ -106,7 +106,7 @@ test('sin ventaja de abridor: la Furia no vale en el primer golpe a alguien fuer
 
 // ---------- recall ----------
 test('el recall se bloquea 10 s después de recibir daño de un jugador', () => {
-    const { w, A, B, hit } = setup('guerrero', 'guerrero');
+    const { w, A, B, hit } = setup('pala', 'pala');
     hit('ataque');
     pkt(w, B.sid, 'recallRequest', { cancel: false });
     const st = last(B.log, 'recallState');
@@ -121,7 +121,7 @@ test('el recall se bloquea 10 s después de recibir daño de un jugador', () => 
 
 // ---------- pociones ----------
 test('pociones: mismo bloqueo (1 min) y misma poción en PvE y en PvP', () => {
-    const { w, A, B, hit } = setup('guerrero', 'guerrero');
+    const { w, A, B, hit } = setup('pala', 'pala');
     const max = B.p.combat.maxHp;
     B.p.hp = Math.round(max * 0.3);
     pkt(w, B.sid, 'potionRequest', { kind: 0 });
@@ -146,7 +146,7 @@ test('pociones: mismo bloqueo (1 min) y misma poción en PvE y en PvP', () => {
 
 // ---------- Segundo aliento ----------
 test('Segundo aliento: 3 s quieto, cura y arranca la recarga de 3,5 min', () => {
-    const { w, B } = setup('guerrero', 'guerrero');
+    const { w, B } = setup('pala', 'pala');
     const max = B.p.combat.maxHp; B.p.hp = 100; B.p.mp = 0;
     pkt(w, B.sid, 'skillRequest', { skill: 'aliento', targetId: 0n, mobId: 0 });
     assert.equal(last(B.log, 'abilityState').channeling, true);
@@ -163,7 +163,7 @@ test('Segundo aliento: 3 s quieto, cura y arranca la recarga de 3,5 min', () => 
 });
 
 test('Segundo aliento: lo cortan un golpe directo, moverse y un control; la quemadura no', () => {
-    const { w, A, B } = setup('mago', 'guerrero');
+    const { w, A, B } = setup('mago', 'pala');
     const start = () => { B.p.hp = 100; B.p.windCdUntil = 0; pkt(w, B.sid, 'skillRequest', { skill: 'aliento', targetId: 0n, mobId: 0 }); assert.ok(B.p.windUntil > 0); };
     // golpe directo
     start(); advance(w, 1000);
@@ -184,7 +184,7 @@ test('Segundo aliento: lo cortan un golpe directo, moverse y un control; la quem
 
 // ---------- invisibilidad y detectar ----------
 test('invisibilidad: recarga de 60 s y se corta al recibir daño o al castear; detectar, 20 s', () => {
-    const { w, A, B, hit } = setup('guerrero', 'mago');
+    const { w, A, B, hit } = setup('pala', 'mago');
     pkt(w, B.sid, 'invisibilityRequest', {});
     assert.ok(B.p.status.isInvisible);
     hit('ataque', A, B);
@@ -204,10 +204,10 @@ test('invisibilidad: recarga de 60 s y se corta al recibir daño o al castear; d
 
 // ---------- K7: maná en combate PvP ----------
 test('K7: en combate PvP el maná regenera al menos 5 por segundo (1 %); fuera del PvP, la regla de PvE de la etapa 6b (2 %, mínimo 3)', () => {
-    const { w, A, B, hit } = setup('guerrero', 'guerrero');
+    const { w, A, B, hit } = setup('pala', 'pala');
     assert.equal(pvpMpRegen(84), 5); assert.equal(pvpMpRegen(1000), 10); // el PvP no cambia con la etapa 6b
     assert.equal(combatMpRegen(84), 3); assert.equal(combatMpRegen(1000), 20);
-    A.p.combat.maxMp = 84; // un paladín de nivel 12
+    A.p.combat.maxMp = 84; // un pala de nivel 12
     A.p.mp = 0; advance(w, 1100);
     const calm = A.p.mp; assert.ok(calm >= 3 && calm <= 6, `fuera del PvP: ${calm}`);
     hit('ataque', A, B); A.p.mp = 0; advance(w, 1100);

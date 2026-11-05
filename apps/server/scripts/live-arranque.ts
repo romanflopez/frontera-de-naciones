@@ -1,7 +1,7 @@
 /**
  * Validación de sim-arranque.ts contra un server REAL en marcha: un bot por clase pelea contra los goblins de la zona
  * ('Campamento goblin' o 'Avanzada goblin' de solmar_legacy) con las mismas reglas del cliente (Proyectil del mago, ataque
- * cuerpo a cuerpo del guerrero, pociones a <40 % de vida) y se anota si gana o muere y cuánto tarda.
+ * cuerpo a cuerpo del pala, pociones a <40 % de vida) y se anota si gana o muere y cuánto tarda.
  *
  *   cd apps/server
  *   DATA_DIR=<carpeta vacía> PORT=8211 FDN_DEBUG_TRUST_SAVE=1 FDN_DEBUG_WARP=1 npx tsx src/index.ts   (en otra terminal)
@@ -25,14 +25,14 @@ class Bot {
     ws!: WebSocket; id = 0n; x = 0; y = 0;
     hp = 0; maxHp = 0; mp = 0; maxMp = 0; dead = false; pots = { hp: 3, mp: 3 };
     mobs: Mob[] = []; types = new Map<number, string>(); kills = 0; taken: { t: number; dmg: number; mob: number }[] = [];
-    constructor(readonly name: string, readonly cls: 'mago' | 'guerrero', readonly lvl: number) { }
+    constructor(readonly name: string, readonly cls: 'mago' | 'pala', readonly lvl: number) { }
     async connect() {
         this.ws = new WebSocket(URL); this.ws.binaryType = 'nodebuffer';
         let ready!: () => void; const got = new Promise<void>((r) => (ready = r));
         this.ws.on('message', (d: Buffer) => {
             const p = ServerMessage.decode(new Uint8Array(d)).payload as Srv | undefined; if (!p) return;
             switch (p.$case) {
-                case 'characterList': this.send(p.value.characters.some((c) => c.name === this.name) ? { $case: 'selectCharacterRequest', value: { name: this.name } } : { $case: 'createCharacterRequest', value: { name: this.name, cls: 'guerrero', faction: 'solmar' } }); if (p.value.error) throw new Error(p.value.error); break;
+                case 'characterList': this.send(p.value.characters.some((c) => c.name === this.name) ? { $case: 'selectCharacterRequest', value: { name: this.name } } : { $case: 'createCharacterRequest', value: { name: this.name, cls: 'pala', faction: 'solmar' } }); if (p.value.error) throw new Error(p.value.error); break;
                 case 'initialState': this.id = p.value.playerId; break;
                 case 'initialGameWorldState': this.x = p.value.playerX; this.y = p.value.playerY; ready(); break;
                 case 'vitals': this.hp = p.value.hp; this.maxHp = p.value.maxHp; this.mp = p.value.mp; this.maxMp = p.value.maxMp; this.dead = p.value.dead; break;
@@ -69,7 +69,7 @@ function standCell(z: { x: number; y: number }): [number, number] {
     return cands[(cellIdx++ * 3) % Math.min(cands.length, 30)].c; // una celda distinta por prueba: los bots anteriores siguen en el mundo
 }
 
-async function trial(cls: 'mago' | 'guerrero', lvl: number, zoneName: string) {
+async function trial(cls: 'mago' | 'pala', lvl: number, zoneName: string) {
     const zi = map.zones.findIndex((z) => z.name === zoneName), z = map.zones[zi], [sx, sy] = standCell(z);
     const b = new Bot(`${cls[0]}${lvl}${zi}${RUN}${Math.random().toString(36).slice(2, 5)}`, cls, lvl);
     await b.connect(); await b.setup();
@@ -90,15 +90,15 @@ async function trial(cls: 'mago' | 'guerrero', lvl: number, zoneName: string) {
         const tgt = mine.map((m) => ({ m, d: Math.hypot(b.x + 0.5 - m.x, b.y + 0.5 - m.y) })).sort((a, c) => a.d - c.d)[0];
         if (tgt && now >= nextAct) {
             if (cls === 'mago' && b.mp >= 8 && tgt.d <= 7.5) { nextAct = now + castMsOf('proyectil') + 400; const dmg = rint(12, 18) + 2 * lvl + mag; b.send({ $case: 'spellCastStartRequest', value: { spellId: 0, spell: 'proyectil' } }); setTimeout(() => b.send({ $case: 'mobHitRequest', value: { mobId: tgt.m.id, dmg: 0, melee: false, crit: false, parSecs: 0, poisonSecs: 0, spell: 'proyectil' } }), castMsOf('proyectil') + 50 + tgt.d * 90); b.mp -= 8; }
-            else if (cls === 'guerrero' && tgt.d <= 1.9) { nextAct = now + 850; const dmg = rint(...melee) + lvl + rint(...wd); setTimeout(() => b.send({ $case: 'mobHitRequest', value: { mobId: tgt.m.id, dmg: 0, melee: true, crit: false, parSecs: 0, poisonSecs: 0, spell: 'ataque' } }), 180); }
-            else if (cls === 'guerrero' && tgt.d > 1.9 && tgt.d < 5) { // sale al encuentro: un paso por vez hacia el blanco
+            else if (cls === 'pala' && tgt.d <= 1.9) { nextAct = now + 850; const dmg = rint(...melee) + lvl + rint(...wd); setTimeout(() => b.send({ $case: 'mobHitRequest', value: { mobId: tgt.m.id, dmg: 0, melee: true, crit: false, parSecs: 0, poisonSecs: 0, spell: 'ataque' } }), 180); }
+            else if (cls === 'pala' && tgt.d > 1.9 && tgt.d < 5) { // sale al encuentro: un paso por vez hacia el blanco
                 const nx = b.x + Math.sign(Math.round(tgt.m.x - 0.5) - b.x), ny = b.y + Math.sign(Math.round(tgt.m.y - 0.5) - b.y);
                 if (!map.blocked[ny]?.[nx]) { b.send({ $case: 'requestMovement', value: { curX: b.x, curY: b.y, destX: nx, destY: ny, gameWorldId: '', dashAttack: false } }); b.x = nx; b.y = ny; nextAct = now + 300; }
             }
             else if (cls === 'mago' && b.mp < 8 && tgt.d <= 1.9) { nextAct = now + 850; setTimeout(() => b.send({ $case: 'mobHitRequest', value: { mobId: tgt.m.id, dmg: 0, melee: true, crit: false, parSecs: 0, poisonSecs: 0, spell: 'ataque' } }), 180); }
         }
-        // el guerrero espera en su sitio hasta que alguien se acerque a 4,5 celdas (los mobs lo notan solos); el mago pega primero
-        if (cls === 'guerrero' && mine.length && !b.taken.length && now - t0 > 1000 && tgt && tgt.d > 5) { /* se acerca hasta 4 celdas */ }
+        // el pala espera en su sitio hasta que alguien se acerque a 4,5 celdas (los mobs lo notan solos); el mago pega primero
+        if (cls === 'pala' && mine.length && !b.taken.length && now - t0 > 1000 && tgt && tgt.d > 5) { /* se acerca hasta 4 celdas */ }
         await sleep(50);
     }
     const t = (Date.now() - t0) / 1000, first = b.taken[0]?.t, tDeath = first ? (Date.now() - first) / 1000 : 0;
@@ -111,8 +111,8 @@ async function trial(cls: 'mago' | 'guerrero', lvl: number, zoneName: string) {
 
 console.log(`Validación en vivo (${TRIALS} pruebas por celda, la zona tiene su cantidad real de mobs)`);
 for (const [zone, label] of [['Campamento goblin', 'goblins (3)'], ['Avanzada goblin', 'élites (3)']] as const) {
-    for (const cls of ['mago', 'guerrero'] as const) {
-        if (process.env.ONLY && process.env.ONLY !== `${cls}:${zone}`) continue; // ej. ONLY='guerrero:Avanzada goblin'
+    for (const cls of ['mago', 'pala'] as const) {
+        if (process.env.ONLY && process.env.ONLY !== `${cls}:${zone}`) continue; // ej. ONLY='pala:Avanzada goblin'
         const rs = [];
         for (let i = 0; i < TRIALS; i++) { rs.push(await trial(cls, 1, zone)); await sleep(1000); }
         console.log(`${cls} Nv1 vs ${label}: ${rs.map((r) => `${r.result} ${r.t.toFixed(1)} s (kills ${r.kills}, vida ${Math.round(r.hpLeft * 100)} %, ${r.hits} golpes recibidos / ${r.dmg} de daño crudo)`).join(' | ')}`);

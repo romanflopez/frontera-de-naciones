@@ -22,7 +22,7 @@ function setup() {
     const svc = new TradeService(storage, () => clock.t); const lines: string[] = []; svc.log = (l) => lines.push(l);
     const all = new Map<bigint, Player>();
     const mk = (name: string, o: { faction?: string; lvl?: number; gold?: number; x?: number; world?: object } = {}): Fake => {
-        const econ = newEcon('guerrero', o.faction ?? 'solmar'); econ.bag = []; econ.gold = o.gold ?? 1000; econ.lvl = o.lvl ?? 10;
+        const econ = newEcon('pala', o.faction ?? 'solmar'); econ.bag = []; econ.gold = o.gold ?? 1000; econ.lvl = o.lvl ?? 10;
         const key = `acc-${name}`, sent: ServerMessage[] = [];
         storage.put(key, { name, salt: '', hash: '', created: 0, lastLogin: 0, econ });
         const p = { playerId: nextId++, posX: o.x ?? 10, posY: 10, world: o.world ?? world, disconnected: false, hp: 100, get isDead() { return (this as unknown as { hp: number }).hp < 1; },

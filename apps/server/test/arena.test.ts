@@ -75,8 +75,8 @@ function setup(names: string[], opts: { allowSmall?: boolean } = {}) {
         caza.playerConnected(session.sessionId, name, (m) => log.push(m), () => {}, persisted);
         mem.put(`acc-${name}`, { name, salt: '', hash: '', created: 0, lastLogin: 0 });
         caza.bindAccount(session.sessionId, `acc-${name}`);
-        caza.onClientSave(session.sessionId, JSON.stringify({ cls: 'guerrero', faction: 'solmar' }));
-        caza.handleClientPacket(session.sessionId, { payload: { $case: 'changePlayerProfileRequest', value: { profile: 'solmar;guerrero;' } } } as never);
+        caza.onClientSave(session.sessionId, JSON.stringify({ cls: 'pala', faction: 'solmar' }));
+        caza.handleClientPacket(session.sessionId, { payload: { $case: 'changePlayerProfileRequest', value: { profile: 'solmar;pala;' } } } as never);
         js.push({ name, session, log, key: `acc-${name}`, online: true });
     });
     const by = (sid: string) => js.find((j) => j.session.sessionId === sid);

@@ -4,7 +4,7 @@
  *  - farmeo encadenado de 30 min: kills por hora, tiempo parado a recuperarse, muertes y pociones;
  *  - horas por tramo con la curva de exp real (killsToLevel).
  *
- *   pnpm --filter @fdn/tools sim:pve [--lvl 1,5,10,20,30,40] [--n 40] [--cls guerrero,mago,healer] [--horas]
+ *   pnpm --filter @fdn/tools sim:pve [--lvl 1,5,10,20,30,40] [--n 40] [--cls pala,mago,clerigo] [--horas]
  *
  * Sale con código 1 si algún nivel queda fuera de las metas (pve/targets.ts).
  */
@@ -15,7 +15,7 @@ import { PVE_TARGETS, TRAVEL_S } from './targets.ts';
 
 const arg = (k: string) => { const i = process.argv.indexOf(`--${k}`); return i > 0 ? process.argv[i + 1] : undefined; };
 const lvls = (arg('lvl') ?? '1,3,5,8,10,15,20,25,30,35,40').split(',').map(Number);
-const n = Number(arg('n') ?? 40), clss = (arg('cls') ?? 'guerrero,mago,healer').split(',') as Cls[];
+const n = Number(arg('n') ?? 40), clss = (arg('cls') ?? 'pala,mago,clerigo').split(',') as Cls[];
 const f1 = (x: number) => x.toFixed(1), f0 = (x: number) => x.toFixed(0);
 const farmAt = (cls: Cls, lvl: number, secs = 1800) => farm(cls, lvl, secs, 7000 + lvl, TRAVEL_S, hpRegenPerSec, MEDITATE);
 

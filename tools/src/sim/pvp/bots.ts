@@ -34,7 +34,7 @@ function common(w: Sim, f: Fighter): { act: Act; potion?: 'hp' | 'mp' } | { poti
     return { potion };
 }
 
-/** Paladín: cierra la distancia con Escudo vengador, Martillo y Carga; en cuerpo a cuerpo Aura, Juicio, Golpe y Barrido. Corta casteos. */
+/** Pala: cierra la distancia con Escudo vengador, Martillo y Carga; en cuerpo a cuerpo Aura, Juicio, Golpe y Barrido. Corta casteos. */
 export const paladin: Policy = (f, w) => {
     const c = common(w, f); if ('act' in c) return c as ReturnType<Policy>;
     const t = target(w, f, 4); if (!t) return { act: null, ...c };
@@ -60,23 +60,23 @@ export const paladin: Policy = (f, w) => {
 export const mage: Policy = (f, w) => {
     const c = common(w, f); if ('act' in c) return c as ReturnType<Policy>;
     const t = target(w, f, 15); if (!t) return { act: null, ...c };
-    const close = nearest(w, f), dc = w.dist(f, close), melee = close.cls === 'guerrero';
+    const close = nearest(w, f), dc = w.dist(f, close), melee = close.cls === 'pala';
     const d = w.dist(f, t), ctrl = w.ctrlLeftMs(t), mp = f.mp;
-    // peligro: un paladín pegado
+    // peligro: un pala pegado
     if (melee && dc <= 3 && w.ctrlLeftMs(close) < 600) {
         const a = use(w, f, 'nova') ?? use(w, f, 'blink');
         if (a) return { act: a, ...c };
         if (f.cast && f.cast.at - w.now < 250) return { act: null, ...c }; // termina el cast
         return { act: away(w, f, close), ...c };
     }
-    // un paladín que se acerca: frenarlo o congelarlo antes de que llegue
+    // un pala que se acerca: frenarlo o congelarlo antes de que llegue
     if (melee && dc <= 9 && w.ctrlLeftMs(close) < 800) {
         const a = (dc <= 7 ? use(w, f, 'paralisis', close) : null) ?? (!isSlow(w, close) ? use(w, f, 'esquirla', close) : null);
         if (a) return { act: a, ...c };
         if (dc <= 5) return { act: away(w, f, close), ...c };
     }
     if (f.cast) return { act: null, ...c };
-    // cortar una cura larga del healer
+    // cortar una cura larga del clérigo
     if (t.cast && t.cast.id === 'curacion' && ctrl === 0) { const a = use(w, f, 'paralisis', t); if (a) return { act: a, ...c }; }
     const a = (!w.burning(t) ? use(w, f, 'ignicion', t) : null)
         ?? ((ctrl >= 1300 || !melee || d > 8) && mp >= 72 ? use(w, f, 'bola', t) : null)
@@ -90,17 +90,17 @@ export const mage: Policy = (f, w) => {
 };
 const isSlow = (w: Sim, f: Fighter) => f.st.slowEndTime > w.now;
 
-/** Healer: se cura y cura al aliado más golpeado, se bendice cuando lo encaran, corta con Reprender y pega con Castigo y Nova. */
-export const healer: Policy = (f, w) => {
+/** Clérigo: se cura y cura al aliado más golpeado, se bendice cuando lo encaran, corta con Reprender y pega con Castigo y Nova. */
+export const clerigo: Policy = (f, w) => {
     const c = common(w, f); if ('act' in c) return c as ReturnType<Policy>;
     const t = target(w, f, 15), close = nearest(w, f); if (!t || !close) return { act: null, ...c };
-    const dc = w.dist(f, close), melee = close.cls === 'guerrero';
+    const dc = w.dist(f, close), melee = close.cls === 'pala';
     const hurt = w.allies(f).sort((a, b) => a.hp / a.s.maxHp - b.hp / b.s.maxHp)[0], hh = hurt.hp / hurt.s.maxHp;
     if (f.cast) { // no se deja cortar la cura si viene un control
         if (melee && dc <= 2.5 && f.cast.id !== 'curacion') return { act: use(w, f, 'novasagrada') ?? null, ...c };
         return { act: null, ...c };
     }
-    // Bendición: cuando un paladín llega o alguien del equipo está controlado
+    // Bendición: cuando un pala llega o alguien del equipo está controlado
     const blessT = w.allies(f).find((a) => w.ctrlLeftMs(a) >= 1500) ?? (melee && dc <= 10 && f.hp / f.s.maxHp < 0.9 ? f : undefined);
     if (blessT) { const a = use(w, f, 'bendicion', blessT); if (a) return { act: a, ...c }; }
     // cortar casteos y frenar al que llega
@@ -118,4 +118,4 @@ export const healer: Policy = (f, w) => {
     return { act: null, ...c };
 };
 
-export const BOTS = { guerrero: paladin, mago: mage, healer } as const;
+export const BOTS = { pala: paladin, mago: mage, clerigo } as const;

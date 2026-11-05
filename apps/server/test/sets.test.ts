@@ -65,7 +65,7 @@ test('bonos de set: 2, 4, 6 y 8 piezas distintas (un anillo repetido cuenta una 
     // cada escalón es más fuerte que el anterior (mismo stat, mayor valor) y todos crecen con la banda
     for (const set of SETS) for (let i = 1; i < set.bonuses.length; i++) assert.ok(set.bonuses[i].stats.every(([, v]) => v >= 1), `${set.id} ${set.bonuses[i].n}`);
     // en el combate: con 2 piezas puestas sube la vida y la velocidad de ataque respecto de las mismas piezas sin set
-    const statsOf = (n: string[]) => statsFromChar({ lvl: 20, cls: 'guerrero', eq: eqOf(n) } as never);
+    const statsOf = (n: string[]) => statsFromChar({ lvl: 20, cls: 'pala', eq: eqOf(n) } as never);
     const sin = statsOf([alba.pieces[0]]), con = statsOf(alba.pieces.slice(0, 2));
     const two = alba.bonuses[0].stats;
     assert.ok(con.maxHp - sin.maxHp >= two.find(([id]) => id === 'hp')![1], 'el bono de vida entra');
@@ -85,7 +85,7 @@ test('piezas de set: caen solo en mazmorras del tramo (mobs y jefe de su dungeon
     const { DUNGEON_BOSS } = await import('@fdn/world');
     const eco = new Economy({ get: () => undefined, put: () => {}, flush: () => {} } as never);
     const sent: { code?: string; text?: string }[] = [];
-    const p = { econ: newEcon('guerrero', 'solmar'), accountKey: 'a', posX: 5, posY: 5, send: (m: { payload?: { $case?: string; value?: { code?: string; text?: string } } }) => { if (m.payload?.$case === 'econResult') sent.push(m.payload.value ?? {}); }, isDead: false, touch: () => {} } as never;
+    const p = { econ: newEcon('pala', 'solmar'), accountKey: 'a', posX: 5, posY: 5, send: (m: { payload?: { $case?: string; value?: { code?: string; text?: string } } }) => { if (m.payload?.$case === 'econResult') sent.push(m.payload.value ?? {}); }, isDead: false, touch: () => {} } as never;
     const ctx = { npcs: [], restat: () => {}, ground: { add: () => {} } } as never;
     const st = (p as { econ: ReturnType<typeof newEcon> }).econ; st.lvl = 18;
     const isSet = (n: string) => !!UNIQUE_BY_NAME.get(n)?.uniq.set;
@@ -117,7 +117,7 @@ test('piezas de set: caen solo en mazmorras del tramo (mobs y jefe de su dungeon
 test('pickSetPiece: prefiere las piezas que todavía no tenés, así el set de 8 se completa con 8 piezas', async () => {
     const { newEcon, pickSetPiece } = await import('../src/economy.ts');
     for (const set of SETS) {
-        const st = newEcon('guerrero', 'solmar'), pool = SET_PIECES_BY_TIER[set.tier].filter((u) => u.uniq.set === set.id), got = new Set<string>();
+        const st = newEcon('pala', 'solmar'), pool = SET_PIECES_BY_TIER[set.tier].filter((u) => u.uniq.set === set.id), got = new Set<string>();
         for (let i = 0; i < 8; i++) { const u = pickSetPiece(st, pool); assert.ok(!got.has(u.name), `${set.id}: repetida ${u.name} antes de completar`); got.add(u.name); st.bag.push({ u: st.nextUid++, n: u.name, r: 1, a: [] }); }
         assert.equal(got.size, 8);
         const again = pickSetPiece(st, pool); assert.ok(pool.includes(again), 'con el set completo cae cualquiera de sus piezas');

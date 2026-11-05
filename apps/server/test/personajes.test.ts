@@ -16,7 +16,7 @@ class MemStorage implements Storage {
 const acct = (st: MemStorage, name: string, extra: Partial<AccountRecord> = {}): string => {
     const key = accountKey(name); st.put(key, { name, salt: 'aa', hash: 'bb', created: 1, lastLogin: 1, ...extra }); return key;
 };
-const mk = (st: MemStorage, acc: string, name: string) => createCharacter(st, acc, name, newEcon('guerrero', 'solmar'));
+const mk = (st: MemStorage, acc: string, name: string) => createCharacter(st, acc, name, newEcon('pala', 'solmar'));
 
 test('una cuenta nueva no tiene personajes y puede crear hasta 3', () => {
     const st = new MemStorage(), a = acct(st, 'ana');
@@ -107,7 +107,7 @@ test('clase y facción inválidas no crean economía', () => {
     assert.equal(newEconChecked('dragon', 'solmar'), undefined);
     assert.equal(newEconChecked('mago', 'nadie'), undefined);
     assert.equal(newEconChecked(undefined, undefined), undefined);
-    assert.equal(newEconChecked('healer', 'vhar')?.cls, 'healer');
+    assert.equal(newEconChecked('clerigo', 'vhar')?.cls, 'clerigo');
 });
 
 test('el depósito es de la cuenta: los personajes de la misma cuenta lo comparten y otra cuenta no lo ve', () => {

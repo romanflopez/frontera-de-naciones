@@ -34,9 +34,9 @@ export function foeAt(kind: Foe, lvl: number, boss?: MobType, solo = false): Foe
 
 /** Prioridad de habilidades por clase (la primera disponible y pagable se usa). */
 const ROTATION: Record<Cls, string[]> = {
-    guerrero: ['escudodivino', 'represalia', 'escudo', 'aturdir', 'aura', 'juicio', 'golpe', 'ataque'],
+    pala: ['escudodivino', 'represalia', 'escudo', 'aturdir', 'aura', 'juicio', 'golpe', 'ataque'],
     mago: ['escudomana', 'paralisis', 'ignicion', 'bola', 'esquirla', 'proyectil', 'ataque'],
-    healer: ['guardian', 'curacion', 'renovar', 'reprender', 'castigo', 'ataque'],
+    clerigo: ['guardian', 'curacion', 'renovar', 'reprender', 'castigo', 'ataque'],
 };
 /** Tiempo que ocupa una acción instantánea (animación + reacción humana). */
 const INSTANT_S = 0.45;
@@ -55,7 +55,7 @@ function run(spec: PveSpec, rnd: () => number): PveResult {
     const s: CombatStats = buildStats(spec.cls, spec.lvl), f = spec.foe, kit = CLASS_KITS[spec.cls], dt = 0.05;
     const rint = (a: number, b: number) => Math.floor(a + rnd() * (b - a + 1));
     let hp = spec.carry ? spec.carry.hp : Math.round(s.maxHp * (spec.startHpPct ?? 1)), mp = spec.carry ? spec.carry.mp : s.maxMp, shield = 0, shieldUntil = 0;
-    let mobHp = f.hp, mobDist = spec.cls === 'guerrero' ? 0 : MOB_AGGRO, mobNextAtk = 0, mobPar = 0, mobBurn = 0, burnTick = 0, burnDmg = 0, nextSp = f.special ? f.special.every * 0.6 : 1e9, stunned = 0;
+    let mobHp = f.hp, mobDist = spec.cls === 'pala' ? 0 : MOB_AGGRO, mobNextAtk = 0, mobPar = 0, mobBurn = 0, burnTick = 0, burnDmg = 0, nextSp = f.special ? f.special.every * 0.6 : 1e9, stunned = 0;
     let busyUntil = 0, pending: { id: string; at: number } | null = null, potAt = spec.carry?.potAt ?? -1e9, windAt = spec.carry?.windAt ?? -1e9, windUntil = 0, hot = 0, hotFrac = 0, hotNext = 0, mitigK = 1, mitigUntil = 0;
     const cd = new Map<string, number>(); let took = 0, mpSpent = 0, pots = 0, potsMp = 0, winds = 0, starved = 0, firstHit = -1;
     const max = spec.maxSecs ?? 240;
@@ -92,14 +92,14 @@ function run(spec: PveSpec, rnd: () => number): PveResult {
             const sp = (PVP_SPELLS[id] ?? SKILLS[id]) as typeof SKILLS[string] | undefined; if (!sp) continue;
             if ((cd.get(id) ?? -1e9) > t || mp < sp.mp) continue;
             // con criterio: lo caro (más del 6 % del maná) solo si sobra maná o el mob todavía tiene mucha vida
-            if (spec.cls !== 'guerrero' && id !== 'proyectil' && id !== 'castigo' && sp.mp > s.maxMp * 0.06 && !sp.shield && !sp.heal && (f.boss || f.hp > foeAt('comun', spec.lvl).hp * 1.5 ? mp < s.maxMp * 0.3 : mp < s.maxMp * 0.75)) continue;
+            if (spec.cls !== 'pala' && id !== 'proyectil' && id !== 'castigo' && sp.mp > s.maxMp * 0.06 && !sp.shield && !sp.heal && (f.boss || f.hp > foeAt('comun', spec.lvl).hp * 1.5 ? mp < s.maxMp * 0.3 : mp < s.maxMp * 0.75)) continue;
             if (sp.shield && shieldUntil > t) continue;
             if ((id === 'curacion' || id === 'renovar') && hp > s.maxHp * (id === 'curacion' ? 0.55 : 0.8)) continue;
             if (id === 'renovar' && hot > 0) continue;
             if ((id === 'escudodivino' || id === 'escudomana' || id === 'guardian' || id === 'represalia') && (firstHit < 0 || hp > s.maxHp * 0.9)) continue;
             if ((sp.secs || sp.stun) && (f.boss || mobPar > t)) { if (!sp.dmg) continue; if (id === 'paralisis' || id === 'reprender') continue; }
             if (id === 'bola' && mobBurn <= t && kit.ignicion !== undefined && kit.ignicion <= spec.lvl && (cd.get('ignicion') ?? 0) <= t + 1) continue;
-            if (sp.melee || id === 'ataque') { if (mobDist > 1.6 && spec.cls === 'guerrero') continue; }
+            if (sp.melee || id === 'ataque') { if (mobDist > 1.6 && spec.cls === 'pala') continue; }
             chosen = id; break;
         }
         if (!chosen) { starved += dt; continue; }
@@ -150,7 +150,7 @@ export function many(spec: Omit<PveSpec, 'seed'>, n: number, seed0 = 1000) {
 export function farm(cls: Cls, lvl: number, secs: number, seed: number, travel: number, regen: (maxHp: number, resting: boolean) => number, meditate: { pct: number; min: number }) {
     const s = buildStats(cls, lvl), foe = foeAt('comun', lvl);
     let c: Carry = { hp: s.maxHp, mp: s.maxMp, potAt: -1e9, windAt: -1e9 }, clock = 0, kills = 0, rest = 0, deaths = 0, pots = 0, i = 0;
-    const needMp = cls === 'guerrero' ? 0 : 0.25; // el paladín sigue con el ataque básico sin maná
+    const needMp = cls === 'pala' ? 0 : 0.25; // el pala sigue con el ataque básico sin maná
     const pass = (dt: number, resting: boolean) => {
         c.hp = Math.min(s.maxHp, c.hp + regen(s.maxHp, resting) * dt);
         c.mp = Math.min(s.maxMp, c.mp + (resting ? Math.max(meditate.min, s.maxMp * meditate.pct) : combatMpRegen(s.maxMp)) * dt);

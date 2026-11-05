@@ -15,7 +15,7 @@ let clock = 190_000_000;
 mock.method(Date, 'now', () => clock);
 
 test('fx: el efecto de un ítem de jefe solo está activo en Dorado', () => {
-    const arma = (r: number) => statsFromChar({ lvl: 40, cls: 'guerrero', eq: { arma: { n: 'Hacha del Gran Verdugo', r, a: [] } } } as never);
+    const arma = (r: number) => statsFromChar({ lvl: 40, cls: 'pala', eq: { arma: { n: 'Hacha del Gran Verdugo', r, a: [] } } } as never);
     assert.deepEqual(arma(4).fx, ['aturdir']);
     for (const r of [0, 1, 2, 3]) assert.equal(arma(r).fx, undefined, `r${r} sin efecto`);
     // todo efecto del catálogo tiene su texto, y solo lo traen ítems de jefe
@@ -24,7 +24,7 @@ test('fx: el efecto de un ítem de jefe solo está activo en Dorado', () => {
 
 function setup(type: MobType, fx: string[]) {
     clock += 100_000;
-    const combat = { ...statsFromChar({ lvl: 12, cls: 'guerrero', eq: {} }), fx };
+    const combat = { ...statsFromChar({ lvl: 12, cls: 'pala', eq: {} }), fx };
     const heals: number[] = [];
     const p = { playerId: 7n, posX: 14, posY: 20, disconnected: false, isDead: false, status: { isInvisible: false }, combat, pvp: new PvpLimiter(), send: (_m: ServerMessage) => {} } as unknown as Player;
     const blocked = Array.from({ length: N }, () => new Array<boolean>(N).fill(false)), safe = Array.from({ length: N }, () => new Array<boolean>(N).fill(false));

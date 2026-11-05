@@ -24,12 +24,12 @@ function setup(n = 1) {
         p.pvp.meleeGapMs = meleeIntervalSecs(0) * 1000;
         return p;
     };
-    const pala = mk(1n, 'guerrero', 11), mago = mk(2n, 'mago', 13);
+    const pala = mk(1n, 'pala', 11), mago = mk(2n, 'mago', 13);
     const players = [pala, mago];
     const blocked = Array.from({ length: N }, () => new Array<boolean>(N).fill(false)), safe = Array.from({ length: N }, () => new Array<boolean>(N).fill(false));
     const map = { size: N, tiles: [], blocked, safe, props: [], decals: [], zones: [{ type: 'goblin', x: 12, y: 20, r: 1, n, name: 'prueba' }], buildings: [], npcs: [], spawn: { x: 1, y: 1 }, fire: { x: -50, y: -50 } } as unknown as WorldMap;
     const host: MobHost = {
-        players: () => players, playerById: (id) => players.find((p) => p.playerId === id), nearby: () => [pala], after: () => {}, // los avisos llegan una sola vez (al paladín)
+        players: () => players, playerById: (id) => players.find((p) => p.playerId === id), nearby: () => [pala], after: () => {}, // los avisos llegan una sola vez (al pala)
         hurt: () => {}, stun: () => 0, reward: () => {}, pay: () => true,
         heal: (p, v) => { heals.push({ id: p.playerId, n: v }); },
     };
@@ -47,7 +47,7 @@ test('amenaza: el mob persigue al que más amenaza le generó, no al primero que
     const { sim, pala, mago, raws, hit, step } = setup();
     const m = raws[0];
     hit(pala, m, 'golpe'); step(0.2);
-    assert.equal(sim.targetOf(m.id), pala.playerId, 'primero va al paladín');
+    assert.equal(sim.targetOf(m.id), pala.playerId, 'primero va al pala');
     for (let i = 0; i < 4; i++) { hit(mago, m, 'proyectil'); clock += 1000; }
     step(0.2);
     assert.ok(sim.threatOn(m.id, mago) > sim.threatOn(m.id, pala));
@@ -59,7 +59,7 @@ test('amenaza: Juicio y Escudo vengador multiplican la amenaza (×3 y ×5)', () 
     assert.equal(threatOf('giro'), 3); assert.equal(threatOf('carga'), 3);
 });
 
-test('provocación: el Martillo hace que el mob ataque al paladín aunque el mago tenga más amenaza', () => {
+test('provocación: el Martillo hace que el mob ataque al pala aunque el mago tenga más amenaza', () => {
     const { sim, pala, mago, raws, hit, step } = setup();
     const m = raws[0];
     for (let i = 0; i < 6; i++) { hit(mago, m, 'proyectil'); clock += 1000; }
@@ -114,7 +114,7 @@ test('Bola de fuego: 1,4× sobre un mob que se está quemando', () => {
     } finally { Math.random = rnd; }
 });
 
-test('Juicio: el paladín se cura la mitad del daño que hizo', () => {
+test('Juicio: el pala se cura la mitad del daño que hizo', () => {
     const { pala, raws, hit, dmgs, heals } = setup();
     hit(pala, raws[0], 'juicio');
     const d = dmgs()[0];

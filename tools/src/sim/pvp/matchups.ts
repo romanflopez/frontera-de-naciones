@@ -11,7 +11,7 @@ import { simulate } from './engine.ts';
 import { SERVER_RULES, type Rules } from './rules.ts';
 
 export interface Matchup { name: string; a: Cls[]; b: Cls[] }
-const P: Cls = 'guerrero', M: Cls = 'mago', H: Cls = 'healer';
+const P: Cls = 'pala', M: Cls = 'mago', H: Cls = 'clerigo';
 export const ONE_V_ONE: Matchup[] = [[P, M], [P, H], [M, H], [P, P], [M, M], [H, H]].map(([a, b]) => ({ name: `${CLS_NAME[a]} vs ${CLS_NAME[b]}`, a: [a], b: [b] }));
 export const TWO_V_TWO: Matchup[] = [
     [[P, H], [P, M]], [[P, H], [M, H]], [[P, M], [M, H]], [[P, H], [P, H]], [[P, M], [P, M]], [[M, H], [M, H]],

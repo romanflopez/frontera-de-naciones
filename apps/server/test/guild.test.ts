@@ -17,10 +17,10 @@ class MemStorage implements Storage {
 function setup(storage = new MemStorage()) {
     const people = new Map<string, GuildInfo>(), inbox = new Map<string, ServerMessage[]>(), tags = new Map<string, string>(); let t = 1_000_000;
     const add = (sid: string, name: string, o: Partial<GuildInfo> = {}) => {
-        const econ = newEcon('guerrero', o.faction ?? 'solmar'); econ.gold = 20_000; econ.lvl = o.level ?? 15; econ.bag = [];
+        const econ = newEcon('pala', o.faction ?? 'solmar'); econ.gold = 20_000; econ.lvl = o.level ?? 15; econ.bag = [];
         const key = `c_${sid}`;
         storage.put(key, { name, salt: '', hash: '', created: 0, lastLogin: 0, econ });
-        people.set(sid, { key, name, faction: o.faction ?? 'solmar', level: econ.lvl, cls: 'guerrero', map: 'solmar', online: true, econ, ...o });
+        people.set(sid, { key, name, faction: o.faction ?? 'solmar', level: econ.lvl, cls: 'pala', map: 'solmar', online: true, econ, ...o });
         inbox.set(sid, []);
         return { key, econ };
     };

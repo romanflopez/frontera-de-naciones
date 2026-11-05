@@ -45,7 +45,7 @@ test('/gm bis: lo que llevaba puesto vuelve a la bolsa y se puede repetir sin du
 });
 
 test('/gm bis: por ahora solo existe para el mago', () => {
-    const { w, p } = join('guerrero');
+    const { w, p } = join('pala');
     const eq0 = JSON.stringify(p.econ!.eq);
     assert.match(w.gmCommand('s-1', 'bis', [])[0], /solo existe para el Mago/);
     assert.equal(JSON.stringify(p.econ!.eq), eq0, 'no toca nada');

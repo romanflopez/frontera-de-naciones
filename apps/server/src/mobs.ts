@@ -31,7 +31,7 @@ export interface MobHost {
     pay(p: Player, cost: number): boolean;
     /** Cura al jugador en el server (robo de vida) y avisa. */
     heal(p: Player, n: number): void;
-    /** Devuelve maná (Castigo del healer, si pega). Opcional (tests). */
+    /** Devuelve maná (Castigo del clérigo, si pega). Opcional (tests). */
     refundMp?(p: Player, n: number): void;
     /** Envenena al jugador (mob tóxico): −30 % de curación mientras dura. Opcional (tests). */
     poison?(p: Player, secs: number): void;
@@ -322,12 +322,12 @@ export class MobSim {
      * Curar genera amenaza (K5): cada monstruo que está peleando con el curado (lo tiene en su tabla o lo persigue)
      * suma `amount` de amenaza al que curó. Devuelve a cuántos monstruos les llegó.
      */
-    healThreat(healer: Player, healed: Player, amount: number): number {
+    healThreat(clerigo: Player, healed: Player, amount: number): number {
         if (amount <= 0) return 0;
         let n = 0;
         for (const m of this.mobs.values()) {
             if (m.dead || m.state === 'return' || (!m.threat.has(healed.playerId) && m.target !== healed.playerId)) continue;
-            this.addThreat(m, healer, amount); n++;
+            this.addThreat(m, clerigo, amount); n++;
         }
         return n;
     }
@@ -618,7 +618,7 @@ export class MobSim {
         if (slowSecs > 0) m.slow = T + slowSecs;
         if (stunSecs > 0) this.control(p, m, stunSecs, T); // aturdido (corta la carga de un jefe)
         if (m.bs) bossInterrupt(this.bh, m, skill, p); // motor de jefes: Carga, Nova, Giro... cortan el casteo
-        const phys = (SKILLS[skill] ?? PVP_SPELLS[skill])?.stat !== 'mag'; // Nova de escarcha y Nova sagrada son mágicas; las del paladín, físicas
+        const phys = (SKILLS[skill] ?? PVP_SPELLS[skill])?.stat !== 'mag'; // Nova de escarcha y Nova sagrada son mágicas; las del pala, físicas
         if (m.traits & (phys ? TRAIT_ANTI_PHYS : TRAIT_ANTI_MAGIC)) dmg = Math.max(1, Math.round(dmg * ANTI_DAMAGE_MULT));
         m.lastAttacker = p.playerId; m.hp -= dmg; this.addThreat(m, p, dmg * threatOf(skill));
         if (m.par > T && dmg >= m.hpMax * 0.45) m.par = 0;

@@ -22,7 +22,7 @@ let mem = new MemStorage();
 const kinds = (log: ServerMessage[]) => log.map((m) => m.payload?.$case);
 const find = <K extends string>(log: ServerMessage[], k: K) => log.find((m) => m.payload?.$case === k)?.payload as any;
 
-/** Un jugador conectado a `world`, con cuenta y personaje creados (guerrero de Solmar), parado en (x, y). */
+/** Un jugador conectado a `world`, con cuenta y personaje creados (pala de Solmar), parado en (x, y). */
 function join(reg: WorldRegistry, eco: Economy, world: GameWorld, name: string, at?: { x: number; y: number }) {
     const log: ServerMessage[] = [];
     const disconnects: string[] = [];
@@ -31,7 +31,7 @@ function join(reg: WorldRegistry, eco: Economy, world: GameWorld, name: string, 
     world.playerConnected(session.sessionId, name, (m) => log.push(m), (r) => disconnects.push(r), persisted);
     mem.put(`acc-${name}`, { name, salt: '', hash: '', created: 0, lastLogin: 0 });
     world.bindAccount(session.sessionId, `acc-${name}`);
-    world.onClientSave(session.sessionId, JSON.stringify({ cls: 'guerrero', faction: 'solmar' }));
+    world.onClientSave(session.sessionId, JSON.stringify({ cls: 'pala', faction: 'solmar' }));
     const p = world.playerOf(session.sessionId)!;
     void reg; void eco;
     return { session, log, disconnects, p };

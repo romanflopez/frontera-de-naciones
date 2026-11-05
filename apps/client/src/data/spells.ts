@@ -60,9 +60,9 @@ const MAGE: ClassData = {
     ],
 };
 
-/** Por id de clase del juego (main.ts: 'mago', 'guerrero' = Paladin). */
+/** Por id de clase del juego (main.ts: 'mago', 'pala' = Pala). */
 export const CLASS_DATA: Record<string, ClassData> = {
     mago: MAGE,
-    guerrero: { name: 'Paladin', spells: [], techniques: [], paths: [] },
-    healer: { name: 'Healer', spells: [], techniques: [], paths: [] },
+    pala: { name: 'Pala', spells: [], techniques: [], paths: [] },
+    clerigo: { name: 'Clérigo', spells: [], techniques: [], paths: [] },
 };

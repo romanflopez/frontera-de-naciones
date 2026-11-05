@@ -234,9 +234,10 @@ function totals() {
 // ---------- clases ----------
 interface ClassDef { id: string; name: string; hidden?: boolean; desc: string; head: string; armor?: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; spells: string[] }
 const CLASSES: ClassDef[] = [
-    { id: 'guerrero', name: 'Paladin', desc: 'Tanque: aguanta, aturde y pega cuerpo a cuerpo.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'juicio', 'escudo', 'mandato', 'aturdir', 'aura', 'represalia', 'escudodivino', 'amparo', 'furia', 'giro', 'carga', 'grito', 'remover', 'aliento'] },
+    { id: 'pala', name: 'Pala', desc: 'Tanque: aguanta, aturde y pega cuerpo a cuerpo.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'juicio', 'escudo', 'mandato', 'aturdir', 'aura', 'represalia', 'escudodivino', 'amparo', 'furia', 'giro', 'carga', 'grito', 'remover', 'aliento'] },
     { id: 'mago', name: 'Mago', desc: 'Frágil: frío para frenar, fuego para rematar.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 200, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'esquirla', 'paralisis', 'nova', 'ignicion', 'bola', 'lluvia', 'escudomana', 'clarividencia', 'intelecto', 'furia', 'remover', 'invisibilidad', 'detectar', 'blink', 'aliento'] },
-    { id: 'healer', name: 'Healer', desc: 'Apoyo: cura, bendice y corta casteos.', head: 'head_short', armor: 'Túnica de mago', hp: 110, hpL: 14, mp: 110, mpL: 13, melee: [3, 6], weapon: 'Báculo de fresno', spells: ['castigo', 'curacion', 'renovar', 'bendicion', 'novasagrada', 'reprender', 'orbe', 'guardian', 'esfera', 'grupo', 'furia', 'pasoluz', 'despertar', 'detectar', 'aliento'] },
+    { id: 'clerigo', name: 'Clérigo', desc: 'Apoyo: cura, bendice y corta casteos.', head: 'head_short', armor: 'Túnica de mago', hp: 110, hpL: 14, mp: 110, mpL: 13, melee: [3, 6], weapon: 'Báculo de fresno', spells: ['castigo', 'curacion', 'renovar', 'bendicion', 'novasagrada', 'reprender', 'orbe', 'guardian', 'esfera', 'grupo', 'furia', 'pasoluz', 'despertar', 'detectar', 'aliento'] },
+    { id: 'arquero', name: 'Arquero', hidden: true, desc: 'Sin kit todavía.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: [] }, // esqueleto (D.0): no se puede crear hasta que tenga kit
 ];
 let CLS: ClassDef = CLASSES[0];
 /** Vida y maná máximos que manda el server (Vitals): mandan sobre la cuenta local, que usa números viejos de cada clase. */
@@ -455,7 +456,7 @@ function onMobDamaged(v: { mobId: number; attackerId: bigint; dmg: number; crit:
     const mine = v.attackerId === myId, poisonTick = v.dmg === 3 && !v.crit && m.poison > now();
     m.hp = v.hp; m.flash = 0.12;
     if (mine && !poisonTick && /goblin/.test(m.sprite ?? '')) sfx('goblin-hit', 0.6); // quejido del goblin (y de sus variantes) al recibir un golpe mío
-    if (mine && !poisonTick && CLS.id === 'guerrero' && now() - lastMeleeReq < 0.6) {
+    if (mine && !poisonTick && CLS.id === 'pala' && now() - lastMeleeReq < 0.6) {
         sfx(v.crit ? 'sword-crit' : 'sword-attack', v.crit ? 0.85 : 0.5);
         efxLocal(v.crit ? 'critico' : 'impacto', m.x, m.y); // chispazo del golpe (solo lo veo yo)
         // crítico con el skin del caballero: golpe desde arriba (arranca con la espada ya levantada para que caiga junto con el número)
@@ -682,16 +683,16 @@ function hurtPlayer(d: number, kind: 'phys' | 'magic' = 'phys', applied = false)
     if (!(P.one && P.one.anim !== 'hit' && now() < P.one.until)) oneShot(P, 'hit', 0.15);
 }
 /** El server dice que morí: pierdo un poco de exp y pido revivir en mi ciudad. */
-/** Muerto esperando que un healer aliado lo despierte (K8). */
+/** Muerto esperando que un clérigo aliado lo despierte (K8). */
 let reviveWait = false;
 function die() {
     if (P.dead) return;
     P.dead = true; potEpoch++; pots.cd = 0; P.deadT = now(); P.hp = 0; P.path = []; P.casting = null; P.target = null; P.med = false; const lost = Math.round(expNeed() * 0.05); // la pérdida de exp la aplica el server (llega en inventoryState)
     log(`Moriste. Perdiste ${lost} de exp y ${MAP_DEF.id === DEFAULT_MAP ? 'volvés a tu ciudad' : 'reaparecés en el punto de reaparición de este mapa'}.`, true);
     const ask = (n: number) => { if (!P.dead || n > 10) return; net.send({ $case: 'respawnRequest', value: {} }); later(1, () => ask(n + 1)); };
-    // K8: con un healer aliado cerca, se espera 10 s antes de reaparecer para que te pueda Despertar
-    reviveWait = [...others.values()].some((o) => !o.gone && facOf(o.profile) === selectedFaction && !isEnemy(o) && o.profile.split(';')[1] === 'healer' && (o.hp ?? 1) > 0 && dist(P, o) <= 15);
-    if (reviveWait) toast('Hay un healer aliado cerca: te puede despertar. Si no, reaparecés en 10 s.');
+    // K8: con un clérigo aliado cerca, se espera 10 s antes de reaparecer para que te pueda Despertar
+    reviveWait = [...others.values()].some((o) => !o.gone && facOf(o.profile) === selectedFaction && !isEnemy(o) && o.profile.split(';')[1] === 'clerigo' && (o.hp ?? 1) > 0 && dist(P, o) <= 15);
+    if (reviveWait) toast('Hay un clérigo aliado cerca: te puede despertar. Si no, reaparecés en 10 s.');
     later(reviveWait ? 10 : 2.2, () => ask(0));
 }
 /** Mi vida según el server: es la que vale. */
@@ -699,7 +700,7 @@ function onVitals(v: { hp: number; maxHp: number; dead: boolean; mp: number; max
     if (v.maxHp > 0) srvMax.hp = v.maxHp; if (v.maxMp > 0) srvMax.mp = v.maxMp;
     const sh = v.shield ?? 0; if (sh > 0 && P.shield <= 0) P.shieldEnd = now() + 10; P.shield = sh; // escudos de K8: duran 10 s
     if (v.dead) { if (!P.dead) die(); P.hp = 0; return; }
-    if (P.dead) { const woke = reviveWait && now() - P.deadT < 9.9; reviveWait = false; /* lo despertó un healer: el aviso llega del server */ P.dead = false; P.one = null; P.mp = maxMp(); mpLocalAt = 0; if (!woke) log(MAP_DEF.id === DEFAULT_MAP ? 'Revivís en tu ciudad.' : 'Revivís en el punto de reaparición.', true); }
+    if (P.dead) { const woke = reviveWait && now() - P.deadT < 9.9; reviveWait = false; /* lo despertó un clérigo: el aviso llega del server */ P.dead = false; P.one = null; P.mp = maxMp(); mpLocalAt = 0; if (!woke) log(MAP_DEF.id === DEFAULT_MAP ? 'Revivís en tu ciudad.' : 'Revivís en el punto de reaparición.', true); }
     P.hp = Math.min(maxHp(), v.hp);
     // el maná también es del server; si recién gasté/tomé algo local (el aviso todavía viaja), no me pisa para arriba
     const smp = Math.min(maxMp(), v.mp);
@@ -829,11 +830,11 @@ const LIB: Record<string, SpellDef> = {
         cast() { return reviveCast(); } },
     grupo: { name: 'Bendición de grupo', mp: 28, cd: 10, col: '#ffb07a', range: 0, target: false, aoe: 14, // Fortitude + Divine Spirit: +6 % de vida y +50 % de regen de maná: 15 min afuera, 90 s en la arena (a toda la party)
         cast() { skillSend('grupo'); } },
-    pasoluz: { name: 'Paso de luz', mp: 0, cd: 15, col: '#fff2a8', range: 0, target: false, instant: true, // escape del healer (nivel 20): hasta 6 celdas y se saca el frenado
+    pasoluz: { name: 'Paso de luz', mp: 0, cd: 15, col: '#fff2a8', range: 0, target: false, instant: true, // escape del clérigo (nivel 20): hasta 6 celdas y se saca el frenado
         cast() { const d = blinkDest(6); if (!d) { toast('No hay lugar para el Paso de luz hacia ahí.'); return false; } net.send({ $case: 'blinkRequest', value: { x: d.x, y: d.y, skill: 'pasoluz' } }); } },
     aliento: { name: 'Segundo aliento', mp: 0, cd: 210, col: '#7fe0a0', range: 0, target: false, instant: true, // Second Wind (Valdrys): 3 s quieto, la mitad de vida y maná
         cast() { if (P.hp >= maxHp() && P.mp >= maxMp()) { toast('Ya tenés la vida y el maná llenos.'); return false; } P.path = []; P.target = null; P.engage = false; P.pickup = null; P.queued = null; cancelCast(); skillSend('aliento'); } },
-    // Healer (K5): el server cura, cobra y valida. Las curas van al aliado elegido (click en alguien de tu nación) o a vos.
+    // Clérigo (K5): el server cura, cobra y valida. Las curas van al aliado elegido (click en alguien de tu nación) o a vos.
     castigo: { name: 'Castigo', mp: 18, cd: 1, col: '#ffe680', range: VIEW_RANGE, target: true, // Smite (Valdrys): devuelve 9 de maná y te cura el 35 % del daño
         cast(m) { if (!isMob(m)) return false; efx('solar', m.x, m.y, 8); damageMob(m, 'castigo'); } },
     reprender: { name: 'Reprender', mp: 30, cd: 15, col: '#fff2a8', range: VIEW_RANGE, target: true, ctrl: true, instant: true, // Chastise (Valdrys): aturde 3 s
@@ -849,7 +850,7 @@ const LIB: Record<string, SpellDef> = {
     orbe: { name: 'Orbe sagrado', mp: 56, cd: 10, col: '#a8ffd0', range: VIEW_RANGE, target: false, // Holy Orb (Valdrys): 20 % al objetivo y a los de al lado
         cast() { return healCast('orbe', VIEW_RANGE); } },
     furia: { name: 'Furia', mp: 15, cd: 90, col: '#ffd23f', range: 0, target: false,
-        cast() { sfx('berserk', 0.7); efxLocal('pilar', P.x, P.y); pvpSend('pilar', P.x, P.y, 0n, 'furia'); P.fury = now() + 60; float(P.x, P.y - 0.4, '¡FURIA!', '#ffd23f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd23f' }); log(`Furia: +${selectedClass === 'mago' ? 35 : selectedClass === 'healer' ? 20 : 15}% de daño por 60 s.`, true); } },
+        cast() { sfx('berserk', 0.7); efxLocal('pilar', P.x, P.y); pvpSend('pilar', P.x, P.y, 0n, 'furia'); P.fury = now() + 60; float(P.x, P.y - 0.4, '¡FURIA!', '#ffd23f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd23f' }); log(`Furia: +${selectedClass === 'mago' ? 35 : selectedClass === 'clerigo' ? 20 : 15}% de daño por 60 s.`, true); } },
 };
 let SPELLS: Spell[] = [];
 const SPECIAL_KEY: Record<string, string | undefined> = { remover: 'r', invisibilidad: 'f', detectar: 'g', blink: 'b', carga: 'z', giro: 'x', grito: 'v', aliento: 'y', despertar: 'u', pasoluz: 'b' };
@@ -3152,7 +3153,7 @@ function storedId(name: string): string {
     return id;
 }
 try { const f = localStorage.getItem('fdn:faction'); if (FACTIONS.some((x) => x.id === f)) selectedFaction = f!; } catch { /* sin almacenamiento */ }
-let selectedClass = 'guerrero';
+let selectedClass = 'pala';
 try { const c = localStorage.getItem('fdn:class'); if (CLASSES.some((x) => x.id === c && !x.hidden)) selectedClass = c!; } catch { /* sin almacenamiento */ }
 // pantallas de login / selección / clase / facción / creación (ver loginui.ts)
 const flow = initLoginUI({

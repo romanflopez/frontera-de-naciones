@@ -38,12 +38,12 @@ const $ = (id: string) => document.getElementById(id)!;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-const CLS_COL: Record<string, string> = { mago: '#b872ff', guerrero: '#ff5a3c', healer: '#f2d36b' };
-const CLS_TAG: Record<string, string> = { mago: 'Domina el poder arcano', guerrero: 'Lucha con honor', healer: 'Sostiene al grupo' };
+const CLS_COL: Record<string, string> = { mago: '#b872ff', pala: '#ff5a3c', clerigo: '#f2d36b' };
+const CLS_TAG: Record<string, string> = { mago: 'Domina el poder arcano', pala: 'Lucha con honor', clerigo: 'Sostiene al grupo' };
 const CLS_LORE: Record<string, string> = {
     mago: 'Los magos canalizan la energía arcana a través de sus hechizos. Pegan de lejos, congelan y queman, pero necesitan maná y poca gente que los toque.',
-    healer: 'Los healers canalizan la luz sagrada: curan y bendicen a los suyos, castigan de lejos y cortan los casteos peligrosos. Pueden cazar solos, pero brillan en grupo.',
-    guerrero: 'Los paladines son maestros del combate cuerpo a cuerpo. Su vida y su resistencia les permiten sostener la línea de frente y frenar a los enemigos.',
+    clerigo: 'Los clérigos canalizan la luz sagrada: curan y bendicen a los suyos, castigan de lejos y cortan los casteos peligrosos. Pueden cazar solos, pero brillan en grupo.',
+    pala: 'Los palas son maestros del combate cuerpo a cuerpo. Su vida y su resistencia les permiten sostener la línea de frente y frenar a los enemigos.',
 };
 const clsCol = (id: string) => CLS_COL[id] ?? '#d6a445';
 
@@ -55,7 +55,7 @@ function mountDolls(host: HTMLElement) {
 }
 
 function clsIcon(id: string, col: string): string {
-    if (id === 'healer') return badge(`<path d="M-5 -17 H5 V-5 H17 V5 H5 V17 H-5 V5 H-17 V-5 H-5Z" fill="${col}" fill-opacity=".3" stroke="${col}" stroke-width="1.8" stroke-linejoin="round"/><circle r="4.5" fill="#fff"/>`, col);
+    if (id === 'clerigo') return badge(`<path d="M-5 -17 H5 V-5 H17 V5 H5 V17 H-5 V5 H-17 V-5 H-5Z" fill="${col}" fill-opacity=".3" stroke="${col}" stroke-width="1.8" stroke-linejoin="round"/><circle r="4.5" fill="#fff"/>`, col);
     const glyph = id === 'mago'
         ? `<path d="M0 -17 L4.5 -4.5 L17 0 L4.5 4.5 L0 17 L-4.5 4.5 L-17 0 L-4.5 -4.5Z" fill="${col}" fill-opacity=".3" stroke="${col}" stroke-width="1.8" stroke-linejoin="round"/><circle r="4.5" fill="#fff"/><path d="M12 -14 l1.6 3.4 3.4 1.6 -3.4 1.6 -1.6 3.4 -1.6 -3.4 -3.4 -1.6 3.4 -1.6z" fill="#fff" opacity=".85" transform="scale(.5) translate(24 -26)"/>`
         : `<g stroke="${col}" stroke-linecap="round" stroke-linejoin="round"><path d="M-15 -17 L13 11 M15 -17 L-13 11" stroke-width="3.6"/><path d="M-19 7 L-9 17 M19 7 L9 17" stroke-width="3"/><path d="M-15 -17 L13 11 M15 -17 L-13 11" stroke="#fff" stroke-opacity=".55" stroke-width="1"/></g><path d="M-8 -5 H8 V4 C8 10 3 13 0 15 C-3 13 -8 10 -8 4Z" fill="#150a14" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>`;
@@ -193,8 +193,8 @@ export function initLoginUI(ctx: FlowCtx) {
     function bullets(c: ClassInfo): string[] {
         const sp = (...ids: string[]) => ids.map((i) => ctx.spellName(i)).join(', ');
         if (c.id === 'mago') return [`Hechizos a distancia: ${sp('proyectil', 'bola', 'lluvia')}`, `Congela para controlar (${sp('paralisis')})`, `Mucho maná: ${c.mp} base, +${c.mpL} por nivel`, `Frágil: ${c.hp} de vida base`];
-        if (c.id === 'healer') return [`Cura a los suyos: ${sp('curacion', 'renovar', 'orbe')}`, `Bendice y protege (${sp('bendicion')})`, `Castiga de lejos y corta casteos (${sp('castigo', 'reprender')})`, `Maná: ${c.mp} base, +${c.mpL} por nivel`];
-        if (c.id === 'guerrero') return [`Cuerpo a cuerpo: ${c.melee[0]}–${c.melee[1]} de daño`, `Resistente: ${c.hp} de vida base, +${c.hpL} por nivel`, `Aturde y barre (${sp('aturdir', 'giro')})`, `Poco maná: ${c.mp} base`];
+        if (c.id === 'clerigo') return [`Cura a los suyos: ${sp('curacion', 'renovar', 'orbe')}`, `Bendice y protege (${sp('bendicion')})`, `Castiga de lejos y corta casteos (${sp('castigo', 'reprender')})`, `Maná: ${c.mp} base, +${c.mpL} por nivel`];
+        if (c.id === 'pala') return [`Cuerpo a cuerpo: ${c.melee[0]}–${c.melee[1]} de daño`, `Resistente: ${c.hp} de vida base, +${c.hpL} por nivel`, `Aturde y barre (${sp('aturdir', 'giro')})`, `Poco maná: ${c.mp} base`];
         return [c.desc];
     }
     /** Íconos de facción y de clase: una sola pantalla de creación, como el diseño del pack. */

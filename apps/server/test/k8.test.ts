@@ -1,7 +1,7 @@
 /**
  * K8: habilidades de nivel 15 a 35 de los kits de Valdrys (ver el doc del proyecto kits-de-clase.md §2, versión 4: 15, 20, 25, 30 y 35).
  * Escudos (de maná, divino, guardián), Paso de luz, Aura de represalia, Clarividencia, Purga, bendiciones de grupo (poder, amparo,
- * intelecto y la Bendición de grupo del healer: Fortaleza + Espíritu divino), Esfera celestial y Despertar.
+ * intelecto y la Bendición de grupo del clérigo: Fortaleza + Espíritu divino), Esfera celestial y Despertar.
  */
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
@@ -59,10 +59,10 @@ function setup(instance = '') {
         return { sid, log, p };
     };
     const mago = join('mago', { x: 30, y: 20 }, 'solmar', 'mago');
-    const pala = join('pala', { x: 31, y: 21 }, 'solmar', 'guerrero');
-    const healer = join('healer', { x: 32, y: 20 }, 'solmar', 'healer');
-    const enemigo = join('enemigo', { x: 34, y: 20 }, 'vhar', 'guerrero');
-    return { w, host, mago, pala, healer, enemigo, join };
+    const pala = join('pala', { x: 31, y: 21 }, 'solmar', 'pala');
+    const clerigo = join('clerigo', { x: 32, y: 20 }, 'solmar', 'clerigo');
+    const enemigo = join('enemigo', { x: 34, y: 20 }, 'vhar', 'pala');
+    return { w, host, mago, pala, clerigo, enemigo, join };
 }
 const advance = (w: GameWorld, ms: number) => { for (let t = 0; t < ms; t += 100) { clock += 100; w.tick(); } };
 const castFor = (w: GameWorld, sid: string, spell: string) => { pkt(w, sid, 'spellCastStartRequest', { spellId: 0, spell }); clock += castMsOf(spell); };
@@ -72,8 +72,8 @@ const skill = (w: GameWorld, sid: string, s: string, targetId = 0n, mobId = 0) =
 test('K8: del 13 al 40 las habilidades salen en el 15, 20, 25, 30 y 35 (escape de todas en el 20)', () => {
     const table: [string, string, number][] = [
         ['mago', 'escudomana', 15], ['mago', 'blink', 20], ['mago', 'clarividencia', 25], ['mago', 'remover', 30], ['mago', 'intelecto', 35],
-        ['guerrero', 'escudodivino', 15], ['guerrero', 'carga', 20], ['guerrero', 'represalia', 25], ['guerrero', 'grito', 30], ['guerrero', 'amparo', 35],
-        ['healer', 'guardian', 15], ['healer', 'pasoluz', 20], ['healer', 'despertar', 25], ['healer', 'esfera', 30], ['healer', 'grupo', 35],
+        ['pala', 'escudodivino', 15], ['pala', 'carga', 20], ['pala', 'represalia', 25], ['pala', 'grito', 30], ['pala', 'amparo', 35],
+        ['clerigo', 'guardian', 15], ['clerigo', 'pasoluz', 20], ['clerigo', 'despertar', 25], ['clerigo', 'esfera', 30], ['clerigo', 'grupo', 35],
     ];
     for (const [cls, id, lvl] of table) {
         assert.equal(canUseSkill(cls, kitLevel(lvl), id), true, `${cls} ${id} a nivel ${lvl}`);
@@ -81,7 +81,7 @@ test('K8: del 13 al 40 las habilidades salen en el 15, 20, 25, 30 y 35 (escape d
         assert.equal(canUseSkill(cls, kitLevel(40), id), true, 'siguen al 40');
     }
     assert.equal(canUseSkill('mago', kitLevel(40), 'escudodivino'), false, 'cada escudo es de su clase');
-    assert.equal(canUseSkill('guerrero', kitLevel(40), 'despertar'), false);
+    assert.equal(canUseSkill('pala', kitLevel(40), 'despertar'), false);
     assert.equal(SKILLS.escudomana.shield, 0.33); assert.equal(SKILLS.escudodivino.shield, 0.6); assert.equal(SKILLS.guardian.shield, 0.4);
     assert.equal(castMsOf('grito'), 1408); assert.equal(castMsOf('despertar'), 1408);
     assert.equal(SHIELD_MS, 10000);
@@ -128,15 +128,15 @@ test('Escudo de maná: 33 % de la vida del mago; el golpe se lo come y la vida q
 });
 
 test('Escudo divino (60 %) y Escudo guardián (40 % al aliado elegido); el guardián no se le pone a un enemigo', () => {
-    const { w, pala, healer, enemigo } = setup();
+    const { w, pala, clerigo, enemigo } = setup();
     skill(w, pala.sid, 'escudodivino');
     assert.equal(shieldOf(pala.p.status, clock), Math.round(pala.p.combat.maxHp * 0.6));
-    skill(w, healer.sid, 'guardian', enemigo.p.playerId);
+    skill(w, clerigo.sid, 'guardian', enemigo.p.playerId);
     assert.equal(shieldOf(enemigo.p.status, clock), 0);
-    assert.equal(denied(healer.log, 'guardian'), 1);
-    skill(w, healer.sid, 'guardian', pala.p.playerId);
+    assert.equal(denied(clerigo.log, 'guardian'), 1);
+    skill(w, clerigo.sid, 'guardian', pala.p.playerId);
     assert.equal(shieldOf(pala.p.status, clock), pala.p.combat.maxHp, 'se suma al divino con tope de una barra');
-    const v = cases(healer.log, 'playerVitals').map((m) => (m.payload as { value: { playerId: bigint; shield: number } }).value).filter((x) => x.playerId === pala.p.playerId).at(-1);
+    const v = cases(clerigo.log, 'playerVitals').map((m) => (m.payload as { value: { playerId: bigint; shield: number } }).value).filter((x) => x.playerId === pala.p.playerId).at(-1);
     assert.equal(v?.shield, pala.p.combat.maxHp, 'los cercanos ven el escudo en la barra');
 });
 
@@ -155,7 +155,7 @@ test('escudo en PvP: absorbe después del multiplicador y del tope por golpe', (
     assert.equal(mago.p.hp, hp - got);
 });
 
-// ---------- paladín ----------
+// ---------- pala ----------
 test('Aura de represalia: −20 % de daño recibido por 10 s', () => {
     const { w, pala } = setup();
     const base = (() => { const hp = pala.p.hp; priv(w).damagePlayer(pala.p, 400, 'magic', null, 'x'); const d = hp - pala.p.hp; pala.p.hp = pala.p.combat.maxHp; return d; })();
@@ -183,11 +183,11 @@ test('Aura de represalia: devuelve ⅓ del golpe al monstruo que pegó (en el ti
 });
 
 test('Bendición de poder (id grito): cast 0,8 s, +16 al Daño base a los aliados a 14 celdas, no al enemigo; dura 15 min fuera de la arena', () => {
-    const { w, mago, pala, healer, enemigo } = setup();
+    const { w, mago, pala, clerigo, enemigo } = setup();
     skill(w, pala.sid, 'grito');
     assert.equal(denied(pala.log, 'grito'), 1, 'sin cast no sale');
     castFor(w, pala.sid, 'grito'); skill(w, pala.sid, 'grito');
-    for (const o of [pala, mago, healer]) { assert.ok(hasBuff(o.p.status, 'poder', clock), o.p.characterName); assert.equal(o.p.combat.dmgBonus, 16); }
+    for (const o of [pala, mago, clerigo]) { assert.ok(hasBuff(o.p.status, 'poder', clock), o.p.characterName); assert.equal(o.p.combat.dmgBonus, 16); }
     assert.equal(hasBuff(enemigo.p.status, 'poder', clock), false);
     const r = mock.method(Math, 'random', () => 0);
     try {
@@ -224,23 +224,23 @@ function withParty(w: GameWorld, members: { sid: string; p: Player }[], fn: () =
 }
 
 test('Bendiciones de grupo: llegan a toda la party aunque esté lejos; a los de cerca sin party también; al enemigo y a los de lejos sin party no', () => {
-    const { w, pala, mago, healer, enemigo, join } = setup();
-    const lejos = join('lejos', { x: 30, y: 52 }, 'solmar', 'guerrero'), ajeno = join('ajeno', { x: 31, y: 52 }, 'solmar', 'mago');
+    const { w, pala, mago, clerigo, enemigo, join } = setup();
+    const lejos = join('lejos', { x: 30, y: 52 }, 'solmar', 'pala'), ajeno = join('ajeno', { x: 31, y: 52 }, 'solmar', 'mago');
     assert.ok(Math.hypot(lejos.p.posX - pala.p.posX, lejos.p.posY - pala.p.posY) > 14, 'el de la party está fuera de las 14 celdas');
-    withParty(w, [pala, healer, lejos], () => {
+    withParty(w, [pala, clerigo, lejos], () => {
         castFor(w, pala.sid, 'grito'); skill(w, pala.sid, 'grito');
-        for (const o of [pala, healer, lejos]) assert.ok(hasBuff(o.p.status, 'poder', clock), `${o.p.characterName} (party)`);
+        for (const o of [pala, clerigo, lejos]) assert.ok(hasBuff(o.p.status, 'poder', clock), `${o.p.characterName} (party)`);
         assert.equal(lejos.p.combat.dmgBonus, 16, 'se recalculan sus stats');
         assert.ok(hasBuff(mago.p.status, 'poder', clock), 'el de cerca sin party sigue recibiéndola (14 celdas)');
         assert.equal(hasBuff(ajeno.p.status, 'poder', clock), false, 'lejos y sin party: no');
         assert.equal(hasBuff(enemigo.p.status, 'poder', clock), false, 'el enemigo no');
         // las otras tres también
-        castFor(w, healer.sid, 'grupo'); skill(w, healer.sid, 'grupo');
+        castFor(w, clerigo.sid, 'grupo'); skill(w, clerigo.sid, 'grupo');
         assert.ok(hasBuff(lejos.p.status, 'fortaleza', clock) && hasBuff(lejos.p.status, 'espiritu', clock));
         castFor(w, pala.sid, 'amparo'); skill(w, pala.sid, 'amparo');
         assert.ok(hasBuff(lejos.p.status, 'amparo', clock));
         castFor(w, mago.sid, 'intelecto'); skill(w, mago.sid, 'intelecto');
-        assert.ok(hasBuff(pala.p.status, 'intelecto', clock) && hasBuff(healer.p.status, 'intelecto', clock), 'el mago (sin party) llega a los de cerca');
+        assert.ok(hasBuff(pala.p.status, 'intelecto', clock) && hasBuff(clerigo.p.status, 'intelecto', clock), 'el mago (sin party) llega a los de cerca');
         assert.equal(hasBuff(lejos.p.status, 'intelecto', clock), false, 'pero el lejano no está en SU party');
     });
 });
@@ -258,16 +258,16 @@ test('Bendiciones de grupo: se renuevan sin apilarse (la nueva pisa la duración
 });
 
 test('Bendiciones de grupo: dentro de la arena duran lo de Valdrys (60 y 90 s)', () => {
-    const { w, pala, healer } = setup();
+    const { w, pala, clerigo } = setup();
     pala.p.setPosition(ARENA_AT.x, ARENA_AT.y); advance(w, 100);
     castFor(w, pala.sid, 'grito'); skill(w, pala.sid, 'grito');
     assert.ok(hasBuff(pala.p.status, 'poder', clock));
     advance(w, 59_000); assert.ok(hasBuff(pala.p.status, 'poder', clock), 'a los 59 s sigue');
     advance(w, 1_200); assert.equal(hasBuff(pala.p.status, 'poder', clock), false, 'a los 60 s se fue');
-    healer.p.setPosition(ARENA_AT.x + 2, ARENA_AT.y); advance(w, 100);
-    castFor(w, healer.sid, 'grupo'); skill(w, healer.sid, 'grupo');
-    advance(w, 89_000); assert.ok(hasBuff(healer.p.status, 'fortaleza', clock));
-    advance(w, 1_200); assert.equal(hasBuff(healer.p.status, 'fortaleza', clock), false, 'Bendición de grupo: 90 s adentro');
+    clerigo.p.setPosition(ARENA_AT.x + 2, ARENA_AT.y); advance(w, 100);
+    castFor(w, clerigo.sid, 'grupo'); skill(w, clerigo.sid, 'grupo');
+    advance(w, 89_000); assert.ok(hasBuff(clerigo.p.status, 'fortaleza', clock));
+    advance(w, 1_200); assert.equal(hasBuff(clerigo.p.status, 'fortaleza', clock), false, 'Bendición de grupo: 90 s adentro');
 });
 
 test('Bendiciones de grupo: se sacan al entrar a la arena y no vuelven al salir; las auras de 10 s y los escudos no se tocan', () => {
@@ -319,16 +319,16 @@ test('Clarividencia: el mago se la pone a sí mismo por 10 s, recarga 30 s', () 
 });
 
 test('Intelecto arcano: +8 de Magia de equipo 15 min a los aliados (más Daño mágico y más poder de curación)', () => {
-    const { w, mago, healer } = setup();
-    const mag0 = healer.p.combat.mag;
+    const { w, mago, clerigo } = setup();
+    const mag0 = clerigo.p.combat.mag;
     castFor(w, mago.sid, 'intelecto'); skill(w, mago.sid, 'intelecto');
-    assert.equal(healer.p.combat.mag, mag0 + 8);
+    assert.equal(clerigo.p.combat.mag, mag0 + 8);
     assert.equal(mago.p.combat.mag, statsFromChar(mago.p.econ!).mag + 8);
-    assert.ok(healAmount(0.4, healer.p.combat, 1000) > healAmount(0.4, { ...healer.p.combat, mag: mag0 }, 1000));
+    assert.ok(healAmount(0.4, clerigo.p.combat, 1000) > healAmount(0.4, { ...clerigo.p.combat, mag: mag0 }, 1000));
     advance(w, 899_000);
-    assert.equal(healer.p.combat.mag, mag0 + 8, 'a los 15 min menos 1 s sigue');
+    assert.equal(clerigo.p.combat.mag, mag0 + 8, 'a los 15 min menos 1 s sigue');
     advance(w, 1_200);
-    assert.equal(healer.p.combat.mag, mag0);
+    assert.equal(clerigo.p.combat.mag, mag0);
 });
 
 test('Purga (remover): saca el frenado y el congelado, recarga 24 s', () => {
@@ -343,11 +343,11 @@ test('Purga (remover): saca el frenado y el congelado, recarga 24 s', () => {
     assert.ok(isSlowed(mago.p.status, clock), 'en recarga no sale');
 });
 
-// ---------- healer ----------
+// ---------- clerigo ----------
 test('Bendición de grupo (Fortaleza): +6 % de vida máxima, 15 min; al vencer la vida se recorta al máximo', () => {
-    const { w, healer, pala } = setup();
+    const { w, clerigo, pala } = setup();
     const max0 = pala.p.combat.maxHp;
-    castFor(w, healer.sid, 'grupo'); skill(w, healer.sid, 'grupo');
+    castFor(w, clerigo.sid, 'grupo'); skill(w, clerigo.sid, 'grupo');
     assert.ok(hasBuff(pala.p.status, 'fortaleza', clock) && hasBuff(pala.p.status, 'espiritu', clock), 'las dos a la vez');
     assert.deepEqual(lastBuffs(pala.log).sort(), ['espiritu', 'fortaleza']);
     assert.equal(pala.p.combat.maxHp, Math.round(max0 * 1.06));
@@ -358,75 +358,75 @@ test('Bendición de grupo (Fortaleza): +6 % de vida máxima, 15 min; al vencer l
 });
 
 test('Bendición de grupo (Espíritu divino): +50 % de regeneración de maná, 15 min fuera de la arena', () => {
-    const { w, healer, mago } = setup();
+    const { w, clerigo, mago } = setup();
     const regen = () => { mago.p.mp = 0; mago.p.nextMpRegenAt = 0; priv(w).regenMana(mago.p, clock); return mago.p.mp; };
     const base = regen();
-    castFor(w, healer.sid, 'grupo'); skill(w, healer.sid, 'grupo');
+    castFor(w, clerigo.sid, 'grupo'); skill(w, clerigo.sid, 'grupo');
     assert.ok(hasBuff(mago.p.status, 'espiritu', clock));
     assert.equal(regen(), Math.round(base * 1.5));
     advance(w, 899_000); assert.ok(hasBuff(mago.p.status, 'espiritu', clock), 'dura 15 min');
     advance(w, 1_200); assert.equal(hasBuff(mago.p.status, 'espiritu', clock), false);
 });
 
-test('Paso de luz (healer, nivel 20): hasta 6 celdas, se saca el frenado, recarga 15 s; el mago no lo tiene', () => {
-    const { w, healer, mago } = setup();
-    applySlow(healer.p.status, clock, 3000);
-    const x0 = healer.p.posX, y0 = healer.p.posY;
-    pkt(w, healer.sid, 'blinkRequest', { x: x0, y: y0 + 7, skill: 'pasoluz' });
-    assert.equal(healer.p.posY, y0, '7 celdas: muy lejos');
+test('Paso de luz (clerigo, nivel 20): hasta 6 celdas, se saca el frenado, recarga 15 s; el mago no lo tiene', () => {
+    const { w, clerigo, mago } = setup();
+    applySlow(clerigo.p.status, clock, 3000);
+    const x0 = clerigo.p.posX, y0 = clerigo.p.posY;
+    pkt(w, clerigo.sid, 'blinkRequest', { x: x0, y: y0 + 7, skill: 'pasoluz' });
+    assert.equal(clerigo.p.posY, y0, '7 celdas: muy lejos');
     // una celda libre a 5 de distancia (el mapa tiene casas y árboles)
     for (const [dx, dy] of [[0, 5], [0, -5], [5, 0], [-5, 0], [3, 4], [-3, 4], [3, -4], [-3, -4], [4, 3], [-4, 3], [4, -3], [-4, -3]]) {
-        pkt(w, healer.sid, 'blinkRequest', { x: x0 + dx, y: y0 + dy, skill: 'pasoluz' });
-        if (healer.p.posX !== x0 || healer.p.posY !== y0) break;
+        pkt(w, clerigo.sid, 'blinkRequest', { x: x0 + dx, y: y0 + dy, skill: 'pasoluz' });
+        if (clerigo.p.posX !== x0 || clerigo.p.posY !== y0) break;
     }
-    const x1 = healer.p.posX, y1 = healer.p.posY;
+    const x1 = clerigo.p.posX, y1 = clerigo.p.posY;
     assert.equal(Math.hypot(x1 - x0, y1 - y0), 5, 'se movió 5 celdas');
-    assert.equal(isSlowed(healer.p.status, clock), false, 'se saca el frenado');
-    clock += 5000; pkt(w, healer.sid, 'blinkRequest', { x: x0, y: y0, skill: 'pasoluz' });
-    assert.deepEqual([healer.p.posX, healer.p.posY], [x1, y1], 'en recarga');
+    assert.equal(isSlowed(clerigo.p.status, clock), false, 'se saca el frenado');
+    clock += 5000; pkt(w, clerigo.sid, 'blinkRequest', { x: x0, y: y0, skill: 'pasoluz' });
+    assert.deepEqual([clerigo.p.posX, clerigo.p.posY], [x1, y1], 'en recarga');
     const my = mago.p.posY;
     pkt(w, mago.sid, 'blinkRequest', { x: mago.p.posX, y: my + 3, skill: 'pasoluz' });
     assert.equal(mago.p.posY, my, 'no es del mago');
     pkt(w, mago.sid, 'blinkRequest', { x: mago.p.posX, y: my + 3 });
     assert.equal(mago.p.posY, my + 3, 'sin skill sigue siendo el Blink');
-    setLevel(w, healer.p, kitLevel(20) - 1); clock += 20_000;
-    pkt(w, healer.sid, 'blinkRequest', { x: x0, y: y0, skill: 'pasoluz' });
-    assert.deepEqual([healer.p.posX, healer.p.posY], [x1, y1], 'antes del 20 no');
-    setLevel(w, healer.p, kitLevel(20));
-    pkt(w, healer.sid, 'blinkRequest', { x: x0, y: y0, skill: 'pasoluz' });
-    assert.deepEqual([healer.p.posX, healer.p.posY], [x0, y0], 'en el 20 sí');
+    setLevel(w, clerigo.p, kitLevel(20) - 1); clock += 20_000;
+    pkt(w, clerigo.sid, 'blinkRequest', { x: x0, y: y0, skill: 'pasoluz' });
+    assert.deepEqual([clerigo.p.posX, clerigo.p.posY], [x1, y1], 'antes del 20 no');
+    setLevel(w, clerigo.p, kitLevel(20));
+    pkt(w, clerigo.sid, 'blinkRequest', { x: x0, y: y0, skill: 'pasoluz' });
+    assert.deepEqual([clerigo.p.posX, clerigo.p.posY], [x0, y0], 'en el 20 sí');
 });
 
 test('Esfera celestial: 8 curas del 13 % que saltan al aliado más herido a ≤ 6 celdas', () => {
-    const { w, healer, pala, mago } = setup();
-    pala.p.hp = 10; mago.p.hp = 10; healer.p.hp = 10;
-    const per = (o: Player) => healAmount(0.13, healer.p.combat, o.combat.maxHp);
-    skill(w, healer.sid, 'esfera', pala.p.playerId);
-    const got = pala.p.hp - 10 + mago.p.hp - 10 + healer.p.hp - 10;
+    const { w, clerigo, pala, mago } = setup();
+    pala.p.hp = 10; mago.p.hp = 10; clerigo.p.hp = 10;
+    const per = (o: Player) => healAmount(0.13, clerigo.p.combat, o.combat.maxHp);
+    skill(w, clerigo.sid, 'esfera', pala.p.playerId);
+    const got = pala.p.hp - 10 + mago.p.hp - 10 + clerigo.p.hp - 10;
     // los tres empiezan en 10: la esfera reparte entre los tres, y la suma son 8 curas
-    const min = 8 * Math.min(per(pala.p), per(mago.p), per(healer.p)), max = 8 * Math.max(per(pala.p), per(mago.p), per(healer.p));
+    const min = 8 * Math.min(per(pala.p), per(mago.p), per(clerigo.p)), max = 8 * Math.max(per(pala.p), per(mago.p), per(clerigo.p));
     assert.ok(got >= min && got <= max, `${got} entre ${min} y ${max}`);
-    assert.ok(pala.p.hp > 10 && mago.p.hp > 10 && healer.p.hp > 10, 'llega a todos');
+    assert.ok(pala.p.hp > 10 && mago.p.hp > 10 && clerigo.p.hp > 10, 'llega a todos');
 });
 
 test('Esfera celestial: sola con un aliado lejos, cura una vez', () => {
-    const { w, healer, join } = setup();
-    const lejos = join('lejos', { x: 40, y: 20 }, 'solmar', 'guerrero');
-    lejos.p.hp = 10; healer.p.hp = healer.p.combat.maxHp;
-    skill(w, healer.sid, 'esfera', lejos.p.playerId);
-    assert.equal(lejos.p.hp, 10 + healAmount(0.13, healer.p.combat, lejos.p.combat.maxHp));
+    const { w, clerigo, join } = setup();
+    const lejos = join('lejos', { x: 40, y: 20 }, 'solmar', 'pala');
+    lejos.p.hp = 10; clerigo.p.hp = clerigo.p.combat.maxHp;
+    skill(w, clerigo.sid, 'esfera', lejos.p.playerId);
+    assert.equal(lejos.p.hp, 10 + healAmount(0.13, clerigo.p.combat, lejos.p.combat.maxHp));
 });
 
 test('Despertar: cast 2,4 s, revive al aliado caído con 50 % de vida; no a un vivo ni a un enemigo', () => {
-    const { w, healer, pala, enemigo } = setup();
+    const { w, clerigo, pala, enemigo } = setup();
     priv(w).damagePlayer(pala.p, 1e7, 'magic', null, 'x');
     assert.ok(pala.p.isDead);
-    skill(w, healer.sid, 'despertar', pala.p.playerId);
-    assert.equal(denied(healer.log, 'despertar'), 1, 'sin cast no sale');
+    skill(w, clerigo.sid, 'despertar', pala.p.playerId);
+    assert.equal(denied(clerigo.log, 'despertar'), 1, 'sin cast no sale');
     clock += 30_000; // en el mundo abierto no hay límite de tiempo (mientras no haya reaparecido)
-    castFor(w, healer.sid, 'despertar'); skill(w, healer.sid, 'despertar', enemigo.p.playerId);
-    assert.equal(denied(healer.log, 'despertar'), 2, 'a un enemigo (vivo) no');
-    castFor(w, healer.sid, 'despertar'); skill(w, healer.sid, 'despertar', pala.p.playerId);
+    castFor(w, clerigo.sid, 'despertar'); skill(w, clerigo.sid, 'despertar', enemigo.p.playerId);
+    assert.equal(denied(clerigo.log, 'despertar'), 2, 'a un enemigo (vivo) no');
+    castFor(w, clerigo.sid, 'despertar'); skill(w, clerigo.sid, 'despertar', pala.p.playerId);
     assert.equal(pala.p.isDead, false);
     assert.equal(pala.p.hp, Math.round(pala.p.combat.maxHp * 0.5));
     assert.ok(texts(pala.log).some((t) => t.includes('te despertó')));
@@ -435,24 +435,24 @@ test('Despertar: cast 2,4 s, revive al aliado caído con 50 % de vida; no a un v
 });
 
 test('Despertar: en una mazmorra (instancia) solo dentro de los 10 s de la caída', () => {
-    const { w, healer, pala, mago } = setup('prueba-k8');
+    const { w, clerigo, pala, mago } = setup('prueba-k8');
     priv(w).damagePlayer(pala.p, 1e7, 'magic', null, 'x');
     clock += 11_000;
-    castFor(w, healer.sid, 'despertar'); skill(w, healer.sid, 'despertar', pala.p.playerId);
+    castFor(w, clerigo.sid, 'despertar'); skill(w, clerigo.sid, 'despertar', pala.p.playerId);
     assert.ok(pala.p.isDead);
-    assert.ok(texts(healer.log).some((t) => t.includes('10 s')));
+    assert.ok(texts(clerigo.log).some((t) => t.includes('10 s')));
     priv(w).damagePlayer(mago.p, 1e7, 'magic', null, 'x');
-    clock += 21_000; healer.p.mp = healer.p.combat.maxHp;
+    clock += 21_000; clerigo.p.mp = clerigo.p.combat.maxHp;
     priv(w).damagePlayer(mago.p, 0, 'magic', null, 'x');
     mago.p.deadAt = clock - 5000;
-    castFor(w, healer.sid, 'despertar'); skill(w, healer.sid, 'despertar', mago.p.playerId);
+    castFor(w, clerigo.sid, 'despertar'); skill(w, clerigo.sid, 'despertar', mago.p.playerId);
     assert.equal(mago.p.isDead, false, 'a los 5 s sí');
 });
 
 test('al morir se pierden escudos y bendiciones (y los stats vuelven)', () => {
-    const { w, pala, healer } = setup();
+    const { w, pala, clerigo } = setup();
     skill(w, pala.sid, 'escudodivino');
-    castFor(w, healer.sid, 'grupo'); skill(w, healer.sid, 'grupo');
+    castFor(w, clerigo.sid, 'grupo'); skill(w, clerigo.sid, 'grupo');
     const max0 = withBuffs(statsFromChar(pala.p.econ!), createDefaultStatus(), clock).maxHp;
     priv(w).damagePlayer(pala.p, 1e7, 'magic', null, 'x');
     assert.ok(pala.p.isDead);

@@ -19,7 +19,7 @@ import type { GameWorld } from '../src/world.ts';
 const N = 40;
 function sim(zones: Zone[], opts: { noRespawn?: boolean; elites?: boolean } = {}) {
     const timers: { ms: number; fn: () => void }[] = [];
-    const p = { playerId: 7n, posX: 1, posY: 1, disconnected: false, isDead: false, status: { isInvisible: false }, combat: statsFromChar({ lvl: 10, cls: 'guerrero', eq: {} }), pvp: new PvpLimiter(), send: () => {} } as unknown as Player;
+    const p = { playerId: 7n, posX: 1, posY: 1, disconnected: false, isDead: false, status: { isInvisible: false }, combat: statsFromChar({ lvl: 10, cls: 'pala', eq: {} }), pvp: new PvpLimiter(), send: () => {} } as unknown as Player;
     const grid = (v: boolean) => Array.from({ length: N }, () => new Array<boolean>(N).fill(v));
     const map = { size: N, tiles: [], blocked: grid(false), safe: grid(false), props: [], decals: [], zones, buildings: [], npcs: [], spawn: { x: 1, y: 1 }, fire: { x: -50, y: -50 } } as unknown as WorldMap;
     const host: MobHost = {
@@ -90,7 +90,7 @@ function setup() {
         caza.playerConnected(session.sessionId, name, (m) => log.push(m), () => {}, persisted);
         mem.put(`acc-${name}`, { name, salt: '', hash: '', created: 0, lastLogin: 0 });
         caza.bindAccount(session.sessionId, `acc-${name}`);
-        caza.onClientSave(session.sessionId, JSON.stringify({ cls: 'guerrero', faction: 'solmar' }));
+        caza.onClientSave(session.sessionId, JSON.stringify({ cls: 'pala', faction: 'solmar' }));
         const p = caza.playerOf(session.sessionId)!; p.prog.lvl = 5;
         return { name, session, log };
     };

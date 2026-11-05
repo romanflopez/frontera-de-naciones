@@ -7,7 +7,7 @@ import { defaultStats } from '@fdn/world';
 const char = (cls: string, dex: number, mag: number) => statsFromChar({ lvl: 120, cls, stats: { ...defaultStats(), dex, mag }, eq: {} } as never);
 
 test('golpe físico: ataca 100 + (DEX − 50) contra 2 × DEX del objetivo, con tope 10-90 %', () => {
-    const naked = char('guerrero', 10, 10), tank = char('guerrero', 120, 10), ace = char('guerrero', 200, 10);
+    const naked = char('pala', 10, 10), tank = char('pala', 120, 10), ace = char('pala', 200, 10);
     assert.equal(hitChance(naked, naked, 'phys'), HIT.max / 100, 'sin DEX nadie esquiva: tope 90 %');
     assert.equal(hitChance(ace, naked, 'phys'), HIT.max / 100);
     // DEX 200 contra DEX 200: (100 + 150) / 400 × K
@@ -20,7 +20,7 @@ test('golpe físico: ataca 100 + (DEX − 50) contra 2 × DEX del objetivo, con 
 });
 
 test('golpe mágico: 100 + (MAG − 50) contra 100 + (MAG − 50) del objetivo; la DEX no cuenta', () => {
-    const mage = char('mago', 10, 200), plain = char('guerrero', 10, 10), dexy = char('guerrero', 200, 10);
+    const mage = char('mago', 10, 200), plain = char('pala', 10, 10), dexy = char('pala', 200, 10);
     assert.ok(hitChance(mage, plain, 'magic') >= hitChance(plain, mage, 'magic'));
     assert.equal(hitChance(mage, plain, 'magic'), hitChance(mage, dexy, 'magic'), 'la DEX no esquiva hechizos');
     // MAG contra MAG parejo: 50 % × K / 50 de HB; con K = 90, 90 % (tope)
@@ -28,7 +28,7 @@ test('golpe mágico: 100 + (MAG − 50) contra 100 + (MAG − 50) del objetivo; 
 });
 
 test('la tirada usa la chance (y se apaga con la bandera de los tests)', () => {
-    const a = char('guerrero', 120, 10), b = char('guerrero', 120, 10), p = hitChance(a, b, 'phys');
+    const a = char('pala', 120, 10), b = char('pala', 120, 10), p = hitChance(a, b, 'phys');
     assert.equal(HIT_ROLL.enabled, false, 'bajo node --test la tirada está apagada: los tests de combate no dependen del azar');
     assert.equal(hitRoll(a, b, 'phys', () => 0.9999), true, 'apagada: siempre pega');
     HIT_ROLL.enabled = true;

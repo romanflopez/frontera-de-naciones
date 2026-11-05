@@ -23,7 +23,7 @@ class MemStorage implements Storage {
 }
 function setup() {
     const mem = new MemStorage(), eco = new Economy(mem), reg = new WorldRegistry({ settings, economy: eco });
-    const join = (world: GameWorld, name: string, cls = 'guerrero') => {
+    const join = (world: GameWorld, name: string, cls = 'pala') => {
         const log: ServerMessage[] = [];
         const session: TransferSession = { sessionId: `s-${name}`, worldId: world.id };
         const persisted: PersistedPlayer = { mapId: world.mapId, worldId: world.mapId, x: 11, y: 11, direction: 4, gender: 0, skinColor: 0, hairStyleIndex: 0, underwearColorIndex: 0, movementSpeedMs: 270, runningMode: true, attackMode: true };
@@ -83,7 +83,7 @@ test('la DF y la RM que vienen de atributos se topean; la base de la armadura no
         armadura: { n: 'Armadura de placas', a: [{ id: 'df', v: 300 }] }, // base def 34, rm 12
         anillo: { n: 'Anillo opaco', a: [{ id: 'rm', v: 300 }] }, // base rm 8
     };
-    const s = statsFromChar({ lvl: 40, cls: 'guerrero', eq } as never);
+    const s = statsFromChar({ lvl: 40, cls: 'pala', eq } as never);
     const arm = BASE_BY_NAME.get('Armadura de placas')!, ring = BASE_BY_NAME.get('Anillo opaco')!;
     assert.equal(s.def, arm.def! + COMBAT_CAP.df);
     assert.equal(s.rm, arm.rm! + ring.rm! + COMBAT_CAP.rm);
@@ -115,7 +115,7 @@ test('mejora: un Verde solo llega a +3; un fallo nunca baja el nivel', () => {
 
 // ---------- migración v5 ----------
 test('migración v5: únicos de banda → Azul, de jefe → la calidad más alta, botín viejo → Común sin atributos', () => {
-    const st = newEcon('guerrero', 'solmar');
+    const st = newEcon('pala', 'solmar');
     const band = uniqueItem(st, UNIQUE_BASES.find((u) => !u.uniq.boss)!, 2), boss = uniqueItem(st, UNIQUE_BASES.find((u) => u.uniq.boss)!, 4);
     band.r = 2; band.a = band.a.slice(0, 2); boss.r = 3; boss.a = boss.a.slice(0, 2); // como se guardaban antes (sin extras)
     const viejo = { u: st.nextUid++, n: 'Espada corta', r: 3, a: [{ id: 'crit' as AttrId, v: 90 }] };
@@ -274,7 +274,7 @@ test('extras E3: aspd no sale; las armas sacan daño plano/crítico y las armadu
     assert.ok(!a.dmg && !a.poison && !a.leech, 'la armadura no saca daño plano, veneno ni robo de vida');
     assert.ok((a.df ?? 0) > (a.crit ?? 0) * 2, 'en la armadura la defensa sale más que el crítico');
     assert.equal(pickExtra('arma', []), undefined);
-    const base = statsFromChar({ lvl: 10, cls: 'guerrero', eq: { arma: { n: 'Espada corta', r: 0, a: [] } } } as never);
-    const plus = statsFromChar({ lvl: 10, cls: 'guerrero', eq: { arma: { n: 'Espada corta', r: 2, a: [{ id: 'dmg', v: 3 }] } } } as never);
+    const base = statsFromChar({ lvl: 10, cls: 'pala', eq: { arma: { n: 'Espada corta', r: 0, a: [] } } } as never);
+    const plus = statsFromChar({ lvl: 10, cls: 'pala', eq: { arma: { n: 'Espada corta', r: 2, a: [{ id: 'dmg', v: 3 }] } } } as never);
     assert.deepEqual([plus.wdmg[0] - base.wdmg[0], plus.wdmg[1] - base.wdmg[1]], [3, 3]);
 });

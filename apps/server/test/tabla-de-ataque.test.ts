@@ -59,7 +59,7 @@ function world() {
         return { sid, log, p };
     };
     const mago = join('mago', { x: 30, y: 20 }, 'solmar', 'mago');
-    const enemigo = join('enemigo', { x: 34, y: 20 }, 'vhar', 'guerrero');
+    const enemigo = join('enemigo', { x: 34, y: 20 }, 'vhar', 'pala');
     const shield = (p: Player) => applyShield(p.status, clock, 100000, p.combat.maxHp, 10000); // una barra llena
     const hitPvp = (spell: string) => pkt(w, mago.sid, 'pvpHitRequest', { fx: '', x: enemigo.p.posX, y: enemigo.p.posY, targetId: enemigo.p.playerId, dmg: 0, secs: 0, r: 0, spell });
     return { w, host, mago, enemigo, shield, hitPvp };

@@ -45,7 +45,7 @@ class Bot {
         this.ws.on('message', (d: Buffer) => {
             const p = ServerMessage.decode(new Uint8Array(d)).payload as Srv | undefined; if (!p) return;
             switch (p.$case) {
-                case 'characterList': this.send(p.value.characters.some((c) => c.name === this.name) ? { $case: 'selectCharacterRequest', value: { name: this.name } } : { $case: 'createCharacterRequest', value: { name: this.name, cls: 'guerrero', faction: 'solmar' } }); if (p.value.error) throw new Error(p.value.error); break;
+                case 'characterList': this.send(p.value.characters.some((c) => c.name === this.name) ? { $case: 'selectCharacterRequest', value: { name: this.name } } : { $case: 'createCharacterRequest', value: { name: this.name, cls: 'pala', faction: 'solmar' } }); if (p.value.error) throw new Error(p.value.error); break;
                 case 'initialState': this.id = p.value.playerId; this.ms = p.value.movementSpeedMs || 270; break;
                 case 'initialGameWorldState': this.mapName = p.value.mapName; this.x = p.value.playerX; this.y = p.value.playerY; ready(); break;
                 case 'vitals': this.vitals = { hp: p.value.hp, maxHp: p.value.maxHp, mp: p.value.mp, maxMp: p.value.maxMp, dead: p.value.dead }; this.vitalsLog.push({ t: Date.now(), hp: p.value.hp, mp: p.value.mp }); break;
@@ -62,7 +62,7 @@ class Bot {
     close() { this.ws.close(); }
 
     /** Guarda un personaje (el server lo valida y recalcula los stats de combate); el server limita los guardados a uno cada 0,8 s. */
-    async save(o: { cls: 'guerrero' | 'mago'; lvl: number; eq?: Partial<Record<'arma' | 'armadura' | 'cabeza' | 'anillo', Item | null>>; hp?: number; mp?: number }) {
+    async save(o: { cls: 'pala' | 'mago'; lvl: number; eq?: Partial<Record<'arma' | 'armadura' | 'cabeza' | 'anillo', Item | null>>; hp?: number; mp?: number }) {
         const json = JSON.stringify({ v: 1, faction: 'solmar', cls: o.cls, lvl: o.lvl, exp: 0, gold: 0, hp: o.hp ?? 99999, mp: o.mp ?? 99999, bag: [], eq: { arma: null, armadura: null, cabeza: null, anillo: null, ...o.eq }, q: { i: 0, st: 'new', prog: 0, keys: {}, shards: {} }, pots: { hp: 3, mp: 3 }, u: [] });
         this.send({ $case: 'saveCharacterRequest', value: { data: json } });
         await sleep(950);
@@ -145,12 +145,12 @@ async function main() {
     console.log(`posiciones: ${A.x},${A.y} y blancos en ${targets.map((t) => `${t.x},${t.y}`).join(' ')}`);
 
     // ---------- (a) daño físico y mágico ----------
-    // atacante guerrero nivel 2 sin arma: 'ataque' = rint(5,9) + nivel -> crudo 7..11
-    await A.save({ cls: 'guerrero', lvl: 2 });
+    // atacante pala nivel 2 sin arma: 'ataque' = rint(5,9) + nivel -> crudo 7..11
+    await A.save({ cls: 'pala', lvl: 2 });
     const cases = [0, 100, 300];
     const dfOf = (x: number): Item => ring(x === 0 ? [] : x === 300 ? [{ id: 'df', v: 200 }, { id: 'df', v: 100 }] : [{ id: 'df', v: x }]);
     // los blancos 0..2 son para DF; la RM se prueba en los mismos con otro equipo
-    for (let i = 0; i < 3; i++) await targets[i].save({ cls: 'guerrero', lvl: 60, eq: { anillo: dfOf(cases[i]) } });
+    for (let i = 0; i < 3; i++) await targets[i].save({ cls: 'pala', lvl: 60, eq: { anillo: dfOf(cases[i]) } });
     for (let i = 0; i < 3; i++) {
         const T = targets[i], df = cases[i];
         for (let k = 0; k < 6; k++) { await A.cast('ataque', T); await sleep(880); }
@@ -162,7 +162,7 @@ async function main() {
     const rmOf = (x: number): Item => ring(x === 0 ? [] : x === 300 ? [{ id: 'rm', v: 200 }, { id: 'rm', v: 100 }] : [{ id: 'rm', v: x }]);
     // 'Anillo opaco' ya trae RM 8 de base: la RM total es x + 8; para RM=0 exacto se usa un anillo con otro nombre base (sin RM)
     const noRm = (x: number): Item => (x === 0 ? { n: 'Espada corta', r: 0, a: [] } : rmOf(x));
-    for (let i = 0; i < 3; i++) await targets[i].save({ cls: 'guerrero', lvl: 60, eq: i === 0 ? { arma: noRm(0) } : { anillo: noRm(cases[i]) } });
+    for (let i = 0; i < 3; i++) await targets[i].save({ cls: 'pala', lvl: 60, eq: i === 0 ? { arma: noRm(0) } : { anillo: noRm(cases[i]) } });
     for (let i = 0; i < 3; i++) {
         const T = targets[i], rm = i === 0 ? 0 : cases[i] + 8; A.hits.length = 0;
         for (let k = 0; k < 3; k++) { await A.cast('proyectil', T); await sleep(420); }
@@ -170,7 +170,7 @@ async function main() {
         check(d.length >= 2 && d.every((x) => ok.has(x)), `(a) mágico, RM=${rm}: daños ${[...new Set(d)].join(',')} esperados ⊂ {${[...ok].join(',')}}`);
     }
     // el DF no protege del daño mágico ni la RM del físico
-    await targets[3].save({ cls: 'guerrero', lvl: 60, eq: { anillo: dfOf(300) } }); A.hits.length = 0;
+    await targets[3].save({ cls: 'pala', lvl: 60, eq: { anillo: dfOf(300) } }); A.hits.length = 0;
     for (let k = 0; k < 2; k++) { await A.cast('proyectil', targets[3]); await sleep(420); }
     const dm = A.myHits(targets[3]).map((h) => h.dmg);
     check(dm.length >= 1 && dm.every((x) => x >= mit(18, 8) && x <= 24), `(a) DF=300 no reduce el daño mágico (RM 8): ${dm.join(',')}`);
@@ -184,7 +184,7 @@ async function main() {
         { T: targets[2], rm: 308, rpar: 0, eq: ring([{ id: 'rm', v: 200 }, { id: 'rm', v: 100 }]) },
         { T: targets[3], rm: 108, rpar: 50, eq: ring([{ id: 'rm', v: 100 }, { id: 'rpar', v: 50 }]) },
     ];
-    for (const c of para) await c.T.save({ cls: 'guerrero', lvl: 60, eq: c.eq.n === 'Espada corta' ? { arma: c.eq } : { anillo: c.eq } });
+    for (const c of para) await c.T.save({ cls: 'pala', lvl: 60, eq: c.eq.n === 'Espada corta' ? { arma: c.eq } : { anillo: c.eq } });
     for (const c of para) {
         A.hits.length = 0; await A.cast('paralisis', c.T, 1); await sleep(500);
         const want = Math.max(0.4, Math.round(((3 * 100) / (100 + c.rm)) * (1 - c.rpar / 100) * 100) / 100), got = A.myHits(c.T).find((h) => h.secs > 0)?.secs ?? -1;
@@ -193,10 +193,10 @@ async function main() {
     }
 
     // ---------- (c) y (d) pociones ----------
-    // V: guerrero nivel 5 (vida máx. 212, maná máx. 56). Lo lastimo ~100 y le gasto maná para poder tomar pociones.
+    // V: pala nivel 5 (vida máx. 212, maná máx. 56). Lo lastimo ~100 y le gasto maná para poder tomar pociones.
     const V = targets[0]; // al lado del atacante
-    await V.save({ cls: 'guerrero', lvl: 5 });
-    await A.save({ cls: 'guerrero', lvl: 6 });
+    await V.save({ cls: 'pala', lvl: 5 });
+    await A.save({ cls: 'pala', lvl: 6 });
     for (let k = 0; k < 14 && V.vitals.hp > V.vitals.maxHp - 110; k++) { await A.cast('ataque', V); await sleep(880); }
     V.send({ $case: 'hpReport', value: { hp: V.vitals.hp, mpSpent: 40, mp: 16, meditating: false } });
     await sleep(400);
