@@ -25,7 +25,7 @@ import type { Player } from './player.ts';
 import type { AccountRecord, Storage } from './storage.ts';
 
 /** v3: nivel máximo 40 y curva de exp nueva (migra la exp guardada conservando la fracción del nivel). v4: puntos de stats. */
-export const ECON_VERSION = 11;
+export const ECON_VERSION = 12;
 export const MAX_LVL = MAX_LEVEL;
 /** Sin límite de oro de juego: el único techo es el técnico (entero exacto en JS / double del protocolo). */
 export const MAX_GOLD = Number.MAX_SAFE_INTEGER;
@@ -292,6 +292,10 @@ export function migrateEcon(st: Econ): boolean {
     if (st.v < 10) { st.zem = Math.max(0, Math.floor(st.zem ?? 0)) + Math.max(0, Math.floor(Number(st.forge) || 0)); delete st.forge; }
     // v11 (D.10): EK, contribución y títulos. Las cuentas viejas arrancan en 0; si el guardado trae algo raro se sanea.
     if (st.v < 11) cleanContrib(st);
+    // v12 (D.11): la Defensa de la frontera pide nivel 61. Quien la tenga ya sorteada hoy sin llegar a 61 la pierde (no hay progreso real: el PvP no cuenta antes de la zona roja).
+    if (st.v < 12 && st.qb && st.lvl < 61) {
+        const d = st.qb.d; d.ids = d.ids.filter((id) => id !== 'frontera'); delete d.prog.frontera; d.done = d.done.filter((id) => id !== 'frontera');
+    }
     st.v = ECON_VERSION;
     refreshUnlocks(st);
     return true;
@@ -797,7 +801,7 @@ export class Economy {
 
     }
 
-    /** Ganó una pelea contra otra nación en un mapa de facción (lo decide world.ts). A cada rival se le cuenta una vez por día. */
+    /** Ganó una pelea contra otra nación en zona roja (lo decide world.ts). A cada rival se le cuenta una vez por día. */
     questPvp(p: Player, victimKey: string): void {
         const st = p.econ; if (!st) return;
         const b = (st.qb ??= newQuestBook()); rollDailies(b, st.lvl, Date.now());
@@ -806,7 +810,7 @@ export class Economy {
         this.questEvent(p, st, { k: 'pvp' }); this.touch(p); this.snapshot(p);
     }
 
-    /** Premio de una misión: exp en % del nivel, oro, piedras e ítem único. Verifica antes de tocar nada; devuelve el texto o un error. */
+    /** Premio de una misión: exp en % del nivel, oro, zem e ítem único. Verifica antes de tocar nada; devuelve el texto o un error. */
     private payReward(st: Econ, r: QuestReward, choice: string): { ok: true; text: string; ups: number } | { ok: false; code: string; text: string } {
         let item: SItem | undefined;
         if (r.unique) {
@@ -817,10 +821,10 @@ export class Economy {
             item = uniqueItem(st, u);
         }
         const exp = Math.max(1, Math.round(expToLevel(st.lvl) * r.expPct / 100));
-        st.exp += exp; addGold(st, r.gold); if (r.forge) st.zem = (st.zem ?? 0) + r.forge;
+        st.exp += exp; addGold(st, r.gold); if (r.zem) st.zem = (st.zem ?? 0) + r.zem;
         if (item) st.bag.push(item);
         const ups = levelUp(st);
-        return { ok: true, ups, text: `+${exp} exp, +${r.gold} oro${r.forge ? `, +${r.forge} zem` : ''}${item ? ` y ${item.n}` : ''}.${ups ? ` ¡Subiste a nivel ${st.lvl}!` : ''}` };
+        return { ok: true, ups, text: `+${exp} exp, +${r.gold} oro${r.zem ? `, +${r.zem} zem` : ''}${item ? ` y ${item.n}` : ''}.${ups ? ` ¡Subiste a nivel ${st.lvl}!` : ''}` };
     }
 
     /** Acciones del libro de misiones con el Capitán: m_accept / m_turnin (cadena), d_turnin / d_reroll (encargos), r_turnin (repetible). */
@@ -841,10 +845,10 @@ export class Economy {
             b.m.i++; b.m.st = 'new'; b.m.prog = [];
             return done(`Entregaste «${q.name}»: ${r.text}`, r.ups > 0, r.ups ? 'level_up' : 'ok');
         }
-        if (action === 'r_turnin') { // key = "material|gold" o "material|forge" (forge = 1 zem)
+        if (action === 'r_turnin') { // key = "material|gold" o "material|zem" (1 zem)
             const [mat, what] = key.split('|');
             if (!mat || RESERVED_MATS.has(mat)) return fail('bad_mat', 'Ese material no se entrega: es para las llaves.');
-            if (what !== 'gold' && what !== 'forge') return fail('bad_action', 'Elegí oro o zem.');
+            if (what !== 'gold' && what !== 'zem') return fail('bad_action', 'Elegí oro o zem.');
             if ((mats[mat] ?? 0) < REPEAT_MATS) return fail('mats', `Necesitás ${REPEAT_MATS} del mismo material.`);
             mats[mat] -= REPEAT_MATS; this.questEvent(p, st, null);
             if (what === 'gold') { const g = repeatGold(st.lvl); addGold(st, g); return done(`Entregaste ${REPEAT_MATS} materiales: +${g} oro.`); }
