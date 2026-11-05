@@ -332,6 +332,9 @@ export const pvpMpRegen = (maxMp: number): number => Math.max(PVP_MP_REGEN_MIN, 
 /** Tope de los multiplicadores "sobre controlado" contra jugadores (Juicio y Escudo 1,5× → 1,2×; Esquirla 2× → 1,2×). */
 export const PVP_VS_CTRL_MAX = 1.2;
 /** Daño que llega a un jugador desde otro: primero el multiplicador PvP (antes de la defensa) y después el tope por golpe. */
+/** D.2: la magia ya no falla (antes acertaba ~90 %), así que el daño mágico entre jugadores se compensa con ese 90 % para no mover el balance. Provisorio hasta el balance general (D.20). La quemadura no entra: nunca tiraba golpe. */
+export const PVP_MAGIC_COMP = 0.9;
+export const pvpMagicComp = (raw: number, kind: DmgKind, spell: string): number => kind === 'magic' && spell !== 'quemadura' ? Math.max(1, Math.round(raw * PVP_MAGIC_COMP)) : raw;
 export const pvpScale = (raw: number): number => Math.max(1, Math.round(raw * PVP_DMG_MULT));
 export const pvpCap = (dmg: number, maxHp: number): number => Math.min(dmg, Math.max(1, Math.floor(maxHp * PVP_HIT_CAP)));
 /** Multiplicador "sobre controlado" que se usa contra un jugador. */

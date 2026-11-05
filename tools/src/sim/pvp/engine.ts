@@ -13,7 +13,7 @@
  * - pociones con bloqueo compartido y la de vida en 20 % + 4 pulsos de 0,5 s.
  * Lo que no está en el server y es supuesto de la sim: un jugador no actúa más rápido que cada 250-400 ms (tiempo de reacción).
  */
-import { BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, BURN_EVERY, BURN_TICKS, AURA_HEAL_FRAC, FURY_MS, POISON_HEAL_TAKEN, POTION_HOT_EVERY_MS, PVP_COMBAT_MS, PVP_SPELLS, PvpLimiter, RUN_MS, SECOND_WIND, SKILLS, STUN_SPELLS, UTIL_MP, WALK_MS, burnTickDmg, castMsOf, damageAfterDefense, healAmount, hitRoll, isCast, paralysisSecs, potionHpSplit, rollSpellDamage, secondWindHeal, skillMpCost, spellDmgKind, type CombatStats, type DmgKind } from '../../../../apps/server/src/systems/pvpCombat.ts';
+import { pvpMagicComp, BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, BURN_EVERY, BURN_TICKS, AURA_HEAL_FRAC, FURY_MS, POISON_HEAL_TAKEN, POTION_HOT_EVERY_MS, PVP_COMBAT_MS, PVP_SPELLS, PvpLimiter, RUN_MS, SECOND_WIND, SKILLS, STUN_SPELLS, UTIL_MP, WALK_MS, burnTickDmg, castMsOf, damageAfterDefense, healAmount, hitRoll, isCast, paralysisSecs, potionHpSplit, rollSpellDamage, secondWindHeal, skillMpCost, spellDmgKind, type CombatStats, type DmgKind } from '../../../../apps/server/src/systems/pvpCombat.ts';
 import { applyBless, applyParalysis, applyPoison, applySlow, castRemover, createDefaultStatus, expireTimed, isBlessed, isPoisoned, isSlowed, updateStatus, type CharacterStatus } from '../../../../apps/server/src/systems/statusSystem.ts';
 import { canUseSkill } from '@fdn/world';
 import { cap, potHp, potMp, scale, vsCtrl, type Rules } from './rules.ts';
@@ -110,7 +110,7 @@ export class Sim {
         const R = this.spec.rules;
         if (spell !== 'quemadura' && !hitRoll(src.s, t.s, kind)) { this.markPvp(t); this.markPvp(src); this.log(`${src.name} ${spell} → ${t.name} falla`); return 0; }
         if (isBlessed(t.st, this.now)) raw = Math.max(1, Math.round(raw * BLESS_DMG_TAKEN));
-        raw = scale(R, raw);
+        raw = scale(R, pvpMagicComp(raw, kind, spell));
         const dmg = Math.min(t.hp, cap(R, damageAfterDefense(raw, t.s, kind), t.s.maxHp));
         t.hp -= dmg; this.markPvp(t); this.markPvp(src);
         src.m.dmg += dmg; src.m.bySpell[spell] = (src.m.bySpell[spell] ?? 0) + dmg; t.taken.push([this.now, dmg, src.id]);
