@@ -17,6 +17,7 @@ import { LEGACY_FROM_VHAR, LEGACY_VHAR_LINK } from './vhar/legacy';
 import { buildVharInterior, VHAR_INTERIORS, VHAR_RESPAWN } from './vhar/interiors';
 import { FLARE_ARRIVAL, FLARE_FIELD, flareMaps } from './flare';
 import { tiledMaps } from './tiledmaps';
+import { huntMaps, MINAS_TO_LLANURA, LLANURA } from './hunt';
 import { TIERS, TIER_LIST, TIERS_WITH_CONTENT, tierGateLevel, type Tier } from './tiers';
 import { mobDef } from './mobs';
 
@@ -227,6 +228,9 @@ export const MAPS: Record<string, MapDef> = {
     ...flareMaps({ [FLARE_FIELD.solmar.eris]: { map: VILLA_ID, to: VILLA_FLARE_BACK }, [FLARE_FIELD.vhar.eris]: { map: VHAR_CITADEL_ID, to: VHAR_FLARE_BACK } }),
 };
 // mapas importados de Tiled (pnpm maps:tiled): van después porque sus conexiones llegan al spawn de mapas ya definidos
+// E6: tramo del tier 5 (mapas de caza generados) colgado de las Minas abandonadas
+Object.assign(MAPS, huntMaps());
+MAPS.minas_abandonadas.links.push({ id: 'minas_abandonadas_a_llanura', map: 'minas_abandonadas', ...MINAS_TO_LLANURA.portal, to: { map: LLANURA.id, ...LLANURA.arrive }, kind: 'portal', gate: { lvl: 38 }, msg: 'Cruzás hacia la Llanura del Umbral.' });
 Object.assign(MAPS, tiledMaps(MAPS));
 
 export const getMapDef = (id: string | undefined): MapDef | undefined => { const c = canonicalMapId(id); return c ? MAPS[c] : undefined; };
