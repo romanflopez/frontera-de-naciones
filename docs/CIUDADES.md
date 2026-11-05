@@ -203,7 +203,7 @@ Se listaron los NPC de las dos ciudades y sus interiores (`t.npc(...)` en `solma
 3. **El cliente decide qué abre cada NPC por rol** (`main.ts` ~2550): hay que confirmar que `sanador` y `mago` no caen en una rama por defecto rara y que la dialogación `_v` (Vhar) usa el texto de Vhar.
 4. **Alcance**: `TALK_RANGE` es 2,6 celdas; los NPC adentro de interiores chicos pueden quedar contra una pared o en una celda bloqueada. Falta chequear que cada NPC sea alcanzable desde la puerta.
 
-**Faltan NPC que el roadmap necesita:** maestro de arena (cola 1v1/2v2, `PARTY_Y_ARENAS.md`), teletransporte por destino (hoy el Portal es un waypoint, no un NPC), cambio de nación y reputación (Municipalidad, post-beta), misión diaria y tienda de fichas (post-beta), más dadores de quests si el MVP quiere que "las quests guíen todo" (`mvp-dungeons-llaves-quests`, doc del proyecto claude.ai), y entrenador de hechizos (Torre) cuando estén los kits de mago y healer.
+**Faltan NPC que el roadmap necesita:** maestro de arena (cola 1v1/2v2, `PARTY_Y_ARENAS.md`), teletransporte por destino (hoy el Portal es un waypoint, no un NPC), cambio de nación y reputación (Municipalidad, post-beta), misión diaria y tienda de fichas (post-beta), más dadores de quests si el MVP quiere que "las quests guíen todo" (`mvp-dungeons-llaves-quests`, doc del proyecto claude.ai), y entrenador de hechizos (Torre) cuando estén los kits de mago y clérigo.
 
 **Tareas:**
 

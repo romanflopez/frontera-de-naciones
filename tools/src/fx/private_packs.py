@@ -41,7 +41,7 @@ EFECTOS = [
     ('represalia', 'Pixel Art VFX - Vampire - FREE Version/VFX1/Frames',          'centro', 1.5, 14, 2.2),  # Aura de represalia / furia de jefe
     ('invocar',    'Pixel Art VFX - Necromancer - FREE Version/VFX 1/Frames',     'pie',    1.8, 12, 2.2),  # adds de jefe
     ('charco',     'Pixel Art VFX Impacts - FREE Version/VFX2/COLOR/Frames',      'pie',    2.4, 12),  # charco de jefe (ácido)
-    # pack "Magic Buff Effects for Top Down Games" de Craftpix (anillos en el piso): healer y bendiciones
+    # pack "Magic Buff Effects for Top Down Games" de Craftpix (anillos en el piso): clerigo y bendiciones
     ('curar',      'craftpix-net-207889-magic-buff-effects-pack-for-top-down-games/Life Recovery/PNG',  'pie', 1.0, 14, 1.0, 1.8),  # Curación, Renovar, Orbe, Esfera
     ('mana',       'craftpix-net-207889-magic-buff-effects-pack-for-top-down-games/Mana Recovery/PNG',  'pie', 1.0, 14, 1.0, 1.8),  # Segundo aliento, Intelecto arcano
     ('revivir',    'craftpix-net-207889-magic-buff-effects-pack-for-top-down-games/Revival/PNG',        'pie', 1.0, 14, 1.0, 1.9),  # Despertar

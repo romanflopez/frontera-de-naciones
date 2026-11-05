@@ -6,12 +6,12 @@ columna "Probás" y mergea. Recién ahí arranca el siguiente. Si un paso deja a
 
 | # | Paso | Depende de | Probás vos (2 minutos) |
 |---|---|---|---|
-| 1 | **D.0** Renombres pala/clérigo + esqueleto arquero | — | Entrás con un personaje viejo y sigue siendo su clase; crear personaje muestra 3 clases con nombres nuevos |
+| 1 | **D.0** Renombres paladín/clérigo + esqueleto arquero | — | Entrás con un personaje viejo y sigue siendo su clase; crear personaje muestra 3 clases con nombres nuevos |
 | 2 | **D.14** Entrada sin flash de HUD | — | Login → no se ve HUD ni chat hasta que aparece el mapa; cambiar de mapa igual |
 | 3 | **D.13** Cursor nativo | — | El mouse responde al instante; el clic cae en la celda bajo la flecha; el anillo de casteo sigue andando |
 | 4 | **D.12** Movilidad | D.13 (para probar bien) | Correr es el default; caminás solo al castear; se siente rápido. Si no, tocás los dos números y repetís |
-| 5 | **D.2** Magia no falla | — | Un mago en PvP nunca ve "Falló"; `sim:pvp` en verde |
-| 6 | **D.3** 4 stats (sacar Inteligencia) | D.0 | Personaje viejo con puntos en INT los tiene libres; ventana muestra 4 stats; `sim:pvp` en verde |
+| 5 | **D.2** Magia no falla | — | Un mago en PvP nunca ve "Falló"; `sim:pvp` no empeora |
+| 6 | **D.3** 4 stats (sacar Inteligencia) | D.0 | Personaje viejo con puntos en INT los tiene libres; ventana muestra 4 stats; `sim:pvp` no empeora |
 | 7 | **D.4** Remover propio | D.3 | Paralizado podés castear Remover (1,5 s); después 4 s no te paralizan; a otro tarda 1 s |
 | 8 | **D.1** Curva a 30 h | — | `sim:pve --horas` da ~30 h al 120 y < 1 h al 10 |
 | 9 | **D.6** Topes DF/RM por semana | — | Ventana de personaje muestra "Tope actual DF x / RM y · sube el lunes"; con `SERVER_EPOCH` de hace 10 semanas da 60/75 |
@@ -30,4 +30,6 @@ columna "Probás" y mergea. Recién ahí arranca el siguiente. Si un paso deja a
 Los pasos sin dependencia (2, 3, 5, 8, 9, 15, 17, 19) se pueden adelantar si alguno se traba. Los de economía y stats (6, 7, 11, 12, 14) van estrictamente en este orden.
 
 ## Después de la cola
+**D.20 Balance general** va cuando los ítems estén bien definidos, con el material de Helbreath que pase Román. Hasta entonces, los pasos solo tienen que no empeorar `sim:pvp` y `sim:pve`.
+
 Catálogo de mecánicas de mazmorra (con los videos de Dreadmyst), kits de las 4 clases con tipo de hechizo, arquero completo, mapas 51-120 y mapa central, animaciones de casteo, orbes con efecto, sprites de NPC. Cada uno se escribe como paso cuando se define.

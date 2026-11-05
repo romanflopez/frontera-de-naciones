@@ -48,7 +48,7 @@ function setup() {
         return { sid, log, p };
     };
     const A = join('caster', { x: 30, y: 20 }, 'solmar', 'mago');
-    const B = join('blanco', { x: 33, y: 20 }, 'vhar', 'guerrero');
+    const B = join('blanco', { x: 33, y: 20 }, 'vhar', 'paladin');
     // el proyectil esquivable se lanza apuntado al blanco y llega después de volar (ver projectile.test.ts)
     const fire = (spell: string) => { pkt(w, A.sid, 'projectileLaunchRequest', { spell, targetId: B.p.playerId, aimX: B.p.posX + 0.5, aimY: B.p.posY + 0.5 }); };
     return { w, A, B, fire };

@@ -52,6 +52,8 @@ interface MapSpec {
     widen?: number;
     /** Multiplica los mobs de cada zona (pits y sueltos): mapas que van a concentrar mucha gente subiendo (por defecto 1). */
     mobMult?: number;
+    /** Mapa de leveo propio de cada nación (NATION_SPLIT_MAPS): sale sin PvP, pero el terreno se arma con el estilo abierto de los mapas de facción (`pvp: 'faction'`). */
+    nation?: boolean;
 }
 
 /** Un mapa por entrada. Pit A = el más cerca de la entrada (el más fácil), C = el más lejos. Los nombres de zona son únicos entre mapas. */
@@ -63,7 +65,7 @@ const SPECS: MapSpec[] = [
         pits: [{ name: 'Claro de los goblins', type: 'goblin' }, { name: 'Madriguera hobgoblin', type: 'hobgoblin' }, { name: 'Fuerte del bosque', type: 'goblin_elite' }],
         loose: [{ type: 'goblin' }, { type: 'zombie' }] },
     // Mapa 2 (niveles 8-20): une el tramo del Cañón con el del Pantano. 5 pits de la entrada al fondo, de más flojo a más duro (8, 11, 14, 17, 20).
-    { id: 'goblin_camp', eris: 'canon_goblin', name: 'Cañón goblin', region: 'comun', pvp: 'faction', lvl: [8, 20], tier: 1, mobMult: 3, linkGates: { goblin_cave: 4 },
+    { id: 'goblin_camp', eris: 'canon_goblin', name: 'Cañón goblin', region: 'comun', pvp: 'faction', nation: true, lvl: [8, 20], tier: 1, mobMult: 3, linkGates: { goblin_cave: 4 },
         pits: [{ name: 'Empalizada del cañón', type: 'goblin_elite' }, { name: 'Puesto de arqueros', type: 'hobgoblin_archer' }, { name: 'Tienda del cabecilla', type: 'hobgoblin' },
             { name: 'Ciénaga de zombis (cañón)', type: 'zombie' }, { name: 'Pozo oscuro (cañón)', type: 'zombie_dark' }],
         loose: [{ type: 'goblin' }, { type: 'zombie' }] },
@@ -152,19 +154,19 @@ const SPECS: MapSpec[] = [
     { id: 'torture_chambers', openMods: true, eris: 'camaras_de_tortura', name: 'Cámaras de tortura', region: 'mazmorra', pvp: 'off', lvl: [118, 120], tier: 12, dungeon: true, respawnMap: 'fuerte_amir', dropLinks: ['underworld'],
         pits: [{ name: 'Celdas de los condenados', type: 'zombie_dark' }, { name: 'Potros del verdugo', type: 'cursed_grave' }, { name: 'Carceleros', type: 'skeleton_archer' }],
         loose: [{ type: 'skeleton' }], boss: { type: 'verdugo', name: 'Sala del Gran Verdugo' }, bossClear: 10, extras: [{ to: 'fuerte_amir', where: 'near' }] },
-    { id: 'merrimead_swamp', eris: 'pantano_de_merrimead', name: 'Pantano de Merrimead', region: 'comun', pvp: 'faction', lvl: [17, 23], tier: 2,
+    { id: 'merrimead_swamp', eris: 'pantano_de_merrimead', name: 'Pantano de Merrimead', region: 'comun', pvp: 'faction', lvl: [21, 28], tier: 3, nation: true, mobMult: 1.6,
         pits: [{ name: 'Ciénaga de zombis', type: 'zombie' }, { name: 'Pozo oscuro', type: 'zombie_dark' }, { name: 'Lápidas del pantano', type: 'cursed_grave' }],
         loose: [{ type: 'zombie' }], extras: [{ to: 'altas_de_nazia', where: 'far' }] },
-    { id: 'nazia_highlands', eris: 'altas_de_nazia', name: 'Altas de Nazia', region: 'comun', pvp: 'faction', lvl: [23, 31], tier: 3,
+    { id: 'nazia_highlands', eris: 'altas_de_nazia', name: 'Altas de Nazia', region: 'comun', pvp: 'faction', lvl: [29, 36], tier: 3, nation: true, mobMult: 1.8,
         pits: [{ name: 'Nidada de crías', type: 'antlion_small' }, { name: 'Hoyos de las tierras altas', type: 'antlion' }, { name: 'Hormigueros ardientes', type: 'fire_ant' }],
-        loose: [{ type: 'antlion_small' }], extras: [{ to: 'pantano_de_merrimead', where: 'near' }, { to: 'nido_hormiga_leon', where: 'far', kind: 'door', gate: 4 }] },
-    { id: 'lochport_cemetery', eris: 'cementerio_de_lochport', name: 'Cementerio de Lochport', region: 'comun', pvp: 'faction', lvl: [37, 45], tier: 4,
+        loose: [{ type: 'antlion_small' }], extras: [{ to: 'pantano_de_merrimead', where: 'near' }, { to: 'nido_hormiga_leon', where: 'far', kind: 'door', gate: 11 }] },
+    { id: 'lochport_cemetery', eris: 'cementerio_de_lochport', name: 'Cementerio de Lochport', region: 'comun', pvp: 'faction', lvl: [37, 44], tier: 4, nation: true, mobMult: 1.5,
         pits: [{ name: 'Tumbas viejas', type: 'skeleton' }, { name: 'Arqueros del osario', type: 'skeleton_archer' }, { name: 'Hechiceros del camposanto', type: 'skeleton_mage' }],
-        loose: [{ type: 'cursed_grave' }], extras: [{ to: 'risco_del_sur', where: 'far' }, { to: 'cripta_olvidada', where: 'near', kind: 'door', gate: 9 }] },
-    { id: 'the_breach', eris: 'la_brecha', name: 'La Brecha', region: 'comun', pvp: 'faction', lvl: [55, 61], tier: 6, widen: 2,
+        loose: [{ type: 'cursed_grave' }], extras: [{ to: 'risco_del_sur', where: 'far' }, { to: 'cripta_olvidada', where: 'near', kind: 'door', gate: 26 }] },
+    { id: 'the_breach', eris: 'la_brecha', name: 'La Brecha', region: 'comun', pvp: 'faction', lvl: [53, 60], tier: 6, nation: true, mobMult: 2.4, widen: 2,
         pits: [{ name: 'Túneles de hormiga león', type: 'antlion' }, { name: 'Hormigueros de la brecha', type: 'fire_ant' }, { name: 'Mineros caídos', type: 'zombie_dark' }],
-        loose: [{ type: 'antlion_small' }, { type: 'fire_ant' }], dropLinks: ['antlion_nest', 'abandoned_mines'], extras: [{ to: 'risco_del_sur', where: 'near' }, { to: 'torre_del_hechicero', where: 'far', kind: 'door', gate: 14 }] },
-    { id: 'southern_ridge', eris: 'risco_del_sur', name: 'Risco del Sur', region: 'comun', pvp: 'faction', lvl: [45, 52], tier: 5, dropLinks: ['black_oak_farm'],
+        loose: [{ type: 'antlion_small' }, { type: 'fire_ant' }], dropLinks: ['antlion_nest', 'abandoned_mines'], extras: [{ to: 'risco_del_sur', where: 'near' }, { to: 'torre_del_hechicero', where: 'far', kind: 'door', gate: 48 }] },
+    { id: 'southern_ridge', eris: 'risco_del_sur', name: 'Risco del Sur', region: 'comun', pvp: 'faction', lvl: [45, 52], tier: 5, nation: true, mobMult: 1.5, dropLinks: ['black_oak_farm'],
         pits: [{ name: 'Risco de las hormigas', type: 'antlion' }, { name: 'Atalaya en ruinas', type: 'skeleton_mage' }, { name: 'Grietas de fuego', type: 'fire_ant' }],
         loose: [{ type: 'antlion' }, { type: 'skeleton' }], extras: [{ to: 'cementerio_de_lochport', where: 'near' }, { to: 'la_brecha', where: 'far' }] },
 ];
@@ -622,7 +624,7 @@ function convert(spec: MapSpec): object {
     }
 
     return {
-        id: spec.id, eris: spec.eris, name: spec.name, region: spec.region, pvp: spec.pvp, lvl: spec.lvl, tier: spec.tier, ...(spec.dungeon ? { dungeon: true } : {}), ...(spec.respawnMap ? { respawnMap: spec.respawnMap } : {}), tileset: tsName, size: N, flareSize: [p.w, p.h], entry,
+        id: spec.id, eris: spec.eris, name: spec.name, region: spec.region, pvp: spec.nation ? 'off' : spec.pvp, lvl: spec.lvl, tier: spec.tier, ...(spec.dungeon ? { dungeon: true } : {}), ...(spec.respawnMap ? { respawnMap: spec.respawnMap } : {}), tileset: tsName, size: N, flareSize: [p.w, p.h], entry,
         source: `Flare (flare-game) mods/empyrean_campaign/maps/${spec.id}.txt`, license: 'CC-BY-SA-3.0 (adaptado: ver docs/MAPAS_FLARE.md)',
         walkable, zones, links, extras, layers: { background, object }, blocked: reach.map((r) => r.map((v) => (v ? 0 : 1))),
     };

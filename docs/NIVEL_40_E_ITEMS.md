@@ -4,12 +4,12 @@
 
 Fecha: 1/11/2026. Pedido: subir el techo a nivel 40, abrir mapas, que los primeros 10 niveles sean más fáciles y después se ponga más difícil aunque los bichos den más exp, revisar el farmeo en área y hacer un análisis profundo de los ítems.
 
-**Cómo leer los números:** son de un modelo simple (guerrero, un bicho a la vez, 85 % del tiempo pegando, 2,5 s entre bichos, 300 kills/hora en un pit, sin muertes ni pociones). Sirven para ver la forma de las curvas y los problemas, **no** para prometer horas reales. Hay que validarlos con `sim-arranque.ts` extendido a 40 antes de fijar valores.
+**Cómo leer los números:** son de un modelo simple (paladín, un bicho a la vez, 85 % del tiempo pegando, 2,5 s entre bichos, 300 kills/hora en un pit, sin muertes ni pociones). Sirven para ver la forma de las curvas y los problemas, **no** para prometer horas reales. Hay que validarlos con `sim-arranque.ts` extendido a 40 antes de fijar valores.
 
 ## 1. Resumen: qué encontré
 
-1. **La curva actual ya es casi la que querés**, solo hay que subir el techo (`MAX_LVL` está en 60 en `economy.ts`; el tope de importación ya es 40). Con el techo en 40 un guerrero a un bicho por vez tarda ~4 h hasta el 10, ~26 h hasta el 20 y ~190 h hasta el 40. Lo que falta es aliviar el arranque y frenar el daño en área.
-2. **El daño en área es lo que más puede romper la curva.** Con 2-3 bichos por golpe, esas ~190 h bajan a ~60-95 h. Hay que decidir cuánto más rápido puede ser un mago que un guerrero.
+1. **La curva actual ya es casi la que querés**, solo hay que subir el techo (`MAX_LVL` está en 60 en `economy.ts`; el tope de importación ya es 40). Con el techo en 40 un paladín a un bicho por vez tarda ~4 h hasta el 10, ~26 h hasta el 20 y ~190 h hasta el 40. Lo que falta es aliviar el arranque y frenar el daño en área.
+2. **El daño en área es lo que más puede romper la curva.** Con 2-3 bichos por golpe, esas ~190 h bajan a ~60-95 h. Hay que decidir cuánto más rápido puede ser un mago que un paladín.
 3. **Los ítems tienen 7 problemas que hay que arreglar antes de pasar a 40 niveles** (sección 5). Los tres más graves: el poder de los ítems deja de seguir al nivel pasado el 12; **tres de los atributos de los únicos (crítico, velocidad de ataque, robo de vida) los calcula el cliente y el server no los aplica**; y el oro pierde valor frente a los precios y las mejoras.
 4. **Contenido:** para llegar a 40 faltan unos 29 niveles de mundo. Se puede cubrir estirando el rango de cada mapa y sumando mapas de la reserva de Flare (sección 4).
 
@@ -32,7 +32,7 @@ Fecha: 1/11/2026. Pedido: subir el techo a nivel 40, abrir mapas, que los primer
 
 ### 2.2 Propuesta: fácil hasta el 10, más duro después
 
-Un solo mando: **`killsToLevel`**. Subir la exp por bicho y subir los kills por nivel es lo mismo (se compensan), así que alcanza con tocar esta función y dejar `mobExpCurve` como está. Objetivo (guerrero a un bicho por vez): ~2,5 h hasta el 10, ~18 h del 10 al 20, ~55 h del 20 al 30, ~115 h del 30 al 40 (≈190 h en total).
+Un solo mando: **`killsToLevel`**. Subir la exp por bicho y subir los kills por nivel es lo mismo (se compensan), así que alcanza con tocar esta función y dejar `mobExpCurve` como está. Objetivo (paladín a un bicho por vez): ~2,5 h hasta el 10, ~18 h del 10 al 20, ~55 h del 20 al 30, ~115 h del 30 al 40 (≈190 h en total).
 
 | Nivel | Kills hoy | Kills propuestos | Relación |
 |---|---|---|---|
@@ -86,7 +86,7 @@ Consecuencias:
 
 ### 3.1 Cuánto distorsiona
 
-Los pits tienen ~1 bicho cada 7-8 celdas, pero los bichos se agrupan al pelear. Con Bola de fuego (radio 1,9) o Giro del guerrero (radio 1,9), en una pelea normal pegás a 2-4 bichos por golpe; en `COMBATE.md` el mago liquida 4-6 goblins en ~3 s. Tomo un multiplicador de 1,5× a 3×:
+Los pits tienen ~1 bicho cada 7-8 celdas, pero los bichos se agrupan al pelear. Con Bola de fuego (radio 1,9) o Giro del paladín (radio 1,9), en una pelea normal pegás a 2-4 bichos por golpe; en `COMBATE.md` el mago liquida 4-6 goblins en ~3 s. Tomo un multiplicador de 1,5× a 3×:
 
 | Multiplicador de área | Horas totales hasta 40 | 1 → 10 | 10 → 20 | 30 → 40 |
 |---|---|---|---|---|
@@ -95,7 +95,7 @@ Los pits tienen ~1 bicho cada 7-8 celdas, pero los bichos se agrupan al pelear. 
 | 2× | 95 | 1,2 | 9 | 58 |
 | 3× | 64 | 0,8 | 6 | 38 |
 
-Un mago bueno con 3× llega a 40 en un tercio del tiempo. Eso solo es un problema si el guerrero no puede acercarse; el contenido de grupo también se vacía más rápido.
+Un mago bueno con 3× llega a 40 en un tercio del tiempo. Eso solo es un problema si el paladín no puede acercarse; el contenido de grupo también se vacía más rápido.
 
 ### 3.2 Qué hacer (en orden de mi preferencia)
 
@@ -103,7 +103,7 @@ Un mago bueno con 3× llega a 40 en un tercio del tiempo. Eso solo es un problem
 2. **Maná como límite:** Bola cuesta 25 de maná cada 3,6 s. Sin bonus de maná, el mago se queda sin maná antes que sin bichos; las pociones de maná pasan a ser sumidero de oro. Hay que medirlo (el mago sube maná 12 por nivel).
 3. **Bichos más peligrosos en grupo:** los pits altos con un "líder" (élite con ×4 de vida) que obligue a elegir objetivo.
 4. **No penalizar la exp por kill** (queda raro y castiga a los grupos).
-5. Calibrar la curva para que el **área rinda hasta ~1,6× lo del guerrero**, no más. Si queda más, se baja el multiplicador con la penalidad.
+5. Calibrar la curva para que el **área rinda hasta ~1,6× lo del paladín**, no más. Si queda más, se baja el multiplicador con la penalidad.
 
 Parte compartida: con 4 jugadores, cada uno recibe `(1 + 0,1·3)/4 = 32,5 %` de la exp del bicho, pero mata ~4× más rápido, así que ronda 1,3× de la exp de ir solo. Está bien, no hace falta tocarlo.
 
@@ -162,7 +162,7 @@ Hoy: único por kill = 0,5 % (suelto), 1,5 % (pit), 4 % (mazmorra); 10 únicos p
 
 ### 5.4 Pool de drop diluido: la mitad no es para tu clase
 
-De los 10 únicos de cada banda, un guerrero usa ~6 (armas 1 y 2 manos, armadura pesada/media, yelmo físico, 2 anillos) y un mago ~5. Con el botín propio de cada compañero, el server **sabe la clase de quien recibe**: se puede sesgar el sorteo (p. ej. 60 % ítems de tu clase / 40 % del resto, para que sirvan de mercancía en la subasta). Eso casi duplica la velocidad de armarse sin tocar la tasa.
+De los 10 únicos de cada banda, un paladín usa ~6 (armas 1 y 2 manos, armadura pesada/media, yelmo físico, 2 anillos) y un mago ~5. Con el botín propio de cada compañero, el server **sabe la clase de quien recibe**: se puede sesgar el sorteo (p. ej. 60 % ítems de tu clase / 40 % del resto, para que sirvan de mercancía en la subasta). Eso casi duplica la velocidad de armarse sin tocar la tasa.
 
 ### 5.5 Basura en una bolsa de 18
 
@@ -205,7 +205,7 @@ De los 10 únicos de cada banda, un guerrero usa ~6 (armas 1 y 2 manos, armadura
 
 ## 7. Preguntas abiertas
 
-1. ¿Cuántas horas querés que dure llegar a 40 para alguien que juega bien (guerrero a un bicho vs. mago en área)?
+1. ¿Cuántas horas querés que dure llegar a 40 para alguien que juega bien (paladín a un bicho vs. mago en área)?
 2. ¿Cuánto más rápido puede subir el mago en área: 1,3×, 1,6× o 2×?
 3. ¿Banda de 5 niveles (8 bandas) o 4 niveles (10 bandas)?
 4. ¿Los ítems de jefe se pueden subastar?

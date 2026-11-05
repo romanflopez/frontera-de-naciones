@@ -8,9 +8,10 @@
  *   Mazmorras de grupo (una por tier, docs/TIERS_DE_ZONA.md): Cañón goblin -> D1, Altas de Nazia -> D2, Cementerio -> D3, La Brecha -> D4, Cenizas II -> D5, Cenizas III -> D6, Lago Kuuma -> D7
  */
 import type { Prop, WorldMap, Zone } from '../index';
-import type { MapDef, Link } from '../maps';
+import type { MapDef, Link, MapRect } from '../maps';
 import type { MobType } from '../mobs';
 import { DUNGEON_ENTRY_KEYS } from '../quests';
+import { VHAR_SUFFIX, baseMapId, nationOfMap } from '../nations';
 import { flareTile, type FlareMapData } from './types';
 import { DATA as SALTED_FIELD } from './salted_field';
 import { DATA as STONEWOOD } from './stonewood';
@@ -59,12 +60,40 @@ const SALTED_FIELD_VHAR: FlareMapData = {
 };
 const STONEWOOD_2: FlareMapData = {
     ...STONEWOOD,
-    extras: [...STONEWOOD.extras, { to: SALTED_FIELD_VHAR.eris, cell: { x: 1, y: 6 }, kind: 'walk', arrive: { x: 56, y: 12 } }],
+    extras: [...STONEWOOD.extras, { to: SALTED_FIELD_VHAR.eris, cell: { x: 1, y: 6 }, kind: 'walk', arrive: { x: 56, y: 12 } }, { to: 'canon_goblin_vhar', cell: { x: 51, y: 77 }, kind: 'walk', arrive: { x: 5, y: 2 } }],
+};
+/**
+ * Mapas de leveo propios de cada nación (src/nations.ts): Solmar usa los de siempre y Vhar tiene una copia de cada uno (zonas renombradas,
+ * porque el validador no admite el mismo nombre de zona en dos mapas) con sus salidas y mazmorras hacia las copias de Vhar. Los puntos de
+ * contacto con mapas compartidos (el Bosque de Piedra y el Pantano de Merrimead) tienen una puerta aparte para cada nación.
+ */
+const SPLIT_BASE = [GOBLIN_CAMP, GOBLIN_CAVE, PERDITION_MINES, MERRIMEAD_SWAMP, NAZIA_HIGHLANDS, ANTLION_NEST, STORMROCK_RUINS, LOCHPORT_CEMETERY, SOUTHERN_RIDGE, THE_BREACH, ST_MARIA_2, ST_MARIA_3, WIZARDS_TOWER_1, WIZARDS_TOWER_2];
+const SPLIT_IDS = new Set(SPLIT_BASE.map((d) => d.id)), SPLIT_ERIS = new Set(SPLIT_BASE.map((d) => d.eris));
+/** `linkTo`: celda de llegada propia de la copia en un mapa compartido, por destino (`id`) o por destino y celda del vínculo (`id@x,y`). */
+const vharCopy = (d: FlareMapData, linkTo: Record<string, Partial<{ tx: number; ty: number }>> = {}): FlareMapData => ({
+    ...d, id: d.id + VHAR_SUFFIX, eris: d.eris + VHAR_SUFFIX, name: `${d.name} (Vhar)`,
+    ...(d.respawnMap ? { respawnMap: d.respawnMap + VHAR_SUFFIX } : {}),
+    zones: d.zones.map((z) => ({ ...z, name: `${z.name} (Vhar)` })),
+    links: d.links.map((l) => (SPLIT_IDS.has(l.to) ? { ...l, to: l.to + VHAR_SUFFIX } : { ...l, ...linkTo[l.to], ...linkTo[`${l.to}@${l.cell.x},${l.cell.y}`] })),
+    extras: d.extras.map((e) => (SPLIT_ERIS.has(e.to) ? { ...e, to: e.to + VHAR_SUFFIX } : e)),
+});
+// llega a los mapas compartidos (el Bosque de Piedra y el Paso de Stormrock) junto a la puerta de su nación, no junto a la de Solmar
+const VHAR_OVER: Record<string, Parameters<typeof vharCopy>[1]> = {
+    goblin_camp: { stonewood: { tx: 51, ty: 76 } },
+    the_breach: { 'stormrock_pass@7,62': { tx: 28, ty: 81 }, 'stormrock_pass@92,89': { tx: 100, ty: 106 } },
+};
+const VHAR_COPIES = SPLIT_BASE.map((d) => vharCopy(d, VHAR_OVER[d.id]));
+const THE_BREACH_VHAR = VHAR_COPIES.find((d) => d.id === 'the_breach_vhar')!;
+const STORMROCK_PASS_2: FlareMapData = {
+    ...STORMROCK_PASS,
+    extras: [...STORMROCK_PASS.extras,
+        { to: THE_BREACH_VHAR.eris, cell: { x: 28, y: 80 }, kind: 'walk', arrive: { x: 5, y: 59 } },
+        { to: THE_BREACH_VHAR.eris, cell: { x: 100, y: 105 }, kind: 'walk', arrive: { x: 89, y: 87 } }],
 };
 export type { FlareMapData } from './types';
 
 /** En el orden de la cadena: la primera es la que une el portal de las ciudades. */
-export const FLARE_DATA: FlareMapData[] = [SALTED_FIELD, SALTED_FIELD_VHAR, STONEWOOD_2, GOBLIN_CAMP, MERRIMEAD_SWAMP, NAZIA_HIGHLANDS, LOCHPORT_CEMETERY, SOUTHERN_RIDGE, THE_BREACH, GOBLIN_CAVE, PERDITION_MINES, ANTLION_NEST, STORMROCK_RUINS, ST_MARIA_2, ST_MARIA_3, WIZARDS_TOWER_1, WIZARDS_TOWER_2, TEMPLE_OF_MEZ_1, TEMPLE_OF_MEZ_2, UNDERWORLD_STRONGHOLD_1, THE_PIT, STORMROCK_PASS, UNDERWORLD, UNDERWORLD_CATACOMBS, UNDERWORLD_MINES, BLACK_OAK_FARM, OASIS, LAKE_KUUMA, GROT_LAGOON, ABANDONED_MINES, FORT_AMIR, TORTURE_CHAMBERS];
+export const FLARE_DATA: FlareMapData[] = [SALTED_FIELD, SALTED_FIELD_VHAR, STONEWOOD_2, GOBLIN_CAMP, MERRIMEAD_SWAMP, NAZIA_HIGHLANDS, LOCHPORT_CEMETERY, SOUTHERN_RIDGE, THE_BREACH, GOBLIN_CAVE, PERDITION_MINES, ANTLION_NEST, STORMROCK_RUINS, ST_MARIA_2, ST_MARIA_3, WIZARDS_TOWER_1, WIZARDS_TOWER_2, TEMPLE_OF_MEZ_1, TEMPLE_OF_MEZ_2, UNDERWORLD_STRONGHOLD_1, THE_PIT, STORMROCK_PASS_2, UNDERWORLD, UNDERWORLD_CATACOMBS, UNDERWORLD_MINES, BLACK_OAK_FARM, OASIS, LAKE_KUUMA, GROT_LAGOON, ABANDONED_MINES, FORT_AMIR, TORTURE_CHAMBERS, ...VHAR_COPIES];
 const byFlareId = new Map(FLARE_DATA.map((d) => [d.id, d]));
 const byEris = new Map(FLARE_DATA.map((d) => [d.eris, d]));
 export const FLARE_FIRST = FLARE_DATA[0];
@@ -95,7 +124,7 @@ export const DUNGEON_DENSITY: Record<string, { every: number; n: number }> = {
     fuerte_amir: { every: 2, n: 4 }, camaras_de_tortura: { every: 2, n: 4 },
 };
 function thinZones<T extends { kind: string; n: number }>(eris: string, zones: T[]): T[] {
-    const k = DUNGEON_DENSITY[eris]; if (!k) return zones;
+    const k = DUNGEON_DENSITY[baseMapId(eris)]; if (!k) return zones;
     let pit = 0;
     return zones.flatMap((z) => (z.kind === 'boss' ? [z] : z.kind === 'pit' && pit++ % k.every === 0 ? [{ ...z, n: Math.min(z.n, k.n) }] : []));
 }
@@ -125,7 +154,8 @@ function flareLinks(d: FlareMapData): Link[] {
     for (const e of d.extras) {
         const to = byEris.get(e.to); if (!to) throw new Error(`${d.id}: la conexión extra apunta a '${e.to}', que no existe`);
         const avoid = [...to.links.map((b) => b.cell), ...to.extras.map((b) => b.cell), ...(FIELD_ERIS.has(to.eris) ? [FLARE_BACK] : [])];
-        out.push({ id: `${d.eris}_a_${to.eris}`, map: d.eris, x: e.cell.x, y: e.cell.y, to: { map: to.eris, ...nearestWalkable(to, e.arrive?.x ?? to.entry.x, e.arrive?.y ?? to.entry.y, avoid) }, kind: e.kind, ...(e.gate ? { gate: { lvl: e.gate } } : {}), msg: e.kind === 'walk' ? `Seguís el camino hacia ${to.name}.` : e.kind === 'door' ? `Bajás a ${to.name}.` : `Cruzás el portal hacia ${to.name}.` });
+        const n = seen.get(to.eris) ?? 0; seen.set(to.eris, n + 1);
+        out.push({ id: `${d.eris}_a_${to.eris}${n ? `_${n + 1}` : ''}`, map: d.eris, x: e.cell.x, y: e.cell.y, to: { map: to.eris, ...nearestWalkable(to, e.arrive?.x ?? to.entry.x, e.arrive?.y ?? to.entry.y, avoid) }, kind: e.kind, ...(e.gate ? { gate: { lvl: e.gate } } : {}), msg: e.kind === 'walk' ? `Seguís el camino hacia ${to.name}.` : e.kind === 'door' ? `Bajás a ${to.name}.` : `Cruzás el portal hacia ${to.name}.` });
     }
     return out;
 }
@@ -172,21 +202,29 @@ function surfaceRest(d: FlareMapData, seen = new Set<string>()): { map: string; 
     return undefined;
 }
 
+/** Tramo intermedio 60–80: mapas compartidos donde solo una parte tiene PvP. Estas son las zonas PACÍFICAS (entrada y pits de leveo); el resto es PvP. */
+export const PEACE_RECTS: Record<string, MapRect[]> = {
+    paso_de_stormrock: [{ x0: 0, y0: 58, x1: 131, y1: 131 }], // sur: puertas de la Brecha y pits A/B; PvP al norte (pit C y salida a Cenizas I)
+    cenizas_i: [{ x0: 0, y0: 0, x1: 70, y1: 119 }], // oeste: entrada y pit A; PvP al este (pits B/C y salida)
+    cenizas_ii: [{ x0: 0, y0: 66, x1: 119, y1: 119 }], // sur: entrada y pit A; PvP al norte (pits B/C y salidas)
+};
+
 /** Definiciones de mapa de los mapas de Flare. `hub` = vínculo de vuelta del primero a la ciudad que lo une (lo pone maps.ts). */
 export function flareMaps(hubs: Record<string, { map: string; to: Cell }>): Record<string, MapDef> {
     const out: Record<string, MapDef> = {};
     for (const d of FLARE_DATA) {
         const links = flareLinks(d);
         // puertas con llave (docs/LLAVES.md): la entrada desde la superficie al primer piso pide la llave de esa mazmorra
-        if (!d.dungeon) for (const l of links) { const k = DUNGEON_ENTRY_KEYS[l.to.map]; if (k) l.gate = { ...(l.gate ?? {}), key: k }; }
+        if (!d.dungeon) for (const l of links) { const k = DUNGEON_ENTRY_KEYS[baseMapId(l.to.map)]; if (k) l.gate = { ...(l.gate ?? {}), key: k }; }
         const hub = hubs[d.eris];
         if (hub) links.push({ id: d === FLARE_FIRST ? 'campos_a_ciudad' : `${d.eris}_a_ciudad`, map: d.eris, ...FLARE_BACK, to: { map: hub.map, ...hub.to }, kind: 'portal', gate: { faction: FIELD_FACTION[d.eris] }, msg: 'Cruzás el portal de vuelta a la ciudad.' });
         // al campo de una nación se entra desde el Bosque de Piedra solo siendo de esa nación (las ciudades ya llevan a la suya)
-        for (const l of links) { const f = FIELD_FACTION[l.to.map]; if (f && !FIELD_ERIS.has(d.eris)) l.gate = { ...(l.gate ?? {}), faction: f }; }
+        for (const l of links) { const f = FIELD_FACTION[l.to.map] ?? nationOfMap(l.to.map); if (f && !FIELD_ERIS.has(d.eris)) l.gate = { ...(l.gate ?? {}), faction: f }; }
         const def: MapDef = {
             id: d.eris, name: d.name, region: d.region, size: d.size, lvl: d.lvl, tier: d.tier, pvp: d.pvp, safe: false,
             spawn: { ...d.entry }, respawn: { ...d.entry }, links, build: () => buildFlareMap(byEris.get(d.eris)!),
         };
+        if (PEACE_RECTS[d.eris]) def.peaceRects = PEACE_RECTS[d.eris];
         if (d.dungeon) {
             // mazmorra: la posición no se guarda (al reconectar volvés a la superficie) y al morir reaparecés en la entrada del piso 1
             const rest = surfaceRest(d); if (!rest) throw new Error(`${d.id}: la mazmorra no lleva a ningún mapa de superficie`);

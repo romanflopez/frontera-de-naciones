@@ -27,8 +27,8 @@ function setup() {
         world.playerConnected(session.sessionId, name, (m) => log.push(m), () => {}, persisted);
         mem.put(`acc-${name}`, { name, salt: '', hash: '', created: 0, lastLogin: 0 });
         world.bindAccount(session.sessionId, `acc-${name}`);
-        world.onClientSave(session.sessionId, JSON.stringify({ cls: 'guerrero', faction }));
-        world.handleClientPacket(session.sessionId, { payload: { $case: 'changePlayerProfileRequest', value: { profile: `${faction};guerrero;` } } } as never);
+        world.onClientSave(session.sessionId, JSON.stringify({ cls: 'paladin', faction }));
+        world.handleClientPacket(session.sessionId, { payload: { $case: 'changePlayerProfileRequest', value: { profile: `${faction};paladin;` } } } as never);
         reg.sessionHook = (id) => (id === session.sessionId ? { session } : undefined);
         return { session, log, p: world.playerOf(session.sessionId)! };
     };

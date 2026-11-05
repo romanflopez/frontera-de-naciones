@@ -1,9 +1,10 @@
 /** Legibilidad del PvP: los mapas de facción tienen que ser abiertos (poco bloqueado, poca decoración) para que se vea al rival y se pueda esquivar. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MAPS, buildMap } from '@fdn/world';
+import { MAPS, buildMap, baseMapId, nationOfMap } from '@fdn/world';
 
 /** Excepciones conocidas (mapas con paredes o acantilados de verdad): se abren cuando se rehaga su arte. */
+// los mapas de leveo de cada nación (sin PvP) se arman con el mismo estilo abierto que los de facción: se miden igual; las copias de Vhar valen lo mismo que el original
 const EXCEPCIONES = new Set(['la_brecha', 'cenizas_i']);
 const MAX_BLOQUEADO = 0.10, MAX_PROPS_POR_CELDA = 0.09;
 
@@ -19,11 +20,11 @@ function medir(id: string) {
 }
 
 test('pvp limpio: los mapas de facción tienen menos de 10 % de celdas bloqueadas y pocos props (salvo excepciones conocidas)', () => {
-    const ids = Object.values(MAPS).filter((d) => d.pvp === 'faction' && !d.legacy && !d.debugOnly).map((d) => d.id);
+    const ids = Object.values(MAPS).filter((d) => (d.pvp === 'faction' || (nationOfMap(d.id) && !d.temporary)) && !d.legacy && !d.debugOnly).map((d) => d.id);
     assert.ok(ids.length >= 10);
     for (const id of ids) {
         const r = medir(id);
-        if (EXCEPCIONES.has(id)) { assert.ok(r.blocked > MAX_BLOQUEADO, `${id} ya cumple: sacalo de EXCEPCIONES`); continue; }
+        if (EXCEPCIONES.has(baseMapId(id))) { assert.ok(r.blocked > MAX_BLOQUEADO, `${id} ya cumple: sacalo de EXCEPCIONES`); continue; }
         assert.ok(r.blocked <= MAX_BLOQUEADO, `${id}: ${(100 * r.blocked).toFixed(0)} % bloqueado`);
         assert.ok(r.props <= MAX_PROPS_POR_CELDA, `${id}: ${(100 * r.props).toFixed(1)} props cada 100 celdas`);
     }

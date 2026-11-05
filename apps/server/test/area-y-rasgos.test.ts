@@ -25,7 +25,7 @@ interface Opts { type?: MobType; n?: number; r?: number; at?: { x: number; y: nu
 
 function setup(o: Opts = {}) {
     clock += 100_000;
-    const { type = 'goblin', n = 1, r = 0, at = { x: 14, y: 20 }, cls = 'guerrero', lvl = relevel(10) } = o;
+    const { type = 'goblin', n = 1, r = 0, at = { x: 14, y: 20 }, cls = 'paladin', lvl = relevel(10) } = o;
     const sent: ServerMessage[] = [], hurts: { raw: number; source: string }[] = [], timers: { at: number; fn: () => void }[] = [];
     const combat = statsFromChar({ lvl, cls, eq: {} });
     const p = { playerId: 7n, posX: at.x, posY: at.y, disconnected: false, isDead: false, status: { isInvisible: false }, combat, pvp: new PvpLimiter(), send: (m: ServerMessage) => sent.push(m) } as unknown as Player;
@@ -142,7 +142,7 @@ test('huida: se aleja, y a los segundos vuelve a casa y se cura; mientras corre 
 
 // ---------- B. habilidades de mob ----------
 test('anti-físico: el daño físico se reduce a la mitad de verdad; el mágico no', () => {
-    const base = setup({ type: 'goblin', cls: 'guerrero', lvl: relevel(20) }), anti = setup({ type: 'goblin', cls: 'guerrero', lvl: relevel(20) });
+    const base = setup({ type: 'goblin', cls: 'paladin', lvl: relevel(20) }), anti = setup({ type: 'goblin', cls: 'paladin', lvl: relevel(20) });
     anti.raws[0].traits = TRAIT_ANTI_PHYS;
     let a = 0, b = 0, n = 0;
     for (let i = 0; i < 400; i++) { base.hit(base.raws[0], 'ataque'); anti.hit(anti.raws[0], 'ataque'); clock += 1000; n++; }
@@ -162,7 +162,7 @@ test('anti-mágico: el daño mágico se reduce a la mitad; el físico no', () =>
     for (let i = 0; i < 100; i++) { base.hit(base.raws[0], 'proyectil'); anti.hit(anti.raws[0], 'proyectil'); clock += 2000; }
     const a = base.dmgs().reduce((s, x) => s + x.dmg, 0), b = anti.dmgs().reduce((s, x) => s + x.dmg, 0);
     assert.ok(Math.abs(b / a - ANTI_DAMAGE_MULT) < 0.05, `razón ${(b / a).toFixed(3)}`);
-    const f = setup({ type: 'goblin', cls: 'guerrero', lvl: relevel(20) }), f0 = setup({ type: 'goblin', cls: 'guerrero', lvl: relevel(20) });
+    const f = setup({ type: 'goblin', cls: 'paladin', lvl: relevel(20) }), f0 = setup({ type: 'goblin', cls: 'paladin', lvl: relevel(20) });
     f.raws[0].traits = TRAIT_ANTI_MAGIC;
     for (let i = 0; i < 300; i++) { f.hit(f.raws[0], 'ataque'); f0.hit(f0.raws[0], 'ataque'); clock += 1000; }
     const x = f.dmgs().reduce((s, t) => s + t.dmg, 0), y = f0.dmgs().reduce((s, t) => s + t.dmg, 0);
@@ -219,7 +219,7 @@ test('exp en el server: matar un mutante da el triple, un salvaje +25 % y los ra
     world.playerConnected(session.sessionId, 'x', () => {}, () => {}, persisted);
     mem.put('acc-x', { name: 'x', salt: '', hash: '', created: 0, lastLogin: 0 });
     world.bindAccount(session.sessionId, 'acc-x');
-    world.onClientSave(session.sessionId, JSON.stringify({ cls: 'guerrero', faction: 'solmar' }));
+    world.onClientSave(session.sessionId, JSON.stringify({ cls: 'paladin', faction: 'solmar' }));
     const p = world.playerOf(session.sessionId)!, st = p.econ!;
     eco.snapshot(p); st.qb!.d.done = ['pits', 'recolector', 'frontera']; // tope del día alcanzado: el encargo del mutante no se cobra y no suma exp
     const ctx: EconCtx = { npcs: [], restat: () => {}, ground: { add: () => {} } as never };
@@ -254,7 +254,7 @@ test('rendimiento: un mapa con 60 mobs (con rasgos y huidas) mantiene el tick de
     const blocked = Array.from({ length: N }, () => new Array<boolean>(N).fill(false)), safe = Array.from({ length: N }, () => new Array<boolean>(N).fill(false));
     const zones = [{ type: 'goblin' as MobType, x: 20, y: 20, r: 12, n: 30, name: 'pozo A' }, { type: 'skeleton' as MobType, x: 20, y: 20, r: 12, n: 30, name: 'pozo B' }];
     const map = { size: N, tiles: [], blocked, safe, props: [], decals: [], zones, buildings: [], npcs: [], spawn: { x: 1, y: 1 }, fire: { x: -50, y: -50 } } as unknown as WorldMap;
-    const combat = statsFromChar({ lvl: 10, cls: 'guerrero', eq: {} });
+    const combat = statsFromChar({ lvl: 10, cls: 'paladin', eq: {} });
     const p = { playerId: 7n, posX: 20, posY: 20, disconnected: false, isDead: false, status: { isInvisible: false }, combat, pvp: new PvpLimiter(), send: () => {} } as unknown as Player;
     const host: MobHost = { players: () => [p], playerById: () => p, nearby: () => [p], after: () => {}, hurt: () => {}, stun: () => 0, pay: () => true, heal: () => {}, reward: () => {} };
     const sim = new MobSim(map, host);

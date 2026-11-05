@@ -24,12 +24,12 @@ function setup(n = 1) {
         p.pvp.meleeGapMs = meleeIntervalSecs(0) * 1000;
         return p;
     };
-    const pala = mk(1n, 'guerrero', 11), mago = mk(2n, 'mago', 13);
-    const players = [pala, mago];
+    const paladin = mk(1n, 'paladin', 11), mago = mk(2n, 'mago', 13);
+    const players = [paladin, mago];
     const blocked = Array.from({ length: N }, () => new Array<boolean>(N).fill(false)), safe = Array.from({ length: N }, () => new Array<boolean>(N).fill(false));
     const map = { size: N, tiles: [], blocked, safe, props: [], decals: [], zones: [{ type: 'goblin', x: 12, y: 20, r: 1, n, name: 'prueba' }], buildings: [], npcs: [], spawn: { x: 1, y: 1 }, fire: { x: -50, y: -50 } } as unknown as WorldMap;
     const host: MobHost = {
-        players: () => players, playerById: (id) => players.find((p) => p.playerId === id), nearby: () => [pala], after: () => {}, // los avisos llegan una sola vez (al paladín)
+        players: () => players, playerById: (id) => players.find((p) => p.playerId === id), nearby: () => [paladin], after: () => {}, // los avisos llegan una sola vez (al paladín)
         hurt: () => {}, stun: () => 0, reward: () => {}, pay: () => true,
         heal: (p, v) => { heals.push({ id: p.playerId, n: v }); },
     };
@@ -39,18 +39,18 @@ function setup(n = 1) {
     const hit = (p: Player, m: Raw, spell: string, extra: Record<string, unknown> = {}) => sim.hit(p, { mobId: m.id, dmg: 0, melee: false, crit: false, parSecs: 0, poisonSecs: 0, spell, ...extra });
     const dmgs = () => sent.filter((x) => x.payload?.$case === 'mobDamaged').map((x) => (x.payload as { value: { dmg: number } }).value.dmg);
     const step = (secs: number) => { const n = Math.round(secs / 0.1); for (let i = 0; i < n; i++) { clock += 100; sim.update(); } };
-    return { sim, pala, mago, raws, hit, dmgs, heals, step, sent };
+    return { sim, paladin, mago, raws, hit, dmgs, heals, step, sent };
 }
 
 // ---------- K4: amenaza ----------
 test('amenaza: el mob persigue al que más amenaza le generó, no al primero que le pegó', () => {
-    const { sim, pala, mago, raws, hit, step } = setup();
+    const { sim, paladin, mago, raws, hit, step } = setup();
     const m = raws[0];
-    hit(pala, m, 'golpe'); step(0.2);
-    assert.equal(sim.targetOf(m.id), pala.playerId, 'primero va al paladín');
+    hit(paladin, m, 'golpe'); step(0.2);
+    assert.equal(sim.targetOf(m.id), paladin.playerId, 'primero va al paladin');
     for (let i = 0; i < 4; i++) { hit(mago, m, 'proyectil'); clock += 1000; }
     step(0.2);
-    assert.ok(sim.threatOn(m.id, mago) > sim.threatOn(m.id, pala));
+    assert.ok(sim.threatOn(m.id, mago) > sim.threatOn(m.id, paladin));
     assert.equal(sim.targetOf(m.id), mago.playerId, 'el mago generó más amenaza y se lo lleva');
 });
 
@@ -60,23 +60,23 @@ test('amenaza: Juicio y Escudo vengador multiplican la amenaza (×3 y ×5)', () 
 });
 
 test('provocación: el Martillo hace que el mob ataque al paladín aunque el mago tenga más amenaza', () => {
-    const { sim, pala, mago, raws, hit, step } = setup();
+    const { sim, paladin, mago, raws, hit, step } = setup();
     const m = raws[0];
     for (let i = 0; i < 6; i++) { hit(mago, m, 'proyectil'); clock += 1000; }
     step(0.2); assert.equal(sim.targetOf(m.id), mago.playerId);
-    hit(pala, m, 'aturdir', { parSecs: 3 }); step(0.2);
-    assert.equal(sim.targetOf(m.id), pala.playerId, 'provocado');
+    hit(paladin, m, 'aturdir', { parSecs: 3 }); step(0.2);
+    assert.equal(sim.targetOf(m.id), paladin.playerId, 'provocado');
     step(3.5);
     assert.equal(sim.targetOf(m.id), mago.playerId, 'pasados los 3 s vuelve al de más amenaza');
 });
 
 test('Mandato: provoca a todos los monstruos a 6 celdas durante 7 s', () => {
-    const { sim, pala, mago, raws, hit, step } = setup(4);
+    const { sim, paladin, mago, raws, hit, step } = setup(4);
     for (const m of raws) { hit(mago, m, 'proyectil'); clock += 400; }
     step(0.2);
-    const n = sim.tauntNear(pala, pala.posX + 0.5, pala.posY + 0.5, 6, 7); step(0.2);
+    const n = sim.tauntNear(paladin, paladin.posX + 0.5, paladin.posY + 0.5, 6, 7); step(0.2);
     assert.equal(n, raws.length);
-    for (const m of raws) assert.equal(sim.targetOf(m.id), pala.playerId);
+    for (const m of raws) assert.equal(sim.targetOf(m.id), paladin.playerId);
     step(7.5);
     for (const m of raws) assert.equal(sim.targetOf(m.id), mago.playerId, 'al terminar vuelven al de más amenaza');
 });
@@ -115,20 +115,20 @@ test('Bola de fuego: 1,4× sobre un mob que se está quemando', () => {
 });
 
 test('Juicio: el paladín se cura la mitad del daño que hizo', () => {
-    const { pala, raws, hit, dmgs, heals } = setup();
-    hit(pala, raws[0], 'juicio');
+    const { paladin, raws, hit, dmgs, heals } = setup();
+    hit(paladin, raws[0], 'juicio');
     const d = dmgs()[0];
     assert.equal(heals.length, 1); assert.equal(heals[0].n, Math.round(d * 0.5));
 });
 
 test('Escudo vengador: aturde 3 s y pega 1,5× a un mob ya aturdido', () => {
-    const { pala, raws, hit, dmgs } = setup(), m = raws[0], rnd = Math.random;
+    const { paladin, raws, hit, dmgs } = setup(), m = raws[0], rnd = Math.random;
     Math.random = () => 0.5;
     try {
-        hit(pala, m, 'escudo', { parSecs: 3 });
+        hit(paladin, m, 'escudo', { parSecs: 3 });
         assert.ok(m.par > clock / 1000 + 2.9, 'aturdido 3 s');
         clock += 9500; m.par = clock / 1000 + 2; m.imm = 0; // otro lo aturdió
-        hit(pala, m, 'escudo', { parSecs: 3 });
+        hit(paladin, m, 'escudo', { parSecs: 3 });
         const d = dmgs(); assert.ok(Math.abs(d[1] / d[0] - 1.5) < 0.05, `${d[0]} → ${d[1]}`);
     } finally { Math.random = rnd; }
 });

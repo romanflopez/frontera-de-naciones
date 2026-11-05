@@ -6,6 +6,8 @@ Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última a
 
 | Paso | Estado | Detalle |
 |---|---|---|
+| **D.0 Renombres y esqueleto del arquero** | **Implementado** (falta la prueba manual de la fila 1 de `COLA.md`) | `guerrero` → `paladin`, `healer` → `clerigo` (en pantalla: Paladín, Clérigo, Mago; Arquero cuando se habilite). `ECON_VERSION` 7 migra las cuentas; `canonicalClass` lee los ids viejos en guardados previos. `arquero` queda registrado con kit vacío: no aparece en crear personaje y el server rechaza crearlo. `sim:pvp` y `sim:pve` dan exactamente los mismos números que antes del cambio |
+| **D.14 Entrada sin flash de HUD** | **Implementado** (falta la prueba manual de la fila 2 de `COLA.md`) | Un solo estado `worldReady` en el cliente (`body.world-ready`): HUD, chat, minimapa, buffs, party y demás quedan `visibility:hidden` hasta que llega `InitialGameWorldState` **y** el mapa se dibujó un cuadro. "Viajando a" sube al elegir personaje (y en cada `mapTransfer`) y se funde recién ahí; sin fundido de entrada, para no mostrar el mapa viejo. Si el personaje arranca en otro mapa (ciudad de la nación), espera hasta 3 s el `mapTransfer` para no destapar el mapa de paso. Atajos de teclado bloqueados mientras `!worldReady`. Sin cambios de server ni de protocolo; `pnpm test` 522 verdes y 1 salteado, typecheck y build del cliente en verde (no hay tests automáticos de UI en el cliente: la prueba es E) |
 | 0.1 CI mínimo | **Hecho** | Corre en cada push y pull request: tipos de los 5 paquetes, tests del server y build del cliente (~1 min). Se comprobó que queda verde en `main` y rojo con un test roto. Falta (en GitHub): exigir el chequeo en Settings → Branches |
 | 0.2 Legal y catálogos | Pendiente | |
 | 0.3 Deploy de prueba | Pendiente | |
@@ -17,6 +19,7 @@ Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última a
 | **1.5 Tiers de zona** (paso nuevo) | **Implementado** (falta el recorrido E y el balance de jefes) | `TIERS_DE_ZONA.md` §3b: mapas de T1 a T6 (niveles 1-30), jefes en el tope de su tier, banda de ítems por tier, validador y tests |
 | **3.7 Dar e Intercambiar** (parte de 3.7) | **Implementado** (falta la prueba manual con 2 personas en el navegador) | `INTERCAMBIO.md`: Dar (regalo que el otro acepta) e Intercambiar (ventana de 8 + oro por lado), núcleo atómico común, topes de Dar. 17 tests (`trade.test.ts`) + script de red con dos bots (`scripts/test-trade.ts`, 23 verificaciones). Faltan correo, ítems frágiles/ligados y subasta de 1 a 3 días |
 | **Personajes por cuenta** (fuera del plan, pedido de Román) | **Implementado** (falta mirarlo a mano con 2 personas) | `PERSISTENCIA.md` § Personajes por cuenta: hasta 3 por cuenta, nombres únicos en todo el server, borrado con confirmación, cuentas viejas migradas solas, depósito compartido entre los personajes de la cuenta y un solo personaje conectado por cuenta. 11 tests (`personajes.test.ts`); probado en el navegador (crear, límite de 3, nombre repetido, borrar y que otra cuenta tome el nombre). Los bots de `scripts/` ahora eligen o crean el personaje; `test-trade` da 23/23. *`test-persistence` sigue sin pasar el teletransporte (sus coordenadas son de `solmar_legacy` y el personaje arranca en `solmar_villa`): a revisar.* |
+| **D.13 Cursor nativo** | **Implementado** (falta la prueba de Román en pantalla normal y retina) | `cursor.ts`: flecha, espada (mob/enemigo), globo (NPC), portal, moneda y retícula de hechizo listo pasan a `cursor: image-set()` con hotspot, generadas una vez en canvas a 1x y 2x. El overlay solo dibuja el anillo de casteo y aparece únicamente mientras se carga un hechizo. Clic→celda: `toGrid` trabaja en px CSS (`W = clientWidth`), no depende del DPR. La retícula nativa no pulsa (el botón del hechizo sí) |
 
 ## Paso 1.1: qué quedó
 
@@ -34,7 +37,7 @@ Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última a
 
 **Lo que falta de este paso**
 - **D, simulación:** extender `sim-arranque.ts` a 40 y confirmar que las horas por tramo caen dentro de ±25 % de la meta (0,9 / 6 / 24 / 60 h acumuladas del modelo de un mob por vez).
-- **E, prueba manual:** guerrero y mago nuevos de 1 a 10 midiendo el tiempo real (meta: menos de una hora).
+- **E, prueba manual:** paladín y mago nuevos de 1 a 10 midiendo el tiempo real (meta: menos de una hora).
 
 **Efecto que hay que saber.** Hoy no hay mapas con mobs por encima del nivel ~12 (llegan Fase 4). Con el multiplicador y la regla de diferencia, **a partir del nivel 12-15 subir se vuelve muy lento hasta que existan zonas de nivel alto**. Para probar niveles altos se usa el comando de GM `/gm nivel`.
 
@@ -85,7 +88,7 @@ Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última a
 
 **Área (solo en el server).** Tope de objetivos por lanzamiento: Bola, Lluvia, Ventisca, Marejada, Pilar de luz y Sismo 5; Torbellino y Giro 4. Los objetivos van del más cercano al centro al más lejano y cada uno extra cobra **−12 % de daño (mínimo 50 %)**: 100, 88, 76, 64 y 52 %. Un mismo lanzamiento (ventana de 250 ms) no pasa del tope aunque el cliente repita los pedidos. Con 5 objetivos el área rinde 3,8 golpes. El Giro elige él mismo los más cercanos. El cliente manda ordenados por cercanía. **El área contra jugadores (PvP) no cambió.**
 
-**Huida.** Un mob cobarde con ≤ 7 % de vida corre 5 s en dirección contraria a quien lo atacó (velocidad ×1,2), no se contagia ni vuelve a pelear, y después vuelve a casa y se cura. La chance depende del tipo (`fleeChance`): goblins 40-70 %, hormigas 50-70 %, wyverns y hechiceros 30 %, no huyen zombis, esqueletos guerreros ni jefes. Un mob **paralizado no huye**.
+**Huida.** Un mob cobarde con ≤ 7 % de vida corre 5 s en dirección contraria a quien lo atacó (velocidad ×1,2), no se contagia ni vuelve a pelear, y después vuelve a casa y se cura. La chance depende del tipo (`fleeChance`): goblins 40-70 %, hormigas 50-70 %, wyverns y hechiceros 30 %, no huyen zombis, esqueletos paladines ni jefes. Un mob **paralizado no huye**.
 
 **Rasgos de mob** (`packages/world/src/mobTraits.ts`, se sortean al nacer y viajan en la foto de mobs, campo nuevo `traits`):
 - **Mutante** (3 % en pozos y mazmorras): ×3 de exp, ×2 de chance de drop, +50 % de vida y +25 % de daño.
@@ -96,6 +99,6 @@ Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última a
 **Pruebas:** `apps/server/test/area-y-rasgos.test.ts` (18 tests): fórmula de caída con 1, 2, 3 y 6 objetivos; de 8 mobs solo 5 reciben daño y de forma decreciente; un cliente tramposo que repite no pasa del tope; la recarga habilita otro lanzamiento; un solo objetivo no tiene castigo; huida (sí / no con vida alta, no huyen valientes ni jefes ni paralizados, se aleja y termina); anti-físico y anti-mágico reducen a la mitad de verdad sin tocar el otro tipo; tóxico y explosivo; multiplicadores de exp y de botín (incluido el cálculo real del server); proporciones del sorteo (3 % y 10 %); **G:** 60 mobs con rasgos mantienen el p95 del tick del simulador por debajo de 10 ms. Suite del server: 199 verdes y 1 salteado; `test-combat.ts` 17/17 y `test-economy.ts` 81/81 contra un server real.
 
 **Lo que falta**
-- **D, simulación:** confirmar con `sim-arranque.ts` que el mago en área saca ≤ 1,6× la exp por hora del guerrero. Con un pozo medio (1,4 bichos por tirada) y el tope no debería pasarse, pero no se midió.
+- **D, simulación:** confirmar con `sim-arranque.ts` que el mago en área saca ≤ 1,6× la exp por hora del paladín. Con un pozo medio (1,4 bichos por tirada) y el tope no debería pasarse, pero no se midió.
 - **E, prueba manual:** 15 minutos en un pozo con cada clase para ver si se siente repetitivo, y el aspecto de los rasgos (hoy solo el nombre; una marca visual queda para el arte HD).
 - El tóxico y el explosivo no tienen animación propia todavía.

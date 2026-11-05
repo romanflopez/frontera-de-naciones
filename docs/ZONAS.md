@@ -79,9 +79,9 @@ Las zonas de los niveles 1-5 y el Páramo viven ahora en mapas propios, grandes 
 
 ## Chequeo de combate (estimación, sin defensa ni mejoras de equipo)
 
-Daño del jugador con las fórmulas de `PVP_SPELLS`/`BASE` (`pvpCombat.ts`): Guerrero `tajo` 22-30 + 3·Nv + arma (cd 0,9 s); Mago `hoja`/`lanza` (2-3·Nv + mag) con cd 1,4/4,5 s. Vida: guerrero `140 + 18·(Nv-1)`, mago `90 + 10·(Nv-1)` (más ~8/5 por nivel de equipo).
+Daño del jugador con las fórmulas de `PVP_SPELLS`/`BASE` (`pvpCombat.ts`): Paladín `tajo` 22-30 + 3·Nv + arma (cd 0,9 s); Mago `hoja`/`lanza` (2-3·Nv + mag) con cd 1,4/4,5 s. Vida: paladín `140 + 18·(Nv-1)`, mago `90 + 10·(Nv-1)` (más ~8/5 por nivel de equipo).
 
-Con un jugador de nivel igual al del mob común, matar uno lleva ~2-6 s al Guerrero y ~5-13 s al Mago (Nv 11 en el foso: 5 s / 12 s). Un mob común tarda ~20-35 s en matar al Guerrero y ~12-22 s al Mago peleando 1 a 1, así que se puede ganar cada pelea con margen y los grupos de 3-4 ya exigen parálisis, cura o pociones. Mini-boss y bosses: 14-23 s (Guerrero) y 30-50 s (Mago); el Mago tiene que kitear/paralizar.
+Con un jugador de nivel igual al del mob común, matar uno lleva ~2-6 s al Paladín y ~5-13 s al Mago (Nv 11 en el foso: 5 s / 12 s). Un mob común tarda ~20-35 s en matar al Paladín y ~12-22 s al Mago peleando 1 a 1, así que se puede ganar cada pelea con margen y los grupos de 3-4 ya exigen parálisis, cura o pociones. Mini-boss y bosses: 14-23 s (Paladín) y 30-50 s (Mago); el Mago tiene que kitear/paralizar.
 
 ## Cambios de esta pasada
 

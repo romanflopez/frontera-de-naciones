@@ -33,7 +33,7 @@ export const SKILL_DESC: Record<string, { kind: 'daño' | 'control' | 'cura' | '
     clarividencia: { kind: 'buff', text: 'Clarividencia: mucho más crítico de hechizos durante 10 s.' },
     remover: { kind: 'utilidad', text: 'Purga: te sacás aturdido, enraizado, congelado, frenado y silencio.' },
     intelecto: { kind: 'buff', text: 'Intelecto arcano: más Magia para vos y los aliados cerca. Dura 15 min fuera de la arena.' },
-    // Healer
+    // Clérigo
     castigo: { kind: 'daño', text: 'Castigo: proyectil sagrado que te cura parte del daño que hace. Pega más a un aturdido. Es lo que te deja farmear solo.' },
     curacion: { kind: 'cura', text: 'Curación: cura grande a un aliado (o a vos) con casteo. Tu cura principal.' },
     renovar: { kind: 'cura', text: 'Renovar: cura en el tiempo durante 12 s sobre un aliado; no se vuelve a aplicar hasta que termina. Sobre un enemigo, quemadura.' },

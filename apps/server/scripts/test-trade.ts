@@ -34,7 +34,7 @@ class Bot {
         this.ws.on('message', (d: Buffer) => {
             const p = ServerMessage.decode(new Uint8Array(d)).payload as Srv | undefined; if (!p) return;
             switch (p.$case) {
-                case 'characterList': this.send(p.value.characters.some((c) => c.name === this.name) ? { $case: 'selectCharacterRequest', value: { name: this.name } } : { $case: 'createCharacterRequest', value: { name: this.name, cls: 'guerrero', faction: 'solmar' } }); if (p.value.error) throw new Error(p.value.error); break;
+                case 'characterList': this.send(p.value.characters.some((c) => c.name === this.name) ? { $case: 'selectCharacterRequest', value: { name: this.name } } : { $case: 'createCharacterRequest', value: { name: this.name, cls: 'paladin', faction: 'solmar' } }); if (p.value.error) throw new Error(p.value.error); break;
                 case 'initialState': this.id = p.value.playerId; break;
                 case 'initialGameWorldState': ready(); break;
                 case 'inventoryState': this.inv = p.value; break;
@@ -67,7 +67,7 @@ class Bot {
 function seed(name: string, bag: unknown[], gold: number) {
     const dir = join(DATA_DIR, 'accounts'); mkdirSync(dir, { recursive: true });
     const salt = randomBytes(16), key = Buffer.from(name.normalize('NFC').toLowerCase(), 'utf8').toString('hex');
-    const character = { v: 1, faction: 'solmar', cls: 'guerrero', lvl: 20, exp: 0, gold, hp: 500, mp: 50, bag, eq: { arma: null, armadura: null, cabeza: null, anillo: null },
+    const character = { v: 1, faction: 'solmar', cls: 'paladin', lvl: 20, exp: 0, gold, hp: 500, mp: 50, bag, eq: { arma: null, armadura: null, cabeza: null, anillo: null },
         q: { i: 0, st: 'new', prog: 0, keys: { cripta: 0, foso: 0 }, shards: { cripta: 0, foso: 0 } }, pots: { hp: 3, mp: 0 }, u: [] };
     writeFileSync(join(dir, `${key}.json`), JSON.stringify({ name, salt: salt.toString('hex'), hash: scryptSync('test1234', salt, 32).toString('hex'), created: Date.now(), lastLogin: Date.now(), character: JSON.stringify(character) }));
 }

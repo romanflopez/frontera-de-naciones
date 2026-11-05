@@ -13,7 +13,7 @@ mock.method(Date, 'now', () => clock);
 
 type Eq = Record<string, { n: string; a?: { id: string; v: number }[]; up?: number } | null>;
 const withAttrs = (attrs: { id: string; v: number }[], extra: Eq = {}): Eq => ({ arma: { n: 'Espada corta', a: attrs }, ...extra });
-const statsFor = (eq: Eq, cls = 'guerrero', lvl = 10) => statsFromChar({ lvl, cls, eq });
+const statsFor = (eq: Eq, cls = 'paladin', lvl = 10) => statsFromChar({ lvl, cls, eq });
 
 function setup(combat: CombatStats, at = { x: 14, y: 20 }, type: MobType = 'goblin') {
     clock += 100_000;
@@ -62,7 +62,7 @@ test('topes: al sumar varios ítems (equipo, anillos, mejoras) se aplican sobre 
 
 // ---------- H. el cliente no manda el daño ----------
 test('el daño, el crítico y el veneno que diga el cliente se ignoran', () => {
-    const { hit, hits, raw } = setup(statsFor({}, 'guerrero', 1));
+    const { hit, hits, raw } = setup(statsFor({}, 'paladin', 1));
     hit('ataque', { dmg: 999999, crit: true, poisonSecs: 5 });
     const h = hits(); assert.equal(h.length, 1);
     assert.ok(h[0].dmg < 60, `daño del server (${h[0].dmg}), no el 999999 del cliente`);
@@ -119,7 +119,7 @@ test('maná: sin maná el server no aplica el golpe', () => {
 
 // ---------- B. crítico, robo de vida y veneno ----------
 test('crítico: la proporción sigue el total topeado y el golpe crítico pega ×1,8', () => {
-    const { hit, hits } = setup(statsFor(withAttrs([{ id: 'crit', v: 500 }]), 'guerrero', 10)); // pide 505 %, vale 35 %
+    const { hit, hits } = setup(statsFor(withAttrs([{ id: 'crit', v: 500 }]), 'paladin', 10)); // pide 505 %, vale 35 %
     for (let i = 0; i < 3000; i++) { hit('ataque'); clock += 1000; }
     const h = hits(), crits = h.filter((x) => x.crit), rate = crits.length / h.length;
     assert.ok(rate > 0.30 && rate < 0.40, `${(rate * 100).toFixed(1)} % de críticos (esperado ~35 %)`);
@@ -129,7 +129,7 @@ test('crítico: la proporción sigue el total topeado y el golpe crítico pega �
 });
 
 test('crítico: sin equipo es 5 % y los hechizos no critican', () => {
-    const a = setup(statsFor({}, 'guerrero', 10));
+    const a = setup(statsFor({}, 'paladin', 10));
     for (let i = 0; i < 4000; i++) { a.hit('ataque'); clock += 1000; }
     const rate = a.hits().filter((x) => x.crit).length / a.hits().length;
     assert.ok(rate > 0.035 && rate < 0.065, `${(rate * 100).toFixed(1)} %`);
@@ -139,21 +139,21 @@ test('crítico: sin equipo es 5 % y los hechizos no critican', () => {
 });
 
 test('robo de vida: cura al server lo que de verdad quitó, con el tope de 15 %', () => {
-    const { hit, hits, heals } = setup(statsFor(withAttrs([{ id: 'leech', v: 80 }]), 'guerrero', 10));
+    const { hit, hits, heals } = setup(statsFor(withAttrs([{ id: 'leech', v: 80 }]), 'paladin', 10));
     for (let i = 0; i < 20; i++) { hit('ataque'); clock += 1000; }
     const h = hits(); assert.equal(heals.length, h.length);
     h.forEach((x, i) => assert.equal(heals[i], Math.max(1, Math.round((x.dmg * 15) / 100)), 'curación = 15 % del daño, no 80 %'));
 });
 
 test('robo de vida: sin atributo no cura, y un hechizo mágico tampoco cura', () => {
-    const a = setup(statsFor({}, 'guerrero', 10)); a.hit('ataque'); assert.equal(a.heals.length, 0);
+    const a = setup(statsFor({}, 'paladin', 10)); a.hit('ataque'); assert.equal(a.heals.length, 0);
     const b = setup(statsFor(withAttrs([{ id: 'leech', v: 15 }]), 'mago', 10)); b.hit('bola'); assert.equal(b.hits().length, 1); assert.equal(b.heals.length, 0, 'el robo de vida es del daño físico');
 });
 
 test('veneno: lo decide el server según el atributo del equipo', () => {
-    const yes = setup(statsFor(withAttrs([{ id: 'poison', v: 100 }]), 'guerrero', 10));
+    const yes = setup(statsFor(withAttrs([{ id: 'poison', v: 100 }]), 'paladin', 10));
     yes.hit('ataque'); assert.ok(yes.raw.poison > 0);
-    const no = setup(statsFor({}, 'guerrero', 10));
+    const no = setup(statsFor({}, 'paladin', 10));
     no.hit('ataque'); assert.equal(no.raw.poison, 0);
 });
 

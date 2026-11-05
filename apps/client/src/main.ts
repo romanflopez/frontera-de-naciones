@@ -234,9 +234,10 @@ function totals() {
 // ---------- clases ----------
 interface ClassDef { id: string; name: string; hidden?: boolean; desc: string; head: string; armor?: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; spells: string[] }
 const CLASSES: ClassDef[] = [
-    { id: 'guerrero', name: 'Paladin', desc: 'Tanque: aguanta, aturde y pega cuerpo a cuerpo.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'juicio', 'escudo', 'mandato', 'aturdir', 'aura', 'represalia', 'escudodivino', 'amparo', 'furia', 'giro', 'carga', 'grito', 'remover', 'aliento'] },
+    { id: 'paladin', name: 'Paladín', desc: 'Tanque: aguanta, aturde y pega cuerpo a cuerpo.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'juicio', 'escudo', 'mandato', 'aturdir', 'aura', 'represalia', 'escudodivino', 'amparo', 'furia', 'giro', 'carga', 'grito', 'remover', 'aliento'] },
     { id: 'mago', name: 'Mago', desc: 'Frágil: frío para frenar, fuego para rematar.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 200, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'esquirla', 'paralisis', 'nova', 'ignicion', 'bola', 'lluvia', 'escudomana', 'clarividencia', 'intelecto', 'furia', 'remover', 'invisibilidad', 'detectar', 'blink', 'aliento'] },
-    { id: 'healer', name: 'Healer', desc: 'Apoyo: cura, bendice y corta casteos.', head: 'head_short', armor: 'Túnica de mago', hp: 110, hpL: 14, mp: 110, mpL: 13, melee: [3, 6], weapon: 'Báculo de fresno', spells: ['castigo', 'curacion', 'renovar', 'bendicion', 'novasagrada', 'reprender', 'orbe', 'guardian', 'esfera', 'grupo', 'furia', 'pasoluz', 'despertar', 'detectar', 'aliento'] },
+    { id: 'clerigo', name: 'Clérigo', desc: 'Apoyo: cura, bendice y corta casteos.', head: 'head_short', armor: 'Túnica de mago', hp: 110, hpL: 14, mp: 110, mpL: 13, melee: [3, 6], weapon: 'Báculo de fresno', spells: ['castigo', 'curacion', 'renovar', 'bendicion', 'novasagrada', 'reprender', 'orbe', 'guardian', 'esfera', 'grupo', 'furia', 'pasoluz', 'despertar', 'detectar', 'aliento'] },
+    { id: 'arquero', name: 'Arquero', hidden: true, desc: 'Sin kit todavía.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: [] }, // esqueleto (D.0): no se puede crear hasta que tenga kit
 ];
 let CLS: ClassDef = CLASSES[0];
 /** Vida y maná máximos que manda el server (Vitals): mandan sobre la cuenta local, que usa números viejos de cada clase. */
@@ -295,7 +296,8 @@ function onServer(m: ServerPayload) {
             turnTo(P, dx, dy, 0, true);
             const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
             others.clear(); drops.length = 0; P.pickup = null; // el server vuelve a mandar el suelo cercano
-            hideMapLoading();
+            { const n = getMapDef(m.value.mapName)?.name; if (n) $('mlName').textContent = n; }
+            revealPending = true; // el telón se levanta recién después de dibujar este mapa (ver frame)
             break;
         }
         case 'playersEnteredRange':
@@ -455,7 +457,7 @@ function onMobDamaged(v: { mobId: number; attackerId: bigint; dmg: number; crit:
     const mine = v.attackerId === myId, poisonTick = v.dmg === 3 && !v.crit && m.poison > now();
     m.hp = v.hp; m.flash = 0.12;
     if (mine && !poisonTick && /goblin/.test(m.sprite ?? '')) sfx('goblin-hit', 0.6); // quejido del goblin (y de sus variantes) al recibir un golpe mío
-    if (mine && !poisonTick && CLS.id === 'guerrero' && now() - lastMeleeReq < 0.6) {
+    if (mine && !poisonTick && CLS.id === 'paladin' && now() - lastMeleeReq < 0.6) {
         sfx(v.crit ? 'sword-crit' : 'sword-attack', v.crit ? 0.85 : 0.5);
         efxLocal(v.crit ? 'critico' : 'impacto', m.x, m.y); // chispazo del golpe (solo lo veo yo)
         // crítico con el skin del caballero: golpe desde arriba (arranca con la espada ya levantada para que caiga junto con el número)
@@ -682,16 +684,16 @@ function hurtPlayer(d: number, kind: 'phys' | 'magic' = 'phys', applied = false)
     if (!(P.one && P.one.anim !== 'hit' && now() < P.one.until)) oneShot(P, 'hit', 0.15);
 }
 /** El server dice que morí: pierdo un poco de exp y pido revivir en mi ciudad. */
-/** Muerto esperando que un healer aliado lo despierte (K8). */
+/** Muerto esperando que un clérigo aliado lo despierte (K8). */
 let reviveWait = false;
 function die() {
     if (P.dead) return;
     P.dead = true; potEpoch++; pots.cd = 0; P.deadT = now(); P.hp = 0; P.path = []; P.casting = null; P.target = null; P.med = false; const lost = Math.round(expNeed() * 0.05); // la pérdida de exp la aplica el server (llega en inventoryState)
     log(`Moriste. Perdiste ${lost} de exp y ${MAP_DEF.id === DEFAULT_MAP ? 'volvés a tu ciudad' : 'reaparecés en el punto de reaparición de este mapa'}.`, true);
     const ask = (n: number) => { if (!P.dead || n > 10) return; net.send({ $case: 'respawnRequest', value: {} }); later(1, () => ask(n + 1)); };
-    // K8: con un healer aliado cerca, se espera 10 s antes de reaparecer para que te pueda Despertar
-    reviveWait = [...others.values()].some((o) => !o.gone && facOf(o.profile) === selectedFaction && !isEnemy(o) && o.profile.split(';')[1] === 'healer' && (o.hp ?? 1) > 0 && dist(P, o) <= 15);
-    if (reviveWait) toast('Hay un healer aliado cerca: te puede despertar. Si no, reaparecés en 10 s.');
+    // K8: con un clérigo aliado cerca, se espera 10 s antes de reaparecer para que te pueda Despertar
+    reviveWait = [...others.values()].some((o) => !o.gone && facOf(o.profile) === selectedFaction && !isEnemy(o) && o.profile.split(';')[1] === 'clerigo' && (o.hp ?? 1) > 0 && dist(P, o) <= 15);
+    if (reviveWait) toast('Hay un clérigo aliado cerca: te puede despertar. Si no, reaparecés en 10 s.');
     later(reviveWait ? 10 : 2.2, () => ask(0));
 }
 /** Mi vida según el server: es la que vale. */
@@ -699,7 +701,7 @@ function onVitals(v: { hp: number; maxHp: number; dead: boolean; mp: number; max
     if (v.maxHp > 0) srvMax.hp = v.maxHp; if (v.maxMp > 0) srvMax.mp = v.maxMp;
     const sh = v.shield ?? 0; if (sh > 0 && P.shield <= 0) P.shieldEnd = now() + 10; P.shield = sh; // escudos de K8: duran 10 s
     if (v.dead) { if (!P.dead) die(); P.hp = 0; return; }
-    if (P.dead) { const woke = reviveWait && now() - P.deadT < 9.9; reviveWait = false; /* lo despertó un healer: el aviso llega del server */ P.dead = false; P.one = null; P.mp = maxMp(); mpLocalAt = 0; if (!woke) log(MAP_DEF.id === DEFAULT_MAP ? 'Revivís en tu ciudad.' : 'Revivís en el punto de reaparición.', true); }
+    if (P.dead) { const woke = reviveWait && now() - P.deadT < 9.9; reviveWait = false; /* lo despertó un clérigo: el aviso llega del server */ P.dead = false; P.one = null; P.mp = maxMp(); mpLocalAt = 0; if (!woke) log(MAP_DEF.id === DEFAULT_MAP ? 'Revivís en tu ciudad.' : 'Revivís en el punto de reaparición.', true); }
     P.hp = Math.min(maxHp(), v.hp);
     // el maná también es del server; si recién gasté/tomé algo local (el aviso todavía viaja), no me pisa para arriba
     const smp = Math.min(maxMp(), v.mp);
@@ -829,11 +831,11 @@ const LIB: Record<string, SpellDef> = {
         cast() { return reviveCast(); } },
     grupo: { name: 'Bendición de grupo', mp: 28, cd: 10, col: '#ffb07a', range: 0, target: false, aoe: 14, // Fortitude + Divine Spirit: +6 % de vida y +50 % de regen de maná: 15 min afuera, 90 s en la arena (a toda la party)
         cast() { skillSend('grupo'); } },
-    pasoluz: { name: 'Paso de luz', mp: 0, cd: 15, col: '#fff2a8', range: 0, target: false, instant: true, // escape del healer (nivel 20): hasta 6 celdas y se saca el frenado
+    pasoluz: { name: 'Paso de luz', mp: 0, cd: 15, col: '#fff2a8', range: 0, target: false, instant: true, // escape del clérigo (nivel 20): hasta 6 celdas y se saca el frenado
         cast() { const d = blinkDest(6); if (!d) { toast('No hay lugar para el Paso de luz hacia ahí.'); return false; } net.send({ $case: 'blinkRequest', value: { x: d.x, y: d.y, skill: 'pasoluz' } }); } },
     aliento: { name: 'Segundo aliento', mp: 0, cd: 210, col: '#7fe0a0', range: 0, target: false, instant: true, // Second Wind (Valdrys): 3 s quieto, la mitad de vida y maná
         cast() { if (P.hp >= maxHp() && P.mp >= maxMp()) { toast('Ya tenés la vida y el maná llenos.'); return false; } P.path = []; P.target = null; P.engage = false; P.pickup = null; P.queued = null; cancelCast(); skillSend('aliento'); } },
-    // Healer (K5): el server cura, cobra y valida. Las curas van al aliado elegido (click en alguien de tu nación) o a vos.
+    // Clérigo (K5): el server cura, cobra y valida. Las curas van al aliado elegido (click en alguien de tu nación) o a vos.
     castigo: { name: 'Castigo', mp: 18, cd: 1, col: '#ffe680', range: VIEW_RANGE, target: true, // Smite (Valdrys): devuelve 9 de maná y te cura el 35 % del daño
         cast(m) { if (!isMob(m)) return false; efx('solar', m.x, m.y, 8); damageMob(m, 'castigo'); } },
     reprender: { name: 'Reprender', mp: 30, cd: 15, col: '#fff2a8', range: VIEW_RANGE, target: true, ctrl: true, instant: true, // Chastise (Valdrys): aturde 3 s
@@ -849,7 +851,7 @@ const LIB: Record<string, SpellDef> = {
     orbe: { name: 'Orbe sagrado', mp: 56, cd: 10, col: '#a8ffd0', range: VIEW_RANGE, target: false, // Holy Orb (Valdrys): 20 % al objetivo y a los de al lado
         cast() { return healCast('orbe', VIEW_RANGE); } },
     furia: { name: 'Furia', mp: 15, cd: 90, col: '#ffd23f', range: 0, target: false,
-        cast() { sfx('berserk', 0.7); efxLocal('pilar', P.x, P.y); pvpSend('pilar', P.x, P.y, 0n, 'furia'); P.fury = now() + 60; float(P.x, P.y - 0.4, '¡FURIA!', '#ffd23f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd23f' }); log(`Furia: +${selectedClass === 'mago' ? 35 : selectedClass === 'healer' ? 20 : 15}% de daño por 60 s.`, true); } },
+        cast() { sfx('berserk', 0.7); efxLocal('pilar', P.x, P.y); pvpSend('pilar', P.x, P.y, 0n, 'furia'); P.fury = now() + 60; float(P.x, P.y - 0.4, '¡FURIA!', '#ffd23f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd23f' }); log(`Furia: +${selectedClass === 'mago' ? 35 : selectedClass === 'clerigo' ? 20 : 15}% de daño por 60 s.`, true); } },
 };
 let SPELLS: Spell[] = [];
 const SPECIAL_KEY: Record<string, string | undefined> = { remover: 'r', invisibilidad: 'f', detectar: 'g', blink: 'b', carga: 'z', giro: 'x', grito: 'v', aliento: 'y', despertar: 'u', pasoluz: 'b' };
@@ -1116,13 +1118,14 @@ const efxLocal = (n: string, x: number, y: number, dy = 0) => { const k = FXM?.r
 const efx = (n: string, x: number, y: number, dy = 0) => { efxLocal(n, x, y, dy); if (connected) pvpSend(n, x, y); };
 // ---------- PvP: bandos enemigos (y todos contra todos en la arena) ----------
 const inArena = (x: number, y: number) => !!MAP_DEF.ffaRect && inMapRect(MAP_DEF.ffaRect, Math.floor(x), Math.floor(y));
+const inPeace = (x: number, y: number) => !!MAP_DEF.peaceRects?.some((r) => inMapRect(r, Math.floor(x), Math.floor(y)));
 const facOf = (profile: string) => profile.split(';')[0];
 /** Arenas 2v2 / 3v3 (`/arena`): el equipo es la party; el resto es rival aunque sea de tu nación. El server decide igual (y no deja pegar en la preparación). */
 const onArenaMap = () => MAP_DEF.region === 'arena';
 const teammate = (o: Other) => partyRows.has(o.name);
 const sameSide = (o: Other) => (onArenaMap() ? teammate(o) : facOf(o.profile) === selectedFaction);
 const unseen = (o: Other) => !!o.inv && !P.det && !sameSide(o);
-const isEnemy = (o: Other) => MAP_DEF.pvp !== 'off' && !o.gone && !unseen(o) && !isSafe(o.x, o.y) && !isSafe(P.x, P.y) && (onArenaMap() ? !teammate(o) : MAP_DEF.pvp === 'ffa' || facOf(o.profile) !== selectedFaction || (inArena(P.x, P.y) && inArena(o.x, o.y)));
+const isEnemy = (o: Other) => MAP_DEF.pvp !== 'off' && !o.gone && !unseen(o) && !isSafe(o.x, o.y) && !isSafe(P.x, P.y) && !inPeace(o.x, o.y) && !inPeace(P.x, P.y) && (onArenaMap() ? !teammate(o) : MAP_DEF.pvp === 'ffa' || facOf(o.profile) !== selectedFaction || (inArena(P.x, P.y) && inArena(o.x, o.y)));
 const enemiesNear = (x: number, y: number, r: number) => [...others.values()].filter((o) => isEnemy(o) && Math.hypot(o.x - x, o.y - y) <= r);
 /** Avisa al server qué hechizo lancé y sobre quién; el daño lo calcula el server (el campo dmg ya no se usa). */
 function pvpSend(fx: string, x: number, y: number, targetId = 0n, spell = '', secs = 0, r = 0) { net.send({ $case: 'pvpHitRequest', value: { fx, x, y, targetId, dmg: 0, secs, r, spell } }); }
@@ -1644,7 +1647,7 @@ function showArenaInvite(mode: string, expiresMs: number, mock = false): void {
 }
 
 window.addEventListener('keydown', (e) => {
-    if (!connected) return;
+    if (!connected || !worldReady) return;
     if (e.target instanceof HTMLInputElement) return;
     if (e.key === 'Enter') { e.preventDefault(); ($('chatIn') as HTMLInputElement).focus(); return; }
     if (e.key === 'F9') { e.preventDefault(); toggleGm(); return; }
@@ -2078,7 +2081,7 @@ function render() {
     if (inDungeon(P.x, P.y)) { ctx.fillStyle = 'rgba(12,8,24,.28)'; ctx.fillRect(0, 0, W, H); }
     ctx.textAlign = 'center';
     const zn = isSafe(P.x, P.y) ? null : ZONES.find((z) => near(P.x, P.y, z, z.r + 2)), zl = zn ? mobDef(zn.type, zn).lvl : 0;
-    const zone = isSafe(P.x, P.y) ? `${cityAt(P.x, P.y)?.name ?? 'Zona segura'} · zona segura` : zn ? `${zn.name} · Nv ${Math.max(1, zl - 1)}–${zl + 1}` : '';
+    const zone = isSafe(P.x, P.y) ? `${cityAt(P.x, P.y)?.name ?? 'Zona segura'} · zona segura` : zn ? `${zn.name} · Nv ${Math.max(1, zl - 1)}–${zl + 1}${MAP_DEF.peaceRects ? (inPeace(P.x, P.y) ? ' · sin PvP' : ' · ¡PvP!') : ''}` : '';
     const danger = zl - P.lvl; // verde: tranquila · dorado: a tu nivel · rojo: te pasa por mucho
     if (zone) { ctx.font = "600 13px 'Alegreya SC', Georgia, serif"; ctx.fillStyle = !zn ? 'rgba(214,164,69,.9)' : danger >= 4 ? '#ff6b5a' : danger >= 1 ? '#ffb347' : danger >= -3 ? 'rgba(214,164,69,.9)' : '#8fd18b'; ctx.fillText(zone + (zn && danger >= 4 ? ' · ¡peligrosa!' : ''), W / 2, H - 98); }
 }
@@ -2952,25 +2955,47 @@ function loadMap(def: MapDef): string {
 const loadEl = () => $('maploading');
 /** Barra de la pantalla de viaje: 0.1 al mostrarla, 0.7 con el mapa armado (esperando al server), 1 al entrar. */
 const setMapLoading = (k: number) => { ($('mlFill') as HTMLElement).style.width = `${Math.round(k * 100)}%`; };
+/**
+ * Único estado del que dependen HUD, chat y minimapa (`body.world-ready`, ver ui/loading-craftpix.css). Va a true recién con el estado
+ * inicial recibido y el mapa dibujado; al login, al elegir personaje y al cambiar de mapa vuelve a false.
+ */
+let worldReady = false;
+const setWorldReady = (v: boolean) => { worldReady = v; document.body.classList.toggle('world-ready', v); };
+/** Llegó el estado inicial y falta dibujar el mapa; el telón se levanta al final del próximo cuadro. */
+let revealPending = false;
+/** Hasta cuándo (segundos de `now()`) esperar el viaje a la ciudad propia antes de destapar, por si el server no lo hace. */
+let homeWaitUntil = 0;
+const HOME_WAIT_S = 3;
+let curtainTimer = 0;
 function showMapLoading(name: string, lvl: [number, number] | null, tier?: number) {
-    const el = loadEl(); el.classList.remove('err'); el.dataset.since = String(performance.now());
+    clearTimeout(curtainTimer); revealPending = false; homeWaitUntil = 0; mapLoading = true; setWorldReady(false);
+    const el = loadEl(); el.classList.remove('err', 'out'); el.dataset.since = String(performance.now());
     $('mlName').textContent = name; $('mlLvl').textContent = lvl ? `${tier ? `Zona T${tier} · ` : ''}Nivel recomendado ${lvl[0]}–${lvl[1]}` : ''; $('mlMsg').textContent = 'Loading...';
     setMapLoading(0.1);
-    el.hidden = false; requestAnimationFrame(() => el.classList.add('on'));
+    el.hidden = false; // sin fundido de entrada: tapa en el acto, para que no se vea el mapa viejo ni el nuevo a medio armar
 }
+/** Levanta el telón: destapa el mundo y funde la pantalla de viaje (se queda al menos 600 ms para que no parpadee). */
 function hideMapLoading() {
-    const el = loadEl(); if (el.hidden) return;
-    setMapLoading(1);
+    revealPending = false; homeWaitUntil = 0; clearTimeout(curtainTimer);
+    const el = loadEl(); setMapLoading(1);
     const wait = Math.max(0, 600 - (performance.now() - Number(el.dataset.since ?? 0)));
-    setTimeout(() => { el.classList.remove('on'); setTimeout(() => { el.hidden = true; }, 350); mapLoading = false; }, wait);
+    curtainTimer = window.setTimeout(() => {
+        mapLoading = false; setWorldReady(true); el.classList.add('out');
+        curtainTimer = window.setTimeout(() => { el.hidden = true; el.classList.remove('out'); }, 350);
+    }, wait);
+}
+/** Saca el telón sin entrar al mundo: se cortó la conexión o el server rechazó el personaje elegido. */
+function dropMapLoading() {
+    clearTimeout(curtainTimer); revealPending = false; homeWaitUntil = 0; mapLoading = false; setWorldReady(false);
+    const el = loadEl(); el.hidden = true; el.classList.remove('err', 'out');
 }
 function failMapLoading(msg: string) {
-    mapLoading = true; const el = loadEl(); el.classList.add('err', 'on'); el.hidden = false; $('mlMsg').textContent = msg; setMapLoading(1);
+    clearTimeout(curtainTimer); revealPending = false; homeWaitUntil = 0; mapLoading = true; setWorldReady(false);
+    const el = loadEl(); el.classList.remove('out'); el.classList.add('err'); el.hidden = false; $('mlMsg').textContent = msg; setMapLoading(1);
     net.close();
 }
 /** El server me sacó del mundo anterior: pantalla de carga, armo el mapa, verifico el hash y aviso MapReady (recién ahí me mete en el nuevo). */
 function onMapTransfer(v: { mapId: string; name: string; x: number; y: number; direction: number; mapHash: string; gameWorldId: string; lvlMin: number; lvlMax: number }) {
-    mapLoading = true;
     P.path = []; P.mv = false; P.target = null; P.engage = false;
     showMapLoading(v.name || v.mapId, v.lvlMax ? [v.lvlMin, v.lvlMax] : null, getMapDef(v.mapId)?.tier);
     // dejar que el navegador pinte la pantalla de carga antes de armar el mapa
@@ -3155,7 +3180,9 @@ function frame(ts: number = performance.now()) {
     if (hitstop > 0) { hitstop -= dt; dt = 0; }
     if (!mapLoading) { update(dt); checkPortals(); checkLinks(); wpTick(); npcTick(); }
     updateCam(Math.min(0.05, T - lastCam)); lastCam = T;
-    updateHover(); { const r0 = performance.now(); render(); diag.render(performance.now() - r0); } hud(); winTick(T); minimapTick(); requestAnimationFrame(frame);
+    updateHover(); { const r0 = performance.now(); render(); diag.render(performance.now() - r0); } hud(); winTick(T); minimapTick();
+    if (revealPending && T >= homeWaitUntil) hideMapLoading(); // el mapa ya se dibujó en este cuadro
+    requestAnimationFrame(frame);
     perf.frames++; { const t = performance.now(); if (t - perf.since >= 1000) { perf.fps = (perf.frames * 1000) / (t - perf.since); perf.frames = 0; perf.since = t; } }
 }
 
@@ -3168,7 +3195,7 @@ function storedId(name: string): string {
     return id;
 }
 try { const f = localStorage.getItem('fdn:faction'); if (FACTIONS.some((x) => x.id === f)) selectedFaction = f!; } catch { /* sin almacenamiento */ }
-let selectedClass = 'guerrero';
+let selectedClass = 'paladin';
 try { const c = localStorage.getItem('fdn:class'); if (CLASSES.some((x) => x.id === c && !x.hidden)) selectedClass = c!; } catch { /* sin almacenamiento */ }
 // pantallas de login / selección / clase / facción / creación (ver loginui.ts)
 const flow = initLoginUI({
@@ -3274,6 +3301,7 @@ $('loginForm').addEventListener('submit', async (e) => {
     net.onMessage = (m) => {
         if (m.$case === 'characterList') {
             const chars = m.value.characters.map((c) => ({ name: c.name, cls: c.cls, faction: c.faction, lvl: c.level, zone: c.zone }));
+            lastChars = chars; dropMapLoading(); // si venía de elegir personaje, el server lo rechazó: vuelve a la selección
             if (flowActive) { inFlow = true; flow.update(chars, m.value.error); return; }
             // reconexión automática tras un corte: vuelve a entrar con el mismo personaje sin pasar por la selección
             const again = auto && playName ? chars.find((c) => c.name === playName) : undefined;
@@ -3288,7 +3316,7 @@ $('loginForm').addEventListener('submit', async (e) => {
     };
     let tries = 0;
     net.onClose = (reason) => {
-        const was = connected; saver.stop(); others.clear(); drops.length = 0; lastInv = null; mapLoading = false; loadEl().hidden = true;
+        const was = connected; saver.stop(); others.clear(); drops.length = 0; lastInv = null; dropMapLoading();
         inFlow = false; flowActive = false;
         if (backToLogin) { backToLogin = false; showLogin(); btn.disabled = false; return; }
         if (leaving) { leaving = false; connected = false; showLogin('Saliste del juego.'); btn.disabled = false; return; }
@@ -3306,10 +3334,14 @@ $('loginForm').addEventListener('submit', async (e) => {
 let autoEnter = false, inFlow = false, backToLogin = false;
 /** Pantallas de personajes abiertas en esta conexión / personaje con el que se juega / recién creado (arranca en su ciudad). */
 let flowActive = false, playName = '', creatingNew = false;
+let lastChars: { name: string; faction: string; zone: string }[] = [];
 const lastCharKey = (account: string) => `fdn:char:${account.toLowerCase()}`;
 /** Pide entrar al mundo con ese personaje; el mundo llega después (initialGameWorldState) y ahí se llama a enterWorld. */
 function playChar(name: string, isNew: boolean) {
     inFlow = false; creatingNew = isNew; playName = name;
+    // el telón sube antes de pedir el personaje; un personaje nuevo todavía no tiene zona guardada: va a la ciudad de su nación
+    const ch = lastChars.find((c) => c.name === name), homeMap = ch && factionHome(ch.faction)?.map;
+    showMapLoading(ch?.zone || (homeMap && getMapDef(homeMap)?.name) || '', null);
     try { localStorage.setItem(lastCharKey(($('nameIn') as HTMLInputElement).value.trim()), name); } catch { /* sin almacenamiento */ }
     net.send({ $case: 'selectCharacterRequest', value: { name } });
 }
@@ -3334,7 +3366,10 @@ function enterWorld(name: string) {
     // cada facción arranca en su ciudad (también si el guardado te dejó dentro de la del otro bando)
     // en una ciudad del otro bando (o un interior suyo): a la propia
     const home = factionHome(selectedFaction), inOther = MAP_DEF.safe && (MAP_DEF.region === 'solmar' || MAP_DEF.region === 'vhar') && MAP_DEF.region !== selectedFaction;
-    if (home && (!welcomeBack || inOther)) net.send({ $case: 'playerTeleportRequested', value: { x: home.x, y: home.y } });
+    if (home && (!welcomeBack || inOther)) {
+        net.send({ $case: 'playerTeleportRequested', value: { x: home.x, y: home.y } });
+        if (home.map !== MAP_DEF.id) homeWaitUntil = now() + HOME_WAIT_S; // viene un mapTransfer: no destapar el mapa de paso
+    }
     log(selectedFaction === 'vhar' ? 'Bienvenido a la Ciudadela de Vhar. El portón del sur lleva a los Campos de Sal; los edificios tienen interior.' : 'Bienvenido a la Villa de Solmar. Los edificios tienen interior: entrá por las puertas.', true);
     log('En la plaza está el Portal de Frontera: un menú con las zonas de entrenamiento. La primera ya está abierta; las demás se abren al subir de nivel. Para volver a la ciudad apretá H (tarda 8 s y se corta si te pegan).', true);
     log('Tocá un mob para atacarlo. Apretá un hechizo (1–4), esperá que cargue y hacé clic en el objetivo. Enter para chatear.');
@@ -3386,7 +3421,7 @@ async function boot() {
     loadBuildingImages();
     refreshLook(); void initKnight();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, toScreen, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.mv = false; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, perf: () => ({ ...perf }), setQb: (v: QuestBookView | null) => { QB = v; renderQuest(); }, questDlg: (name: string) => openQuestDlg({ id: 'capitan_s', name, x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), questLog: toggleQuestLog, arenaInvite: (mode = '2v2') => showArenaInvite(mode, Date.now() + 30_000, true), arenaDbg: (v: ArenaInfo | null) => { $('arena').hidden = false; renderArena(v); }, shopDbg: (role = 'mercader') => openShop({ id: role + '_s', name: 'Mercader', x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), uid: () => uid++, RARS: RAR, mobCount: () => mobs.length, arrows: () => arrows.length });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, worldReady: () => worldReady, perf: () => ({ ...perf }), setQb: (v: QuestBookView | null) => { QB = v; renderQuest(); }, questDlg: (name: string) => openQuestDlg({ id: 'capitan_s', name, x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), questLog: toggleQuestLog, arenaInvite: (mode = '2v2') => showArenaInvite(mode, Date.now() + 30_000, true), arenaDbg: (v: ArenaInfo | null) => { $('arena').hidden = false; renderArena(v); }, shopDbg: (role = 'mercader') => openShop({ id: role + '_s', name: 'Mercader', x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), uid: () => uid++, RARS: RAR, mobCount: () => mobs.length, arrows: () => arrows.length });
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5), recall: () => ({ on: !!recall, k: recallK(now()), cd: Math.max(0, recallCdEnd - now()) }) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();

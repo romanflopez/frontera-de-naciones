@@ -32,7 +32,7 @@ Código: `apps/client/index.html` (bloque `#login`), `apps/client/src/loginui.ts
 
 **Falta**
 - [x] Detalle del personaje: el mapa donde quedó ya está; **agregar última conexión** (Román, 5/11). EK cuando exista.
-- [ ] **Logo/escudo de cada nación** (Solmar, Vhar) y **emblema de cada clase** (pala, clérigo, mago, arquero): hoy se dibujan por código (`shield()`, `clsIcon()`). Román define si van como arte propio o quedan por código.
+- [ ] **Logo/escudo de cada nación** (Solmar, Vhar) y **emblema de cada clase** (paladín, clérigo, mago, arquero): hoy se dibujan por código (`shield()`, `clsIcon()`). Román define si van como arte propio o quedan por código.
 
 ## 3. Crear personaje
 
@@ -56,8 +56,8 @@ Código: `apps/client/index.html` (bloque `#login`), `apps/client/src/loginui.ts
 **Estado:** pantalla de carga inicial (`#loading`), pantalla "Viajando a" por mapa (`#maploading`), después el mundo.
 
 **A corregir**
-- [ ] **Al entrar se ven el HUD y el chat antes de que cargue el mundo** (Román, 5/11): el HUD se destapa al pasar el login, antes de recibir el estado inicial del mapa. Arreglo: el HUD, el chat y el minimapa quedan `hidden` hasta que llegue `InitialGameWorldState` **y** el mapa esté renderizado; la pantalla "Viajando a" se mantiene arriba de todo hasta ese momento y recién ahí se funde. Un solo estado `worldReady` en el cliente del que dependen los tres, en lugar de destaparlos por separado.
-- [ ] Revisar que al cambiar de mapa pase lo mismo (que no se vea el mapa viejo ni el HUD "vacío" mientras llega el nuevo).
+- [x] **Al entrar se ven el HUD (D.14, falta prueba manual) y el chat antes de que cargue el mundo** (Román, 5/11): el HUD se destapa al pasar el login, antes de recibir el estado inicial del mapa. Arreglo: el HUD, el chat y el minimapa quedan `hidden` hasta que llegue `InitialGameWorldState` **y** el mapa esté renderizado; la pantalla "Viajando a" se mantiene arriba de todo hasta ese momento y recién ahí se funde. Un solo estado `worldReady` en el cliente del que dependen los tres, en lugar de destaparlos por separado.
+- [x] Revisar que al cambiar de mapa pase lo mismo (D.14) (que no se vea el mapa viejo ni el HUD "vacío" mientras llega el nuevo).
 
 **Falta**
 - [ ] Primeros minutos / tutorial: pendiente (fase 6.1 del plan).
@@ -119,11 +119,11 @@ Código: `apps/client/index.html` (bloque `#login`), `apps/client/src/loginui.ts
 
 ## 8. Juego: moverse, mouse, pegar, castear, morir
 
-**Estado:** movimiento continuo con predicción local (`moveFree`, 20 envíos/s), velocidad que manda el server (280 ms/celda caminar, 170 correr; D.12). Cursor del sistema oculto y reemplazado por un canvas de 88 px que sigue al mouse en `pointermove` (`cursor.ts`), con el anillo de casteo dibujado ahí.
+**Estado:** movimiento continuo con predicción local (`moveFree`, 20 envíos/s), velocidad que manda el server (280 ms/celda caminar, 170 correr; D.12). Cursor nativo (`cursor: image-set(...)` a 1x y 2x, con hotspot) para la flecha y sus variantes (espada, globo, portal, moneda, retícula de hechizo listo) en `cursor.ts`; el canvas overlay de 88 px queda solo para el anillo de casteo.
 
 **A corregir**
 - [x] **Se mueve lento** (D.12, hecho; falta que Román lo pruebe y afine) (Román, 5/11). No es red: es el valor. Probar 280 ms caminar / 170 correr (server, `movementSpeedMs`) y decidir jugando; el tope de 200 en combate de `COMBATE.md` se revisa con el mismo criterio.
-- [ ] **Mouse con "sensibilidad loca"** (Román, 5/11). Causa: el cursor es un overlay que va un frame atrás del mouse real y flota cuando bajan los fps. Arreglo: la flecha pasa a **cursor nativo** (`cursor: url(...)`, con hotspot) y el canvas queda solo para el anillo de casteo y la retícula. Verificar además que el clic caiga en la celda bajo la flecha con `devicePixelRatio` ≠ 1 y con el canvas escalado.
+- [x] **Mouse con "sensibilidad loca"** (D.13, hecho; falta que Román lo pruebe) (Román, 5/11). Causa: el cursor es un overlay que va un frame atrás del mouse real y flota cuando bajan los fps. Arreglo: la flecha pasa a **cursor nativo** (`cursor: url(...)`, con hotspot) y el canvas queda solo para el anillo de casteo y la retícula. Verificar además que el clic caiga en la celda bajo la flecha con `devicePixelRatio` ≠ 1 y con el canvas escalado.
 - [x] **La movilidad es lo que está mal, antes que todo lo demás** (D.12, hecho: correr por defecto, caminar al castear, arranque y giro; falta frenado y la prueba de Román) (Román, 5/11): es el primer ítem de esta sección a resolver, jugando, no en papel. Velocidad, aceleración al arrancar/frenar, giro, y que correr sea el default.
 - [ ] **Castear necesita una animación piola** (Román, 5/11): hoy hay texto y anillo en el cursor; falta la pose/animación del personaje (manos, brillo en el piso, partículas del color del hechizo) y el "suelte" al terminar el casteo. Entra con el pipeline de sprites (Character Creator 2D tiene animación de cast).
 - [ ] Pegar: depende de las animaciones (Román, 5/11); se revisa cuando estén.
