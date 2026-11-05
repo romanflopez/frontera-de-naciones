@@ -22,3 +22,7 @@ Una línea por duda: qué, dónde, qué opciones se ven.
 - **D.16, depende de D.15 y se hizo solo la tienda:** el marco de la tienda se ancla a la derecha del chat actual (~444 px); cuando D.15 mueva el chat al lado del HUD hay que revisar ese `left`. Opción: tomar el ancho del chat de una variable CSS.
 - **D.16, vender sin confirmación:** tocar un ítem de la bolsa lo vende al instante. Opción: confirmar solo desde cierta rareza (el server igual decide).
 - **D.16, borde dorado del marco de las ventanas:** viene del kit (`.cw`) y se dejó; entra en la decisión de estilo global de D.18.
+- **D.9, piedras viejas:** las piedras de forja guardadas pasaron a zem en la **bolsa** (1:1), o sea en riesgo si morís contra un jugador en zona roja; hay que depositarlas para forjar. Opción: mandarlas directo al depósito de la cuenta en la migración.
+- **D.9, jefes:** los jefes de mazmorra y de mundo siguen soltando 3-5 zem fijos en vez del 7-10 %; `DISEÑO.md` dice "todos los mobs al 7-10 %". Opción: pasarlos al porcentaje.
+- **D.9, textos:** el resto de los docs (`ITEMS.md`, `JEFE_DE_MUNDO.md`, etc.) todavía dicen "piedra de forja"; y las recompensas de misiones siguen en el campo `forge` de `quests.ts` (ahora pagan zem a la bolsa). El renombre de misiones es D.11.
+- **D.9, caída y party:** el zem y el oro de la caída se reparten entre la party del que mató como el oro (partes iguales).

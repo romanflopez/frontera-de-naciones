@@ -1540,7 +1540,7 @@ message InventoryState {
   // Oro real (puede pasar de 2^31: `gold` queda topado a int32 solo por compatibilidad; el cliente usa gold_d).
   double gold_d = 18;
   // Piedras de forja (materiales para mejorar ítems únicos).
-  int32 forge = 19;
+  int32 zem = 19; // zem de la bolsa (D.9; antes piedras de forja)
   // Puntos de stats repartidos y puntos libres (paso 1.2). Los stats de las cuentas viejas valen 10.
   int32 stat_str = 20;
   int32 stat_vit = 21;
@@ -1574,7 +1574,7 @@ message KillReward {
   bool quest_ready = 11;
   int32 quest_prog = 12;
   double gold_d = 13;
-  int32 forge = 14;
+  int32 zem = 14; // zem que cayó con este kill (D.9)
 }
 
 // ---------- Botín en el suelo (server-autoritativo; ver docs/ECONOMIA_SERVER.md) ----------

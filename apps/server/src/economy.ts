@@ -16,7 +16,7 @@ import {
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
     DAILY_BY_ID, DAILY_EXP_PCT, DUNGEON_KEY, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, junkValue, MAT_REFORJA, reforgeGold, reforgeStones, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
     mainComplete, newQuestBook, repeatGold, rewardUniques, rollDailies, type QuestBook, type QuestEvent, type QuestHave, type QuestReward,
-    canonicalClass,
+    canonicalClass, ZEM_CHANCE, ZEM_BOSS, ZEM_ID, pvpGoldLoss,
 } from '@fdn/world';
 import { DAILY_INDEX_BASE, dailyOffers, dayKey } from './dailyShop.ts';
 import { canPickup, GROUND_MAX_PER_OWNER, PICKUP_RANGE, type GroundApi } from './ground.ts';
@@ -25,7 +25,7 @@ import type { Player } from './player.ts';
 import type { AccountRecord, Storage } from './storage.ts';
 
 /** v3: nivel máximo 40 y curva de exp nueva (migra la exp guardada conservando la fracción del nivel). v4: puntos de stats. */
-export const ECON_VERSION = 9;
+export const ECON_VERSION = 10;
 export const MAX_LVL = MAX_LEVEL;
 /** Sin límite de oro de juego: el único techo es el técnico (entero exacto en JS / double del protocolo). */
 export const MAX_GOLD = Number.MAX_SAFE_INTEGER;
@@ -47,7 +47,9 @@ export interface Econ {
     hp: number; mp: number;
     bag: SItem[];
     eq: Record<Slot, SItem | null>;
-    /** Piedras de forja (material de mejora). Las cuentas viejas no lo tienen: se toma como 0. */
+    /** Zem de la bolsa (D.9): riesgo en PvP de zona roja; la forja gasta el del depósito. Las cuentas viejas no lo tienen: 0. */
+    zem?: number;
+    /** Piedras de forja de antes de D.9: `migrateEcon` las pasa a `zem` 1:1 y borra el campo. */
     forge?: number;
     /** Materiales apilables levantados del suelo (systems/loot.ts), por id. Las cuentas viejas no lo tienen. */
     mats?: Record<string, number>;
@@ -95,9 +97,6 @@ export function pickSetPiece(st: Econ, pool: UniqueBase[]): UniqueBase {
     const fresh = pool.filter((u) => !have.has(u.name));
     return pick(fresh.length ? fresh : pool);
 }
-/** Piedras de forja: chance por muerte según el origen del mob, y cantidad que suelta un jefe. */
-export const FORGE_CHANCE = { loose: 0.05, pit: 0.08, dungeon: 0.18, world: 0.18 };
-export const FORGE_BOSS: [number, number] = [3, 5];
 /**
  * Probabilidad de éxito de cada mejora (+1 .. +11): arranca en 33 % para que la gente pueda "limar". Solo vive en el server.
  * Al fallar no baja el nivel: solo se pierden piedras y oro (el costo del azar es el tiempo, no perder lo ya hecho).
@@ -186,7 +185,7 @@ export function newEcon(rawCls: string, faction: string): Econ {
     };
     st.eq.arma = newItem(st, kit.weapon, 0, []); st.eq.armadura = newItem(st, kit.armor, 0, []);
     refreshUnlocks(st);
-    const dfg = Number(process.env.FDN_DEBUG_FORGE); if (Number.isFinite(dfg) && dfg > 0) { st.forge = Math.floor(dfg); const u = UNIQUE_BASES.find((x) => !x.uniq.boss)!; st.bag.push(uniqueItem(st, u)); } // solo pruebas: piedras y un único
+    const dfg = Number(process.env.FDN_DEBUG_FORGE); if (Number.isFinite(dfg) && dfg > 0) { st.zem = Math.floor(dfg); const u = UNIQUE_BASES.find((x) => !x.uniq.boss)!; st.bag.push(uniqueItem(st, u)); } // solo pruebas: piedras y un único
     const dbg = Number(process.env.FDN_DEBUG_GOLD); if (Number.isFinite(dbg) && dbg > 0) st.gold = Math.min(MAX_GOLD, Math.floor(dbg)); // solo pruebas
     return st;
 }
@@ -277,6 +276,8 @@ export function migrateEcon(st: Econ): boolean {
         const frac = Math.min(0.999, Math.max(0, st.exp / Math.max(1, expToLevelV8(st.lvl))));
         st.exp = Math.min(expToLevel(st.lvl) - 1, Math.floor(frac * expToLevel(st.lvl)));
     }
+    // v10 (D.9): la piedra de forja pasa a ser zem, 1:1. Quedan en la bolsa (el zem de la bolsa es riesgo en PvP: hay que depositarlo para forjar).
+    if (st.v < 10) { st.zem = Math.max(0, Math.floor(st.zem ?? 0)) + Math.max(0, Math.floor(Number(st.forge) || 0)); delete st.forge; }
     st.v = ECON_VERSION;
     refreshUnlocks(st);
     return true;
@@ -377,6 +378,29 @@ export class Economy {
         return st;
     }
 
+    /** Depósito de la cuenta dueña del personaje (el que usa deposit.ts), o undefined si todavía no tiene. */
+    private vaultOf(key: string): { stacks?: Record<string, number> } | undefined {
+        const holder = this.storage.get(key)?.owner ?? key;
+        return (this.storage.get(holder) as { vault?: { stacks?: Record<string, number> } } | undefined)?.vault;
+    }
+    /** Guarda cuenta del personaje y depósito juntos (un solo flush), como hace el depósito. */
+    private saveVault(key: string): void {
+        const holder = this.storage.get(key)?.owner ?? key, h = this.storage.get(holder), a = this.storage.get(key);
+        if (a) this.storage.put(key, a); if (h && h !== a) this.storage.put(holder, h);
+        this.storage.flush();
+    }
+    /**
+     * Pérdida de una muerte contra un jugador en zona roja (D.9): todo el zem de la bolsa y `min(10 % del oro, nivel × 100)`. El equipo no se cae nunca.
+     * Saca de la bolsa y devuelve lo que cayó (el mundo lo tira al suelo reservado 30 s para el que mató y su party).
+     */
+    takePvpLoss(p: Player): { zem: number; gold: number } {
+        const st = p.econ; if (!st) return { zem: 0, gold: 0 };
+        const zem = Math.max(0, Math.floor(st.zem ?? 0)), gold = pvpGoldLoss(st.gold, st.lvl);
+        if (zem > 0) st.zem = 0;
+        if (gold > 0) addGold(st, -gold);
+        if (zem > 0 || gold > 0) { this.touch(p); this.snapshot(p); }
+        return { zem, gold };
+    }
     private touch(p: Player): void { const acc = this.acc(p.accountKey); if (acc && p.econ) { acc.econ = p.econ; this.storage.put(p.accountKey, acc); } }
 
     /** SOLO GM: fija el nivel (exp a 0) y/o suma oro. */
@@ -521,7 +545,7 @@ export class Economy {
     }
 
     // ---------- mejora de ítems únicos (docs/ITEMS.md §7) ----------
-    /** Mejora un ítem único (en la bolsa o equipado) en un herrero: gasta piedras de forja y oro; puede fallar (probabilidades solo acá). */
+    /** Mejora un ítem único (en la bolsa o equipado) en un herrero: gasta zem del depósito y oro; puede fallar (probabilidades solo acá). */
     upgrade(p: Player, ctx: EconCtx, npcId: string, uid: number): void {
         this.run(p, ctx, (st) => {
             if (p.isDead) return fail('dead', 'Estás muerto.');
@@ -532,7 +556,8 @@ export class Economy {
             const up = it.up ?? 0, cap = UP_MAX_BY_QUALITY[Math.min(4, Math.max(0, it.r))] ?? UP_MAX;
             if (up >= cap) return fail('max', `Un ítem ${QUALITY_NAMES[it.r]?.toLowerCase() ?? ''} se mejora hasta +${cap}; ya está ahí.`);
             const stones = upStones(up), gold = upGold(u.uniq.tier, up);
-            if ((st.forge ?? 0) < stones) return fail('stones', `Necesitás ${stones} piedra${stones > 1 ? 's' : ''} de forja.`);
+            const vault = this.vaultOf(p.accountKey), inVault = vault?.stacks?.zem ?? 0; // D.9: la forja solo usa el zem del DEPÓSITO
+            if (inVault < stones) return fail('stones', `Necesitás ${stones} zem en el depósito (tenés ${inVault}${(st.zem ?? 0) > 0 ? `; los ${st.zem} de la bolsa no sirven: depositalos` : ''}).`);
             if (st.gold < gold) return fail('gold', `Necesitás ${gold} de oro.`);
             // desde +8 cada intento gasta una copia de repuesto de la misma pieza (de cualquier calidad, en la bolsa)
             let spare: SItem | undefined;
@@ -540,12 +565,12 @@ export class Economy {
                 spare = st.bag.find((x) => x.n === it.n && x.u !== it.u);
                 if (!spare) return fail('spare', `Para pasar de +${up} a +${up + 1} necesitás otra ${it.n} de repuesto en la bolsa.`);
             }
-            st.forge = (st.forge ?? 0) - stones; addGold(st, -gold);
+            vault!.stacks!.zem = inVault - stones; if (!vault!.stacks!.zem) delete vault!.stacks!.zem; addGold(st, -gold); this.saveVault(p.accountKey);
             if (spare) st.bag.splice(st.bag.indexOf(spare), 1);
             if (Math.random() < (UP_RATE[up] ?? 0)) { it.up = up + 1; this.questEvent(p, st, null); return done(`¡${it.n} subió a +${it.up}!`, true); }
             // la mejora a +6 o más es la zona de riesgo: el fallo baja un nivel
-            if (up >= UP_RISK_FROM) { it.up = up - 1; return done(`La mejora falló y ${it.n} BAJÓ a +${it.up}. Se perdieron ${stones} piedra${stones > 1 ? 's' : ''} y ${gold} de oro.`, true); }
-            return done(`La mejora falló: se perdieron ${stones} piedra${stones > 1 ? 's' : ''} y ${gold} de oro. ${it.n} sigue en +${up}.`);
+            if (up >= UP_RISK_FROM) { it.up = up - 1; return done(`La mejora falló y ${it.n} BAJÓ a +${it.up}. Se perdieron ${stones} zem y ${gold} de oro.`, true); }
+            return done(`La mejora falló: se perdieron ${stones} zem y ${gold} de oro. ${it.n} sigue en +${up}.`);
         });
     }
 
@@ -739,10 +764,10 @@ export class Economy {
             item = uniqueItem(st, u);
         }
         const exp = Math.max(1, Math.round(expToLevel(st.lvl) * r.expPct / 100));
-        st.exp += exp; addGold(st, r.gold); if (r.forge) st.forge = (st.forge ?? 0) + r.forge;
+        st.exp += exp; addGold(st, r.gold); if (r.forge) st.zem = (st.zem ?? 0) + r.forge;
         if (item) st.bag.push(item);
         const ups = levelUp(st);
-        return { ok: true, ups, text: `+${exp} exp, +${r.gold} oro${r.forge ? `, +${r.forge} piedras de forja` : ''}${item ? ` y ${item.n}` : ''}.${ups ? ` ¡Subiste a nivel ${st.lvl}!` : ''}` };
+        return { ok: true, ups, text: `+${exp} exp, +${r.gold} oro${r.forge ? `, +${r.forge} zem` : ''}${item ? ` y ${item.n}` : ''}.${ups ? ` ¡Subiste a nivel ${st.lvl}!` : ''}` };
     }
 
     /** Acciones del libro de misiones con el Capitán: m_accept / m_turnin (cadena), d_turnin / d_reroll (encargos), r_turnin (repetible). */
@@ -763,14 +788,14 @@ export class Economy {
             b.m.i++; b.m.st = 'new'; b.m.prog = [];
             return done(`Entregaste «${q.name}»: ${r.text}`, r.ups > 0, r.ups ? 'level_up' : 'ok');
         }
-        if (action === 'r_turnin') { // key = "material|gold" o "material|forge"
+        if (action === 'r_turnin') { // key = "material|gold" o "material|forge" (forge = 1 zem)
             const [mat, what] = key.split('|');
             if (!mat || RESERVED_MATS.has(mat)) return fail('bad_mat', 'Ese material no se entrega: es para las llaves.');
-            if (what !== 'gold' && what !== 'forge') return fail('bad_action', 'Elegí oro o piedra de forja.');
+            if (what !== 'gold' && what !== 'forge') return fail('bad_action', 'Elegí oro o zem.');
             if ((mats[mat] ?? 0) < REPEAT_MATS) return fail('mats', `Necesitás ${REPEAT_MATS} del mismo material.`);
             mats[mat] -= REPEAT_MATS; this.questEvent(p, st, null);
             if (what === 'gold') { const g = repeatGold(st.lvl); addGold(st, g); return done(`Entregaste ${REPEAT_MATS} materiales: +${g} oro.`); }
-            st.forge = (st.forge ?? 0) + 1; return done(`Entregaste ${REPEAT_MATS} materiales: +1 piedra de forja.`);
+            st.zem = (st.zem ?? 0) + 1; return done(`Entregaste ${REPEAT_MATS} materiales: +1 zem.`);
         }
         return fail('bad_action', 'Acción inválida.');
     }
@@ -824,6 +849,7 @@ export class Economy {
         const st = p.econ; if (!st || !(amount > 0)) return false;
         const n = Math.floor(amount);
         if (itemId === 'gold') addGold(st, n);
+        else if (itemId === ZEM_ID) st.zem = (st.zem ?? 0) + n; // zem del suelo (caída de PvP): va a la bolsa, sin tope
         else { const mats = (st.mats ??= {}); mats[itemId] = Math.min(9999, (mats[itemId] ?? 0) + n); this.questEvent(p, st, { k: 'gather', n }); }
         this.touch(p); this.snapshot(p);
         return true;
@@ -873,8 +899,8 @@ export class Economy {
             if (st.bag.length < BAG_MAX) st.bag.push(item);
             else { bagFull = true; ctx.ground.add(item, Math.floor(p.posX) + 0.5, Math.floor(p.posY) + 0.5, [p.accountKey], LOOT_FREE_MS); } // nada se destruye: cae junto al jugador
         }
-        let forge = 0;
-        if (boss ? (bossU || k.origin === 'world') : Math.random() < FORGE_CHANCE[k.origin ?? 'pit'] * DROPS.forgeMult) { forge = boss ? rint(FORGE_BOSS[0], FORGE_BOSS[1]) : 1; st.forge = (st.forge ?? 0) + forge; }
+        let zem = 0; // D.9: 7-10 % por mob (según el origen) y un montón fijo de los jefes de mazmorra y de mundo; cae en la bolsa
+        if (boss ? (bossU || k.origin === 'world') : Math.random() < ZEM_CHANCE[k.origin ?? 'pit'] * DROPS.forgeMult) { zem = boss ? rint(ZEM_BOSS[0], ZEM_BOSS[1]) : 1; st.zem = (st.zem ?? 0) + zem; }
         if (boss && bossU) { // pieza de set extra (jefes de mazmorra): la banda es la de su mazmorra (D1 = T1 … D7 = T7), no la del nivel del jefe
             const di = DUNGEON_IDS.findIndex((d) => DUNGEON_BOSS[d] === k.type && k.map === DUNGEON_MAP[d]), pool = di >= 0 ? SET_PIECES_BY_TIER[di + 1] : undefined;
             if (pool && Math.random() < BOSS_SET_CHANCE) {
@@ -905,7 +931,7 @@ export class Economy {
         const questReady = false, questProg = 0; // la cadena vieja de 10 quedó jubilada: los avisos de misión van por questEvent
         levelUp(st); const ups = st.lvl - lvl0;
         this.touch(p);
-        p.send(M.killReward({ mobId: k.mobId, x: k.x, y: k.y, exp: gain, gold, item: item ? toInvItem(item) : undefined, bagFull, potion, shard, forge, newLvl: ups ? st.lvl : 0, questReady, questProg }));
+        p.send(M.killReward({ mobId: k.mobId, x: k.x, y: k.y, exp: gain, gold, item: item ? toInvItem(item) : undefined, bagFull, potion, shard, zem, newLvl: ups ? st.lvl : 0, questReady, questProg }));
         if (ups) ctx.restat(p); // subir de nivel cura (restat lo detecta por el nivel nuevo)
         this.snapshot(p);
     }

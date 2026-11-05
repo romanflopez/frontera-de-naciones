@@ -91,13 +91,13 @@ test('la DF y la RM que vienen de atributos se topean; la base de la armadura no
 
 // ---------- mejora: tope por calidad y zona de riesgo ----------
 test('mejora: un Verde solo llega a +3; un fallo nunca baja el nivel', () => {
-    const { eco, reg, join } = setup();
+    const { mem, eco, reg, join } = setup();
     const world = reg.ensure('solmar_legacy');
     const { p, log } = join(world, 'Mejorador');
     const st = p.econ!, cx = ctx([{ id: 'armero_s', x: 11, y: 11 }]);
     const verde = uniqueItem(st, UNIQUE_BASES.find((u) => !u.uniq.boss)!, 1);
     verde.up = UP_MAX_BY_QUALITY[1]; st.bag.push(verde);
-    st.forge = 999; st.gold = 999_999;
+    (mem.get('acc-Mejorador') as { vault?: unknown }).vault = { v: 1, items: [], gold: 0, stacks: { zem: 999 }, nextUid: 1, ops: [] }; st.gold = 999_999;
     eco.upgrade(p, cx, 'armero_s', verde.u);
     assert.equal(lastResult(log)?.code, 'max');
     // Dorado en +6: con el dado en contra se queda en +6; con el dado a favor, sube a +7
