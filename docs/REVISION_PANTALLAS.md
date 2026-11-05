@@ -95,10 +95,10 @@ Código: `apps/client/index.html` (bloque `#login`), `apps/client/src/loginui.ts
 
 **A corregir**
 - [ ] **Rehacer los NPCs** (Román, 5/11): sprites propios con el mismo origen de arte que las ciudades nuevas (Blender, misma cámara y luz), uno por rol, con una variante de paleta por nación.
-- [ ] **Hablar con un vendedor abre directamente lo que vende** (Román, 5/11), sin diálogo previo. Como mucho una línea de saludo en la cabecera de la ventana de la tienda. El diálogo queda solo para los NPCs de misión (Capitán) y el arenero.
+- [x] **Hablar con un vendedor abre directamente lo que vende** (D.19, hecho; falta que Román lo pruebe) (Román, 5/11), sin diálogo previo. Como mucho una línea de saludo en la cabecera de la ventana de la tienda. El diálogo queda solo para los NPCs de misión (Capitán) y el arenero.
 
 **Falta**
-- [ ] Nombre y rol sobre la cabeza del NPC (hoy hay que acercarse para saber quién es) y un ícono de rol en el minimapa.
+- [x] (D.19) Nombre y rol sobre la cabeza del NPC (el rol en texto, más el ícono que ya tenía). El ícono de rol en el minimapa no se tocó.
 
 **Decisiones**
 - [x] Los vendedores venden lo mismo en las dos ciudades; la diferencia es visual (Román, 5/11).

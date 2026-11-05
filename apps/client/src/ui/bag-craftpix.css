@@ -47,6 +47,7 @@
 
 /* ===== VENDEDOR ===== */
 #shop.cw{top:calc(84px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(392px,calc(100vw - 24px));max-height:calc(100vh - 220px);z-index:4}
+#shop .role .greet{display:block;margin:8px 6px 0;text-transform:none;letter-spacing:0;font:italic 400 13.5px/1.35 "Alegreya",Georgia,serif;color:#cfc6ad}
 #shop .role{margin:-2px 2px 10px;text-align:center;font:400 10.5px/1 "Alegreya SC",Georgia,serif;letter-spacing:.14em;text-transform:uppercase;color:#8d8673}
 #shop .cw-body{flex:1;min-height:0;overflow:auto;padding:12px 10px 8px;scrollbar-width:thin;scrollbar-color:#3a3f46 #15181b}
 #shopList{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start}
