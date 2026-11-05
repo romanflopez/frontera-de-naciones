@@ -4,7 +4,8 @@
  * y límites de recarga, alcance y ritmo por hechizo.
  */
 import { KEY_RECIPES } from '@fdn/world';
-import { hasBuff, type BuffId, type CharacterStatus } from './statusSystem.ts';
+import { hasBuff, type BuffId, type CharacterStatus } from './statusSystem.ts'
+import { currentCaps } from './weekCaps.ts';
 import { isClass, type ClassId, BASE_BY_NAME, UNIQUE_BY_NAME, activeSets, fitsSlot, classBaseHp, classBaseMp, powerLevel, STAT_BASE, CRIT_BASE, MAX_LEVEL, PVE_MP_REGEN, MEDITATE, aspdTotal, critTotal, itemDfTotal, itemRmTotal, leechTotal, meleeIntervalSecs, statBonus, upMult, type Stats } from '@fdn/world';
 export type Stat = 'mag' | 'wdmg' | 'melee';
 export interface PvpSpell {
@@ -235,7 +236,7 @@ export function statsFromChar(o: StatSource | undefined, uncapCrit = false): Com
     for (const bonus of activeSets(names)) for (const [id, v] of bonus.stats) addAttr({ id, v }); // bonos de set (2/4/6 piezas): pasan por los mismos topes
     if (itemDmg > 0 && s.wdmg[1] > 0) s.wdmg = [s.wdmg[0] + itemDmg, s.wdmg[1] + itemDmg]; // daño plano de los afijos: suma al golpe del arma equipada
     if (fx.size) s.fx = [...fx];
-    s.def += itemDfTotal(itemDf); s.rm += itemRmTotal(itemRm); // la DF/RM de ATRIBUTOS se topea; la base de las armaduras no
+    const caps = currentCaps(); s.def += itemDfTotal(itemDf, caps.df); s.rm += itemRmTotal(itemRm, caps.rm); // la DF/RM de ATRIBUTOS se topea; la base de las armaduras no
     s.crit = uncapCrit ? Math.min(100, CRIT_BASE + itemCrit) : critTotal(itemCrit); s.aspd = aspdTotal(itemAspd); s.leech = leechTotal(itemLeech); s.poison = Math.min(100, s.poison); // topes del paso 1.3
     const baseHp = classBaseHp(cls, lvl), sb = statBonus(o.stats, baseHp); // puntos de Fuerza, Vitalidad, Destreza y Magia (Vitalidad en % de la vida base)
     bonusHp += sb.hp; bonusMp += sb.mp; s.def += sb.def; s.dexStat = o.stats?.dex ?? STAT_BASE; s.magStat = o.stats?.mag ?? STAT_BASE; s.meleeMult = sb.meleeMult; s.magicMult = sb.magicMult;

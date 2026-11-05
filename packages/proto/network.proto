@@ -1552,6 +1552,10 @@ message InventoryState {
   string quest_book = 26;
   // Inteligencia: se eliminó en D.3. El tag no se reutiliza ni se renumera; el server ya no lo manda (queda en 0).
   int32 stat_int = 27;
+  // Topes de DF y RM de atributos de ítems de esta semana del server (D.6) y cuándo suben (ms UTC; 0 = ya están en el máximo).
+  int32 cap_df = 28;
+  int32 cap_rm = 29;
+  int64 cap_next_at = 30;
 }
 /** Respuesta a una acción de economía: ok=false con un motivo (code) y texto para mostrar. */
 message EconResult { bool ok = 1; string code = 2; string text = 3; }

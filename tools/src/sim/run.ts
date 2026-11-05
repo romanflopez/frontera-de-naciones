@@ -1,11 +1,12 @@
 /**
  * Simulación PvP de K7 con las 3 clases: 1v1 y 2v2 con muchas semillas, contra los números que hoy tiene el server.
  *
- *   pnpm --filter @fdn/tools sim:pvp [--lvl 12] [--n 60] [--mult 0.6] [--cap 0.25] [--potlock 10] [--pot 0.5] [--log "paladín vs mago"]
+ *   pnpm --filter @fdn/tools sim:pvp [--topes min|max|<semana>] [--lvl 12] [--n 60] [--mult 0.6] [--cap 0.25] [--potlock 10] [--pot 0.5] [--log "paladín vs mago"]
  *
  * Sin parámetros mide lo que está en pvpCombat.ts. Con `--log` imprime una pelea entera del enfrentamiento pedido.
  * Sale con código 1 si algún enfrentamiento queda fuera del objetivo (ver pvp/matchups.ts).
  */
+import { capsForWeek } from '@fdn/world';
 import { BOTS } from './pvp/bots.ts';
 import { simulate } from './pvp/engine.ts';
 import { ONE_V_ONE, TWO_V_TWO, runAll, table } from './pvp/matchups.ts';
@@ -20,6 +21,13 @@ const rules: Rules = {
     potLockMs: num('potlock', SERVER_RULES.potLockMs / 1000) * 1000, potMult: num('pot', SERVER_RULES.potMult), mpRegenPct: num('regen', SERVER_RULES.mpRegenPct), mpRegenMin: num('regenmin', SERVER_RULES.mpRegenMin),
     poisonOn: arg('veneno') ? arg('veneno')!.split(',') : SERVER_RULES.poisonOn, healCd: num('curacd', SERVER_RULES.healCd), castigoMult: num('castigo', SERVER_RULES.castigoMult),
 };
+// D.6: `--topes min` (semana 0: DF 30 / RM 40), `--topes max` (semana 7+: 60 / 75) o un número de semana. Arma a todos con DF/RM de ítems muy por encima del tope.
+const topes = arg('topes');
+if (topes) {
+    const week = topes === 'min' ? 0 : topes === 'max' ? 10 : Number(topes);
+    process.env.SERVER_EPOCH = new Date(Date.now() - week * 7 * 86_400_000).toISOString(); process.env.FDN_SIM_TOPES = '1';
+    console.log(`Topes de la semana ${week}: DF ${capsForWeek(week).df} / RM ${capsForWeek(week).rm}\n`);
+}
 const lvls = (arg('lvl') ?? '12').split(',').map(Number), n = num('n', 60);
 
 const want = arg('log');

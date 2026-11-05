@@ -135,6 +135,8 @@ const itName = (it: { name: string; up?: number }) => (it.up ? `+${it.up} ` : ''
 let forgeStones = 0;
 /** Puntos de stats repartidos y libres (los manda el server en InventoryState; el server decide, esto solo se muestra y se refleja en los números). */
 let stats: Stats = defaultStats(), statFree = 0;
+/** Topes de DF y RM de atributos de ítems de esta semana del server y cuándo suben (ms; 0 = ya están en el máximo). Los manda el server en `inventoryState` (D.6). */
+let capDf = 60, capRm = 75, capNextAt = 0;
 const FORGE_ICON = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M16 3 27 12 22 28H10L5 12Z" fill="#c9833a" stroke="#6b3f16" stroke-width="2"/><path d="M16 3 22 28 27 12ZM16 3 10 28 5 12Z" fill="#e5a65a" opacity=".45"/></svg>');
 let uid = 1;
 const attrText = (a: { id: AttrId; v: number }) => ATTRS.find((x) => x.id === a.id)!.f(a.v);
@@ -226,7 +228,7 @@ function totals() {
     }
     for (const b of activeSets(worn)) for (const [id, v] of b.stats) add({ id, v }); // bonos de set (mismos números que el server)
     const sb = statBonus(stats, classBaseHp(CLS.id, P.lvl)); t.hp += sb.hp; t.mp += sb.mp; // los puntos de Vitalidad, Fuerza, Magia y Destreza (mismos números que el server)
-    t.df = itemDfTotal(t.df) + sb.def; t.rm += itemRmTotal(rmAttr); // DF y RM de ATRIBUTOS con su tope (60 y 75); la base de las armaduras no
+    t.df = itemDfTotal(t.df, capDf) + sb.def; t.rm += itemRmTotal(rmAttr, capRm); // DF y RM de ATRIBUTOS con el tope de la semana que manda el server; la base de las armaduras no
     t.def += t.df; // el atributo 'df' suma a la defensa
     if (t.dmg > 0 && t.wdmg[1] > 0) t.wdmg = [t.wdmg[0] + t.dmg, t.wdmg[1] + t.dmg]; // daño plano de los afijos (mismo cálculo que el server)
     return t;
@@ -2201,7 +2203,7 @@ function hud() {
         const locked = !canUseSkill(CLS.id, P.lvl, s.id ?? ''); el.classList.toggle('locked', locked); if (locked) el.dataset.lvl = `Nv ${skillLevel(CLS.id, s.id ?? '') ?? '-'}`;
     });
     const tt = totals(), wd: [number, number] = tt.wdmg[1] > 0 ? tt.wdmg : CLS.melee;
-    const chips: [string, string][] = [['Nv.', String(P.lvl)], ['Exp', `${Math.floor(P.exp).toLocaleString('es-AR')} / ${expNeed().toLocaleString('es-AR')}`], ['Ataque', `${wd[0]}–${wd[1]}`], ['Defensa', `${tt.def} · RM ${tt.rm}`], ['Vel. mov.', Math.round((270 / P.stepMs) * 100) + '%'], ['Crítico', critTotal(tt.crit) + '%']];
+    const chips: [string, string][] = [['Nv.', String(P.lvl)], ['Exp', `${Math.floor(P.exp).toLocaleString('es-AR')} / ${expNeed().toLocaleString('es-AR')}`], ['Ataque', `${wd[0]}–${wd[1]}`], ['Defensa', `${tt.def} · RM ${tt.rm}`], ['Vel. mov.', Math.round((270 / P.stepMs) * 100) + '%'], ['Crítico', critTotal(tt.crit) + '%'], ['Tope DF / RM', `${capDf} / ${capRm}${capNextAt > 0 ? ' · sube el lunes' : ''}`]];
     const ch = chips.map(([k, v]) => `<div class="chp"><u>◆</u><span>${k}</span><b>${v}</b></div>`).join('');
     if ($('chips').dataset.h !== ch) { $('chips').dataset.h = ch; $('chips').innerHTML = ch; layoutHud(); }
     const m = P.target && mobs.includes(P.target) ? P.target : null;
@@ -3272,7 +3274,7 @@ function applyInventory(v: InventoryState) {
     for (const sl of SLOTS) P.eq[sl] = null;
     for (const e of v.eq) if (e.item && (SLOTS as string[]).includes(e.slot)) P.eq[e.slot as Slot] = itemFromInv(e.item);
     pots.hp = v.potsHp; pots.mp = v.potsMp; forgeStones = v.forge;
-    stats = { str: v.statStr || 10, vit: v.statVit || 10, dex: v.statDex || 10, mag: v.statMag || 10 }; statFree = v.statFree;
+    stats = { str: v.statStr || 10, vit: v.statVit || 10, dex: v.statDex || 10, mag: v.statMag || 10 }; statFree = v.statFree; capDf = v.capDf || 60; capRm = v.capRm || 75; capNextAt = Number(v.capNextAt);
     Q.i = v.questI; Q.st = v.questState === 'active' || v.questState === 'ready' ? v.questState : 'new'; Q.prog = v.questProg;
     Q.keys.cripta = v.keysCripta; Q.keys.foso = v.keysFoso; Q.shards.cripta = v.shardsCripta; Q.shards.foso = v.shardsFoso;
     try { QB = v.questBook ? JSON.parse(v.questBook) as QuestBookView : null; } catch { QB = null; }

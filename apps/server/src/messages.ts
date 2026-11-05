@@ -1,6 +1,7 @@
 /**
  * Constructores de mensajes del server.
  */
+import { currentCaps } from './systems/weekCaps.ts';
 import { ServerMessage, type DeepPartial, type PlayerEnteredRange, type ArenaInfo } from '@fdn/proto';
 import type { GameWorldConfig } from './config.ts';
 import type { Player } from './player.ts';
@@ -187,7 +188,7 @@ export const mobDied = (mobId: number, killerId: bigint, x: number, y: number, t
 
 // ---------- economía (ver economy.ts) ----------
 const invItem = (i: SItem) => ({ uid: i.u, base: i.n, rarity: i.r, attrs: i.a.map((a) => ({ id: a.id, v: a.v })), up: i.up ?? 0, rf: i.rf ?? 0 });
-export const inventoryState = (st: Econ): ServerMessage => msg({
+export const inventoryState = (st: Econ): ServerMessage => { const caps = currentCaps(); return msg({
     $case: 'inventoryState',
     value: {
         gold: Math.min(2147483647, st.gold), goldD: st.gold, lvl: st.lvl, exp: st.exp, bag: st.bag.map(invItem),
@@ -197,9 +198,10 @@ export const inventoryState = (st: Econ): ServerMessage => msg({
         keysCripta: st.q.keys.cripta, keysFoso: st.q.keys.foso, shardsCripta: st.q.shards.cripta, shardsFoso: st.q.shards.foso,
         unlocked: st.u, cls: st.cls, faction: st.faction, forge: st.forge ?? 0,
         statStr: st.stats.str, statVit: st.stats.vit, statDex: st.stats.dex, statMag: st.stats.mag, statLuk: 10, /* la Suerte se eliminó; el campo queda en el protocolo con el valor neutro */ statFree: statPointsFree(st.lvl, st.stats),
+        capDf: caps.df, capRm: caps.rm, capNextAt: BigInt(caps.nextAt),
         questBook: st.qb ? JSON.stringify(questBookView(st.qb, { mats: st.mats ?? {}, maxUp: Math.max(0, ...st.bag.map((i) => i.up ?? 0), ...Object.values(st.eq).map((i) => i?.up ?? 0)) }, Date.now())) : '',
     },
-});
+}); };
 export const econResult = (ok: boolean, code: string, text: string): ServerMessage => msg({ $case: 'econResult', value: { ok, code, text } });
 /** La oferta del día (global): se manda al entrar; `sold` marca la estrella ya vendida hoy. */
 export const dailyShopState = (offers: { base: string; quality: number; attrs: { id: string; v: number }[]; price: number; star?: boolean }[], sold: boolean): ServerMessage =>
