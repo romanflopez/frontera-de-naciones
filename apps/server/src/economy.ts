@@ -329,6 +329,7 @@ export class Economy {
             }
         }
         if (acc.econ && migrateEcon(acc.econ)) this.storage.put(key, acc);
+        if (acc.econ) acc.econ.stats = cleanStats(acc.econ.stats); // los stats se sanean siempre: un stat nuevo (ej. int) no existe en cuentas ya migradas y rompía el protobuf con NaN
         if (acc.econ) acc.econ.qb = cleanQuestBook(acc.econ.qb); // el libro de misiones se sanea siempre (cuentas viejas, datos rotos)
         return acc.econ;
     }
