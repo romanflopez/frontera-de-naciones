@@ -12,6 +12,7 @@ import { dailyOffers } from './dailyShop.ts';
 const BOSS_SHARE_RANGE = 30;
 import { hitRoll, pvpMagicComp, AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, MEDITATE, pvpMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionLockMs, potionMp, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, POTION_LOCK_PVP_MS, PVP_COMBAT_MS, pvpCap, pvpScale, pvpVsCtrl, RECALL_PVP_LOCK_MS, INVIS_CD_MS, DETECT_CD_MS, SECOND_WIND, secondWindHeal, progressFromEcon, PVP_SPELLS, BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, POISON_HEAL_TAKEN, HEAL_THREAT, CLERIGO_SKILLS, STUN_SPELLS, healAmount, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, K8_SKILLS, skillMpCost, SHIELD_MS, BUFF, withBuffs, buffTakenMult, type DmgKind } from './systems/pvpCombat.ts';
 import { HUBS, QUESTS, RECALL, TRAINING, trainingLockedMsg, trainingOfMap, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef, checkSkill, skillDeniedText } from '@fdn/world';
+import { currentCaps } from './systems/weekCaps.ts';
 import { applyParalysis, applySlow, applyBless, applyPoison, applyBuff, applyShield, absorbShield, activeBuffs, clearBuffs, hasBuff, shieldOf, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, canRemover, startRemoverCd, REMOVER_SELF_MS, REMOVER_OTHER_MS, IMMUNITY_MS, expireTimed, isBlessed, isPoisoned, isSlowed, updateStatus, clearBlessings } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import type { GameWorldConfig, Settings } from './config.ts';
@@ -306,6 +307,8 @@ export class GameWorld {
     private playerTimer(p: Player, ms: number, fn: (w: GameWorld) => void): void { p.timers.push({ at: Date.now() + ms, fn }); }
 
     /** Un paso de simulación: lo llama el registro de mundos (un solo reloj para todos los mundos despiertos). */
+    /** Semana del server con la que se calcularon los topes de DF/RM de los jugadores de este mundo (D.6). */
+    private capWeek = currentCaps().week;
     tick(): void {
         if (this.hibernated) return;
         const now = Date.now();
@@ -314,7 +317,9 @@ export class GameWorld {
             this.timers = this.timers.filter((t) => t.at > now);
             for (const t of due) this.safe('temporizador', t.fn);
         }
+        const capWeek = currentCaps(now).week, capsChanged = capWeek !== this.capWeek; this.capWeek = capWeek; // D.6: el lunes sube el tope de DF/RM
         for (const pl of this.players.values()) {
+            if (capsChanged && pl.econ) { this.restat(pl); pl.send(M.inventoryState(pl.econ)); }
             if (pl.timers.length) {
                 const due = pl.timers.filter((t) => t.at <= now);
                 pl.timers = pl.timers.filter((t) => t.at > now);

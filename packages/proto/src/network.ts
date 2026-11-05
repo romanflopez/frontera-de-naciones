@@ -1841,6 +1841,10 @@ export interface InventoryState {
   questBook: string;
   /** Inteligencia: se eliminó en D.3. El tag no se reutiliza ni se renumera; el server ya no lo manda (queda en 0). */
   statInt: number;
+  /** Topes de DF y RM de atributos de ítems de esta semana del server (D.6) y cuándo suben (ms UTC; 0 = ya están en el máximo). */
+  capDf: number;
+  capRm: number;
+  capNextAt: bigint;
 }
 
 /** Respuesta a una acción de economía: ok=false con un motivo (code) y texto para mostrar. */
@@ -23035,6 +23039,9 @@ function createBaseInventoryState(): InventoryState {
     statFree: 0,
     questBook: "",
     statInt: 0,
+    capDf: 0,
+    capRm: 0,
+    capNextAt: 0n,
   };
 }
 
@@ -23120,6 +23127,18 @@ export const InventoryState: MessageFns<InventoryState> = {
     }
     if (message.statInt !== 0) {
       writer.uint32(216).int32(message.statInt);
+    }
+    if (message.capDf !== 0) {
+      writer.uint32(224).int32(message.capDf);
+    }
+    if (message.capRm !== 0) {
+      writer.uint32(232).int32(message.capRm);
+    }
+    if (message.capNextAt !== 0n) {
+      if (BigInt.asIntN(64, message.capNextAt) !== message.capNextAt) {
+        throw new globalThis.Error("value provided for field message.capNextAt of type int64 too large");
+      }
+      writer.uint32(240).int64(message.capNextAt);
     }
     return writer;
   },
@@ -23353,6 +23372,30 @@ export const InventoryState: MessageFns<InventoryState> = {
             message.statInt = reader.int32();
             continue;
           }
+          case 28: {
+            if (tag !== 224) {
+              break;
+            }
+
+            message.capDf = reader.int32();
+            continue;
+          }
+          case 29: {
+            if (tag !== 232) {
+              break;
+            }
+
+            message.capRm = reader.int32();
+            continue;
+          }
+          case 30: {
+            if (tag !== 240) {
+              break;
+            }
+
+            message.capNextAt = reader.int64() as bigint;
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -23397,6 +23440,9 @@ export const InventoryState: MessageFns<InventoryState> = {
     message.statFree = object.statFree ?? 0;
     message.questBook = object.questBook ?? "";
     message.statInt = object.statInt ?? 0;
+    message.capDf = object.capDf ?? 0;
+    message.capRm = object.capRm ?? 0;
+    message.capNextAt = (object.capNextAt !== undefined && object.capNextAt !== null) ? BigInt(object.capNextAt) : 0n;
     return message;
   },
 };

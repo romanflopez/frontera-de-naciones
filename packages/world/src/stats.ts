@@ -122,7 +122,7 @@ export function cleanStats(raw: unknown): Stats {
  * `df` y `rm` topean SOLO lo que viene de atributos de los ítems (la DF/RM base de armaduras y yelmos no entra):
  * con 8 slots la mitigación X/(100+X) apilada se escapaba sin tope (docs modelo-de-items §3.6).
  */
-export const COMBAT_CAP = { crit: 35, aspd: 40, leech: 15, df: 60, rm: 75 } as const;
+export const COMBAT_CAP = { crit: 35, aspd: 40, leech: 15, df: 60, rm: 75 } as const; // df/rm: topes FINALES; el tope de la semana sale de `capsForWeek`
 export const CRIT_BASE = 5, CRIT_MULT = 1.8, MELEE_BASE_SECS = 0.85, POISON_SECS = 4;
 const capTo = (v: number, cap: number): number => Math.max(0, Math.min(cap, Number.isFinite(v) ? v : 0));
 /** Probabilidad total de crítico (%) a partir de lo que suma el equipo. */
@@ -130,8 +130,27 @@ export const critTotal = (itemCrit: number): number => capTo(CRIT_BASE + itemCri
 export const aspdTotal = (itemAspd: number): number => capTo(itemAspd, COMBAT_CAP.aspd);
 export const leechTotal = (itemLeech: number): number => capTo(itemLeech, COMBAT_CAP.leech);
 /** DF y RM que vienen de ATRIBUTOS de ítems, ya topeadas (la base de las armaduras va aparte, sin tope). */
-export const itemDfTotal = (itemDf: number): number => capTo(itemDf, COMBAT_CAP.df);
-export const itemRmTotal = (itemRm: number): number => capTo(itemRm, COMBAT_CAP.rm);
+export const itemDfTotal = (itemDf: number, cap: number = COMBAT_CAP.df): number => capTo(itemDf, cap);
+export const itemRmTotal = (itemRm: number, cap: number = COMBAT_CAP.rm): number => capTo(itemRm, cap);
+
+// ---------- topes de DF/RM por semana del server (D.6, DISEÑO.md §5) ----------
+/** Escalera: la semana 0 del server arranca en DF 30 / RM 40 y cada lunes sube `step` hasta los topes finales (`COMBAT_CAP.df` 60 y `COMBAT_CAP.rm` 75, en la semana 7). */
+export const CAP_LADDER = { dfStart: 30, rmStart: 40, step: 5 } as const;
+export interface WeekCaps { df: number; rm: number; /** true si ya están en los topes finales (no vuelven a subir) */ max: boolean }
+/** Topes de DF y RM de atributos de ítems en la semana `week` (0 = la semana del `SERVER_EPOCH`). Un número raro cuenta como semana 0; `Infinity`, como el máximo. */
+export function capsForWeek(week: number): WeekCaps {
+    const w = Number.isNaN(week) ? 0 : Math.max(0, Math.floor(week));
+    const df = Math.min(COMBAT_CAP.df, CAP_LADDER.dfStart + CAP_LADDER.step * w), rm = Math.min(COMBAT_CAP.rm, CAP_LADDER.rmStart + CAP_LADDER.step * w);
+    return { df, rm, max: df >= COMBAT_CAP.df && rm >= COMBAT_CAP.rm };
+}
+/** Las semanas empiezan el lunes 00:00 hora de Argentina (UTC−3, sin horario de verano). */
+const AR_OFFSET_MS = -3 * 3600_000, DAY_MS = 86_400_000, WEEK_MS = 7 * DAY_MS;
+/** Inicio (ms UTC) del lunes AR de la semana del `epochMs`. */
+const mondayOf = (epochMs: number): number => { const l = epochMs + AR_OFFSET_MS, dow = new Date(l).getUTCDay(); return Math.floor(l / DAY_MS) * DAY_MS - ((dow + 6) % 7) * DAY_MS - AR_OFFSET_MS; };
+/** Semana del server en `nowMs` (0 antes del epoch y durante su semana). */
+export const serverWeek = (nowMs: number, epochMs: number): number => Math.max(0, Math.floor((nowMs - mondayOf(epochMs)) / WEEK_MS));
+/** Cuándo (ms UTC) sube el tope otra vez: el próximo lunes 00:00 AR. */
+export const nextCapRaiseAt = (nowMs: number, epochMs: number): number => mondayOf(epochMs) + (serverWeek(nowMs, epochMs) + 1) * WEEK_MS;
 /** Segundos mínimos entre dos golpes cuerpo a cuerpo con esa velocidad de ataque (ya topeada). */
 export const meleeIntervalSecs = (aspd: number): number => MELEE_BASE_SECS / (1 + aspdTotal(aspd) / 100);
 
