@@ -50,6 +50,8 @@ interface MapSpec {
     keepProps?: number;
     /** Ensancha los pasillos esta cantidad de celdas a cada lado (La Brecha: laberinto de cañones angostos, pedido de Román 4/11/2026). */
     widen?: number;
+    /** Multiplica los mobs de cada zona (pits y sueltos): mapas que van a concentrar mucha gente subiendo (por defecto 1). */
+    mobMult?: number;
 }
 
 /** Un mapa por entrada. Pit A = el más cerca de la entrada (el más fácil), C = el más lejos. Los nombres de zona son únicos entre mapas. */
@@ -61,7 +63,7 @@ const SPECS: MapSpec[] = [
         pits: [{ name: 'Claro de los goblins', type: 'goblin' }, { name: 'Madriguera hobgoblin', type: 'hobgoblin' }, { name: 'Fuerte del bosque', type: 'goblin_elite' }],
         loose: [{ type: 'goblin' }, { type: 'zombie' }] },
     // Mapa 2 (niveles 8-20): une el tramo del Cañón con el del Pantano. 5 pits de la entrada al fondo, de más flojo a más duro (8, 11, 14, 17, 20).
-    { id: 'goblin_camp', eris: 'canon_goblin', name: 'Cañón goblin', region: 'comun', pvp: 'faction', lvl: [8, 20], tier: 1, linkGates: { goblin_cave: 4 },
+    { id: 'goblin_camp', eris: 'canon_goblin', name: 'Cañón goblin', region: 'comun', pvp: 'faction', lvl: [8, 20], tier: 1, mobMult: 3, linkGates: { goblin_cave: 4 },
         pits: [{ name: 'Empalizada del cañón', type: 'goblin_elite' }, { name: 'Puesto de arqueros', type: 'hobgoblin_archer' }, { name: 'Tienda del cabecilla', type: 'hobgoblin' },
             { name: 'Ciénaga de zombis (cañón)', type: 'zombie' }, { name: 'Pozo oscuro (cañón)', type: 'zombie_dark' }],
         loose: [{ type: 'goblin' }, { type: 'zombie' }] },
@@ -530,7 +532,7 @@ function convert(spec: MapSpec): object {
         }
     }
     // 3) Regiones de spawn de Flare -> centros caminables.
-    const cells = p.regions.flatMap((r) => { const c = snap(Math.floor(r.x + r.w / 2), Math.floor(r.y + r.h / 2)); if (!c) return []; const rad = clamp(Math.round(Math.max(r.w, r.h) / 2), 4, 12); return [{ ...c, r: rad, n: clamp(Math.round((rad * rad) / 10), 3, 10) }]; });
+    const cells = p.regions.flatMap((r) => { const c = snap(Math.floor(r.x + r.w / 2), Math.floor(r.y + r.h / 2)); if (!c) return []; const rad = clamp(Math.round(Math.max(r.w, r.h) / 2), 4, 12); return [{ ...c, r: rad, n: Math.round(clamp(Math.round((rad * rad) / 10), 3, 10) * (spec.mobMult ?? 1)) }]; });
 
     // 4) 3 pits: k-means determinista con semillas separadas (cerca de la entrada, lejos de la entrada y lo más lejos de ambas).
     const k = Math.min(spec.pits.length, cells.length);
@@ -562,7 +564,7 @@ function convert(spec: MapSpec): object {
         if (!free(c.x, c.y) || dist(c, entry) < 12) continue;
         if (zones.some((z) => dist(z, c) < z.r + 6) || loose.some((z) => dist(z, c) < 13)) continue;
         const s = spec.loose[loose.length % spec.loose.length];
-        loose.push({ type: s.type, x: c.x, y: c.y, r: 5, n: 2, name: `Merodeadores de ${spec.name}`, lvl: pitLevel(spec.lvl), kind: 'loose' });
+        loose.push({ type: s.type, x: c.x, y: c.y, r: 5, n: Math.round(2 * (spec.mobMult ?? 1)), name: `Merodeadores de ${spec.name}`, lvl: pitLevel(spec.lvl), kind: 'loose' });
     }
     zones.push(...loose);
     // Pedido de Román (4/11/2026): las zonas de caza no pueden quedar metidas en el bosque (no se puede entrar y los mobs no se ven) ni en el
