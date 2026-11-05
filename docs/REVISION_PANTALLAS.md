@@ -12,6 +12,13 @@ Código: `apps/client/index.html` (bloque `#login`), `apps/client/src/loginui.ts
 
 **A corregir**
 - [ ] GUI kit: ya está puesto; pulir un toque (Román). Definir qué se pule cuando se mire con los logos nuevos.
+- [x] **Paso D.18 (5/11), login y crear cuenta:** sin versales (tipografía Alegreya con minúsculas; `Alegreya SC` y `Cinzel` dibujan todo en mayúsculas), sin borde dorado (campos, botones, checkbox, separadores y corchetes del botón pasan al acero/azul del kit), etiquetas visibles en vez de solo placeholder, botón mostrar/ocultar contraseña, **Iniciar sesión** y **Crear cuenta** juntos en el formulario, «¿Olvidaste tu contraseña?» chico al lado de «Recordarme», pie solo con Créditos, botón principal que dice «Conectando…» con spinner mientras espera.
+- [x] **El fondo no se movía:** la capa del kit (`lg-bg.webp`) se pintaba encima de las brasas, la niebla y el zoom y los tapaba. Ahora van por encima, en tonos fríos (celeste y verde agua, al tono del kit y de la gema del logo) y la capa del kit deriva despacio; con `prefers-reduced-motion` queda quieto.
+- [x] **Contraste medido** (capturas reales a 1366×768, texto contra el fondo renderizado): antes «¿Olvidaste…?» 2,4:1 y el error 1,6:1 en la zona más clara. Con un velo oscuro suave detrás del formulario y grises más claros todo el texto normal pasa de 4,5:1 (el texto del botón principal es grande y negrita: pide 3:1).
+- [ ] **«¿Olvidaste tu contraseña?» todavía no hace nada:** muestra un aviso en el lugar del error. Se cablea en D.17 (email en la cuenta + Resend).
+- [ ] **Errores de login (server, va con D.17):** hoy «Contraseña incorrecta. Si el nombre ya es de otra persona, elegí otro.» confirma que el usuario existe, y **iniciar sesión y crear cuenta son el mismo pedido**: un usuario que no existe crea la cuenta sola, así que un error de tipeo en el nombre crea una cuenta nueva. Hace falta una intención explícita (login vs registro) y un mensaje genérico «Usuario o contraseña incorrectos», con la misma demora en ambos casos.
+- [ ] **Bloqueo por intentos:** 5 fallos por nombre en 10 minutos bloquean al nombre **aunque se ponga la clave correcta** (se comprobó en local); cualquiera puede dejar afuera a otro jugador. Mejor espera creciente por IP + nombre que bloqueo duro.
+- [ ] **Login lento y «Se cortó la conexión»** (lo ve Román en `onrender.com`): en local el server responde la clave incorrecta en ~70 ms y manda el motivo del cierre bien. Hipótesis a descartar en producción: servicio dormido del plan gratuito de Render o un proxy que descarta el motivo del cierre del WebSocket. Si es lo segundo, el cliente tendría que recibir el error como mensaje y no solo en el cierre.
 - [x] Contraseña mínima de 4 caracteres es poco para un juego público: **subir a 8** (Román, 5/11). Las cuentas existentes no se tocan; se pide al cambiar.
 
 **Falta**
@@ -26,7 +33,9 @@ Código: `apps/client/index.html` (bloque `#login`), `apps/client/src/loginui.ts
 **Estado:** lista de hasta 3 personajes (clase, nación, nivel), arte del personaje elegido (`#selArt`, canvas con el muñeco), detalle al costado, borrar con confirmación escribiendo el nombre (`#delBox`, hecho a mano en CSS), botones Volver y Jugar.
 
 **A corregir**
-- [ ] **Redistribuir la pantalla** (Román): el muñeco queda pixelado y descentrado. Causa probable: el canvas del muñeco se escala con `data-h` sin `image-rendering` ni tamaño múltiplo del sprite; hay que fijar el tamaño del canvas al del sprite × un entero y centrarlo en una columna propia.
+- [x] **Muñeco nítido y centrado (D.18, 5/11):** el canvas se dimensiona en píxeles reales de pantalla (el escenario escala con `--s`) y el sprite se dibuja a **escala entera sin suavizado**, así que cada píxel del arte ocupa un número entero de píxeles; se acomoda al cambiar el tamaño de la ventana (`resizeDolls`). Crear personaje estaba 45 px a la izquierda del centro. **Sigue siendo pixel art de 64 px**: para que deje de verse pixelado hacen falta sprites en mayor resolución (`PLAN_HD.md`).
+- [x] **Sin versales ni dorado (D.18):** títulos, nombres, botones y fichas en minúscula; fuera la guarda dorada de los encabezados, el filete del botón Jugar y los corchetes dorados. «+ Crear personaje» es un botón con borde punteado, la X de borrar mide 32 px, vida roja y maná azul (antes al revés).
+- [ ] (ya estaba) Redistribuir la pantalla (Román): el muñeco queda pixelado y descentrado. Causa probable: el canvas del muñeco se escala con `data-h` sin `image-rendering` ni tamaño múltiplo del sprite; hay que fijar el tamaño del canvas al del sprite × un entero y centrarlo en una columna propia.
 - [ ] Los dos botones de abajo son distintos (ghost "Volver" / primario "Jugar"): está bien así, se mantiene.
 - [ ] **Modal de borrar: usar el del GUI kit** en vez del `delbox` a mano (hay `win-bg`, `win-hdr-*`, `btn-sq` en `craftpix/`). Misma lógica (escribir el nombre), solo cambia la piel.
 
@@ -39,7 +48,8 @@ Código: `apps/client/index.html` (bloque `#login`), `apps/client/src/loginui.ts
 **Estado:** elegir nación y clase (fichas con texto), arte del muñeco, nombre, Volver/Crear. Stats iniciales fijos por clase (no se eligen).
 
 **A corregir**
-- [ ] Mismo problema de escala/centrado del muñeco que en selección (misma causa, mismo arreglo).
+- [x] Mismo problema de escala/centrado del muñeco que en selección: arreglado en D.18 (ver §2).
+- [x] Campo de nombre con etiqueta visible, texto alineado a la izquierda y velo oscuro para que se lea (D.18).
 - [ ] Solo 3 clases: agregar **arquero** cuando exista (D.0 deja el esqueleto; hasta entonces no se muestra).
 
 **Falta**

@@ -3316,7 +3316,7 @@ $('loginForm').addEventListener('submit', async (e) => {
     if (!name) return;
     const regErr = flow.checkRegister(); if (regErr) { $('loginErr').textContent = regErr; return; }
     const btn = $('loginBtn') as HTMLButtonElement, auto = autoEnter; autoEnter = false;
-    btn.disabled = true; $('loginErr').textContent = 'Conectando…';
+    btn.disabled = true; if (!auto) $('loginErr').textContent = ''; // "Conectando…" lo muestra el propio botón (loginui.ts)
     try {
         const remember = ($('rememberIn') as HTMLInputElement).checked;
         localStorage.setItem('fdn:remember', remember ? '1' : '0');

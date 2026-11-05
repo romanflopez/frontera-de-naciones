@@ -17,7 +17,7 @@ const loadMeta = () => metaP ??= fetch('assets/meta.json').then((r) => r.json())
 const imgs = new Map<string, Promise<HTMLImageElement>>();
 const loadImg = (n: string) => { let p = imgs.get(n); if (!p) { p = new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = `assets/paper/${n}.webp`; }); imgs.set(n, p); } return p; };
 
-interface Doll { cv: HTMLCanvasElement; frames: HTMLCanvasElement[]; meta: PaperMeta; dir: number; col: string; k: number; t0: number }
+interface Doll { cv: HTMLCanvasElement; frames: HTMLCanvasElement[]; meta: PaperMeta; dir: number; col: string; k: number; frac: number; t0: number }
 const dolls = new Set<Doll>();
 let running = false;
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -41,7 +41,7 @@ function frameAt(meta: PaperMeta, t: number) {
     const Lp = 2 * A.n - 2, j = i % Lp; return j < A.n ? j : Lp - j;
 }
 
-const UP = 2; // ampliación previa con píxeles nítidos; después se reduce con suavizado (borde limpio, sin el borroso del escalado grande)
+const UP = 1; // los cuadros se dibujan a escala entera en píxeles de pantalla (ver `layout`), sin ampliar antes ni suavizar
 /** Cuadro ya ampliado y con luz: se levanta el brillo (los sprites son oscuros) y se tiñe un borde de luz del color de la clase. */
 function lit(fr: HTMLCanvasElement, col: string): HTMLCanvasElement {
     const c = document.createElement('canvas'); c.width = fr.width * UP; c.height = fr.height * UP; const g = c.getContext('2d')!;
@@ -55,15 +55,15 @@ function lit(fr: HTMLCanvasElement, col: string): HTMLCanvasElement {
 }
 type FX = { filter: string };
 function draw(d: Doll, t: number) {
-    const { cv, meta, k } = d, g = cv.getContext('2d')!, W = cv.width, H = cv.height, fy = H - 22 * (H / 400);
+    const { cv, meta, k } = d, g = cv.getContext('2d')!, W = cv.width, H = cv.height, fy = Math.round(H - 22 * (H / 400));
     g.clearRect(0, 0, W, H);
-    const fr = d.frames[reduce ? 1 : frameAt(meta, t)], breathe = reduce ? 0 : Math.sin(t * 2.1) * 0.012;
-    const sy = k * (1 + breathe), ox = W / 2 - meta.ax * k, oy = fy - meta.ay * sy;
+    const fr = d.frames[reduce ? 1 : frameAt(meta, t)];
+    const sy = k, ox = Math.round(W / 2 - meta.ax * k), oy = Math.round(fy - meta.ay * sy);
     // sombra de contacto
     const sh = g.createRadialGradient(W / 2, fy, 0, W / 2, fy, W * 0.3);
     sh.addColorStop(0, 'rgba(0,0,0,.7)'); sh.addColorStop(1, 'rgba(0,0,0,0)');
     g.save(); g.translate(0, fy); g.scale(1, 0.18); g.translate(0, -fy); g.fillStyle = sh; g.beginPath(); g.arc(W / 2, fy, W * 0.3, 0, 6.2832); g.fill(); g.restore();
-    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+    g.imageSmoothingEnabled = false;
     // halo de borde: copia desenfocada detrás
     g.save(); g.globalAlpha = 0.6; (g as unknown as FX).filter = `blur(${Math.max(2, k * 0.8)}px) brightness(1.5)`; g.globalCompositeOperation = 'lighter';
     g.drawImage(fr, 0, 0, fr.width, fr.height, ox, oy, meta.cw * k, meta.ch * sy); g.restore();
@@ -85,10 +85,18 @@ function loop(now: number) {
 export async function mountDoll(cv: HTMLCanvasElement, clsId: string, col: string, heightFrac = 0.82) {
     const meta = await loadMeta(); if (!meta) return;
     const { frames, dir } = await compose(clsId, meta);
-    const dpr = Math.min(2, devicePixelRatio || 1);
-    cv.width = Math.round(cv.clientWidth * dpr) || 320; cv.height = Math.round(cv.clientHeight * dpr) || 400;
-    // el personaje mide ~64 px de alto en el atlas
-    const d: Doll = { cv, frames: frames.map((f) => lit(f, col)), meta, dir, col, k: (cv.height * heightFrac) / 64, t0: performance.now() };
+    const d: Doll = { cv, frames: frames.map((f) => lit(f, col)), meta, dir, col, k: 1, frac: heightFrac, t0: performance.now() };
+    layout(d);
     dolls.add(d); draw(d, 0);
     if (!running) { running = true; requestAnimationFrame(loop); }
 }
+
+/** Tamaño del canvas en píxeles reales de pantalla (el escenario del login se escala con `--s`, así que clientWidth no alcanza)
+ *  y escala ENTERA del sprite: cada píxel del arte ocupa un número entero de píxeles de pantalla, sin borroso ni píxeles desparejos. */
+function layout(d: Doll) {
+    const { cv } = d, r = cv.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
+    cv.width = Math.max(1, Math.round(r.width * dpr)) || 320; cv.height = Math.max(1, Math.round(r.height * dpr)) || 400;
+    d.k = Math.max(1, Math.round((cv.height * d.frac) / 64)); // el personaje mide ~64 px de alto en el atlas
+}
+/** Vuelve a medir los muñecos montados (cambió el tamaño de la ventana). */
+export function resizeDolls() { for (const d of dolls) if (d.cv.isConnected && d.cv.offsetParent !== null) { layout(d); draw(d, (performance.now() - d.t0) / 1000); } }

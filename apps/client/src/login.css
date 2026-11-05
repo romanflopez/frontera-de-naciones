@@ -1,5 +1,6 @@
 /* Login y creación de personaje. Escenario fijo de 1280x720 que escala con la ventana (var(--s) lo calcula loginui.ts). */
-#login{position:fixed;inset:0;z-index:5;overflow:hidden;overflow:clip;background:#0a0418;color:#eadfe8;--ac:#c25bff;--fc:#6fb3ff;font-family:var(--f-inter)}
+#login{position:fixed;inset:0;z-index:5;overflow:hidden;overflow:clip;background:#0a0418;color:#eadfe8;--ac:#c25bff;--fc:#6fb3ff;font-family:var(--f-inter);--f-ui:"Alegreya",Georgia,serif;user-select:none;-webkit-user-select:none}
+#login input{user-select:text;-webkit-user-select:text}
 #login .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 #login .lbg{position:absolute;inset:0}
 #login #lbgScene,#login #lbgScene img{position:absolute;inset:0;width:100%;height:100%}
@@ -33,13 +34,13 @@
 #login:not([data-screen=login]) .tagl{display:none}
 #login[data-screen=create] .brand{left:auto;right:0;width:100%}
 
-#login .stitle{position:absolute;left:0;right:0;top:124px;margin:0;display:flex;align-items:center;justify-content:center;gap:18px;font:600 21px var(--f-cinzel);letter-spacing:.16em;color:#f4e9f6;text-shadow:0 0 14px rgba(200,100,255,.55),0 2px 10px #000}
+#login .stitle{position:absolute;left:0;right:0;top:124px;margin:0;display:flex;align-items:center;justify-content:center;gap:18px;font:600 21px var(--f-ui);letter-spacing:.04em;color:#f4e9f6;text-shadow:0 0 14px rgba(200,100,255,.55),0 2px 10px #000}
 #login .stitle::before,#login .stitle::after{content:"";width:130px;height:1px;background:linear-gradient(90deg,transparent,#d58cff)}
 #login .stitle::after{transform:scaleX(-1)}
 
 /* botones */
 #login{--glass:linear-gradient(180deg,rgba(38,16,78,.66),rgba(14,6,34,.80));--gline:rgba(206,150,255,.36);--gshadow:0 0 0 1px rgba(10,2,30,.7),0 0 30px rgba(170,80,255,.22),0 16px 40px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.12)}
-#login .lbtn{font:600 14px var(--f-cinzel);letter-spacing:.16em;color:#f4e8f0;cursor:pointer;border-radius:4px;padding:0 30px;height:48px;min-width:170px;transition:filter .15s,transform .15s,box-shadow .15s,background .15s;text-transform:uppercase}
+#login .lbtn{font:700 16px var(--f-ui);letter-spacing:.02em;color:#f4e8f0;cursor:pointer;border-radius:4px;padding:0 30px;height:48px;min-width:170px;transition:filter .15s,transform .15s,box-shadow .15s,background .15s}
 #login .lbtn.pri{position:relative;background:linear-gradient(180deg,#b040e6 0%,#7022bc 52%,#40107f 100%);border:1px solid #ff8be6;box-shadow:0 0 0 1px #1a0638,0 0 24px rgba(236,92,255,.55),inset 0 1px 0 rgba(255,220,250,.5),inset 0 -8px 14px rgba(40,0,80,.45);text-shadow:0 1px 6px rgba(60,0,90,.9)}
 #login .lbtn.pri:hover:not(:disabled){box-shadow:0 0 0 1px #1a0638,0 0 34px rgba(255,110,255,.8),inset 0 1px 0 rgba(255,220,250,.6),inset 0 -8px 14px rgba(40,0,80,.45)}
 #login .lbtn.ghost{background:linear-gradient(180deg,rgba(40,18,84,.7),rgba(16,6,38,.8));border:1px solid rgba(206,150,255,.5);color:#e2d4f2;box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 0 14px rgba(150,70,230,.18)}
@@ -77,7 +78,7 @@
 #login .sbadge{flex:none;width:52px;height:58px}#login .sbadge svg{width:100%;height:100%}
 #login .slot.on .sbadge svg{filter:drop-shadow(0 0 8px var(--ac))}
 #login .stxt{display:grid;gap:4px;flex:1;min-width:0}
-#login .stxt b{font:600 17px var(--f-cinzel);letter-spacing:.04em;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#login .stxt b{font:600 17px var(--f-ui);letter-spacing:.04em;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #login .stxt small{font:500 12.5px var(--f-inter);color:#b9a6d8}
 #login .slot.empty .stxt b{color:#8e7cb0;font:500 14px var(--f-inter);letter-spacing:.02em}
 #login .slot.empty .stxt small{color:#6f5f90}
@@ -89,7 +90,7 @@
 @keyframes lbreath{0%,100%{opacity:.55;transform:scale(.96)}50%{opacity:.85;transform:scale(1.04)}}
 #login .selart canvas.doll,#login .crart canvas.doll{position:relative;z-index:1;width:100%;height:100%;filter:drop-shadow(0 0 18px color-mix(in srgb,var(--ac) 55%,transparent))}
 #login .sdetail{position:absolute;left:832px;top:178px;width:384px;box-sizing:border-box;padding:22px 24px;background:var(--glass);border:1px solid var(--gline);border-radius:10px;box-shadow:var(--gshadow);backdrop-filter:blur(6px)}
-#login .sdetail h3{margin:0;font:700 28px var(--f-cinzel);color:#fff;letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 0 16px rgba(200,100,255,.5)}
+#login .sdetail h3{margin:0;font:700 28px var(--f-ui);color:#fff;letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 0 16px rgba(200,100,255,.5)}
 #login .dsub{margin:6px 0 0;font:600 13px var(--f-inter);letter-spacing:.08em;color:#b9a6d8}
 #login .dsub b{font-weight:700}
 #login .sdetail .attrs{margin:18px 0 0;padding-top:18px;border-top:1px solid rgba(206,150,255,.2)}
@@ -106,7 +107,7 @@
 #login .tick{position:absolute;right:14px;top:14px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--c);box-shadow:0 0 14px var(--c);opacity:0;transform:scale(.5);transition:opacity .2s,transform .2s;z-index:3}
 #login .tick svg{width:15px;height:15px;fill:none;stroke:#10040f;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
 #login .card.on .tick{opacity:1;transform:none}
-#login .cname{position:relative;z-index:3;font:700 27px var(--f-cinzel);letter-spacing:.16em;color:#fff;text-shadow:0 0 16px color-mix(in srgb,var(--c) 80%,transparent),0 2px 8px #000}
+#login .cname{position:relative;z-index:3;font:700 27px var(--f-ui);letter-spacing:.16em;color:#fff;text-shadow:0 0 16px color-mix(in srgb,var(--c) 80%,transparent),0 2px 8px #000}
 #login .card.fcard .cname{color:var(--c)}
 #login .cbadge{position:absolute;z-index:3;left:14px;top:10px;width:48px;height:48px;flex:none}#login .cbadge svg{width:100%;height:100%;filter:drop-shadow(0 0 8px var(--c))}
 #login .card.fcard .cbadge{position:relative;left:auto;top:auto;width:66px;height:72px;margin-top:-34px;order:-1}
@@ -130,7 +131,7 @@
 #login .crbody{position:absolute;left:372px;top:132px;width:844px;display:grid;gap:14px}
 #login .crhead{display:flex;align-items:center;gap:18px;padding:0 4px}
 #login .crhead .cbadge{position:relative;left:auto;top:auto;margin:0;width:62px;height:62px;flex:none}#login .crhead .cbadge svg{width:100%;height:100%;filter:drop-shadow(0 0 8px var(--ac))}
-#login .crhead h3{margin:0;font:700 32px var(--f-cinzel);letter-spacing:.1em;text-shadow:0 0 18px currentColor}
+#login .crhead h3{margin:0;font:700 32px var(--f-ui);letter-spacing:.1em;text-shadow:0 0 18px currentColor}
 #login .crhead p{margin:4px 0 0;font-size:14px;color:#d8caea;line-height:1.4}
 #login .crgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 #login .pnl{padding:18px 22px;background:var(--glass);border:1px solid var(--gline);border-radius:10px;box-shadow:var(--gshadow);backdrop-filter:blur(6px)}
@@ -148,7 +149,7 @@
 #login .crstrip dl{margin:0;display:grid;grid-template-columns:repeat(4,1fr);gap:0}
 #login .crstrip dl>div{padding:0 18px;border-left:1px solid rgba(206,150,255,.2)}#login .crstrip dl>div:first-child{padding-left:0;border-left:0}
 #login .crstrip dt{font:600 11px var(--f-inter);letter-spacing:.16em;text-transform:uppercase;color:#a894c8;margin-bottom:5px}
-#login .crstrip dd{margin:0;font:700 17px var(--f-cinzel);letter-spacing:.04em;color:#f6eefc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#login .crstrip dd{margin:0;font:700 17px var(--f-ui);letter-spacing:.04em;color:#f6eefc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 @media (prefers-reduced-motion:reduce){#login .fog,#login .pulse,#login .spk,#login .selart::after,#login .crart::after{animation:none}#login .card,#login .lbtn{transition:none}}
 
@@ -159,7 +160,7 @@
 #login .slot.empty:not(:disabled) .stxt b{color:#e7d8ff}
 #login .delbox{position:absolute;left:50%;top:50%;width:460px;margin:-130px 0 0 -230px;padding:24px 26px 22px;box-sizing:border-box;z-index:5;display:grid;gap:12px;background:linear-gradient(180deg,rgba(48,14,30,.96),rgba(18,6,16,.97));border:1px solid rgba(255,120,130,.55);border-radius:10px;box-shadow:0 0 0 1px rgba(20,2,8,.8),0 0 40px rgba(230,60,80,.3),0 20px 50px rgba(0,0,0,.7)}
 #login .delbox[hidden]{display:none}
-#login .delbox h3{margin:0;font:700 18px var(--f-cinzel);letter-spacing:.14em;color:#ffb4bb}
+#login .delbox h3{margin:0;font:700 18px var(--f-ui);letter-spacing:.14em;color:#ffb4bb}
 #login .delbox p{margin:0;font:500 14px/1.45 var(--f-inter);color:#e8dce6}
 #login .delbox input{width:100%;box-sizing:border-box;height:42px;padding:0 12px;font:500 14px var(--f-inter);color:#f4ecff;background:rgba(10,4,16,.8);border:1px solid #96405a;border-radius:5px}
 #login .delbox input:focus{border-color:#ff8a99;outline:none;box-shadow:0 0 0 2px rgba(255,120,130,.35)}
@@ -179,6 +180,6 @@ body:has(#login:not([hidden])) #chatRoot{display:none}
 #credits{position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:rgba(4,2,10,.82);backdrop-filter:blur(3px)}
 #credits[hidden]{display:none}
 #credits .credbox{width:min(760px,92vw);max-height:84vh;display:flex;flex-direction:column;gap:14px;padding:22px;background:linear-gradient(180deg,rgba(22,12,34,.97),rgba(12,6,20,.97));border:1px solid #7a52b8;border-radius:10px;box-shadow:0 18px 60px rgba(0,0,0,.6)}
-#credits h2{margin:0;font:700 20px var(--f-cinzel);color:#f0e4ff;letter-spacing:.04em}
+#credits h2{margin:0;font:700 20px var(--f-ui);color:#f0e4ff;letter-spacing:.04em}
 #credits pre{flex:1;overflow:auto;margin:0;padding:14px;font:400 12px/1.6 ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:#d9ccea;white-space:pre-wrap;word-break:break-word;background:rgba(8,3,14,.75);border:1px solid #3d2a5c;border-radius:6px}
 #credits .lbtn{align-self:center}

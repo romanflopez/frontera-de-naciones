@@ -6,7 +6,7 @@
 import './login.css';
 import './ui/login-craftpix.css';
 import { classBaseHp, classBaseMp } from '@fdn/world';
-import { mountDoll } from './paperdoll.ts';
+import { mountDoll, resizeDolls } from './paperdoll.ts';
 
 export interface ClassInfo { id: string; name: string; desc: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; armor?: string; spells: string[] }
 export interface FactionInfo { id: string; name: string; col: string; desc: string }
@@ -81,7 +81,7 @@ function startFx() {
     const dpr = Math.min(1.5, devicePixelRatio || 1);
     type Em = { x: number; y: number; r: number; vy: number; vx: number; ph: number; hue: number };
     let W = 0, H = 0; const parts: Em[] = [];
-    const spawn = (init: boolean): Em => ({ x: Math.random() * W, y: init ? Math.random() * H : H + 10, r: 0.6 + Math.random() * 2.1, vy: 14 + Math.random() * 38, vx: -6 + Math.random() * 14, ph: Math.random() * 6.28, hue: Math.random() < 0.28 ? 280 : 14 + Math.random() * 20 });
+    const spawn = (init: boolean): Em => ({ x: Math.random() * W, y: init ? Math.random() * H : H + 10, r: 0.6 + Math.random() * 2.1, vy: 14 + Math.random() * 38, vx: -6 + Math.random() * 14, ph: Math.random() * 6.28, hue: Math.random() < 0.3 ? 172 : 196 + Math.random() * 24 }); // brasas frías (celeste y verde agua) al tono del kit y de la gema del logo
     const size = () => { W = cv.clientWidth; H = cv.clientHeight; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); while (parts.length < 70) parts.push(spawn(true)); };
     size(); addEventListener('resize', size);
     let last = performance.now();
@@ -104,7 +104,7 @@ function startFx() {
 function drawStatic() {
     const cv = $('lbgFx') as HTMLCanvasElement, c = cv.getContext('2d'); if (!c) return;
     cv.width = cv.clientWidth; cv.height = cv.clientHeight; c.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < 50; i++) { const x = Math.random() * cv.width, y = Math.random() * cv.height; c.fillStyle = `hsla(${Math.random() < 0.3 ? 280 : 20},100%,65%,.5)`; c.beginPath(); c.arc(x, y, 1 + Math.random() * 1.6, 0, 6.2832); c.fill(); }
+    for (let i = 0; i < 50; i++) { const x = Math.random() * cv.width, y = Math.random() * cv.height; c.fillStyle = `hsla(${Math.random() < 0.3 ? 172 : 205},100%,70%,.5)`; c.beginPath(); c.arc(x, y, 1 + Math.random() * 1.6, 0, 6.2832); c.fill(); }
 }
 
 // ---------- flujo ----------
@@ -112,7 +112,8 @@ export function initLoginUI(ctx: FlowCtx) {
     const root = $('login');
     $('lbgScene').innerHTML = '<img src="assets/background-login.webp" alt="" decoding="async">';
 
-    const fit = () => { const s = Math.min(innerWidth / 1280, innerHeight / 720); root.style.setProperty('--s', String(s)); };
+    let resizeT = 0;
+    const fit = () => { const s = Math.min(innerWidth / 1280, innerHeight / 720); root.style.setProperty('--s', String(s)); clearTimeout(resizeT); resizeT = window.setTimeout(resizeDolls, 120); };
     fit(); addEventListener('resize', fit);
     new MutationObserver(() => { if (!root.hidden) { fit(); startFx(); } }).observe(root, { attributes: true, attributeFilter: ['hidden'] });
     if (!root.hidden) startFx();
@@ -208,14 +209,14 @@ export function initLoginUI(ctx: FlowCtx) {
     /** Ficha de la clase o la facción elegida (la columna derecha, donde el diseño del pack pone la apariencia). */
     function fichaCls(c: ClassInfo): string {
         const col = clsCol(c.id);
-        return `<article class="crcard"><h3 style="color:${col}">${esc(c.name.toUpperCase())}</h3><p class="crtag">${esc(CLS_TAG[c.id] ?? '')}</p>`
+        return `<article class="crcard"><h3 style="color:${col}">${esc(c.name)}</h3><p class="crtag">${esc(CLS_TAG[c.id] ?? '')}</p>`
             + `<ul class="crbul">${bullets(c).map((b) => `<li style="--b:${col}">${esc(b)}</li>`).join('')}</ul>`
             + `<p class="crlore">${esc(CLS_LORE[c.id] ?? c.desc)}</p>`
             + `<dl class="crnums"><div><dt>Vida</dt><dd>${c.hp} <small>+${c.hpL}/nivel</small></dd></div><div><dt>Maná</dt><dd>${c.mp} <small>+${c.mpL}/nivel</small></dd></div>`
             + `<div><dt>Cuerpo a cuerpo</dt><dd>${c.melee[0]}–${c.melee[1]}</dd></div><div><dt>Equipo</dt><dd>${esc(c.weapon)}${c.armor ? `, ${esc(c.armor)}` : ''}</dd></div></dl></article>`;
     }
     function fichaFac(f: FactionInfo): string {
-        return `<article class="crcard sm"><h3 style="color:${f.col}">${esc(f.name.toUpperCase())}</h3><p class="crlore">${esc(f.desc)}</p>`
+        return `<article class="crcard sm"><h3 style="color:${f.col}">${esc(f.name)}</h3><p class="crlore">${esc(f.desc)}</p>`
             + `<dl class="crnums"><div><dt>Empezás en</dt><dd>${esc(ctx.cityName(f.id))}</dd></div></dl></article>`;
     }
     function renderCreate() {
@@ -269,15 +270,36 @@ export function initLoginUI(ctx: FlowCtx) {
     let reg = false;
     const setReg = (on: boolean) => {
         reg = on;
-        $('pass2Row').hidden = !on; $('regHint').hidden = !on;
+        root.toggleAttribute('data-reg', on);
+        $('pass2Row').hidden = !on; $('forgotBtn').hidden = on;
         ($('pass2In') as HTMLInputElement).required = on;
         ($('passIn') as HTMLInputElement).autocomplete = on ? 'new-password' : 'current-password';
-        $('loginBtn').textContent = on ? 'CREAR CUENTA' : 'INICIAR SESIÓN';
-        $('altTxt').textContent = on ? '¿Ya tenés una cuenta?' : '¿No tenés una cuenta?';
-        $('altBtn').textContent = on ? 'Iniciar sesión' : 'Crear cuenta';
+        refreshLoginBtn();
+        $('altBtn').textContent = on ? 'Ya tengo cuenta' : 'Crear cuenta';
         $('loginErr').textContent = '';
     };
+    /** El botón principal dice qué va a pasar; mientras espera al server (main.ts lo deshabilita) muestra "Conectando…". */
+    const loginBtn = $('loginBtn') as HTMLButtonElement;
+    function refreshLoginBtn() {
+        const busy = loginBtn.disabled;
+        loginBtn.classList.toggle('busy', busy); loginBtn.setAttribute('aria-busy', String(busy));
+        $('altBtn').toggleAttribute('disabled', busy);
+        loginBtn.innerHTML = `<span>${busy ? 'Conectando…' : reg ? 'Crear cuenta' : 'Iniciar sesión'}</span>`;
+    }
+    new MutationObserver(refreshLoginBtn).observe(loginBtn, { attributes: true, attributeFilter: ['disabled'] });
     $('altBtn').addEventListener('click', () => { setReg(!reg); ($('nameIn') as HTMLInputElement).focus(); });
+
+    // mostrar / ocultar la contraseña (las dos casillas a la vez, así se ve que coinciden)
+    const pwToggle = $('pwToggle');
+    pwToggle.addEventListener('click', () => {
+        const show = pwToggle.getAttribute('aria-pressed') !== 'true';
+        for (const id of ['passIn', 'pass2In']) ($(id) as HTMLInputElement).type = show ? 'text' : 'password';
+        pwToggle.setAttribute('aria-pressed', String(show));
+        pwToggle.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña');
+        pwToggle.title = show ? 'Ocultar contraseña' : 'Mostrar contraseña';
+    });
+    // la recuperación de contraseña llega con el paso D.17 (hace falta email en la cuenta): hasta entonces el link lo dice
+    $('forgotBtn').addEventListener('click', () => { $('loginErr').textContent = 'Todavía no se puede recuperar la contraseña desde acá. Estamos terminándolo.'; });
 
     // Créditos: la licencia del arte de Flare (CC-BY-SA 3.0) obliga a mostrar la atribución de una forma razonable para el medio,
     // así que los archivos de atribución se leen y se muestran dentro del juego, no solo como .txt en /assets.
