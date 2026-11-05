@@ -24,6 +24,8 @@ import { mobDef } from './mobs';
 export interface MapRect { x0: number; y0: number; x1: number; y1: number }
 export interface Cell { x: number; y: number }
 export const inMapRect = (r: MapRect, x: number, y: number): boolean => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1;
+/** Región de una celda para el PvP: puesto seguro, zona abierta (sin PvP entre naciones) o zona roja (PvP). */
+export type PvpRegion = 'seguro' | 'abierta' | 'roja';
 
 /**
  * Tipo de vínculo (cambia el dibujo y el requisito, no el mecanismo):
@@ -73,8 +75,11 @@ export interface MapDef {
     tempRects?: MapRect[];
     /** Zona de todos contra todos dentro de un mapa `faction` (el Coliseo del mapa original). */
     ffaRect?: MapRect;
-    /** Zonas sin PvP dentro de un mapa con PvP (tramo intermedio 60–80: la entrada y la mitad de leveo son pacíficas, el resto es PvP). */
-    peaceRects?: MapRect[];
+    /**
+     * Zona roja (D.5, DISEÑO.md §3): en un mapa `faction`, el PvP entre naciones vale solo dentro de estos rectángulos; el resto del mapa es zona abierta
+     * (mobs, sin PvP) y las celdas seguras (`WorldMap.safe`) son el puesto seguro. Sin `redRects`, todo el mapa `faction` es rojo salvo el puesto (mapas 81+).
+     */
+    redRects?: MapRect[];
     music?: string;
     /**
      * Mapa de pruebas sin entrada desde el mundo (los de la Fase 1): no hace falta alcanzarlo desde el mapa inicial; los tests
@@ -84,6 +89,19 @@ export interface MapDef {
     links: Link[];
     /** Constructor determinista: cliente y server tienen que armar exactamente lo mismo (sin Math.random ni hora). */
     build(): WorldMap;
+}
+
+/**
+ * Región de PvP en (x, y) (celdas o decimales). `safeCell` = la celda es del puesto seguro (`WorldMap.safe`). La decide quien llama con SU posición:
+ * el server con la que tiene del jugador, nunca con algo que mande el cliente.
+ */
+export function pvpRegionAt(def: Pick<MapDef, 'pvp' | 'safe' | 'redRects'> | undefined, safeCell: boolean, x: number, y: number): PvpRegion {
+    if (safeCell || def?.safe) return 'seguro';
+    const mode = def?.pvp ?? 'faction';
+    if (mode === 'off') return 'abierta';
+    if (mode === 'ffa' || !def?.redRects) return 'roja';
+    const cx = Math.floor(x), cy = Math.floor(y);
+    return def.redRects.some((r) => inMapRect(r, cx, cy)) ? 'roja' : 'abierta';
 }
 
 /** Mapa al que van los personajes nuevos y los que tienen una posición guardada que no existe. */
