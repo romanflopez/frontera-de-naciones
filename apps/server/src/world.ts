@@ -23,7 +23,7 @@ import { guildTagOf } from './guild.ts';
 /** Perfil `faccion;clase;look` más la etiqueta de guild como 4.ª parte (vacía = sin guild); lo que mande el cliente en esa parte se ignora. */
 const withGuildTag = (profile: string, tag: string): string => { const parts = profile.split(';').slice(0, 3); while (parts.length < 3) parts.push(''); return tag ? `${parts.join(';')};${tag}` : parts.join(';'); };
 import { MobSim } from './mobs.ts';
-import { PROJECTILES, projectileFlightMs, projectileHits } from '@fdn/world';
+import { PROJECTILES, projectileFlightMs, projectileHits, pvpRegionAt, type PvpRegion } from '@fdn/world';
 import { ARENA_RULES, MOB_TYPES, POISON_SECS, arenaHealMult, meleeIntervalSecs, type MobType, type WorldMap } from '@fdn/world';
 import { Player, type PersistedPlayer, type Send } from './player.ts';
 import type { Economy, EconCtx } from './economy.ts';
@@ -1414,14 +1414,18 @@ export class GameWorld {
             const ta = this.arena.teams.get(a.sessionId), tb = this.arena.teams.get(b.sessionId);
             return this.arena.phase === 'fight' && ta !== undefined && tb !== undefined && ta !== tb;
         }
-        const safe = (p: Player) => !!this.map?.safe[Math.floor(p.posY)]?.[Math.floor(p.posX)];
-        if (safe(a) || safe(b)) return false;
+        const ra = this.pvpRegion(a), rb = this.pvpRegion(b);
+        if (ra === 'seguro' || rb === 'seguro') return false;
         const mode = this.def?.pvp ?? 'faction';
         if (mode === 'off') return false; // ciudades, mazmorras y bosses: sin PvP (docs/MUNDO.md 5.0)
         if (mode === 'ffa') return true;
-        if (this.def?.peaceRects?.some((r) => inMapRect(r, a.posX, a.posY) || inMapRect(r, b.posX, b.posY))) return false; // zona pacífica del tramo 60–80
+        if (ra !== 'roja' || rb !== 'roja') return false; // D.5: el PvP entre naciones vale solo si LOS DOS están en zona roja (la región sale de la posición que tiene el server)
         const ffa = this.def?.ffaRect, arena = (p: Player) => !!ffa && inMapRect(ffa, p.posX, p.posY);
         return this.factionOf(a) !== this.factionOf(b) || (arena(a) && arena(b));
+    }
+    /** Región de PvP donde está parado un jugador, según la posición del server (D.5). */
+    private pvpRegion(p: Player): PvpRegion {
+        return pvpRegionAt(this.def, !!this.map?.safe[Math.floor(p.posY)]?.[Math.floor(p.posX)], p.posX, p.posY);
     }
     /** Le saca vida a un jugador: DF (físico) o RM (mágico) del server, daño × 100/(100+X); si llega a 0 muere. Devuelve el daño aplicado. */
     /** Tirada de botín de suelo al morir un mob: si cae algo, lo ven en el acto los jugadores cercanos. */
