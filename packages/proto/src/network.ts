@@ -175,6 +175,7 @@ export interface ClientMessage {
     | //
     /** Guilds (ver docs/GUILDS.md). Rango propio de tags desde 1500. */
     { $case: "guildRequest"; value: GuildRequest }
+    | { $case: "contribRequest"; value: ContribRequest }
     | undefined;
 }
 
@@ -1845,6 +1846,11 @@ export interface InventoryState {
   capDf: number;
   capRm: number;
   capNextAt: bigint;
+  /** EK y contribución (D.10): kills a jugadores de la otra nación, contribución gastable, títulos comprados y el puesto. */
+  ek: number;
+  contrib: number;
+  titles: string[];
+  title: string;
 }
 
 /** Respuesta a una acción de economía: ok=false con un motivo (code) y texto para mostrar. */
@@ -2015,14 +2021,12 @@ export interface DepositState {
   canTake: boolean;
 }
 
-/**
- * Pedido de guild. action:
- *   create  = crear (name = nombre de la guild, arg = etiqueta de 2 a 4 letras); cuesta oro y pide nivel mínimo.
- *   invite  = invitar al personaje `name` (líder y oficiales); accept / decline = responder a la invitación pendiente.
- *   leave   = salir; kick = expulsar a `name`; promote / demote = subir o bajar de rango a `name`; leader = ceder el liderazgo a `name`.
- *   crest   = cambiar el escudo (arg = "forma,fondo,figura,símbolo", índices); motd = cambiar el lema (arg); disband = disolver (solo el líder, cofre vacío).
- *   info    = pedir el estado (GuildState).
- */
+/** Tienda de contribución (D.10): action = buy | equip | unequip; id = el del título. */
+export interface ContribRequest {
+  action: string;
+  id: string;
+}
+
 export interface GuildRequest {
   action: string;
   name: string;
@@ -2434,6 +2438,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         break;
       case "guildRequest":
         GuildRequest.encode(message.payload.value, writer.uint32(12002).fork()).join();
+        break;
+      case "contribRequest":
+        ContribRequest.encode(message.payload.value, writer.uint32(12802).fork()).join();
         break;
     }
     return writer;
@@ -3172,6 +3179,14 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "guildRequest", value: GuildRequest.decode(reader, reader.uint32()) };
             continue;
           }
+          case 1600: {
+            if (tag !== 12802) {
+              break;
+            }
+
+            message.payload = { $case: "contribRequest", value: ContribRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -3757,6 +3772,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "guildRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "guildRequest", value: GuildRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "contribRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "contribRequest", value: ContribRequest.fromPartial(object.payload.value) };
         }
         break;
       }
@@ -23043,6 +23064,10 @@ function createBaseInventoryState(): InventoryState {
     capDf: 0,
     capRm: 0,
     capNextAt: 0n,
+    ek: 0,
+    contrib: 0,
+    titles: [],
+    title: "",
   };
 }
 
@@ -23140,6 +23165,18 @@ export const InventoryState: MessageFns<InventoryState> = {
         throw new globalThis.Error("value provided for field message.capNextAt of type int64 too large");
       }
       writer.uint32(240).int64(message.capNextAt);
+    }
+    if (message.ek !== 0) {
+      writer.uint32(248).int32(message.ek);
+    }
+    if (message.contrib !== 0) {
+      writer.uint32(256).int32(message.contrib);
+    }
+    for (const v of message.titles) {
+      writer.uint32(266).string(v!);
+    }
+    if (message.title !== "") {
+      writer.uint32(274).string(message.title);
     }
     return writer;
   },
@@ -23397,6 +23434,38 @@ export const InventoryState: MessageFns<InventoryState> = {
             message.capNextAt = reader.int64() as bigint;
             continue;
           }
+          case 31: {
+            if (tag !== 248) {
+              break;
+            }
+
+            message.ek = reader.int32();
+            continue;
+          }
+          case 32: {
+            if (tag !== 256) {
+              break;
+            }
+
+            message.contrib = reader.int32();
+            continue;
+          }
+          case 33: {
+            if (tag !== 266) {
+              break;
+            }
+
+            message.titles.push(reader.string());
+            continue;
+          }
+          case 34: {
+            if (tag !== 274) {
+              break;
+            }
+
+            message.title = reader.string();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -23444,6 +23513,10 @@ export const InventoryState: MessageFns<InventoryState> = {
     message.capDf = object.capDf ?? 0;
     message.capRm = object.capRm ?? 0;
     message.capNextAt = (object.capNextAt !== undefined && object.capNextAt !== null) ? BigInt(object.capNextAt) : 0n;
+    message.ek = object.ek ?? 0;
+    message.contrib = object.contrib ?? 0;
+    message.titles = object.titles?.map((e) => e) || [];
+    message.title = object.title ?? "";
     return message;
   },
 };
@@ -25181,6 +25254,73 @@ export const DepositState: MessageFns<DepositState> = {
     message.scope = object.scope ?? "";
     message.log = object.log?.map((e) => e) || [];
     message.canTake = object.canTake ?? false;
+    return message;
+  },
+};
+
+function createBaseContribRequest(): ContribRequest {
+  return { action: "", id: "" };
+}
+
+export const ContribRequest: MessageFns<ContribRequest> = {
+  encode(message: ContribRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.action !== "") {
+      writer.uint32(10).string(message.action);
+    }
+    if (message.id !== "") {
+      writer.uint32(18).string(message.id);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ContribRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseContribRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.action = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.id = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<ContribRequest>, I>>(base?: I): ContribRequest {
+    return ContribRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ContribRequest>, I>>(object: I): ContribRequest {
+    const message = createBaseContribRequest();
+    message.action = object.action ?? "";
+    message.id = object.id ?? "";
     return message;
   },
 };

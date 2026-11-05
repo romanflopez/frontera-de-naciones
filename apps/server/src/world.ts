@@ -21,7 +21,8 @@ import type { Occupancy } from './map.ts';
 import * as M from './messages.ts';
 import { guildTagOf } from './guild.ts';
 /** Perfil `faccion;clase;look` más la etiqueta de guild como 4.ª parte (vacía = sin guild); lo que mande el cliente en esa parte se ignora. */
-const withGuildTag = (profile: string, tag: string): string => { const parts = profile.split(';').slice(0, 3); while (parts.length < 3) parts.push(''); return tag ? `${parts.join(';')};${tag}` : parts.join(';'); };
+/** Perfil = nación;clase;apariencia + (la guild y el título los pone el server: 4.ª y 5.ª parte). */
+const withGuildTag = (profile: string, tag: string, title = ''): string => { const parts = profile.split(';').slice(0, 3); while (parts.length < 3) parts.push(''); return title ? `${parts.join(';')};${tag};${title}` : tag ? `${parts.join(';')};${tag}` : parts.join(';'); };
 import { MobSim } from './mobs.ts';
 import { PROJECTILES, projectileFlightMs, projectileHits, pvpRegionAt, ZEM_ID, ZEM_NAME, type PvpRegion } from '@fdn/world';
 import { ARENA_RULES, MOB_TYPES, POISON_SECS, arenaHealMult, meleeIntervalSecs, type MobType, type WorldMap } from '@fdn/world';
@@ -391,7 +392,7 @@ export class GameWorld {
     /** Cambió la guild del jugador: se reescribe la etiqueta de su perfil y la ven los de alrededor. */
     setGuildTag(sessionId: string, tag: string): void {
         const p = this.players.get(sessionId); if (!p) return;
-        p.profile = withGuildTag(p.profile, tag);
+        p.profile = withGuildTag(p.profile, tag, p.econ?.title ?? '');
         p.send(M.playerProfileChanged(p)); this.broadcastNear(p, M.playerProfileChanged(p));
     }
 
@@ -672,6 +673,7 @@ export class GameWorld {
                 case 'clientPickupItem': this.pickupLoot(p, payload.value.lootId.slice(0, 64)); break;
                 case 'econQuestRequest': this.econ?.quest(p, this.ctx, payload.value.npcId, payload.value.action, payload.value.key); break;
                 case 'auctionRequest': auctionHouse()?.handle(p, this.ctx, payload.value); break; // casa de subastas (docs/SUBASTAS.md)
+                case 'contribRequest': if (this.econ?.contribAction(p, this.ctx, payload.value.action.slice(0, 8), payload.value.id.slice(0, 24))) this.setGuildTag(p.sessionId, guildTagOf(p.accountKey)); break; // D.10: si cambió el título, se reescribe el perfil
                 case 'depositRequest': depotService()?.handle(p, this.ctx, payload.value); break; // depósito por cuenta (docs/DEPOSITO.md)
                 case 'tradeRequest': tradeService()?.handle(p, payload.value, (id) => this.tradePeer(p, id)); break; // Dar e Intercambiar (docs/INTERCAMBIO.md)
                 case 'respawnRequest': this.respawn(p); break;
@@ -700,7 +702,7 @@ export class GameWorld {
                 case 'changePlayerProfileRequest': {
                     const v = String(payload.value.profile ?? '').slice(0, 240);
                     if (!/^[\w;,.\- ]*$/.test(v)) break;
-                    p.profile = withGuildTag(v, guildTagOf(p.accountKey)); // la etiqueta de guild la pone el server (docs/GUILDS.md)
+                    p.profile = withGuildTag(v, guildTagOf(p.accountKey), p.econ?.title ?? ''); // la guild y el título los pone el server (docs/GUILDS.md, D.10)
                     this.broadcastNear(p, M.playerProfileChanged(p));
                     break;
                 }
@@ -1702,9 +1704,25 @@ export class GameWorld {
         const note = M.pvpKill(p.playerId, k?.id ?? 0n, p.characterName, k?.name ?? '');
         this.pvpQuestCredit(p, k?.id);
         this.pvpDeathDrop(p, k?.id);
+        this.pvpEkCredit(p, k?.id);
         for (const o of this.players.values()) if (!o.disconnected) o.send(note);
         this.sendVitals(p, true);
         console.log(`[Mundo:${this.id}] ${p.characterName} murió${k ? ` (${k.name})` : ''}`);
+    }
+    /**
+     * EK y contribución (D.10): el que mató y cada compañero de su party cerca suman 1 EK y contribución si el kill es válido para ellos
+     * (zona roja, otra nación, fuera de la arena; regla de nivel antes del 81; 1 vez cada 4 h por víctima). Cada uno con sus propias reglas.
+     */
+    private pvpEkCredit(victim: Player, killerId?: bigint): void {
+        if (!killerId || this.arena || !this.econ || !victim.econ || this.inArenaAt(victim) || this.pvpRegion(victim) !== 'roja') return;
+        const killer = this.playersById.get(killerId);
+        if (!killer || killer === victim || killer.disconnected || this.factionOf(killer) === this.factionOf(victim)) return;
+        for (const m of this.partyInRange(killer)) {
+            if (m === victim || !m.econ || this.factionOf(m) === this.factionOf(victim)) continue;
+            const r = this.econ.pvpKill(m, victim.accountKey || victim.characterName, victim.econ.lvl, this.def?.tier);
+            if ('ek' in r) m.send(M.sendMessage(`+1 EK (${r.ek} en total) y +${r.contrib} de contribución por ${victim.characterName}.`));
+            else if (m === killer) m.send(M.sendMessage(r.why === 'cooldown' ? `${victim.characterName} ya te sumó EK hace menos de 4 horas: no cuenta de nuevo.` : `${victim.characterName} está más de 5 niveles por debajo: no suma EK.`));
+        }
     }
     /**
      * Caída por morir contra un jugador de la otra nación en zona roja (D.9, DISEÑO.md §5b): todo el zem de la bolsa y `min(10 % del oro, nivel × 100)`
