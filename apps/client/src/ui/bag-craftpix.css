@@ -46,24 +46,46 @@
 #itip .row button:hover{filter:none;border-color:#8a7640;color:#f0e6cf}
 
 /* ===== VENDEDOR ===== */
-#shop.cw{top:calc(84px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(392px,calc(100vw - 24px));max-height:calc(100vh - 220px);z-index:4}
+/* D.16: compra y bolsa lado a lado, cada una con su scroll vertical propio; nunca scroll horizontal ni nombres cortados */
+/* a la derecha del chat (que ocupa hasta ~444 px a la izquierda) y a la izquierda del minimapa; en pantallas angostas vuelve al centro */
+#shop.cw{top:calc(84px + env(safe-area-inset-top,0px));left:max(452px,calc(50% - 350px));transform:none;width:min(700px,calc(100vw - 452px - 212px));height:min(500px,calc(100vh - 300px));min-height:340px;max-height:none;z-index:4}
+@media (max-width:1180px){#shop.cw{left:50%;transform:translateX(-50%);width:min(700px,calc(100vw - 24px))}}
+#shop .role{margin:-2px 2px 8px;text-align:center;font:500 13px/1 "Alegreya",Georgia,serif;letter-spacing:.02em;color:#a7b4c1}
 #shop .role .greet{display:block;margin:8px 6px 0;text-transform:none;letter-spacing:0;font:italic 400 13.5px/1.35 "Alegreya",Georgia,serif;color:#cfc6ad}
-#shop .role{margin:-2px 2px 10px;text-align:center;font:400 10.5px/1 "Alegreya SC",Georgia,serif;letter-spacing:.14em;text-transform:uppercase;color:#8d8673}
-#shop .cw-body{flex:1;min-height:0;overflow:auto;padding:12px 10px 8px;scrollbar-width:thin;scrollbar-color:#3a3f46 #15181b}
-#shopList{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start}
-#shopList .label{grid-column:1/-1;margin:6px 2px 0;font:400 11px/1 "Alegreya SC",Georgia,serif;letter-spacing:.14em;text-transform:uppercase;color:#6f6a5c}
-#shopList .label:first-child{margin-top:0}
-/* tarjeta: ícono, nombre arriba y precio abajo con la moneda */
+#shop .cw-body{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:12px 10px 8px}
+#shopList{flex:1;min-width:0;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+.shp{min-width:0;min-height:0;display:flex;flex-direction:column}
+.shp h3{flex:none;margin:0 2px 8px;font:700 14px/1.2 "Alegreya",Georgia,serif;letter-spacing:.01em;color:#cfdae5}
+.shp h3 small{display:block;margin-top:2px;font:500 12.5px/1.25 "Alegreya",Georgia,serif;color:#a7b4c1}
+.shp-list{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:6px;padding:0 4px 2px 0;scrollbar-width:thin;scrollbar-color:#3a4a5a #15181b}
+.shp-sub{flex:none;margin:6px 2px 0;font:600 12.5px/1.2 "Alegreya",Georgia,serif;color:#a7b4c1}
+.shp-sub:first-child{margin-top:0}
+.shp-empty{margin:8px 2px;font:500 13px/1.3 "Alegreya",Georgia,serif;color:#a7b4c1}
+/* fila: ícono, nombre completo (hasta 2 líneas) con rareza y tipo, precio a la derecha con la moneda */
 .cw .srow{position:relative;display:grid;grid-template-columns:44px 1fr;grid-template-rows:auto auto;gap:2px 10px;align-items:start;height:64px;padding:8px 10px;box-sizing:border-box;text-align:left;
   background:#101214;border:1px solid #2a2e33;border-radius:2px;box-shadow:inset 0 0 0 1px #000;cursor:pointer}
-.cw .srow:hover:not(:disabled){border-color:#8a7640;filter:brightness(1.12)}
+#shop .srow{flex:none;height:auto;min-height:56px;grid-template-columns:40px minmax(0,1fr) auto;grid-template-rows:auto;gap:0 10px;align-items:center;padding:7px 10px}
+.cw .srow:hover:not(:disabled){border-color:#9cc4e4;filter:brightness(1.12)}
 .cw .srow .iico,.cw .srow .pico{grid-row:1/3;width:44px;height:44px;margin:0;border-radius:2px;border:1px solid #3b3a2e;background:#0b0d10;box-sizing:border-box}
+#shop .srow .iico,#shop .srow .pico{grid-row:1;width:40px;height:40px}
 .cw .srow span{display:block;font:400 12.5px/1.2 "Alegreya",Georgia,serif;color:#e2d9c4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.2}
 .cw .srow span small{display:none}
+#shop .srow span{display:block;-webkit-line-clamp:unset;font:600 14px/1.2 "Alegreya",Georgia,serif;overflow-wrap:anywhere}
+#shop .srow span small{display:block;text-transform:none;letter-spacing:normal;margin-top:2px;font:500 12.5px/1.2 "Alegreya",Georgia,serif;color:#a7b4c1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cw .srow em{grid-column:2;display:flex;align-items:center;gap:4px;font:600 11px/1 "Alegreya Sans",system-ui,sans-serif;color:#d9ccaa;font-variant-numeric:tabular-nums}
+#shop .srow em{grid-column:3;font-size:13px}
 .cw .srow em::before{content:"";width:11px;height:11px;background:url(/assets/items/misc/oro.png) center/contain no-repeat;filter:drop-shadow(0 1px 1px #000)}
+#shop .srow em::before{width:14px;height:14px}
+/* pantallas angostas: los dos paneles se apilan y scrollea el cuerpo (último recurso) */
+@media (max-width:720px){
+  #shop.cw{height:min(560px,calc(100vh - 220px))}
+  #shop .cw-body{overflow-y:auto}
+  #shopList{display:block}
+  .shp{margin-bottom:12px}
+  .shp-list{overflow:visible}
+}
 .cw .srow.poor{opacity:.45}
 .cw .srow:disabled{opacity:.35;cursor:default}
 .sh-foot{flex:none;padding:8px 10px 10px;border-top:1px solid #22262b}
 .sh-foot .qw-btn{margin-left:0}
-.sh-foot .gold{margin-left:auto;margin-right:0}
+.sh-foot .gold{margin-left:auto;margin-right:0;font-size:15px}
