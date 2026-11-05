@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { DUNGEON_ENTRY_KEYS, KEY_RECIPES, MOBS, QUEST_MATS, findLink, getMapDef, keyMissing, linkGateReason, tierOfLvl } from '@fdn/world';
+import { DUNGEON_ENTRY_KEYS, KEY_RECIPES, MOBS, QUEST_MATS, findLink, getMapDef, keyMissing, linkGateReason, itemBandOfLevel } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { Economy, type EconCtx } from '../src/economy.ts';
 import { PartyService, setParties } from '../src/party.ts';
@@ -120,7 +120,7 @@ test('los siete dungeons tienen llave: puerta cerrada, receta, y el material cae
         const door = getMapDef(surface)!.links.find((l) => l.to.map === dungeon)!;
         assert.equal(door.gate?.key, key, `${surface} → ${dungeon} pide ${key}`);
         // cada material de pit de la receta cae en los pits del mapa de la entrada
-        const pitTiers = new Set<number>(getMapDef(surface)!.build().zones.filter((z) => z.respawn === 10).map((z) => tierOfLvl(z.lvl ?? 0)));
+        const pitTiers = new Set<number>(getMapDef(surface)!.build().zones.filter((z) => z.respawn === 10).map((z) => itemBandOfLevel(z.lvl ?? 0)));
         for (const m of Object.keys(r.mats)) if (QUEST_MATS[m]) assert.ok(pitTiers.has(QUEST_MATS[m].tier), `${m} (T${QUEST_MATS[m].tier}) cae en ${surface}`);
     }
 });

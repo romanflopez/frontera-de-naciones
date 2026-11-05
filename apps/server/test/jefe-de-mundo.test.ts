@@ -35,10 +35,10 @@ function setup() {
     return { reg, svc, said, mk, setRnd: (v: number) => { r = v; } };
 }
 
-test('mapas: los abiertos del T4, ninguna mazmorra; el jefe es de nivel 20 con su motor', () => {
+test('mapas: los abiertos de nivel 16-20, ninguna mazmorra; el jefe es de nivel 20 con su motor', () => {
     const maps = worldBossMaps();
     assert.ok(maps.length >= 2, 'al menos dos mapas para que sea errante');
-    for (const id of maps) { assert.equal(MAPS[id].tier, 4); assert.ok(!MAPS[id].temporary); }
+    for (const id of maps) { assert.equal(MAPS[id].tier, 2); assert.ok(MAPS[id].lvl![0] >= 16 && MAPS[id].lvl![1] <= 20); assert.ok(!MAPS[id].temporary); }
     assert.equal(MOBS[WORLD_BOSS.type].lvl, 20); assert.ok(MOBS[WORLD_BOSS.type].boss);
 });
 

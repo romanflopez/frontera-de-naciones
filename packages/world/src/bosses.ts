@@ -239,4 +239,4 @@ export const BOSS_KITS: Partial<Record<MobType, BossKit>> = {
  * Jefe de mundo del MVP (docs/JEFE_DE_MUNDO.md): uno solo, sale una vez por día a una hora al azar (para que no lo campeen) en uno de los
  * mapas abiertos de su tier, también al azar. Si nadie lo mata en `lifeMin` minutos, se va.
  */
-export const WORLD_BOSS = { type: 'coloso' as MobType, tier: 4, lifeMin: 40, /** ventana del día (hora de Argentina) en la que puede salir */ fromHour: 10, toHour: 23 };
+export const WORLD_BOSS = { type: 'coloso' as MobType, lvl: [16, 20] as [number, number], lifeMin: 40, /** ventana del día (hora de Argentina) en la que puede salir */ fromHour: 10, toHour: 23 };

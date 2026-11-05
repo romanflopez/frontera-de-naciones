@@ -36,13 +36,15 @@ const ctx = (): EconCtx => ({ npcs: [], restat: () => {}, ground: { add: () => {
 const kill = (type: Parameters<typeof mobDef>[0], lvl: number): KillInfo => ({ mobId: 1, type, def: mobDef(type, { lvl }), zoneName: 'prueba', origin: 'pit', x: 0, y: 0 });
 
 // ---------- A. curvas ----------
-test('curva: killsToLevel crece, 11 kills en el nivel 1 y ~10.600 en total hasta el 40', () => {
+test('curva: killsToLevel crece, 11 kills en el nivel 1 y ~10.600 en total hasta el 40 y sigue creciendo hasta el 120', () => {
     assert.equal(killsToLevel(1), 11);
     assert.equal(killsToLevel(10), 120);
     assert.ok(Math.abs(killsToLevel(30) - 420) <= 5 && Math.abs(killsToLevel(39) - 581) <= 5);
     let total = 0, prev = 0;
-    for (let l = 1; l < MAX_LEVEL; l++) { const k = killsToLevel(l); assert.ok(k > prev, `nivel ${l}`); prev = k; total += k; }
+    for (let l = 1; l < 40; l++) { const k = killsToLevel(l); assert.ok(k > prev, `nivel ${l}`); prev = k; total += k; }
     assert.ok(total > 10_000 && total < 11_500, `kills totales ${total}`);
+    for (let l = 40; l < MAX_LEVEL; l++) { const k = killsToLevel(l); assert.ok(k > prev, `nivel ${l}`); prev = k; total += k; }
+    assert.ok(total > 60_000 && total < 80_000, `kills totales hasta el ${MAX_LEVEL}: ${total}`);
 });
 
 test('curva: el multiplicador de exp baja en línea recta de 100 % a ~35 % y nunca sube', () => {
@@ -136,8 +138,8 @@ test('migración v2 -> v3: conserva la fracción de progreso del nivel y no rega
     assert.equal(migrateEcon(st), false, 'migrar dos veces no cambia nada');
 });
 
-test('migración: un nivel por encima del tope se recorta a 40 con exp 0, y la exp casi llena no sube de nivel sola', () => {
-    const a = newEcon('mago', 'vhar'); a.v = 2; a.lvl = 55; a.exp = 123456;
+test('migración: un nivel por encima del tope se recorta al tope (120) con exp 0, y la exp casi llena no sube de nivel sola', () => {
+    const a = newEcon('mago', 'vhar'); a.v = 2; a.lvl = 150; a.exp = 123456;
     assert.equal(migrateEcon(a), true); assert.equal(a.lvl, MAX_LVL); assert.equal(a.exp, 0);
     const b = newEcon('mago', 'vhar'); b.v = 2; b.lvl = 8; b.exp = legacyExpToLevel(8) - 1;
     migrateEcon(b); assert.equal(b.lvl, 8); assert.ok(b.exp < expToLevel(8));

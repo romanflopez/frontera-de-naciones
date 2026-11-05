@@ -245,11 +245,11 @@ test('oferta del día: la compra de la estrella se anuncia a todo el server (una
 // ---------- balance de drops por banda ----------
 test('drops: caen ~14 únicos por banda subiendo de nivel y ~2 por corrida de mazmorra (la chance baja con las muertes que pide la banda)', async () => {
     const { UNIQUE_PIT_CHANCE, uniqueChance } = await import('../src/economy.ts');
-    const { TIERS, TIER_LIST, expToLevel, mobExpCurve, levelExpMult, DUNGEON_IDS, buildMap } = await import('@fdn/world');
+    const { BAND_FROM, expToLevel, mobExpCurve, levelExpMult, DUNGEON_IDS, buildMap } = await import('@fdn/world');
     const kills = (L: number) => expToLevel(L) / (mobExpCurve(L) * levelExpMult(L));
     let prev = Infinity;
-    for (const t of TIER_LIST) {
-        const [a, b] = TIERS[t]; let k = 0; for (let L = a; L <= Math.min(b, 39); L++) k += kills(L);
+    for (const t of [1, 2, 3, 4, 5, 6, 7]) {
+        const a = BAND_FROM[t - 1], b = BAND_FROM[t] ? BAND_FROM[t] - 1 : 39; let k = 0; for (let L = a; L <= Math.min(b, 39); L++) k += kills(L);
         const per = k * uniqueChance(t, 'pit');
         assert.ok(per >= 7 && per <= 20, `T${t}: ${per.toFixed(1)} únicos en la banda (${Math.round(k)} muertes)`);
         assert.ok(UNIQUE_PIT_CHANCE[t - 1] < prev, `T${t}: la chance baja con la banda`); prev = UNIQUE_PIT_CHANCE[t - 1];

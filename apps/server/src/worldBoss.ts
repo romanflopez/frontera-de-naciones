@@ -3,14 +3,14 @@
  * Argentina) para que no lo campeen, en uno de los mapas abiertos de su tier, también al azar. Se anuncia en el chat de todos al aparecer,
  * cuando le quedan 10 minutos y al morir o irse. Vive en memoria: si el server se reinicia, se vuelve a sortear la hora de ese día.
  */
-import { MAPS, MOBS, TIERS, WORLD_BOSS } from '@fdn/world';
+import { MAPS, MOBS, WORLD_BOSS } from '@fdn/world';
 import type { GameWorld } from './world.ts';
 
 const H = 3_600_000, DAY = 24 * H, ART = 3 * H; // Argentina = UTC-3, sin horario de verano
 /** Día calendario de Argentina. */
 export const artDay = (now: number): number => Math.floor((now - ART) / DAY);
 /** Mapas donde puede salir: los abiertos (no mazmorras) del tier del jefe. */
-export const worldBossMaps = (): string[] => Object.values(MAPS).filter((d) => d.tier === WORLD_BOSS.tier && !d.temporary).map((d) => d.id);
+export const worldBossMaps = (): string[] => Object.values(MAPS).filter((d) => !!d.lvl && d.lvl[0] >= WORLD_BOSS.lvl[0] && d.lvl[1] <= WORLD_BOSS.lvl[1] && !d.temporary).map((d) => d.id);
 
 export interface WorldBossDeps {
     ensure(mapId: string): GameWorld;
@@ -69,7 +69,7 @@ export class WorldBossService {
             this.d.announce(`¡${who} ${ev.fighters > 1 || !ev.killer ? 'derribaron' : 'derribó'} al ${ev.name}!`);
         };
         this.state = 'alive'; this.mapId = id; this.until = now + WORLD_BOSS.lifeMin * 60_000; this.warned = false;
-        const [t0, t1] = TIERS[WORLD_BOSS.tier as keyof typeof TIERS];
+        const [t0, t1] = WORLD_BOSS.lvl;
         const text = `¡El ${this.name} (nivel ${MOBS[WORLD_BOSS.type].lvl}, para ${t0}-${t1}) despertó en ${MAPS[id].name}! Se va en ${WORLD_BOSS.lifeMin} minutos.`;
         this.d.announce(text);
         return text;
@@ -78,7 +78,7 @@ export class WorldBossService {
     /** Para el GM: estado y próxima salida. */
     status(now = Date.now()): string {
         if (this.state === 'alive') return `${this.name} vivo en ${MAPS[this.mapId].name}; se va en ${Math.ceil((this.until - now) / 60_000)} min.`;
-        if (this.state === 'waiting' && Number.isFinite(this.at)) return `Hoy sale en ${Math.ceil((this.at - now) / 60_000)} min (en un mapa al azar del T${WORLD_BOSS.tier}).`;
+        if (this.state === 'waiting' && Number.isFinite(this.at)) return `Hoy sale en ${Math.ceil((this.at - now) / 60_000)} min (en un mapa al azar de nivel ${WORLD_BOSS.lvl[0]}-${WORLD_BOSS.lvl[1]}).`;
         return 'Hoy ya no sale: mañana se sortea otra hora.';
     }
 }

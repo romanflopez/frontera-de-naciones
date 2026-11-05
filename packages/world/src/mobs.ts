@@ -117,13 +117,14 @@ for (const [t, L] of Object.entries(BOSS_LEVELS) as [MobType, number][]) {
         boss: { ...b.boss, gold: [Math.round(b.boss.gold[0] * kg), Math.round(b.boss.gold[1] * kg)], special: { ...sp, ...(sp.dmg ? { dmg: [Math.round(sp.dmg[0] * kd), Math.round(sp.dmg[1] * kd)] as [number, number] } : {}) } },
     };
 }
-/** Nivel máximo del personaje (docs/NIVEL_40_E_ITEMS.md §2.4 y docs/PLAN_DE_TRABAJO.md paso 1.1). */
-export const MAX_LEVEL = 40;
+/** Nivel máximo del personaje: 120 desde la etapa E2 (12 tiers de 10 niveles; antes 40, docs/NIVEL_40_E_ITEMS.md §2.4). */
+export const MAX_LEVEL = 120;
 /**
  * Kills de un mob común del propio nivel que hacen falta para subir del nivel `l`: 11 en el nivel 1, ~120 en el 10, ~430 en el 30 y ~590 en el 39.
  * Meta: un veterano que farmea en área llega al 40 en ~30 h (≈ 2 días a full); un jugador a un mob por vez, en ~60 h. Es el único mando de la curva.
  */
-export const killsToLevel = (l: number): number => Math.round(l * (11 + 0.1 * l));
+export const killsToLevel = (l: number): number => (l < 40 ? Math.round(l * (11 + 0.1 * l)) : Math.round(590 + 3.5 * (l - 39)));
+/** (Del 40 al 120 la curva sigue casi recta: 590 kills en el 39 → ~870 en el 119, unas ~70 mil muertes en total. PROVISORIA: se mide con `sim:pve` cuando haya contenido sobre el 40.) */
 /**
  * Multiplicador de la exp que da CUALQUIER mob según el nivel del jugador (a escala 40): 100 % al nivel 1 y baja en
  * línea recta hasta ~35 % al nivel 40. Un mob "se gasta" a medida que lo superás, y por eso conviene subir de zona. La pendiente es suave a

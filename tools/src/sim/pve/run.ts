@@ -38,7 +38,7 @@ if (process.argv.includes('--horas') || !arg('lvl')) {
     console.log('|---|---|---|---|---|---|');
     for (const cls of clss) {
         const per: number[] = [];
-        for (let L = 1; L < MAX_LEVEL; L++) per.push(killsToLevel(L) / farmAt(cls, L, 900).killsPerHour);
+        for (let L = 1; L < Math.min(MAX_LEVEL, 40); L++) per.push(killsToLevel(L) / farmAt(cls, L, 900).killsPerHour);
         const sum = (a: number, b: number) => per.slice(a - 1, b - 1).reduce((x, y) => x + y, 0);
         console.log(`| ${CLS_NAME[cls]} | ${f1(sum(1, 10))} | ${f1(sum(10, 20))} | ${f1(sum(20, 30))} | ${f1(sum(30, 40))} | ${f1(sum(1, 40))} |`);
     }

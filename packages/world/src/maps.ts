@@ -17,7 +17,7 @@ import { LEGACY_FROM_VHAR, LEGACY_VHAR_LINK } from './vhar/legacy';
 import { buildVharInterior, VHAR_INTERIORS, VHAR_RESPAWN } from './vhar/interiors';
 import { FLARE_ARRIVAL, FLARE_FIELD, flareMaps } from './flare';
 import { tiledMaps } from './tiledmaps';
-import { TIERS, TIER_LIST, tierGateLevel, type Tier } from './tiers';
+import { TIERS, TIER_LIST, TIERS_WITH_CONTENT, tierGateLevel, type Tier } from './tiers';
 import { mobDef } from './mobs';
 
 /** Rectángulo de celdas con los dos extremos incluidos (igual que `WorldMap.dungeon`). */
@@ -314,7 +314,7 @@ export function reachableFrom(m: WorldMap, sx: number, sy: number, viaPortals = 
 /**
  * Reglas de los tiers de zona (docs/TIERS_DE_ZONA.md §5): todo mapa de caza o mazmorra (salvo los de prueba y el viejo) tiene tier, su `lvl`
  * cae dentro del tier y el nivel de cada mob también (los jefes, en el tope del mapa); cada puerta a una mazmorra sale de un mapa del mismo
- * tier y pide al menos el mínimo del tier menos 2; cada tier del 1 al 6 tiene al menos 2 mapas abiertos y una mazmorra.
+ * tier y pide al menos el mínimo del tier menos 2; cada tier con contenido (hoy del 1 al 4, `TIERS_WITH_CONTENT`) tiene al menos un mapa abierto y una mazmorra.
  */
 export function tierErrors(defs: Record<string, MapDef>, built: Map<string, WorldMap>): string[] {
     const errs: string[] = [], open = new Map<Tier, number>(), dung = new Map<Tier, number>();
@@ -337,7 +337,7 @@ export function tierErrors(defs: Record<string, MapDef>, built: Map<string, Worl
             if ((l.gate?.lvl ?? 0) < need) errs.push(`vínculo '${l.id}': la puerta de la mazmorra pide nivel ${l.gate?.lvl ?? 0}; mínimo ${need}`);
         }
     }
-    for (const t of TIER_LIST) if (t <= 6 && ((open.get(t) ?? 0) < 1 || (dung.get(t) ?? 0) < 1)) errs.push(`tier ${t}: tiene ${open.get(t) ?? 0} mapas abiertos y ${dung.get(t) ?? 0} mazmorras (mínimo 1 y 1)`);
+    for (const t of TIER_LIST) if (t <= TIERS_WITH_CONTENT && ((open.get(t) ?? 0) < 1 || (dung.get(t) ?? 0) < 1)) errs.push(`tier ${t}: tiene ${open.get(t) ?? 0} mapas abiertos y ${dung.get(t) ?? 0} mazmorras (mínimo 1 y 1)`);
     return errs;
 }
 

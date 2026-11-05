@@ -3,20 +3,20 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MAPS, MOBS, BOSS_LEVELS, TIERS, TIER_LIST, buildMap, itemBandOfLevel, mobDef, mobHpCurve, pitLevel, tierErrors, tierOfLvl, validateMapGraph, type WorldMap } from '@fdn/world';
 
-test('tiers: la tabla cubre los niveles 1 a 40 sin huecos ni solapes', () => {
+test('tiers: 12 tiers de 10 niveles cubren 1 a 120 sin huecos ni solapes', () => {
     let next = 1;
     for (const t of TIER_LIST) { const [a, b] = TIERS[t]; assert.equal(a, next, `T${t} arranca en ${a}`); assert.ok(b >= a); next = b + 1; }
-    assert.equal(next, 41);
-    for (let l = 1; l <= 40; l++) { const t = tierOfLvl(l); assert.ok(l >= TIERS[t][0] && l <= TIERS[t][1]); }
-    assert.equal(itemBandOfLevel(1), 1); assert.equal(itemBandOfLevel(10), 2); assert.equal(itemBandOfLevel(30), 6); assert.equal(itemBandOfLevel(40), 7);
+    assert.equal(next, 121); assert.equal(TIER_LIST.length, 12); for (const t of TIER_LIST) assert.equal(TIERS[t][1] - TIERS[t][0], 9);
+    for (let l = 1; l <= 120; l++) { const t = tierOfLvl(l); assert.ok(l >= TIERS[t][0] && l <= TIERS[t][1]); }
+    assert.equal(itemBandOfLevel(1), 1); assert.equal(itemBandOfLevel(10), 2); assert.equal(itemBandOfLevel(30), 6); assert.equal(itemBandOfLevel(40), 7); assert.equal(itemBandOfLevel(120), 7);
     assert.deepEqual([pitLevel([6, 8], 0), pitLevel([6, 8], 1), pitLevel([6, 8], 2), pitLevel([6, 8])], [6, 7, 8, 6]);
 });
 
-test('tiers: el grafo real cumple las reglas y cada tier 1-6 tiene mapas abiertos y mazmorra', () => {
+test('tiers: el grafo real cumple las reglas y cada tier con contenido (1-4) tiene mapas abiertos y mazmorra', () => {
     assert.deepEqual(validateMapGraph().filter((e) => /tier|T\d|mazmorra|nivel/.test(e)), []);
     const built = new Map<string, WorldMap>(Object.keys(MAPS).map((id) => [id, buildMap(id)]));
     assert.deepEqual(tierErrors(MAPS, built), []);
-    for (const t of [1, 2, 3, 4, 5, 6]) {
+    for (const t of [1, 2, 3, 4]) {
         const open = Object.values(MAPS).filter((d) => d.tier === t && !d.debugOnly && !built.get(d.id)!.dungeon);
         assert.ok(open.length >= 1, `T${t}: mapas abiertos`);
     }
@@ -30,8 +30,8 @@ test('tiers: el validador detecta un mapa sin tier, mobs fuera de rango y una ma
     const sinTier = { ...MAPS, campos_de_sal: { ...MAPS.campos_de_sal, tier: undefined } };
     assert.ok(tierErrors(sinTier, built).some((e) => e.includes('campos_de_sal') && e.includes('sin tier')));
     const corrido = { ...MAPS, campos_de_sal: { ...MAPS.campos_de_sal, tier: 2 as const, lvl: [6, 7] as [number, number] } };
-    assert.ok(tierErrors(corrido, built).some((e) => e.includes('fuera de 6-7')));
-    const otra = { ...MAPS, cueva_goblin: { ...MAPS.cueva_goblin, tier: 3 as const, lvl: [13, 14] as [number, number] } };
+    assert.ok(tierErrors(corrido, built).some((e) => e.includes('fuera del tier 2')));
+    const otra = { ...MAPS, cueva_goblin: { ...MAPS.cueva_goblin, tier: 3 as const, lvl: [23, 24] as [number, number] } };
     assert.ok(tierErrors(otra, built).some((e) => e.includes('cueva_goblin') && e.includes('T3')));
 });
 
