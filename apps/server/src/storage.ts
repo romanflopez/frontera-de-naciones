@@ -29,6 +29,12 @@ export interface AccountRecord {
     chars?: string[];
     /** Registro de personaje (`c_<hex>`): clave de la cuenta dueña. Las cuentas no lo tienen. */
     owner?: string;
+    /** Email de la cuenta (D.17). Las cuentas viejas no lo tienen: lo cargan al entrar. Siempre en minúsculas. */
+    email?: string;
+    /** Recuperación de contraseña en curso: hash (sha256) del código, vencimiento (ms) e intentos fallidos. El código en sí solo viaja por mail. */
+    reset?: { h: string; exp: number; tries: number };
+    /** Registro-índice `e_<hex del email>`: clave de la cuenta dueña de ese email (así se busca por email y no se repite). No es una cuenta. */
+    emailOf?: string;
     /** Personaje borrado (borrado lógico: el nombre queda libre y el dato se puede recuperar a mano). Marca el momento. */
     charDeleted?: number;
 }

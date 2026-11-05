@@ -54,7 +54,7 @@ class Bot {
             }
         });
         await new Promise<void>((r, j) => { this.ws.once('open', () => r()); this.ws.once('error', j); });
-        this.send({ $case: 'authenticateRequest', value: { id: '', characterName: this.name, password: 'test1234' } });
+        this.send({ $case: 'authenticateRequest', value: { id: '', characterName: this.name, password: 'test1234', email: `${this.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@prueba.test` } });
         await Promise.race([got, sleep(5000).then(() => { throw new Error(`${this.name}: no entró al mundo`); })]);
         if (this.mapName && this.mapName !== 'solmar_legacy') throw new Error(`${this.name}: entró en el mapa '${this.mapName}', la prueba se arma en 'solmar_legacy'`);
     }

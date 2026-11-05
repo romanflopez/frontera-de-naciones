@@ -22,7 +22,8 @@ import * as M from './messages.ts';
 import type { PersistedPlayer } from './player.ts';
 import { WorldBossService } from './worldBoss.ts';
 import { WorldRegistry } from './registry.ts';
-import { authenticate, charKeysOf, createCharacter, deleteCharacter, findChar, MAX_CHARS } from './accounts.ts';
+import { authenticate, charKeysOf, createCharacter, deleteCharacter, findChar, MAX_CHARS, requestPasswordReset, resetPassword, setEmail } from './accounts.ts';
+import { mailerFromEnv } from './mail.ts';
 import { Economy, newEconChecked, toCharSave } from './economy.ts';
 import { FileStorage, PgStorage, storageHealth, type Storage } from './storage.ts';
 import { AuctionHouse, setAuctionHouse } from './auction.ts';
@@ -114,12 +115,14 @@ registry.sessionHook = (sessionId) => { const s = sessionsById.get(sessionId); r
 function encode(m: ServerMessage): Uint8Array { return ServerMessage.encode(m).finish(); }
 
 /** Lista de personajes de la cuenta para la pantalla de selección (`error` no vacío = falló la última acción). */
+/** Mails de la cuenta (Resend si hay RESEND_API_KEY y MAIL_FROM; si no, solo log). */
+const mailer = mailerFromEnv();
 function characterListMsg(accKey: string, error = ''): ServerMessage {
     const list = charKeysOf(storage, accKey).map((k) => {
         const rec = storage.get(k)!, econ = economy.load(k), mapId = canonicalMapId(rec.pos?.mapId ?? rec.pos?.worldId);
         return { name: rec.name, cls: econ?.cls ?? '', faction: econ?.faction ?? '', level: econ?.lvl ?? 1, zone: (mapId && getMapDef(mapId)?.name) || '' };
     });
-    return M.characterList(list, MAX_CHARS, error);
+    return M.characterList(list, MAX_CHARS, error, !storage.get(accKey)?.email); // D.17: una cuenta vieja sin email lo tiene que cargar antes de jugar
 }
 
 // Party (docs/PARTY_Y_ARENAS.md): vive fuera de los mundos; la identidad es el sessionId.
@@ -282,10 +285,19 @@ wss.on('connection', (ws, req) => {
         if (!session) {
             // 1) autenticar la cuenta; 2) elegir / crear / borrar personajes; 3) recién ahí se entra al mundo
             if (!acct) {
+                // D.17: recuperar la contraseña se pide ANTES de entrar (no hay sesión): el server responde y el cliente cierra la conexión
+                if (payload?.$case === 'forgotPasswordRequest') {
+                    void requestPasswordReset(storage, mailer, payload.value.identifier.slice(0, 254), clientIp(req)).then((r) => { send(M.passwordResetResult('forgot', r.ok, r.text)); });
+                    return;
+                }
+                if (payload?.$case === 'resetPasswordRequest') {
+                    void resetPassword(storage, mailer, payload.value.token.slice(0, 400), payload.value.password.slice(0, 200), clientIp(req)).then((r) => { send(M.passwordResetResult('reset', r.ok, r.text)); });
+                    return;
+                }
                 if (payload?.$case !== 'authenticateRequest') { disconnect('Autenticate antes de mandar otros mensajes.'); return; }
                 clearTimeout(authTimeout);
                 if (!payload.value.characterName.trim()) { disconnect('Falta el nombre de la cuenta.'); return; }
-                const auth = authenticate(storage, payload.value.characterName, payload.value.password ?? '', clientIp(req));
+                const auth = authenticate(storage, payload.value.characterName, payload.value.password ?? '', clientIp(req), (payload.value.email ?? '').slice(0, 300));
                 if (!auth.ok) { disconnect(auth.error); return; }
                 acct = auth.key;
                 armSelectTimer();
@@ -295,6 +307,14 @@ wss.on('connection', (ws, req) => {
             armSelectTimer();
             if (++preJoinMsgs > 60) { disconnect('Demasiados pedidos sin elegir personaje.'); return; }
             const accKey = acct;
+            if (payload?.$case === 'setEmailRequest') { // D.17: cuenta vieja: carga su email
+                const r = setEmail(storage, accKey, payload.value.email.slice(0, 300));
+                send(characterListMsg(accKey, r.ok ? '' : r.error));
+                return;
+            }
+            if (!storage.get(accKey)?.email && (payload?.$case === 'createCharacterRequest' || payload?.$case === 'deleteCharacterRequest' || payload?.$case === 'selectCharacterRequest')) {
+                send(characterListMsg(accKey, 'Primero cargá el email de tu cuenta.')); return; // el server lo exige: el cliente no puede saltearse el paso
+            }
             switch (payload?.$case) {
                 case 'createCharacterRequest': {
                     const v = payload.value, econ = newEconChecked(v.cls, v.faction);

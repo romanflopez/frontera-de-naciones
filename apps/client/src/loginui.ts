@@ -18,6 +18,8 @@ export interface FlowCtx {
     spellName: (id: string) => string;
     /** ciudad inicial de una facción */
     cityName: (factionId: string) => string;
+    /** Tocó «¿Olvidaste tu contraseña?» (D.17): abre la recuperación. */
+    onForgot?: (account: string) => void;
     get: () => { cls: string; faction: string };
     set: (p: { cls?: string; faction?: string }) => void;
 }
@@ -271,8 +273,9 @@ export function initLoginUI(ctx: FlowCtx) {
     const setReg = (on: boolean) => {
         reg = on;
         root.toggleAttribute('data-reg', on);
-        $('pass2Row').hidden = !on; $('forgotBtn').hidden = on;
-        ($('pass2In') as HTMLInputElement).required = on;
+        $('pass2Row').hidden = !on; $('emailRow').hidden = !on; $('forgotBtn').hidden = on;
+        ($('pass2In') as HTMLInputElement).required = on; ($('emailIn') as HTMLInputElement).required = on;
+        ($('passIn') as HTMLInputElement).minLength = on ? 8 : 4; ($('pass2In') as HTMLInputElement).minLength = 8; // D.17: las cuentas nuevas piden 8 o más; las viejas entran con la suya
         ($('passIn') as HTMLInputElement).autocomplete = on ? 'new-password' : 'current-password';
         refreshLoginBtn();
         $('altBtn').textContent = on ? 'Ya tengo cuenta' : 'Crear cuenta';
@@ -298,8 +301,7 @@ export function initLoginUI(ctx: FlowCtx) {
         pwToggle.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña');
         pwToggle.title = show ? 'Ocultar contraseña' : 'Mostrar contraseña';
     });
-    // la recuperación de contraseña llega con el paso D.17 (hace falta email en la cuenta): hasta entonces el link lo dice
-    $('forgotBtn').addEventListener('click', () => { $('loginErr').textContent = 'Todavía no se puede recuperar la contraseña desde acá. Estamos terminándolo.'; });
+    $('forgotBtn').addEventListener('click', () => ctx.onForgot?.(($('nameIn') as HTMLInputElement).value.trim()));
 
     // Créditos: la licencia del arte de Flare (CC-BY-SA 3.0) obliga a mostrar la atribución de una forma razonable para el medio,
     // así que los archivos de atribución se leen y se muestran dentro del juego, no solo como .txt en /assets.
@@ -330,8 +332,13 @@ export function initLoginUI(ctx: FlowCtx) {
         /** Antes de conectar: en modo "crear cuenta" las dos contraseñas tienen que coincidir. */
         checkRegister(): string {
             if (!reg) return '';
-            return ($('passIn') as HTMLInputElement).value === ($('pass2In') as HTMLInputElement).value ? '' : 'Las contraseñas no coinciden.';
+            const pw = ($('passIn') as HTMLInputElement).value;
+            if (!/^[^\s@]{1,64}@[^\s@.]+(\.[^\s@.]+)+$/.test(($('emailIn') as HTMLInputElement).value.trim())) return 'Escribí un email válido (por ejemplo nombre@correo.com).';
+            if (pw.length < 8) return 'La contraseña tiene que tener entre 8 y 64 caracteres.';
+            return pw === ($('pass2In') as HTMLInputElement).value ? '' : 'Las contraseñas no coinciden.';
         },
+        /** Email que se manda al crear la cuenta ('' al iniciar sesión). */
+        email(): string { return reg ? ($('emailIn') as HTMLInputElement).value.trim() : ''; },
         /** Cuenta autenticada, antes de entrar al mundo: con personajes → selección; sin ninguno → clase, facción y creación. */
         start(i: StartInfo) {
             info = i; chars = i.chars; creating = false; newName = '';
