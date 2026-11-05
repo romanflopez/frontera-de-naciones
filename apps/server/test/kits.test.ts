@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { CLASS_KITS, canUseSkill, checkSkill, skillDeniedText } from '@fdn/world';
+import { kitLevel, CLASS_KITS, canUseSkill, checkSkill, skillDeniedText } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
@@ -24,7 +24,7 @@ class MemStorage implements Storage {
 const pkt = (w: GameWorld, sid: string, $case: string, value: object) => w.handleClientPacket(sid, { payload: { $case, value } } as never);
 const cases = (log: ServerMessage[], k: string) => log.filter((m) => m.payload?.$case === k);
 const texts = (log: ServerMessage[]) => cases(log, 'sendMessage').map((m) => String((m.payload as { value: { message?: string; text?: string } }).value.message ?? (m.payload as { value: { text?: string } }).value.text ?? ''));
-const setLevel = (p: Player, lvl: number) => { p.combat = { ...p.combat, lvl }; };
+const setLevel = (p: Player, lvl: number) => { p.combat = { ...p.combat, lvl: kitLevel(lvl) }; }; // los niveles de los tests están en la escala vieja del kit
 
 function setup() {
     const mem = new MemStorage(), eco = new Economy(mem), reg = new WorldRegistry({ settings, economy: eco });
@@ -55,23 +55,23 @@ test('kits: cada habilidad del server pertenece a por lo menos una clase', () =>
 });
 
 test('kits: el escape o acercamiento de cada clase sale a la vez, en el nivel 20', () => {
-    assert.equal(checkSkill('guerrero', 20, 'carga').ok, true); assert.equal(checkSkill('guerrero', 19, 'carga').ok, false);
-    assert.equal(checkSkill('mago', 20, 'blink').ok, true); assert.equal(checkSkill('mago', 19, 'blink').ok, false);
-    assert.deepEqual(checkSkill('mago', 29, 'remover'), { ok: false, reason: 'nivel', need: 30 }, 'Purga pasa al 30');
-    assert.deepEqual(checkSkill('guerrero', 29, 'grito'), { ok: false, reason: 'nivel', need: 30 }, 'Bendición de poder pasa al 30');
+    assert.equal(checkSkill('guerrero', kitLevel(20), 'carga').ok, true); assert.equal(checkSkill('guerrero', kitLevel(19), 'carga').ok, false);
+    assert.equal(checkSkill('mago', kitLevel(20), 'blink').ok, true); assert.equal(checkSkill('mago', kitLevel(19), 'blink').ok, false);
+    assert.deepEqual(checkSkill('mago', kitLevel(29), 'remover'), { ok: false, reason: 'nivel', need: kitLevel(30) }, 'Purga pasa al 30');
+    assert.deepEqual(checkSkill('guerrero', kitLevel(29), 'grito'), { ok: false, reason: 'nivel', need: kitLevel(30) }, 'Bendición de poder pasa al 30');
 });
 
 test('kits: clase y nivel', () => {
-    assert.equal(canUseSkill('mago', 1, 'proyectil'), true);
-    assert.equal(canUseSkill('guerrero', 40, 'proyectil'), false, 'el paladín no tira saetas');
-    assert.equal(canUseSkill('mago', 40, 'carga'), false, 'el mago no carga');
-    assert.deepEqual(checkSkill('mago', 8, 'bola'), { ok: false, reason: 'nivel', need: 9 });
-    assert.equal(canUseSkill('mago', 9, 'bola'), true);
-    assert.equal(canUseSkill('guerrero', 19, 'carga'), false);
-    assert.equal(canUseSkill('guerrero', 20, 'carga'), true);
-    assert.equal(canUseSkill('nadie', 40, 'ataque'), false, 'clase desconocida: nada');
-    assert.equal(skillDeniedText(checkSkill('mago', 1, 'blink')), 'Se desbloquea en el nivel 20.');
-    assert.equal(skillDeniedText(checkSkill('guerrero', 1, 'blink')), 'Esa habilidad no es de tu clase.');
+    assert.equal(canUseSkill('mago', kitLevel(1), 'proyectil'), true);
+    assert.equal(canUseSkill('guerrero', kitLevel(40), 'proyectil'), false, 'el paladín no tira saetas');
+    assert.equal(canUseSkill('mago', kitLevel(40), 'carga'), false, 'el mago no carga');
+    assert.deepEqual(checkSkill('mago', kitLevel(8), 'bola'), { ok: false, reason: 'nivel', need: kitLevel(9) });
+    assert.equal(canUseSkill('mago', kitLevel(9), 'bola'), true);
+    assert.equal(canUseSkill('guerrero', kitLevel(19), 'carga'), false);
+    assert.equal(canUseSkill('guerrero', kitLevel(20), 'carga'), true);
+    assert.equal(canUseSkill('nadie', kitLevel(40), 'ataque'), false, 'clase desconocida: nada');
+    assert.equal(skillDeniedText(checkSkill('mago', kitLevel(1), 'blink')), `Se desbloquea en el nivel ${kitLevel(20)}.`);
+    assert.equal(skillDeniedText(checkSkill('guerrero', kitLevel(1), 'blink')), 'Esa habilidad no es de tu clase.');
 });
 
 // ---------- H. el cliente pide lo que no le corresponde ----------
@@ -90,7 +90,7 @@ test('server: un mago de nivel 1 no puede castear Bola; a nivel 9 sí', () => {
     const { w, mago } = setup();
     pkt(w, mago.sid, 'spellCastStartRequest', { spellId: 0, spell: 'bola' });
     assert.equal(cases(mago.log, 'spellCastFailed').length, 1);
-    assert.ok(texts(mago.log).some((t) => t.includes('nivel 9')));
+    assert.ok(texts(mago.log).some((t) => t.includes(`nivel ${kitLevel(9)}`)));
     setLevel(mago.p, 9);
     pkt(w, mago.sid, 'spellCastStartRequest', { spellId: 0, spell: 'bola' });
     assert.equal(cases(mago.log, 'spellCastFailed').length, 1, 'a nivel 9 el cast arranca');
@@ -102,7 +102,7 @@ test('server: habilidades de clase (carga, blink) respetan clase y nivel', () =>
     const denied = (log: ServerMessage[], skill: string) => cases(log, 'skillEffect').filter((m) => { const v = (m.payload as { value: { skill: string; ok: boolean } }).value; return v.skill === skill && !v.ok; }).length;
     pkt(w, pala.sid, 'skillRequest', { skill: 'carga', targetId: mago.p.playerId, mobId: 0 });
     assert.equal(denied(pala.log, 'carga'), 1, 'carga a nivel 1: rechazada');
-    assert.ok(texts(pala.log).some((t) => t.includes('nivel 20')));
+    assert.ok(texts(pala.log).some((t) => t.includes(`nivel ${kitLevel(20)}`)));
     pkt(w, mago.sid, 'blinkRequest', { x: mago.p.posX + 3, y: mago.p.posY });
     assert.equal(denied(mago.log, 'blink'), 1, 'blink a nivel 1: rechazado');
     pkt(w, mago.sid, 'skillRequest', { skill: 'carga', targetId: pala.p.playerId, mobId: 0 });
@@ -169,9 +169,9 @@ test('K3: Nova de escarcha congela y daña a un enemigo pegado; antes del nivel 
 });
 
 test('K3: Mandato y Aura sagrada son del paladín y piden nivel 7 y 12', () => {
-    assert.deepEqual(checkSkill('guerrero', 6, 'mandato'), { ok: false, reason: 'nivel', need: 7 });
-    assert.deepEqual(checkSkill('guerrero', 11, 'aura'), { ok: false, reason: 'nivel', need: 12 });
-    assert.equal(canUseSkill('mago', 40, 'mandato'), false);
-    assert.equal(canUseSkill('guerrero', 1, 'juicio'), true);
-    assert.equal(canUseSkill('mago', 7, 'ignicion'), true);
+    assert.deepEqual(checkSkill('guerrero', kitLevel(6), 'mandato'), { ok: false, reason: 'nivel', need: kitLevel(7) });
+    assert.deepEqual(checkSkill('guerrero', kitLevel(11), 'aura'), { ok: false, reason: 'nivel', need: kitLevel(12) });
+    assert.equal(canUseSkill('mago', kitLevel(40), 'mandato'), false);
+    assert.equal(canUseSkill('guerrero', kitLevel(1), 'juicio'), true);
+    assert.equal(canUseSkill('mago', kitLevel(7), 'ignicion'), true);
 });

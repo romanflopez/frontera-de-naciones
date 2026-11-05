@@ -5,7 +5,7 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { CLASS_IDS, canUseSkill, checkSkill, meleeIntervalSecs, type WorldMap } from '@fdn/world';
+import { kitLevel, CLASS_IDS, canUseSkill, checkSkill, meleeIntervalSecs, type WorldMap } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { Economy, newEcon } from '../src/economy.ts';
 import { sanitizeCharacter } from '../src/accounts.ts';
@@ -31,7 +31,7 @@ const pkt = (w: GameWorld, sid: string, $case: string, value: object) => w.handl
 const cases = (log: ServerMessage[], k: string) => log.filter((m) => m.payload?.$case === k);
 const texts = (log: ServerMessage[]) => cases(log, 'sendMessage').map((m) => String((m.payload as { value: { message?: string } }).value.message ?? ''));
 const denied = (log: ServerMessage[], skill: string) => cases(log, 'skillEffect').filter((m) => { const v = (m.payload as { value: { skill: string; ok: boolean } }).value; return v.skill === skill && !v.ok; }).length;
-const setLevel = (p: Player, lvl: number) => { p.combat = { ...p.combat, lvl }; };
+const setLevel = (p: Player, lvl: number) => { p.combat = { ...p.combat, lvl: kitLevel(lvl) }; }; // los niveles de los tests están en la escala vieja del kit
 
 function setup() {
     clock += 1_000_000;
@@ -65,12 +65,12 @@ const skill = (w: GameWorld, sid: string, s: string, targetId = 0n, mobId = 0) =
 test('K5: el healer es una clase jugable con su kit por nivel', () => {
     assert.deepEqual([...CLASS_IDS], ['guerrero', 'mago', 'healer']);
     for (const [id, lvl] of [['castigo', 1], ['curacion', 1], ['renovar', 3], ['bendicion', 5], ['novasagrada', 7], ['reprender', 9], ['orbe', 12]] as const) {
-        assert.equal(canUseSkill('healer', lvl, id), true, `${id} a nivel ${lvl}`);
-        if (lvl > 1) assert.deepEqual(checkSkill('healer', lvl - 1, id), { ok: false, reason: 'nivel', need: lvl });
+        assert.equal(canUseSkill('healer', kitLevel(lvl), id), true, `${id} a nivel ${lvl}`);
+        if (lvl > 1) assert.deepEqual(checkSkill('healer', kitLevel(lvl) - 1, id), { ok: false, reason: 'nivel', need: kitLevel(lvl) });
     }
-    assert.equal(canUseSkill('healer', 40, 'bola'), false, 'no tira bolas de fuego');
-    assert.equal(canUseSkill('mago', 40, 'curacion'), false, 'el mago ya no cura aliados');
-    assert.equal(canUseSkill('guerrero', 40, 'bendicion'), false);
+    assert.equal(canUseSkill('healer', kitLevel(40), 'bola'), false, 'no tira bolas de fuego');
+    assert.equal(canUseSkill('mago', kitLevel(40), 'curacion'), false, 'el mago ya no cura aliados');
+    assert.equal(canUseSkill('guerrero', kitLevel(40), 'bendicion'), false);
 });
 
 test('K5: la vida del healer queda entre la del paladín y la del mago; maná: el mago tiene más (etapa 6b, como en Dreadmyst) y el healer más que el paladín; el personaje nuevo se crea con bastón', () => {

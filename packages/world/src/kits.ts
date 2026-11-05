@@ -12,7 +12,7 @@
 export type ClassId = 'guerrero' | 'mago' | 'healer';
 
 /** Habilidad → nivel mínimo, por clase. `ataque` (golpe básico) lo tienen todas. */
-export const CLASS_KITS: Record<ClassId, Readonly<Record<string, number>>> = {
+const KITS_BASE: Record<ClassId, Readonly<Record<string, number>>> = {
     // `grito` = Bendición de poder (id viejo del Grito de guerra, queda por las barras guardadas)
     guerrero: {
         ataque: 1, golpe: 1, juicio: 1, giro: 3, escudo: 5, mandato: 7, aturdir: 9, aura: 12, escudodivino: 15, carga: 20, represalia: 25, grito: 30, amparo: 35,
@@ -30,6 +30,17 @@ export const CLASS_KITS: Record<ClassId, Readonly<Record<string, number>>> = {
         furia: 1, detectar: 1, aliento: 1,
     },
 };
+
+/**
+ * Los niveles de arriba están en la escala vieja (1-40, el kit completo en el 35). Con el juego en 1-120 el kit se completa en el nivel 60
+ * (`KIT_TOP`): cada habilidad sale en `round(vieja × 60 / 35)`; después del 60 el progreso es de ítems y stats.
+ */
+export const KIT_TOP = 60;
+/** Nivel nuevo de una habilidad que en la escala vieja salía en `old`. */
+export const kitLevel = (old: number): number => (old <= 1 ? 1 : Math.round((old * KIT_TOP) / 35));
+export const CLASS_KITS: Record<ClassId, Readonly<Record<string, number>>> = Object.fromEntries(
+    Object.entries(KITS_BASE).map(([c, k]) => [c, Object.fromEntries(Object.entries(k).map(([id, l]) => [id, kitLevel(l)]))]),
+) as Record<ClassId, Readonly<Record<string, number>>>;
 
 /** Clases jugables, en el orden en que se muestran. */
 export const CLASS_IDS: readonly ClassId[] = ['guerrero', 'mago', 'healer'];

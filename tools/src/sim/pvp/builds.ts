@@ -31,7 +31,7 @@ const GEAR: Record<Cls, [Eq, Eq, Eq]> = {
 };
 /** Reparto de los puntos libres: [atributo, fracción]. */
 const SPLIT: Record<Cls, [keyof Stats, number][]> = {
-    guerrero: [['str', 0.5], ['vit', 0.5]],
+    guerrero: [['dex', 0.31], ['str', 0.27], ['vit', 0.42]], // como el guerrero de HB: ~120 DEX, ~106 FUE y el resto VIT
     mago: [['mag', 0.65], ['vit', 0.35]],
     healer: [['mag', 0.5], ['vit', 0.5]],
 };

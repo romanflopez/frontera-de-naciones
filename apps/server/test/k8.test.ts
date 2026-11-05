@@ -6,7 +6,7 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { relevel, canUseSkill, checkSkill, type WorldMap } from '@fdn/world';
+import { kitLevel, relevel, canUseSkill, checkSkill, type WorldMap } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
@@ -76,12 +76,12 @@ test('K8: del 13 al 40 las habilidades salen en el 15, 20, 25, 30 y 35 (escape d
         ['healer', 'guardian', 15], ['healer', 'pasoluz', 20], ['healer', 'despertar', 25], ['healer', 'esfera', 30], ['healer', 'grupo', 35],
     ];
     for (const [cls, id, lvl] of table) {
-        assert.equal(canUseSkill(cls, lvl, id), true, `${cls} ${id} a nivel ${lvl}`);
-        assert.deepEqual(checkSkill(cls, lvl - 1, id), { ok: false, reason: 'nivel', need: lvl }, `${cls} ${id} antes del ${lvl}`);
-        assert.equal(canUseSkill(cls, 40, id), true, 'siguen al 40');
+        assert.equal(canUseSkill(cls, kitLevel(lvl), id), true, `${cls} ${id} a nivel ${lvl}`);
+        assert.deepEqual(checkSkill(cls, kitLevel(lvl) - 1, id), { ok: false, reason: 'nivel', need: kitLevel(lvl) }, `${cls} ${id} antes del ${lvl}`);
+        assert.equal(canUseSkill(cls, kitLevel(40), id), true, 'siguen al 40');
     }
-    assert.equal(canUseSkill('mago', 40, 'escudodivino'), false, 'cada escudo es de su clase');
-    assert.equal(canUseSkill('guerrero', 40, 'despertar'), false);
+    assert.equal(canUseSkill('mago', kitLevel(40), 'escudodivino'), false, 'cada escudo es de su clase');
+    assert.equal(canUseSkill('guerrero', kitLevel(40), 'despertar'), false);
     assert.equal(SKILLS.escudomana.shield, 0.33); assert.equal(SKILLS.escudodivino.shield, 0.6); assert.equal(SKILLS.guardian.shield, 0.4);
     assert.equal(castMsOf('grito'), 1408); assert.equal(castMsOf('despertar'), 1408);
     assert.equal(SHIELD_MS, 10000);
@@ -89,11 +89,11 @@ test('K8: del 13 al 40 las habilidades salen en el 15, 20, 25, 30 y 35 (escape d
 
 test('K8: el servidor rechaza una habilidad de nivel 15 a un personaje de nivel 14', () => {
     const { w, mago } = setup();
-    setLevel(w, mago.p, 14);
+    setLevel(w, mago.p, kitLevel(15) - 1);
     skill(w, mago.sid, 'escudomana');
     assert.equal(shieldOf(mago.p.status, clock), 0);
     assert.equal(denied(mago.log, 'escudomana'), 1);
-    assert.ok(texts(mago.log).some((t) => t.includes('nivel 15')));
+    assert.ok(texts(mago.log).some((t) => t.includes(`nivel ${kitLevel(15)}`)));
 });
 
 // ---------- escudos ----------
@@ -389,10 +389,10 @@ test('Paso de luz (healer, nivel 20): hasta 6 celdas, se saca el frenado, recarg
     assert.equal(mago.p.posY, my, 'no es del mago');
     pkt(w, mago.sid, 'blinkRequest', { x: mago.p.posX, y: my + 3 });
     assert.equal(mago.p.posY, my + 3, 'sin skill sigue siendo el Blink');
-    setLevel(w, healer.p, 19); clock += 20_000;
+    setLevel(w, healer.p, kitLevel(20) - 1); clock += 20_000;
     pkt(w, healer.sid, 'blinkRequest', { x: x0, y: y0, skill: 'pasoluz' });
     assert.deepEqual([healer.p.posX, healer.p.posY], [x1, y1], 'antes del 20 no');
-    setLevel(w, healer.p, 20);
+    setLevel(w, healer.p, kitLevel(20));
     pkt(w, healer.sid, 'blinkRequest', { x: x0, y: y0, skill: 'pasoluz' });
     assert.deepEqual([healer.p.posX, healer.p.posY], [x0, y0], 'en el 20 sí');
 });
