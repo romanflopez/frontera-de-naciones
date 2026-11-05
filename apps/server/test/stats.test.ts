@@ -39,7 +39,7 @@ const lastResult = (log: ServerMessage[]) => { const r = log.filter((m) => m.pay
 // ---------- A. fórmulas ----------
 test('stats: sin repartir no cambian nada, y cada punto da lo que dice el diseño', () => {
     const b0 = statBonus(defaultStats(), 1250);
-    assert.deepEqual(b0, { hp: 0, mp: 0, def: 0, meleeMult: 1, magicMult: 1 });
+    assert.deepEqual(b0, { hp: 0, mp: 0, def: 0, meleeMult: 1, magicMult: 1, critMag: 0 });
     assert.equal(statBonus(undefined).hp, 0, 'cuenta sin stats = sin bonus');
     const s = defaultStats(); s.vit += 10; s.str += 30; s.mag += 20; s.dex += 20;
     const b = statBonus(s, 1250); // la Vitalidad vale +0,2 % de la vida base de la clase por punto
@@ -57,7 +57,7 @@ test('stats: los puntos salen del nivel (10 al crear + 3 por nivel) y los libres
 
 test('stats: cleanStats recorta lo inválido a enteros entre 10 y el tope', () => {
     const c = cleanStats({ str: 500, vit: -3, dex: 12.9, mag: 'x', luk: 90 }); // luk ya no existe: se descarta y los puntos vuelven solos
-    assert.deepEqual(c, { str: STAT_CAP, vit: 10, dex: 12, mag: 10 });
+    assert.deepEqual(c, { str: STAT_CAP, vit: 10, dex: 12, int: 10, mag: 10 });
     assert.deepEqual(cleanStats(null), defaultStats());
 });
 
@@ -108,7 +108,7 @@ test('repartir: dos pedidos seguidos no pueden gastar el mismo punto dos veces',
 test('repartir: el tope por stat y los muertos', () => {
     const { eco, reg, join } = setup(), w = reg.ensure('solmar_legacy');
     const J = join(w, 'carla'), st = J.p.econ!;
-    st.lvl = 40; st.stats.dex = STAT_CAP - 2;
+    st.lvl = 120; st.stats.dex = STAT_CAP - 2; // con tope 200 hace falta nivel alto para tener los puntos
     J.log.length = 0; eco.statAlloc(J.p, ctx(), 'add', 'dex', 3);
     assert.equal(lastResult(J.log)!.code, 'cap'); assert.equal(st.stats.dex, STAT_CAP - 2);
     eco.statAlloc(J.p, ctx(), 'add', 'dex', 2); assert.equal(st.stats.dex, STAT_CAP);
@@ -197,4 +197,17 @@ test('stats: el tooltip usa los números de la clase y del nivel, y avisa qué s
     assert.match(statTip('dex', 'guerrero', 5, s).now, new RegExp(`\\+${b.def} de defensa`));
     assert.match(statTip('mag', 'mago', 5, s).now, new RegExp(`\\+${b.mp} de maná`));
     assert.equal(statTip('vit', 'clase_rara', 1, base).fit, 'clave', 'clase desconocida cae al paladín, como classBaseHp');
+});
+
+test('Inteligencia: +0,15 % de crítico en hechizos de daño por punto (tope 35 %), sin efecto en el físico ni en las curas', () => {
+    const s = defaultStats(); s.int += 40;
+    assert.ok(Math.abs(statBonus(s, 1000).critMag - 6) < 1e-9, '40 puntos = 6 %');
+    s.int = STAT_CAP; assert.ok(Math.abs(statBonus(s, 1000).critMag - 28.5) < 1e-9, 'con el tope de 200 puntos: 28,5 %');
+    s.int = 1000; assert.equal(statBonus(s, 1000).critMag, 35, 'tope de seguridad');
+    const base = statsFromChar({ lvl: 20, cls: 'mago', eq: {} }), cs = { ...base, critMag: 100 };
+    const normal = rollSpellDamage('bola', { ...base, critMag: 0 }, false);
+    const crit = rollSpellDamage('bola', cs, false);
+    assert.ok(crit > normal * 1.5, 'con 100 % de crítico el hechizo de daño pega fuerte');
+    const phys = rollSpellDamage('golpe', { ...cs, cls: 'guerrero' }, false);
+    assert.ok(phys < crit, 'el físico no usa el crítico de Inteligencia');
 });

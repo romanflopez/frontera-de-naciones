@@ -1838,6 +1838,8 @@ export interface InventoryState {
   statFree: number;
   /** Misiones del corte del MVP (cadena, encargos del día y materiales): JSON de QuestBookView (@fdn/world quests.ts). */
   questBook: string;
+  /** Inteligencia (5.º stat, 5/11): crítico en hechizos de daño. Las cuentas viejas valen 10. */
+  statInt: number;
 }
 
 /** Respuesta a una acción de economía: ok=false con un motivo (code) y texto para mostrar. */
@@ -23016,6 +23018,7 @@ function createBaseInventoryState(): InventoryState {
     statLuk: 0,
     statFree: 0,
     questBook: "",
+    statInt: 0,
   };
 }
 
@@ -23098,6 +23101,9 @@ export const InventoryState: MessageFns<InventoryState> = {
     }
     if (message.questBook !== "") {
       writer.uint32(210).string(message.questBook);
+    }
+    if (message.statInt !== 0) {
+      writer.uint32(216).int32(message.statInt);
     }
     return writer;
   },
@@ -23323,6 +23329,14 @@ export const InventoryState: MessageFns<InventoryState> = {
             message.questBook = reader.string();
             continue;
           }
+          case 27: {
+            if (tag !== 216) {
+              break;
+            }
+
+            message.statInt = reader.int32();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -23366,6 +23380,7 @@ export const InventoryState: MessageFns<InventoryState> = {
     message.statLuk = object.statLuk ?? 0;
     message.statFree = object.statFree ?? 0;
     message.questBook = object.questBook ?? "";
+    message.statInt = object.statInt ?? 0;
     return message;
   },
 };
