@@ -3231,7 +3231,9 @@ function frame(ts: number = performance.now()) {
     if (hitstop > 0) { hitstop -= dt; dt = 0; }
     if (!mapLoading) { update(dt); checkPortals(); checkLinks(); wpTick(); npcTick(); }
     updateCam(Math.min(0.05, T - lastCam)); lastCam = T;
-    updateHover(); { const r0 = performance.now(); render(); diag.render(performance.now() - r0); } hud(); winTick(T); minimapTick();
+    // El mundo se dibuja solo cuando se va a ver: con el mundo listo, o en el cuadro justo antes de levantar el telón (`revealPending`).
+    // En login, selección y pantalla de viaje está tapado, y dibujarlo igual le saca cuadros a esas pantallas y a la entrada.
+    updateHover(); if (worldReady || revealPending) { const r0 = performance.now(); render(); diag.render(performance.now() - r0); } hud(); winTick(T); minimapTick();
     if (revealPending && T >= homeWaitUntil) hideMapLoading(); // el mapa ya se dibujó en este cuadro
     requestAnimationFrame(frame);
     perf.frames++; { const t = performance.now(); if (t - perf.since >= 1000) { perf.fps = (perf.frames * 1000) / (t - perf.since); perf.frames = 0; perf.since = t; } }
