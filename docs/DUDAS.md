@@ -32,3 +32,6 @@ Una línea por duda: qué, dónde, qué opciones se ven.
 - **D.17, un email por cuenta:** el email es único para poder buscar la cuenta por email. Quien tenga dos cuentas tiene que usar emails distintos. Opción: permitir varias cuentas por email y pedir siempre el nombre.
 - **D.17, cambiar el email:** una vez cargado no se puede cambiar desde el juego; si alguien pierde el acceso a ese mail hay que cambiarlo a mano. Falta un flujo de cambio (con la contraseña y confirmación por mail).
 - **D.17, contraseña mínima en cuentas viejas:** siguen entrando con 4 o más. Se podría pedir que la cambien al recuperar (ya se les exigen 8).
+- **D.18, logos y escudos:** las fichas llevan el escudo de nación y el emblema de clase dibujados por código. Los logos propios los pasa Román; cuando lleguen se cambian `shield()` y `clsIcon()` en `loginui.ts`.
+- **D.18, línea de identidad de las naciones:** el texto de `FAC_LORE` (Solmar: bosque y mar; Vhar: nieve y forja) lo escribí yo a partir de `REVISION_PANTALLAS.md`; Román lo ajusta.
+- **D.18, muñeco:** sigue siendo pixel art de 64 px (nítido pero pixelado) hasta tener sprites en mayor resolución; la vista previa del set inicial de la clase queda fuera.

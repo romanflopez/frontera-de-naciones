@@ -151,8 +151,8 @@ export const playerProfileChanged = (p: Player): ServerMessage =>
 export const pvpHit = (casterId: bigint, v: { fx: string; x: number; y: number; targetId: bigint; dmg: number; secs: number; r: number }): ServerMessage =>
     msg({ $case: 'pvpHit', value: { casterId, ...v } });
 
-export const characterList = (characters: { name: string; cls: string; faction: string; level: number; zone: string }[], max: number, error = '', needEmail = false): ServerMessage =>
-    msg({ $case: 'characterList', value: { characters, max, error, needEmail } });
+export const characterList = (characters: { name: string; cls: string; faction: string; level: number; zone: string; lastLogin?: number }[], max: number, error = '', needEmail = false): ServerMessage =>
+    msg({ $case: 'characterList', value: { characters: characters.map((c) => ({ ...c, lastLogin: BigInt(Math.max(0, Math.floor(c.lastLogin ?? 0))) })), max, error, needEmail } });
 export const passwordResetResult = (kind: 'forgot' | 'reset', ok: boolean, text: string): ServerMessage => msg({ $case: 'passwordResetResult', value: { kind, ok, text } });
 export const characterLoaded = (exists: boolean, data: string): ServerMessage => msg({ $case: 'characterLoaded', value: { exists, data } });
 // ---------- PvE autoritativo ----------

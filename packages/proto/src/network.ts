@@ -988,6 +988,8 @@ export interface CharacterSummary {
   level: number;
   /** Nombre del mapa donde quedó (vacío si nunca entró). */
   zone: string;
+  /** Última vez que estuvo en el mundo (ms UTC; 0 = nunca entró). Se actualiza al entrar y al salir. */
+  lastLogin: bigint;
 }
 
 /** Personajes de la cuenta. Se manda tras autenticar y después de cada crear/borrar; `error` no vacío = la última acción falló (la lista sigue vigente). */
@@ -13306,7 +13308,7 @@ export const CharacterLoaded: MessageFns<CharacterLoaded> = {
 };
 
 function createBaseCharacterSummary(): CharacterSummary {
-  return { name: "", cls: "", faction: "", level: 0, zone: "" };
+  return { name: "", cls: "", faction: "", level: 0, zone: "", lastLogin: 0n };
 }
 
 export const CharacterSummary: MessageFns<CharacterSummary> = {
@@ -13325,6 +13327,12 @@ export const CharacterSummary: MessageFns<CharacterSummary> = {
     }
     if (message.zone !== "") {
       writer.uint32(42).string(message.zone);
+    }
+    if (message.lastLogin !== 0n) {
+      if (BigInt.asIntN(64, message.lastLogin) !== message.lastLogin) {
+        throw new globalThis.Error("value provided for field message.lastLogin of type int64 too large");
+      }
+      writer.uint32(48).int64(message.lastLogin);
     }
     return writer;
   },
@@ -13382,6 +13390,14 @@ export const CharacterSummary: MessageFns<CharacterSummary> = {
             message.zone = reader.string();
             continue;
           }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.lastLogin = reader.int64() as bigint;
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -13404,6 +13420,7 @@ export const CharacterSummary: MessageFns<CharacterSummary> = {
     message.faction = object.faction ?? "";
     message.level = object.level ?? 0;
     message.zone = object.zone ?? "";
+    message.lastLogin = (object.lastLogin !== undefined && object.lastLogin !== null) ? BigInt(object.lastLogin) : 0n;
     return message;
   },
 };

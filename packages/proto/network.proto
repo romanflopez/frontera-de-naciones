@@ -799,6 +799,8 @@ message CharacterSummary {
   int32 level = 4;
   /** Nombre del mapa donde quedó (vacío si nunca entró). */
   string zone = 5;
+  /** Última vez que estuvo en el mundo (ms UTC; 0 = nunca entró). Se actualiza al entrar y al salir. */
+  int64 last_login = 6;
 }
 /** Personajes de la cuenta. Se manda tras autenticar y después de cada crear/borrar; `error` no vacío = la última acción falló (la lista sigue vigente). */
 message CharacterList {

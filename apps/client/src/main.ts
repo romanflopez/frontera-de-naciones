@@ -3358,7 +3358,7 @@ $('loginForm').addEventListener('submit', async (e) => {
         if (m.$case === 'characterList') {
             if (m.value.needEmail) { emailPrompt.show(m.value.error); return; } // D.17: cuenta vieja sin email: lo carga antes de elegir personaje
             emailPrompt.hide();
-            const chars = m.value.characters.map((c) => ({ name: c.name, cls: c.cls, faction: c.faction, lvl: c.level, zone: c.zone }));
+            const chars = m.value.characters.map((c) => ({ name: c.name, cls: c.cls, faction: c.faction, lvl: c.level, zone: c.zone, last: Number(c.lastLogin) }));
             lastChars = chars; dropMapLoading(); // si venía de elegir personaje, el server lo rechazó: vuelve a la selección
             if (flowActive) { inFlow = true; flow.update(chars, m.value.error); return; }
             // reconexión automática tras un corte: vuelve a entrar con el mismo personaje sin pasar por la selección

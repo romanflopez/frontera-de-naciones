@@ -37,10 +37,10 @@ Código: `apps/client/index.html` (bloque `#login`), `apps/client/src/loginui.ts
 - [x] **Sin versales ni dorado (D.18):** títulos, nombres, botones y fichas en minúscula; fuera la guarda dorada de los encabezados, el filete del botón Jugar y los corchetes dorados. «+ Crear personaje» es un botón con borde punteado, la X de borrar mide 32 px, vida roja y maná azul (antes al revés).
 - [ ] (ya estaba) Redistribuir la pantalla (Román): el muñeco queda pixelado y descentrado. Causa probable: el canvas del muñeco se escala con `data-h` sin `image-rendering` ni tamaño múltiplo del sprite; hay que fijar el tamaño del canvas al del sprite × un entero y centrarlo en una columna propia.
 - [ ] Los dos botones de abajo son distintos (ghost "Volver" / primario "Jugar"): está bien así, se mantiene.
-- [ ] **Modal de borrar: usar el del GUI kit** en vez del `delbox` a mano (hay `win-bg`, `win-hdr-*`, `btn-sq` en `craftpix/`). Misma lógica (escribir el nombre), solo cambia la piel.
+- [x] **Modal de borrar: usar el del GUI kit** (D.18, hecho; falta que Román lo pruebe) en vez del `delbox` a mano (hay `win-bg`, `win-hdr-*`, `btn-sq` en `craftpix/`). Misma lógica (escribir el nombre), solo cambia la piel.
 
 **Falta**
-- [x] Detalle del personaje: el mapa donde quedó ya está; **agregar última conexión** (Román, 5/11). EK cuando exista.
+- [x] Detalle del personaje: el mapa donde quedó ya está; **última conexión** hecha en D.18 (el server la guarda al entrar y al salir del mundo). EK cuando exista.
 - [ ] **Logo/escudo de cada nación** (Solmar, Vhar) y **emblema de cada clase** (paladín, clérigo, mago, arquero): hoy se dibujan por código (`shield()`, `clsIcon()`). Román define si van como arte propio o quedan por código.
 
 ## 3. Crear personaje
@@ -53,7 +53,7 @@ Código: `apps/client/index.html` (bloque `#login`), `apps/client/src/loginui.ts
 - [ ] Solo 3 clases: agregar **arquero** cuando exista (D.0 deja el esqueleto; hasta entonces no se muestra).
 
 **Falta**
-- [ ] Fichas de nación con su escudo y una línea de identidad (bosque y mar / nieve) y fichas de clase con su emblema y rol en una línea (los roles de `DISEÑO.md` §4).
+- [x] (D.18) Fichas de nación con su escudo y una línea de identidad (bosque y mar / nieve) y fichas de clase con su emblema y rol en una línea (los roles de `DISEÑO.md` §4).
 - [ ] Vista previa del set inicial de la clase en el muñeco (hoy el muñeco es genérico).
 
 **Decisiones**
