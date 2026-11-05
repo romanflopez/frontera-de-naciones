@@ -1077,7 +1077,7 @@ function fire(i: number, m: Target | null) {
         || (!!s.aoe && enemiesNear(m ? m.x : P.x, m ? m.y : P.y, s.aoe + 0.5).length > 0); // si pega a un jugador, el server cobra
     spendMp(s.mp, srvMp); syncHp(); cds[i] = now() + s.cd;
     P.one = { anim: 'cast', t: now() - 0.3, until: now() + 0.12 };
-    fx.push({ k: 'burst', x: P.x, y: P.y, t: 0, c: s.col });
+    fx.push({ k: 'burst', x: P.x, y: P.y, t: 0, c: s.col }); fx.push({ k: 'boom', x: P.x, y: P.y, t: 0, r: 1.1, c: s.col });
     const b = $('sp' + i); b.classList.remove('fired'); void b.offsetWidth; b.classList.add('fired');
 }
 function cancelCast(why?: string | null) { if (!P.casting && !P.ready) return; P.casting = null; useCastStore.getState().cancelCast(); castBarOf = null; P.ready = null; net.send({ $case: 'spellCastCancelRequest', value: {} }); if (why) toast(why); }
@@ -1812,6 +1812,26 @@ function updateCam(dt: number) {
 }
 
 // ---------- dibujo ----------
+/** Casteo propio: círculo rúnico en el piso que se carga con el progreso, runas girando y chispas que suben a las manos; listo (esperando blanco) queda pulsando. */
+function drawCastCharge(T: number) {
+    if (P.dead || !(P.casting || P.ready)) return;
+    const c = P.casting, i = c ? c.i : P.ready!.i, s = SPELLS[i], col = s.col;
+    const k = c ? clamp((T - c.start) / (c.end - c.start), 0, 1) : 1, pul = c ? 1 : 0.8 + 0.2 * Math.sin(T * 8);
+    const p = iso(P.x, P.y), rx = TW * 0.42 * (0.55 + 0.45 * k), ry = rx * 0.5, TAU = Math.PI * 2;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = col; ctx.fillStyle = col;
+    ctx.globalAlpha = (0.2 + 0.4 * k) * pul; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(p.x, p.y, rx, ry, 0, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, rx * 0.62, ry * 0.62, 0, 0, TAU); ctx.stroke();
+    ctx.globalAlpha = 0.85 * pul; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(p.x, p.y, rx, ry, 0, -Math.PI / 2, -Math.PI / 2 + TAU * k); ctx.stroke();
+    for (let n = 0; n < 10; n++) { const a = T * 2.2 + n * TAU / 10; ctx.globalAlpha = (0.3 + 0.6 * k) * pul; ctx.fillRect(p.x + Math.cos(a) * rx * 0.8 - 1.5, p.y + Math.sin(a) * ry * 0.8 - 1.5, 3, 3); }
+    for (let n = 0; n < 8; n++) {
+        const t = (T * 1.4 + n / 8) % 1, a = n * TAU / 8 + T * 0.6, r = 1 - t;
+        ctx.globalAlpha = Math.sin(Math.PI * t) * (0.4 + 0.6 * k); ctx.beginPath(); ctx.arc(p.x + Math.cos(a) * rx * 0.8 * r, p.y + Math.sin(a) * ry * 0.8 * r - 34 * t, 2 + 1.5 * k, 0, TAU); ctx.fill();
+    }
+    const gr = 8 + 16 * k, g = ctx.createRadialGradient(p.x, p.y - 34, 0, p.x, p.y - 34, gr);
+    g.addColorStop(0, '#fff'); g.addColorStop(0.4, col); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.globalAlpha = (0.25 + 0.55 * k) * pul; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y - 34, gr, 0, TAU); ctx.fill();
+    ctx.restore();
+}
 function animFor(e: Ent, T: number): [string, number] {
     if (e === (P as Ent) && P.casting) { const c = P.casting, k = clamp((T - c.start) / (c.end - c.start), 0, 1); return ['cast', k * 0.29]; }
     if (e === (P as Ent) && P.ready) return ['cast', 0.29];
@@ -1999,6 +2019,7 @@ function render() {
         const g = ctx.createRadialGradient(p.x, p.y - 10, 0, p.x, p.y - 10, R2 * (0.4 + k)); g.addColorStop(0, '#fff3c0'); g.addColorStop(0.35, f.c ?? '#ff8a3d'); g.addColorStop(1, 'rgba(120,30,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(p.x, p.y - 10, R2 * (0.4 + k), R2 * (0.4 + k) * 0.6, 0, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = f.c ?? '#ffb070'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(p.x, p.y, R2 * k * 1.1, R2 * k * 0.55, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
     }
+    drawCastCharge(T);
     for (const f of fx) if (f.k === 'burst') { const p = iso(f.x, f.y), k = f.t / 0.6; if (k > 0.5) continue; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1 - k * 2; ctx.fillStyle = f.c!; ctx.beginPath(); ctx.arc(p.x, p.y - 34, 10 + k * 30, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
     if (FXM && IMG.fx) for (const f of fx) if (f.k === 'efx') {
         const r = FXM.rows[f.n!], c = FXM.cell, i = Math.min(FXM.frames - 1, Math.floor(f.t * r.fps)), p = iso(f.x, f.y), w = c * r.scale, im = IMG[r.img ?? 'fx'];
