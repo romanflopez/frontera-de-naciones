@@ -22,7 +22,7 @@ import { chatBus, logToChat, type ChatChannel } from './ui/chatStore';
 import { drawPortalFloor, drawPortalFx, setPortalSheet, PORTAL_CITY, PORTAL_ZONE } from './portal';
 import { stepFree, leadAim, projectileFlightMs } from '@fdn/world';
 import { checkSkill, skillDeniedText, canUseSkill, skillLevel } from '@fdn/world';
-import { DEFAULT_MAP, RECALL, STAT_CAP, classBaseHp, itemDfTotal, itemRmTotal, STAT_DESC, STAT_IDS, STAT_BASE, STAT_RESET_FREE_LVL, statTip, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, traitLabel, traitHpMult, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
+import { DEFAULT_MAP, RECALL, STAT_CAP, classBaseHp, classBaseMp, itemDfTotal, itemRmTotal, STAT_DESC, STAT_IDS, STAT_BASE, STAT_RESET_FREE_LVL, statTip, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, traitLabel, traitHpMult, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
 import { UNIQUE_BY_NAME, UP_MAX, UP_MAX_BY_QUALITY, EXTRAS_BY_QUALITY, FX_INFO, JUNK_MATS, MAT_REFORJA, junkValue, reforgeGold, reforgeStones, activeSets, setOfPiece, slotsFor, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, fitsSlot, TALK_RANGE, roleOf, trainingLockedMsg, trainingOfMap, sellPrice, type AttrId, type Base, type KeyId, type Slot, type Stock } from '@fdn/world';
 import { hpRegenPerSec, HP_REGEN, MEDITATE, PVE_MP_REGEN } from '@fdn/world';
 import { Net, serverUrl, type ServerPayload } from './net.ts';
@@ -241,8 +241,8 @@ const CLASSES: ClassDef[] = [
 let CLS: ClassDef = CLASSES[0];
 /** Vida y maná máximos que manda el server (Vitals): mandan sobre la cuenta local, que usa números viejos de cada clase. */
 const srvMax = { hp: 0, mp: 0 };
-const maxHp = () => (connected && srvMax.hp) || CLS.hp + (P.lvl - 1) * CLS.hpL + totals().hp;
-const maxMp = () => (connected && srvMax.mp) || CLS.mp + (P.lvl - 1) * CLS.mpL + totals().mp;
+const maxHp = () => (connected && srvMax.hp) || classBaseHp(CLS.id, P.lvl) + totals().hp;
+const maxMp = () => (connected && srvMax.mp) || classBaseMp(CLS.id, P.lvl) + totals().mp;
 const expNeed = () => expToLevel(P.lvl);
 
 // ---------- log ----------

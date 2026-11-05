@@ -18,10 +18,11 @@ export const tierOfLvl = (lvl: number): Tier => (TIER_LIST.find((t) => lvl <= TI
 /** Último tier con contenido de caza hoy (los siguientes se llenan en la etapa E6 en adelante; el validador no los exige todavía). */
 export const TIERS_WITH_CONTENT = 4;
 /**
- * Banda de ítems (1..7) según el nivel del mob: nivel mínimo de cada banda. PROVISORIO: hasta que E3 reparta el catálogo sobre 1..120 se
- * conservan los cortes viejos (cada 5 niveles hasta el 30; la banda 7 desde el 31), así la progresión 1-40 no cambia.
+ * Banda de ítems (1..7) según el nivel del mob: nivel mínimo de cada banda. El catálogo de 7 bandas y 21 sets se estira sobre 1-120
+ * (~17 niveles por banda), igual que los lugares de entrenamiento: no se rehace el catálogo; la variedad la dan los afijos y las calidades,
+ * y un ítem sirve ~17 niveles (se mejora con +N mientras subís).
  */
-export const BAND_FROM: readonly number[] = [1, 6, 11, 16, 21, 26, 31];
+export const BAND_FROM: readonly number[] = [1, 18, 35, 52, 69, 86, 103];
 /** Banda de ítems que suelta un mob de nivel `lvl` (las 7 bandas tienen catálogo; la 7 es de ilvl 35). */
 export const itemBandOfLevel = (lvl: number): number => { let b = 1; BAND_FROM.forEach((f, i) => { if (Math.max(1, lvl) >= f) b = i + 1; }); return b; };
 /**
@@ -34,3 +35,23 @@ export const pitLevel = (range: [number, number], pit?: number): number =>
 export const tierGateLevel = (t: Tier): number => Math.max(1, TIERS[t][0] - 2);
 /** Texto del cartel de zona: "Zona T3 · niveles 21-30". */
 export const tierLabel = (t: Tier): string => `Zona T${t} · niveles ${TIERS[t][0]}-${TIERS[t][1]}`;
+
+/**
+ * Nivel de poder: el juego se diseñó para los niveles 1-40 y se estiró a 1-120 (E2b). Los anclajes son [nivel viejo, nivel nuevo]; entre
+ * anclajes se interpola en línea recta. Las curvas de poder (vida de clase, vida/daño/exp de los mobs, multiplicador de exp) se siguen
+ * calculando en la escala vieja con `powerLevel(nivel)`, así el balance ya probado no cambia: subir un nivel nuevo es subir una fracción
+ * de nivel viejo. Los anclajes dejan cada mapa de entrada de mazmorra dentro de la banda de ítems de su llave (llaves y materiales).
+ */
+export const LEVEL_ANCHORS: readonly (readonly [number, number])[] = [[1, 1], [5, 14], [9, 26], [12, 42], [17, 58], [24, 77], [27, 94], [34, 108], [40, 120]];
+/** Nivel nuevo (1-120) de un nivel de la escala vieja (1-40). */
+export function relevel(oldLvl: number): number {
+    const k = LEVEL_ANCHORS; if (oldLvl <= k[0][0]) return k[0][1];
+    for (let i = 1; i < k.length; i++) if (oldLvl <= k[i][0]) { const [a, na] = k[i - 1], [b, nb] = k[i]; return Math.round(na + ((nb - na) * (oldLvl - a)) / (b - a)); }
+    return k[k.length - 1][1];
+}
+/** Nivel de poder (escala vieja, 1-40, continuo) de un nivel nuevo (1-120). */
+export function powerLevel(lvl: number): number {
+    const k = LEVEL_ANCHORS; if (lvl <= k[0][1]) return k[0][0];
+    for (let i = 1; i < k.length; i++) if (lvl <= k[i][1]) { const [a, na] = k[i - 1], [b, nb] = k[i]; return a + ((b - a) * (lvl - na)) / (nb - na); }
+    return k[k.length - 1][0];
+}

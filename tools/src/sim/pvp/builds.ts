@@ -3,7 +3,7 @@
  * con mejoras moderadas, y los puntos de atributos repartidos como los repartiría un jugador normal.
  * Es un supuesto: si cambia el equipo de referencia, hay que volver a correr `sim:pvp`.
  */
-import { STAT_BASE, STAT_CAP, statPointsTotal, type Stats } from '@fdn/world';
+import { powerLevel, STAT_BASE, STAT_CAP, statPointsTotal, type Stats } from '@fdn/world';
 import { statsFromChar, type CombatStats } from '../../../../apps/server/src/systems/pvpCombat.ts';
 
 export type Cls = 'guerrero' | 'mago' | 'healer';
@@ -40,6 +40,6 @@ export function buildStats(cls: Cls, lvl: number): CombatStats {
     const pts = statPointsTotal(lvl), st: Stats = { str: STAT_BASE, vit: STAT_BASE, dex: STAT_BASE, int: STAT_BASE, mag: STAT_BASE };
     let left = pts;
     SPLIT[cls].forEach(([id, f], i) => { const n = i === SPLIT[cls].length - 1 ? left : Math.round(pts * f); st[id] = Math.min(STAT_CAP, STAT_BASE + n); left -= n; });
-    const eq = GEAR[cls][lvl <= 15 ? 0 : lvl <= 30 ? 1 : 2];
+    const pl = powerLevel(lvl), eq = GEAR[cls][pl <= 15 ? 0 : pl <= 30 ? 1 : 2];
     return statsFromChar({ lvl, cls, stats: st, eq });
 }

@@ -2,7 +2,7 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import {
+import { relevel,
     ANTI_DAMAGE_MULT, FLEE_HP_FRAC, MUTANT_DROP_MULT, TRAIT_ANTI_MAGIC, TRAIT_ANTI_PHYS, TRAIT_EXPLOSIVE, TRAIT_MUTANT, TRAIT_TOXIC, TRAIT_WILD,
     fleeChance, mobDef, traitDropMult, traitExpMult, traitHpMult, traitLabel, type MobType, type WorldMap,
 } from '@fdn/world';
@@ -25,7 +25,7 @@ interface Opts { type?: MobType; n?: number; r?: number; at?: { x: number; y: nu
 
 function setup(o: Opts = {}) {
     clock += 100_000;
-    const { type = 'goblin', n = 1, r = 0, at = { x: 14, y: 20 }, cls = 'guerrero', lvl = 10 } = o;
+    const { type = 'goblin', n = 1, r = 0, at = { x: 14, y: 20 }, cls = 'guerrero', lvl = relevel(10) } = o;
     const sent: ServerMessage[] = [], hurts: { raw: number; source: string }[] = [], timers: { at: number; fn: () => void }[] = [];
     const combat = statsFromChar({ lvl, cls, eq: {} });
     const p = { playerId: 7n, posX: at.x, posY: at.y, disconnected: false, isDead: false, status: { isInvisible: false }, combat, pvp: new PvpLimiter(), send: (m: ServerMessage) => sent.push(m) } as unknown as Player;
@@ -142,14 +142,14 @@ test('huida: se aleja, y a los segundos vuelve a casa y se cura; mientras corre 
 
 // ---------- B. habilidades de mob ----------
 test('anti-físico: el daño físico se reduce a la mitad de verdad; el mágico no', () => {
-    const base = setup({ type: 'goblin', cls: 'guerrero', lvl: 20 }), anti = setup({ type: 'goblin', cls: 'guerrero', lvl: 20 });
+    const base = setup({ type: 'goblin', cls: 'guerrero', lvl: relevel(20) }), anti = setup({ type: 'goblin', cls: 'guerrero', lvl: relevel(20) });
     anti.raws[0].traits = TRAIT_ANTI_PHYS;
     let a = 0, b = 0, n = 0;
     for (let i = 0; i < 400; i++) { base.hit(base.raws[0], 'ataque'); anti.hit(anti.raws[0], 'ataque'); clock += 1000; n++; }
     a = base.dmgs().reduce((s, x) => s + x.dmg, 0) / n; b = anti.dmgs().reduce((s, x) => s + x.dmg, 0) / n;
     assert.ok(Math.abs(b / a - ANTI_DAMAGE_MULT) < 0.05, `razón ${(b / a).toFixed(3)}`);
     // el mismo mob anti-físico recibe el hechizo mágico completo
-    const mg = setup({ type: 'goblin', cls: 'mago', lvl: 20 }), mg0 = setup({ type: 'goblin', cls: 'mago', lvl: 20 });
+    const mg = setup({ type: 'goblin', cls: 'mago', lvl: relevel(20) }), mg0 = setup({ type: 'goblin', cls: 'mago', lvl: relevel(20) });
     mg.raws[0].traits = TRAIT_ANTI_PHYS;
     let x = 0, y = 0; for (let i = 0; i < 100; i++) { mg.hit(mg.raws[0], 'proyectil'); mg0.hit(mg0.raws[0], 'proyectil'); clock += 2000; }
     x = mg.dmgs().reduce((s, t) => s + t.dmg, 0); y = mg0.dmgs().reduce((s, t) => s + t.dmg, 0);
@@ -157,12 +157,12 @@ test('anti-físico: el daño físico se reduce a la mitad de verdad; el mágico 
 });
 
 test('anti-mágico: el daño mágico se reduce a la mitad; el físico no', () => {
-    const base = setup({ type: 'goblin', cls: 'mago', lvl: 20 }), anti = setup({ type: 'goblin', cls: 'mago', lvl: 20 });
+    const base = setup({ type: 'goblin', cls: 'mago', lvl: relevel(20) }), anti = setup({ type: 'goblin', cls: 'mago', lvl: relevel(20) });
     anti.raws[0].traits = TRAIT_ANTI_MAGIC;
     for (let i = 0; i < 100; i++) { base.hit(base.raws[0], 'proyectil'); anti.hit(anti.raws[0], 'proyectil'); clock += 2000; }
     const a = base.dmgs().reduce((s, x) => s + x.dmg, 0), b = anti.dmgs().reduce((s, x) => s + x.dmg, 0);
     assert.ok(Math.abs(b / a - ANTI_DAMAGE_MULT) < 0.05, `razón ${(b / a).toFixed(3)}`);
-    const f = setup({ type: 'goblin', cls: 'guerrero', lvl: 20 }), f0 = setup({ type: 'goblin', cls: 'guerrero', lvl: 20 });
+    const f = setup({ type: 'goblin', cls: 'guerrero', lvl: relevel(20) }), f0 = setup({ type: 'goblin', cls: 'guerrero', lvl: relevel(20) });
     f.raws[0].traits = TRAIT_ANTI_MAGIC;
     for (let i = 0; i < 300; i++) { f.hit(f.raws[0], 'ataque'); f0.hit(f0.raws[0], 'ataque'); clock += 1000; }
     const x = f.dmgs().reduce((s, t) => s + t.dmg, 0), y = f0.dmgs().reduce((s, t) => s + t.dmg, 0);

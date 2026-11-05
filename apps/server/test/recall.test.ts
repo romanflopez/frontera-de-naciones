@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { MAPS, RECALL, TRAINING, VHAR, VILLA, buildMap, getMapDef } from '@fdn/world';
+import { relevel, MAPS, RECALL, TRAINING, VHAR, VILLA, buildMap, getMapDef } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
@@ -215,7 +215,7 @@ test('el Portal de Frontera lleva a la entrada de un mapa de Flare; las zonas no
     // zona bloqueada (nivel 1): no viaja
     pkt(villa, sid, 'waypointRequest', { id: 'la_brecha' });
     assert.equal(reg.pendingOf(sid), undefined); assert.match(last(J.log, 'sendMessage').message, /Portal bloqueado/);
-    J.p.prog.lvl = 16;
+    J.p.prog.lvl = relevel(16);
     pkt(villa, sid, 'waypointRequest', { id: 'la_brecha' });
     assert.equal(reg.pendingOf(sid)?.map, 'la_brecha');
     reg.completeTransfer(sid, 'la_brecha', reg.hashOf('la_brecha'));

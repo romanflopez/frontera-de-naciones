@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import {
+import { relevel,
     DAILY_LIMIT, DAILY_QUESTS, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, MAPS, REPEAT_MATS, applyQuestEvent, buildMap, cleanQuestBook, dailyEligible, mobDef, msToReset,
     newQuestBook, questDay, expToLevel, DUNGEON_KEY, KEY_MAT_NAMES, rewardUniques, roleOf, rollDailies, TRAIT_MUTANT, type MobType,
 } from '@fdn/world';
@@ -58,10 +58,10 @@ test('encargos del día fijos: todos los de tu nivel, sin sorteo; reinicio a las
     assert.equal(questDay(t + 60_000), questDay(t) + 1, 'a las 09:00 UTC cambia el día');
     assert.equal(msToReset(t), 60_000);
     b.d.prog.pits = 7;
-    assert.equal(rollDailies(b, 8, t), true, 'subió a 8 en el día: se suman D1, D2 y PvP');
+    assert.equal(rollDailies(b, relevel(8), t), true, 'subió al nivel de D2 en el día: se suman D1, D2 y PvP');
     assert.ok(b.d.ids.includes('dia_d2') && b.d.ids.includes('frontera')); assert.equal(b.d.prog.pits, 7, 'no pierde lo hecho');
     b.d.done.push('pits'); b.d.pvp.push('x');
-    assert.equal(rollDailies(b, 8, t + 2 * H), true); assert.deepEqual(b.d.done, []); assert.deepEqual(b.d.pvp, []); assert.ok(Object.values(b.d.prog).every((v) => v === 0));
+    assert.equal(rollDailies(b, relevel(8), t + 2 * H), true); assert.deepEqual(b.d.done, []); assert.deepEqual(b.d.pvp, []); assert.ok(Object.values(b.d.prog).every((v) => v === 0));
 });
 
 test('objetivos: el mapa cuenta; los de "tener" (colmillos, ítem en +1) se leen de lo que tenés', () => {
@@ -190,10 +190,10 @@ test('encargos del día en el server: se cobran solos sin NPC, el primero da ese
 
 test('pits del encargo: solo cuentan los de tu banda o más alta', () => {
     const { st, kill } = setup();
-    st.lvl = 12; const b = st.qb!; b.d = { day: questDay(Date.now()), ids: ['pits'], prog: { pits: 0 }, done: [], ess: false, pvp: [] }; // nivel 12 = T3
-    kill('goblin', { def: { ...mobDef('goblin'), lvl: 5 } }); assert.equal(b.d.prog.pits, 0, 'T1 para alguien T3 no cuenta');
-    kill('goblin', { def: { ...mobDef('goblin'), lvl: 13 } }); assert.equal(b.d.prog.pits, 1);
-    kill('goblin', { def: { ...mobDef('goblin'), lvl: 13 }, origin: 'loose' }); assert.equal(b.d.prog.pits, 1, 'los sueltos no son de pit');
+    st.lvl = relevel(12); const b = st.qb!; b.d = { day: questDay(Date.now()), ids: ['pits'], prog: { pits: 0 }, done: [], ess: false, pvp: [] }; // nivel 12 = T3
+    kill('goblin', { def: { ...mobDef('goblin'), lvl: relevel(5) } }); assert.equal(b.d.prog.pits, 0, 'una banda baja para alguien de una alta no cuenta');
+    kill('goblin', { def: { ...mobDef('goblin'), lvl: relevel(13) } }); assert.equal(b.d.prog.pits, 1);
+    kill('goblin', { def: { ...mobDef('goblin'), lvl: relevel(13) }, origin: 'loose' }); assert.equal(b.d.prog.pits, 1, 'los sueltos no son de pit');
 });
 
 test('repetible: 10 materiales iguales por oro o piedra; los de las llaves no se aceptan', () => {

@@ -5,7 +5,7 @@
  */
 import { KEY_RECIPES } from '@fdn/world';
 import { hasBuff, type BuffId, type CharacterStatus } from './statusSystem.ts';
-import { isClass, type ClassId, BASE_BY_NAME, UNIQUE_BY_NAME, activeSets, fitsSlot, CLASS_HP, CLASS_MP, CRIT_BASE, CRIT_MULT, MAX_LEVEL, PVE_MP_REGEN, MEDITATE, aspdTotal, critTotal, itemDfTotal, itemRmTotal, leechTotal, meleeIntervalSecs, statBonus, upMult, type Stats } from '@fdn/world';
+import { isClass, type ClassId, BASE_BY_NAME, UNIQUE_BY_NAME, activeSets, fitsSlot, classBaseHp, classBaseMp, powerLevel, CRIT_BASE, CRIT_MULT, MAX_LEVEL, PVE_MP_REGEN, MEDITATE, aspdTotal, critTotal, itemDfTotal, itemRmTotal, leechTotal, meleeIntervalSecs, statBonus, upMult, type Stats } from '@fdn/world';
 export type Stat = 'mag' | 'wdmg' | 'melee';
 export interface PvpSpell {
     dmg?: [number, number]; lvlK?: number; stat?: Stat;
@@ -173,7 +173,7 @@ export const POISON_HEAL_TAKEN = 0.7;
 /** Amenaza que genera curar: fracción de lo curado, sobre los monstruos que están peleando con el curado. */
 export const HEAL_THREAT = 0.5;
 /** Poder de curación: el Daño base mágico sin la tirada (nivel × 2 + Magia), con el multiplicador de Magia. */
-export const healPower = (s: CombatStats): number => Math.round((s.lvl * BASE_LVL_K + s.mag) * s.magicMult);
+export const healPower = (s: CombatStats): number => Math.round((s.plvl * BASE_LVL_K + s.mag) * s.magicMult);
 /** Cura de una habilidad: `frac` de la vida máxima del objetivo más `frac` del poder de curación del que la lanza. */
 export const healAmount = (frac: number, caster: CombatStats, targetMaxHp: number): number => Math.max(1, Math.round(targetMaxHp * frac + healPower(caster) * frac));
 /** Golpes de área contra mobs (paso 1.4): máximo de objetivos por lanzamiento (los más cercanos al centro) y caída de daño por cada objetivo extra. */
@@ -206,9 +206,9 @@ export const combatMpRegen = (maxMp: number): number => Math.max(PVE_MP_REGEN.mi
 export { PVE_MP_REGEN, MEDITATE };
 export const potionMp = (maxMp: number, pvp = false) => Math.max(pvp ? 20 : 40, Math.round(maxMp * 0.5 * (pvp ? POTION_PVP_MULT : 1)));
 
-export interface CombatStats { lvl: number; cls: string; /** multiplicadores de daño por Fuerza (físico) y Magia (hechizos) */ meleeMult: number; magicMult: number; /** % de crítico en hechizos de daño (Inteligencia) */ critMag?: number; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; /** crítico total %, velocidad de ataque %, robo de vida % y chance de veneno % (ya con topes) */ crit: number; aspd: number; leech: number; poison: number; savedHp: number; maxMp: number; savedMp: number; /** K8: Daño base extra (Bendición de poder) */ dmgBonus: number; /** efectos especiales de los ítems Dorado de jefe puestos (docs/ITEMS.md): quemadura, aturdir, vampirismo */ fx?: string[] }
+export interface CombatStats { lvl: number; /** nivel de poder (escala vieja 1-40): el daño y las curas por nivel se miden con este */ plvl: number; cls: string; /** multiplicadores de daño por Fuerza (físico) y Magia (hechizos) */ meleeMult: number; magicMult: number; /** % de crítico en hechizos de daño (Inteligencia) */ critMag?: number; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; /** crítico total %, velocidad de ataque %, robo de vida % y chance de veneno % (ya con topes) */ crit: number; aspd: number; leech: number; poison: number; savedHp: number; maxMp: number; savedMp: number; /** K8: Daño base extra (Bendición de poder) */ dmgBonus: number; /** efectos especiales de los ítems Dorado de jefe puestos (docs/ITEMS.md): quemadura, aturdir, vampirismo */ fx?: string[] }
 
-export const DEFAULT_STATS: CombatStats = { lvl: 1, cls: 'guerrero', meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 140, maxMp: 40, savedMp: 40, dmgBonus: 0 };
+export const DEFAULT_STATS: CombatStats = { lvl: 1, plvl: 1, cls: 'guerrero', meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 140, maxMp: 40, savedMp: 40, dmgBonus: 0 };
 
 /** Las bases de items son las compartidas de @fdn/world (el cliente usa las mismas). */
 const MELEE: Record<string, [number, number]> = { guerrero: [5, 9], mago: [2, 4], healer: [3, 6] };
@@ -220,7 +220,7 @@ export interface StatSource { lvl: number; cls: string; stats?: Stats; hp?: numb
 export function statsFromChar(o: StatSource | undefined, uncapCrit = false): CombatStats {
     if (!o) return { ...DEFAULT_STATS };
     const cls = isClass(o.cls) ? o.cls : 'guerrero', lvl = Math.max(1, Math.min(MAX_LEVEL, Number(o.lvl) || 1));
-    const s: CombatStats = { lvl, cls, meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 0, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 1, maxMp: 0, savedMp: 0, dmgBonus: 0 };
+    const s: CombatStats = { lvl, plvl: Math.round(powerLevel(lvl)), cls, meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 0, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 1, maxMp: 0, savedMp: 0, dmgBonus: 0 };
     let bonusHp = 0, bonusMp = 0, itemDmg = 0, itemCrit = 0, itemAspd = 0, itemLeech = 0, itemDf = 0, itemRm = 0;
     const names: string[] = [], fx = new Set<string>();
     const addAttr = (a: { id: string; v: number }): void => { if (a.id === 'mag') s.mag += a.v; else if (a.id === 'hp') bonusHp += a.v; else if (a.id === 'mp') bonusMp += a.v; else if (a.id === 'df') itemDf += a.v; else if (a.id === 'rm' || a.id === 'fres' || a.id === 'ires') itemRm += a.v; /* fres/ires: atributos viejos, ahora valen RM 1:1 */ else if (a.id === 'rpar') s.rpar += a.v; else if (a.id === 'crit') itemCrit += a.v; else if (a.id === 'aspd') itemAspd += a.v; else if (a.id === 'leech') itemLeech += a.v; else if (a.id === 'poison') s.poison += a.v; else if (a.id === 'dmg') itemDmg += a.v; };
@@ -237,12 +237,10 @@ export function statsFromChar(o: StatSource | undefined, uncapCrit = false): Com
     if (fx.size) s.fx = [...fx];
     s.def += itemDfTotal(itemDf); s.rm += itemRmTotal(itemRm); // la DF/RM de ATRIBUTOS se topea; la base de las armaduras no
     s.crit = uncapCrit ? Math.min(100, CRIT_BASE + itemCrit) : critTotal(itemCrit); s.aspd = aspdTotal(itemAspd); s.leech = leechTotal(itemLeech); s.poison = Math.min(100, s.poison); // topes del paso 1.3
-    const [hp0, hpL] = CLASS_HP[cls];
-    const sb = statBonus(o.stats, hp0 + (lvl - 1) * hpL); // puntos de Fuerza, Vitalidad, Destreza y Magia (Vitalidad en % de la vida base)
+    const baseHp = classBaseHp(cls, lvl), sb = statBonus(o.stats, baseHp); // puntos de Fuerza, Vitalidad, Destreza y Magia (Vitalidad en % de la vida base)
     bonusHp += sb.hp; bonusMp += sb.mp; s.def += sb.def; s.meleeMult = sb.meleeMult; s.magicMult = sb.magicMult; s.critMag = sb.critMag;
-    s.maxHp = hp0 + (lvl - 1) * hpL + bonusHp;
-    const [mp0, mpL] = CLASS_MP[cls];
-    s.maxMp = mp0 + (lvl - 1) * mpL + bonusMp;
+    s.maxHp = baseHp + bonusHp;
+    s.maxMp = classBaseMp(cls, lvl) + bonusMp;
     s.savedMp = Math.max(0, Math.min(s.maxMp, Math.round(Number(o.mp) || 0)));
     s.savedHp = Math.max(1, Math.min(s.maxHp, Math.round(Number(o.hp) || s.maxHp)));
     return s;
@@ -342,9 +340,9 @@ export const BASE_LVL_K = 2;
 export function rollSpellDamage(id: string, s: CombatStats, fury: boolean): number {
     const sp = PVP_SPELLS[id] ?? SKILLS[id]; if (!sp || !sp.dmg) return 0;
     const bonus = s.dmgBonus ?? 0; // Bendición de poder
-    let d = id === 'ataque' ? rint(...(MELEE[s.cls] ?? MELEE.guerrero)) + s.lvl + rint(s.wdmg[0], s.wdmg[1]) + bonus
-        : sp.k !== undefined ? (rint(sp.dmg[0], sp.dmg[1]) + s.lvl * BASE_LVL_K + (sp.stat === 'mag' ? s.mag : rint(s.wdmg[0], s.wdmg[1])) + bonus) * sp.k // múltiplo del Daño base (Valdrys)
-        : rint(sp.dmg[0], sp.dmg[1]) + s.lvl * (sp.lvlK ?? 0) + (sp.stat === 'mag' ? s.mag : sp.stat === 'wdmg' ? rint(s.wdmg[0], s.wdmg[1]) : 0) + bonus;
+    let d = id === 'ataque' ? rint(...(MELEE[s.cls] ?? MELEE.guerrero)) + s.plvl + rint(s.wdmg[0], s.wdmg[1]) + bonus
+        : sp.k !== undefined ? (rint(sp.dmg[0], sp.dmg[1]) + s.plvl * BASE_LVL_K + (sp.stat === 'mag' ? s.mag : rint(s.wdmg[0], s.wdmg[1])) + bonus) * sp.k // múltiplo del Daño base (Valdrys)
+        : rint(sp.dmg[0], sp.dmg[1]) + s.plvl * (sp.lvlK ?? 0) + (sp.stat === 'mag' ? s.mag : sp.stat === 'wdmg' ? rint(s.wdmg[0], s.wdmg[1]) : 0) + bonus;
     d = Math.round(d * (id === 'ataque' || sp.stat === 'wdmg' || sp.stat === 'melee' || sp.melee ? s.meleeMult : sp.stat === 'mag' ? s.magicMult : 1)); // Fuerza / Magia
     if (fury) d = Math.round(d * (FURY_MULT[s.cls] ?? 1.15));
     if (sp.stat === 'mag' && (s.critMag ?? 0) > 0 && Math.random() * 100 < s.critMag!) d = Math.round(d * CRIT_MULT); // Inteligencia: crítico en hechizos de daño

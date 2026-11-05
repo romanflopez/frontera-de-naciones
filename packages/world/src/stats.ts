@@ -5,6 +5,7 @@
  * Cada stat arranca en 10 y no tiene efecto por debajo de eso: los bonus son por punto sobre 10, así un personaje sin repartir juega igual que antes.
  * Cliente y server usan estas mismas funciones (el server decide; el cliente solo muestra y refleja los números).
  */
+import { powerLevel } from './tiers';
 export const STAT_IDS = ['str', 'vit', 'dex', 'int', 'mag'] as const;
 export type StatId = (typeof STAT_IDS)[number];
 export type Stats = Record<StatId, number>;
@@ -28,10 +29,13 @@ export const statPointsTotal = (lvl: number): number => STAT_START_FREE + STAT_P
 export const statPointsSpent = (s: Stats): number => STAT_IDS.reduce((n, id) => n + (s[id] - STAT_BASE), 0);
 export const statPointsFree = (lvl: number, s: Stats): number => statPointsTotal(lvl) - statPointsSpent(s);
 
-/** Vida y maná por clase: [base, por nivel]. Compartidos: el server decide y el cliente muestra los mismos números. */
+/** Vida y maná por clase: [base, por nivel de poder]. Compartidos: el server decide y el cliente muestra los mismos números. */
+
 export const CLASS_HP: Record<string, [number, number]> = { guerrero: [593, 76], mago: [381, 42], healer: [470, 54] };
 export const CLASS_MP: Record<string, [number, number]> = { guerrero: [40, 4], mago: [200, 12], healer: [110, 13] }; // etapa 6b: el maná base del mago pasó de 90 a 200 (con los costos de Valdrys meditaba 30-40 % del tiempo entre el nivel 3 y el 10; docs/COMBATE.md)
-export const classBaseHp = (cls: string, lvl: number): number => { const [a, b] = CLASS_HP[cls] ?? CLASS_HP.guerrero; return a + (Math.max(1, Math.floor(lvl) || 1) - 1) * b; };
+/** Vida y maná base de la clase al nivel `lvl` (1-120): crecen con el nivel de PODER (escala vieja 1-40), no con el nivel crudo. */
+export const classBaseHp = (cls: string, lvl: number): number => { const [a, b] = CLASS_HP[cls] ?? CLASS_HP.guerrero; return Math.round(a + (powerLevel(Math.max(1, lvl || 1)) - 1) * b); };
+export const classBaseMp = (cls: string, lvl: number): number => { const [a, b] = CLASS_MP[cls] ?? CLASS_MP.guerrero; return Math.round(a + (powerLevel(Math.max(1, lvl || 1)) - 1) * b); };
 
 /** Lo que dan los stats: se suma a lo de la clase, el nivel y el equipo. */
 export interface StatBonus { hp: number; mp: number; def: number; meleeMult: number; magicMult: number; /** % de crítico en hechizos de daño (Inteligencia) */ critMag: number }

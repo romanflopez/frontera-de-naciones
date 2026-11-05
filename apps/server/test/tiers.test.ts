@@ -8,7 +8,7 @@ test('tiers: 12 tiers de 10 niveles cubren 1 a 120 sin huecos ni solapes', () =>
     for (const t of TIER_LIST) { const [a, b] = TIERS[t]; assert.equal(a, next, `T${t} arranca en ${a}`); assert.ok(b >= a); next = b + 1; }
     assert.equal(next, 121); assert.equal(TIER_LIST.length, 12); for (const t of TIER_LIST) assert.equal(TIERS[t][1] - TIERS[t][0], 9);
     for (let l = 1; l <= 120; l++) { const t = tierOfLvl(l); assert.ok(l >= TIERS[t][0] && l <= TIERS[t][1]); }
-    assert.equal(itemBandOfLevel(1), 1); assert.equal(itemBandOfLevel(10), 2); assert.equal(itemBandOfLevel(30), 6); assert.equal(itemBandOfLevel(40), 7); assert.equal(itemBandOfLevel(120), 7);
+    assert.equal(itemBandOfLevel(1), 1); assert.equal(itemBandOfLevel(17), 1); assert.equal(itemBandOfLevel(18), 2); assert.equal(itemBandOfLevel(100), 6); assert.equal(itemBandOfLevel(103), 7); assert.equal(itemBandOfLevel(120), 7);
     assert.deepEqual([pitLevel([6, 8], 0), pitLevel([6, 8], 1), pitLevel([6, 8], 2), pitLevel([6, 8])], [6, 7, 8, 6]);
 });
 

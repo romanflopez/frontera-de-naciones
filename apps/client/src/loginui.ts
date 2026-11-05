@@ -5,6 +5,7 @@
  */
 import './login.css';
 import './ui/login-craftpix.css';
+import { classBaseHp, classBaseMp } from '@fdn/world';
 import { mountDoll } from './paperdoll.ts';
 
 export interface ClassInfo { id: string; name: string; desc: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; armor?: string; spells: string[] }
@@ -159,7 +160,7 @@ export function initLoginUI(ctx: FlowCtx) {
         if (!sv) { $('selArt').innerHTML = ''; $('selDetail').innerHTML = ''; setBusy(false); return; }
         const c = clsOf(sv.cls), f = facOf(sv.faction), col = clsCol(c.id);
         root.dataset.cls = c.id; root.style.setProperty('--ac', col); root.style.setProperty('--fc', f.col);
-        const hpMax = c.hp + (sv.lvl - 1) * c.hpL, mpMax = c.mp + (sv.lvl - 1) * c.mpL;
+        const hpMax = classBaseHp(c.id, sv.lvl), mpMax = classBaseMp(c.id, sv.lvl);
         $('selArt').innerHTML = dollCv(c.id, 0.66); mountDolls($('selArt'));
         $('selDetail').innerHTML = `<h3>${esc(sv.name)}</h3><p class="dsub"><b style="color:${col}">${c.name}</b> · <b style="color:${f.col}">${f.name}</b></p><ul class="attrs">${bar('Vida', hpMax, top((x) => x.hp + (sv.lvl - 1) * x.hpL))}${bar('Maná', mpMax, top((x) => x.mp + (sv.lvl - 1) * x.mpL))}</ul><dl><dt>Nivel</dt><dd>${sv.lvl}</dd><dt>Zona</dt><dd>${esc(sv.zone || ciudadInicial(f.id))}</dd></dl>`;
         setBusy(false);

@@ -79,7 +79,7 @@ function newItem(st: Econ, base: string, r: number, a: SItem['a']): SItem { retu
  * la curva de nivel: 202, 473, 801, 1153, 1531, 1933 y 4574). En mazmorra se apunta a ~2 únicos por corrida (chance = 2 / mobs de
  * la mazmorra: 25, 40, 49, 49, 55, 55 y 58); los sueltos van a un tercio del pit. Mutantes y élites multiplican encima.
  */
-export const UNIQUE_PIT_CHANCE = [0.04, 0.021, 0.015, 0.012, 0.009, 0.007, 0.004];
+export const UNIQUE_PIT_CHANCE = [0.018, 0.0079, 0.0054, 0.0036, 0.0026, 0.0022, 0.0016];
 export const UNIQUE_DUNGEON_CHANCE = [0.08, 0.05, 0.041, 0.041, 0.036, 0.036, 0.034];
 export const uniqueChance = (tier: number, origin: 'loose' | 'pit' | 'dungeon' | 'world'): number => {
     const i = Math.min(7, Math.max(1, Math.round(tier))) - 1;

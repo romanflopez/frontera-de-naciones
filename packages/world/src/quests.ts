@@ -13,6 +13,7 @@
  * Esta lógica es pura (sin red ni azar): el server la usa para avanzar el progreso y el cliente para mostrarlo.
  */
 import type { MobType } from './mobs';
+import { powerLevel } from './tiers';
 import { BOSS_UNIQUES, UNIQUES_BY_TIER, type UniqueBase } from './uniques';
 
 // ---------- materiales nuevos (los sueltan los mobs; la receta de las llaves va en el paso de llaves) ----------
@@ -148,175 +149,175 @@ export const MAIN_QUESTS: MainQuest[] = [
         reward: { expPct: 20, gold: 120, forge: 3, unique: 'class_t1_random' },
     },
     {
-        id: 'bosque_de_piedra', name: 'El Bosque de Piedra', minLvl: 2,
+        id: 'bosque_de_piedra', name: 'El Bosque de Piedra', minLvl: 4,
         say: 'Al lado de los Campos está el Bosque de Piedra. Los hobgoblins cavaron una madriguera y salen de noche. Matá a 6.',
         done: 'El bosque respira un poco más tranquilo.',
         goals: [kill('bosque_de_piedra', ['hobgoblin'], 6, 'Hobgoblins en el Bosque de Piedra')],
         reward: { expPct: 20, gold: 80 },
     },
     {
-        id: 'el_herrero', name: 'El herrero', minLvl: 2,
+        id: 'el_herrero', name: 'El herrero', minLvl: 4,
         say: 'Un ítem único vale más mejorado. Andá a la herrería y pedile al herrero que suba tu pieza a +1. A veces falla: así es la forja.',
         done: 'Ya sabés limar. Las piedras caen de los mobs: cuanto más difícil el lugar, más seguido.',
         goals: [{ k: 'upgraded', n: 1, what: 'Tener un ítem en +1' }],
         reward: { expPct: 20, gold: 80 },
     },
     {
-        id: 'colmillos', name: 'Colmillos', minLvl: 2,
+        id: 'colmillos', name: 'Colmillos', minLvl: 4,
         say: 'La Cueva goblin no se abre con palabras. Los bichos de los pits de nivel 1 a 5 a veces sueltan colmillos: juntá 8, con eso y 60 de oro armás la llave (clic derecho sobre los colmillos en la bolsa).',
         done: 'Ocho colmillos. Armá la llave de la cueva desde la bolsa: cada uno de tu grupo necesita la suya.',
         goals: [{ k: 'collect', mat: MAT_COLMILLO, n: 8, what: 'Colmillos' }],
         reward: { expPct: 25, gold: 60 },
     },
     {
-        id: 'canon_goblin', name: 'El Cañón goblin', minLvl: 3,
+        id: 'canon_goblin', name: 'El Cañón goblin', minLvl: 8,
         say: 'Del bosque sale el camino al Cañón goblin, donde está la entrada a la cueva. Ojo: ahí la otra nación también caza y te puede atacar. Bajá a 6 de sus arqueros.',
         done: 'Ya conocés el cañón. La entrada a la cueva está ahí mismo.',
         goals: [kill('canon_goblin', ['hobgoblin_archer'], 6, 'Arqueros hobgoblin en el Cañón goblin')],
         reward: { expPct: 25, gold: 120 },
     },
     {
-        id: 'cueva_goblin', name: 'La cueva goblin', minLvl: 4,
+        id: 'cueva_goblin', name: 'La cueva goblin', minLvl: 11,
         say: 'El Jefe goblin se esconde al fondo de las minas, debajo de la cueva. Bajá solo o con un compañero y no te quedes quieto cuando golpee el piso.',
         done: 'Volviste entero. Elegí una pieza de la armería, te la ganaste. Y guardá la llave gastada que soltó el jefe: con una esencia y 120 de oro abre el Nido.',
         goals: [{ k: 'dungeon', d: 'd1', n: 1, what: 'Completar la Cueva goblin' }],
         reward: { expPct: 40, gold: 200, unique: 'class_t1_choice' },
     },
     {
-        id: 'pantano', name: 'El Pantano de Merrimead', minLvl: 6,
+        id: 'pantano', name: 'El Pantano de Merrimead', minLvl: 17,
         say: 'Saliendo del cañón está el Pantano de Merrimead. En el pozo oscuro los muertos no se quedan quietos: matá a 8 zombis oscuros.',
         done: 'Olés a ciénaga, pero volviste.',
         goals: [kill('pantano_de_merrimead', ['zombie_dark'], 8, 'Zombis oscuros en el Pantano')],
         reward: { expPct: 25, gold: 160 },
     },
     {
-        id: 'altas_de_nazia', name: 'Las Altas de Nazia', minLvl: 8,
+        id: 'altas_de_nazia', name: 'Las Altas de Nazia', minLvl: 23,
         say: 'Del pantano se sube a las Altas de Nazia. Los hormigueros ardientes queman a los viajeros: acabá con 6 hormigas de fuego.',
         done: 'Esas hormigas vienen de algún lado: hay un nido entero, y abajo manda una reina.',
         goals: [kill('altas_de_nazia', ['fire_ant'], 6, 'Hormigas de fuego en las Altas de Nazia')],
         reward: { expPct: 25, gold: 200 },
     },
     {
-        id: 'llave_gastada', name: 'La llave gastada', minLvl: 8,
+        id: 'llave_gastada', name: 'La llave gastada', minLvl: 23,
         say: 'La Reina hormiga león manda en las ruinas debajo del nido. Para entrar, cada uno arma su llave del nido (la llave gastada, una esencia y 120 de oro). Sola no se va a dejar matar: juntá un grupo, y cuando empiece a llover ácido, cortala.',
         done: 'La Reina cayó. Elegí uno de sus trofeos: pocos lo pueden contar.',
         goals: [{ k: 'dungeon', d: 'd2', n: 1, what: 'Completar el Nido de hormiga león' }],
         reward: { expPct: 50, gold: 400, unique: 'boss_d2_choice' },
     },
     {
-        id: 'lochport', name: 'El Cementerio de Lochport', minLvl: 11,
+        id: 'lochport', name: 'El Cementerio de Lochport', minLvl: 37,
         say: 'Con la Reina muerta, el camino sigue hacia el Cementerio de Lochport. Los hechiceros del camposanto levantan a los muertos: matá a 8.',
         done: 'Uno menos que levanta muertos. Quedan muchos.',
         goals: [kill('cementerio_de_lochport', ['skeleton_mage'], 8, 'Hechiceros esqueleto en Lochport')],
         reward: { expPct: 25, gold: 240 },
     },
     {
-        id: 'risco_del_sur', name: 'El Risco del Sur', minLvl: 13,
+        id: 'risco_del_sur', name: 'El Risco del Sur', minLvl: 45,
         say: 'Al sur del cementerio está el Risco. Las hormigas león bajan del risco y cortan el camino: matá a 8.',
         done: 'El camino quedó abierto. Debajo de Lochport hay algo que no duerme.',
         goals: [kill('risco_del_sur', ['antlion'], 8, 'Hormigas león en el Risco del Sur')],
         reward: { expPct: 25, gold: 280 },
     },
     {
-        id: 'cripta', name: 'La Cripta olvidada', minLvl: 14,
+        id: 'cripta', name: 'La Cripta olvidada', minLvl: 48,
         say: 'Debajo de Lochport hay una cripta que no se quedó dormida. En el sepulcro del fondo vela un caballero que no sabe que está muerto. Para entrar, cada uno arma su llave de la cripta olvidada: 8 huesos antiguos (caen en los pits de nivel 11 a 15, como los del cementerio) y 200 de oro. Bajá con gente.',
         done: 'El caballero descansa. Elegí una de sus piezas.',
         goals: [{ k: 'dungeon', d: 'd3', n: 1, what: 'Completar la Cripta olvidada' }],
         reward: { expPct: 40, gold: 500, unique: 'boss_d3_choice' },
     },
     {
-        id: 'la_brecha', name: 'La Brecha', minLvl: 16,
+        id: 'la_brecha', name: 'La Brecha', minLvl: 55,
         say: 'La Brecha es el cruce de todo: de ahí salen el paso de Stormrock, la torre y el templo. Los mineros caídos cuidan la bajada: matá a 8.',
         done: 'Ya conocés la Brecha. Desde acá todo es más duro.',
         goals: [kill('la_brecha', ['zombie_dark'], 8, 'Mineros caídos en La Brecha')],
         reward: { expPct: 25, gold: 400 },
     },
     {
-        id: 'paso_de_stormrock', name: 'El Paso de Stormrock', minLvl: 18,
+        id: 'paso_de_stormrock', name: 'El Paso de Stormrock', minLvl: 61,
         say: 'El paso de Stormrock lleva a las Cenizas. Los wyverns de los riscos cazan a los que cruzan: derribá a 6.',
         done: 'El paso está abierto. Más allá, el mundo se quema.',
         goals: [kill('paso_de_stormrock', ['wyvern'], 6, 'Wyverns en el Paso de Stormrock')],
         reward: { expPct: 25, gold: 450, forge: 3 },
     },
     {
-        id: 'torre', name: 'La Torre del hechicero', minLvl: 19,
+        id: 'torre', name: 'La Torre del hechicero', minLvl: 63,
         say: 'En la torre de la Brecha, un mago mayor sigue con sus experimentos en las cámaras de abajo. Cortalo antes de que termine el hechizo. La puerta pide la llave de la torre: 8 tintas arcanas (pits de nivel 16 a 20, como los de la Brecha) y 300 de oro.',
         done: 'Las cámaras quedaron en silencio.',
         goals: [{ k: 'dungeon', d: 'd4', n: 1, what: 'Completar la Torre del hechicero' }],
         reward: { expPct: 40, gold: 700, forge: 5, unique: 'boss_d4_choice' },
     },
     {
-        id: 'cenizas_i', name: 'Las Cenizas', minLvl: 21,
+        id: 'cenizas_i', name: 'Las Cenizas', minLvl: 69,
         say: 'Del paso se baja a las Cenizas. Los hechiceros de ceniza levantan a los calcinados: matá a 8.',
         done: 'Ceniza en la boca y en la armadura, pero volviste.',
         goals: [kill('cenizas_i', ['skeleton_mage'], 8, 'Hechiceros de ceniza en Cenizas I')],
         reward: { expPct: 25, gold: 550 },
     },
     {
-        id: 'cenizas_ii', name: 'Las catacumbas de ceniza', minLvl: 23,
+        id: 'cenizas_ii', name: 'Las catacumbas de ceniza', minLvl: 74,
         say: 'Más adentro, en Cenizas II, los arqueros de las catacumbas no dejan pasar a nadie: bajá a 8.',
         done: 'La entrada al templo de Mez queda cerca de acá.',
         goals: [kill('cenizas_ii', ['skeleton_archer'], 8, 'Arqueros de las catacumbas en Cenizas II')],
         reward: { expPct: 25, gold: 600, forge: 3 },
     },
     {
-        id: 'templo_de_mez', name: 'El Templo de Mez', minLvl: 24,
+        id: 'templo_de_mez', name: 'El Templo de Mez', minLvl: 77,
         say: 'En el salón principal de Mez reina el Wyvern del aire. Llevá un grupo que sepa moverse, y cada uno su llave del templo: 8 plumas de tormenta (pits de nivel 21 a 25, como los de las Cenizas II) y 450 de oro.',
         done: 'El trono del aire quedó vacío.',
         goals: [{ k: 'dungeon', d: 'd5', n: 1, what: 'Completar el Templo de Mez' }],
         reward: { expPct: 40, gold: 900, forge: 5, unique: 'boss_d5_choice' },
     },
     {
-        id: 'cenizas_iii', name: 'Los hornos de wyvern', minLvl: 26,
+        id: 'cenizas_iii', name: 'Los hornos de wyvern', minLvl: 88,
         say: 'Cenizas III es el borde del mundo conocido. Los wyverns de fuego anidan en los hornos: matá a 10.',
         done: 'Ya viste la entrada a la Fortaleza infernal. Lo que queda es el Foso.',
         goals: [kill('cenizas_iii', ['wyvern_fire'], 10, 'Wyverns de fuego en Cenizas III')],
         reward: { expPct: 25, gold: 750, forge: 3 },
     },
     {
-        id: 'granja', name: 'La granja muerta', minLvl: 28,
+        id: 'granja', name: 'La granja muerta', minLvl: 96,
         say: 'Saliendo de las Cenizas hay una granja que nadie trabaja hace años, pero los corrales no están vacíos. Bajá a 10 zombis oscuros en la Granja de Roble Negro.',
         done: 'Del otro lado de la granja empieza el desierto.',
         goals: [kill('granja_roble_negro', ['zombie_dark'], 10, 'Zombis oscuros en la Granja de Roble Negro')],
         reward: { expPct: 25, gold: 900, forge: 3 },
     },
     {
-        id: 'foso', name: 'El Señor del Foso', minLvl: 29,
+        id: 'foso', name: 'El Señor del Foso', minLvl: 98,
         say: 'Debajo de la fortaleza infernal está el Foso, y en el foso, su señor. Es lo más hondo que se conoce. Si volvés, sos leyenda. La fortaleza se abre con su llave: 8 brasas infernales (pits de nivel 26 a 30, como los de las Cenizas III) y 650 de oro.',
         done: 'El Señor del Foso cayó. Pero hay algo más allá de las cenizas.',
         goals: [{ k: 'dungeon', d: 'd6', n: 1, what: 'Completar el Foso del demonio' }],
         reward: { expPct: 50, gold: 1500, forge: 10, unique: 'boss_d6_choice' },
     },
     {
-        id: 'oasis', name: 'El oasis de ceniza', minLvl: 31,
+        id: 'oasis', name: 'El oasis de ceniza', minLvl: 102,
         say: 'Más allá del Foso empieza una tierra que no está en los mapas. En el Oasis de Ceniza anidan wyverns de fuego: matá a 10.',
         done: 'El agua del oasis sabe a ceniza, pero sirve.',
         goals: [kill('oasis_de_ceniza', ['wyvern_fire'], 10, 'Wyverns de fuego en el Oasis de Ceniza')],
         reward: { expPct: 25, gold: 1000, forge: 3 },
     },
     {
-        id: 'kuuma', name: 'El lago helado', minLvl: 33,
+        id: 'kuuma', name: 'El lago helado', minLvl: 106,
         say: 'Al norte del oasis el agua se congela. En el Lago Kuuma las hormigas de hielo cavan bajo la nieve: bajá a 12.',
         done: 'Viste el fuerte del otro lado del lago. Todavía no: primero la gruta.',
         goals: [kill('lago_kuuma', ['ice_ant'], 12, 'Hormigas de hielo en el Lago Kuuma')],
         reward: { expPct: 25, gold: 1100, forge: 4 },
     },
     {
-        id: 'laguna', name: 'La laguna de la gruta', minLvl: 35,
+        id: 'laguna', name: 'La laguna de la gruta', minLvl: 110,
         say: 'Los hechiceros de la Laguna de la Gruta juntan eslabones malditos para algo que vive debajo del fuerte. Matá a 10.',
         done: 'Los eslabones abren la puerta del Fuerte Amir. Guardalos.',
         goals: [kill('laguna_de_la_gruta', ['skeleton_mage'], 10, 'Hechiceros en la Laguna de la Gruta')],
         reward: { expPct: 25, gold: 1200, forge: 4 },
     },
     {
-        id: 'minas', name: 'Las minas abandonadas', minLvl: 38,
+        id: 'minas', name: 'Las minas abandonadas', minLvl: 116,
         say: 'El último tramo: las Minas abandonadas. Lo que cavaron ahí no quiso quedarse abajo. Bajá a 12 zombis oscuros de las galerías.',
         done: 'Ya conocés todo lo que hay arriba. Lo que falta está debajo del fuerte.',
         goals: [kill('minas_abandonadas', ['zombie_dark'], 12, 'Zombis oscuros en las Minas abandonadas')],
         reward: { expPct: 25, gold: 1400, forge: 5 },
     },
     {
-        id: 'verdugo', name: 'El Gran Verdugo', minLvl: 38,
+        id: 'verdugo', name: 'El Gran Verdugo', minLvl: 116,
         say: 'Más allá del Lago Kuuma está el Fuerte Amir, y debajo, las Cámaras de tortura del Gran Verdugo. Nadie que bajó contó cómo es. La puerta pide la llave del fuerte: 8 eslabones malditos (pits de nivel 31 a 40) y 900 de oro. Llevá a los mejores.',
         done: 'El Gran Verdugo cayó. Completaste el camino del aventurero: sos leyenda.',
         goals: [{ k: 'dungeon', d: 'd7', n: 1, what: 'Completar las Cámaras de tortura' }],
@@ -328,21 +329,21 @@ export interface DailyQuest { id: string; name: string; minLvl: number; maxLvl?:
 export const DAILY_QUESTS: DailyQuest[] = [
     { id: 'pits', name: 'Limpieza de pits', minLvl: 1, goal: { k: 'pit', n: 25, what: 'Mobs de un pit de tu nivel' } },
     { id: 'recolector', name: 'Recolector', minLvl: 1, goal: { k: 'gather', n: 10, what: 'Materiales levantados' } },
-    { id: 'dia_d1', name: 'Bajada a la cueva', minLvl: 4, maxLvl: 10, goal: { k: 'dungeon', d: 'd1', n: 1, what: 'Completar la Cueva goblin' } },
-    { id: 'dia_d2', name: 'Contra la Reina', minLvl: 8, maxLvl: 15, goal: { k: 'dungeon', d: 'd2', n: 1, what: 'Completar el Nido de hormiga león' } },
-    { id: 'dia_d3', name: 'Bajada a la cripta', minLvl: 14, maxLvl: 20, goal: { k: 'dungeon', d: 'd3', n: 1, what: 'Completar la Cripta olvidada' } },
-    { id: 'dia_d4', name: 'Las cámaras de la torre', minLvl: 19, maxLvl: 25, goal: { k: 'dungeon', d: 'd4', n: 1, what: 'Completar la Torre del hechicero' } },
-    { id: 'dia_d5', name: 'El trono del aire', minLvl: 24, maxLvl: 30, goal: { k: 'dungeon', d: 'd5', n: 1, what: 'Completar el Templo de Mez' } },
-    { id: 'dia_d6', name: 'El Foso', minLvl: 29, maxLvl: 35, goal: { k: 'dungeon', d: 'd6', n: 1, what: 'Completar el Foso del demonio' } },
-    { id: 'dia_d7', name: 'Las cámaras del Verdugo', minLvl: 38, goal: { k: 'dungeon', d: 'd7', n: 1, what: 'Completar las Cámaras de tortura' } },
+    { id: 'dia_d1', name: 'Bajada a la cueva', minLvl: 11, maxLvl: 31, goal: { k: 'dungeon', d: 'd1', n: 1, what: 'Completar la Cueva goblin' } },
+    { id: 'dia_d2', name: 'Contra la Reina', minLvl: 23, maxLvl: 52, goal: { k: 'dungeon', d: 'd2', n: 1, what: 'Completar el Nido de hormiga león' } },
+    { id: 'dia_d3', name: 'Bajada a la cripta', minLvl: 48, maxLvl: 66, goal: { k: 'dungeon', d: 'd3', n: 1, what: 'Completar la Cripta olvidada' } },
+    { id: 'dia_d4', name: 'Las cámaras de la torre', minLvl: 63, maxLvl: 83, goal: { k: 'dungeon', d: 'd4', n: 1, what: 'Completar la Torre del hechicero' } },
+    { id: 'dia_d5', name: 'El trono del aire', minLvl: 77, maxLvl: 100, goal: { k: 'dungeon', d: 'd5', n: 1, what: 'Completar el Templo de Mez' } },
+    { id: 'dia_d6', name: 'El Foso', minLvl: 98, maxLvl: 110, goal: { k: 'dungeon', d: 'd6', n: 1, what: 'Completar el Foso del demonio' } },
+    { id: 'dia_d7', name: 'Las cámaras del Verdugo', minLvl: 116, goal: { k: 'dungeon', d: 'd7', n: 1, what: 'Completar las Cámaras de tortura' } },
     { id: 'mutante', name: 'Cazador de mutantes', minLvl: 1, goal: { k: 'mutant', n: 1, what: 'Matar un mutante' } },
-    { id: 'frontera', name: 'Defensa de la frontera', minLvl: 3, goal: { k: 'pvp', n: 1, what: 'Ganar una pelea en mapa de facción' } },
+    { id: 'frontera', name: 'Defensa de la frontera', minLvl: 8, goal: { k: 'pvp', n: 1, what: 'Ganar una pelea en mapa de facción' } },
 ];
 export const DAILY_BY_ID = new Map(DAILY_QUESTS.map((q) => [q.id, q]));
 export const DAILY_EXP_PCT = 10;
 /** Encargos cobrados por día: el resto deja de avanzar hasta el reinicio. */
 export const DAILY_LIMIT = 3;
-export const dailyGold = (lvl: number): number => 50 + 20 * lvl;
+export const dailyGold = (lvl: number): number => 50 + 20 * powerLevel(lvl);
 /** El reinicio diario: 06:00 de Buenos Aires = 09:00 UTC. Todos a la misma hora (mejor que un temporizador de 20 h por personaje). */
 export const DAILY_RESET_UTC_HOUR = 9;
 const DAY_MS = 86_400_000;
@@ -351,7 +352,7 @@ export const msToReset = (now: number): number => (questDay(now) + 1) * DAY_MS +
 
 /** Repetible: N materiales iguales por oro o por una piedra de forja. */
 export const REPEAT_MATS = 10;
-export const repeatGold = (lvl: number): number => 20 + 6 * lvl;
+export const repeatGold = (lvl: number): number => 20 + 6 * powerLevel(lvl);
 
 // ---------- estado ----------
 export interface QuestBook {

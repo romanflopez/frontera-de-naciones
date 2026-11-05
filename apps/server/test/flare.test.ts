@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ALL_BASES, BASE_BY_NAME, BOSS_UNIQUES, FLARE_DATA, FLARE_FIELD, MAPS, MOB_TYPES, UNIQUES_BY_TIER, UNIQUE_BASES, UNIQUE_TIERS_READY, buildMap, mobDef, tierOfLevel, flareTile, mapHash, type MobType } from '@fdn/world';
+import { relevel, ALL_BASES, BASE_BY_NAME, BOSS_UNIQUES, FLARE_DATA, FLARE_FIELD, MAPS, MOB_TYPES, UNIQUES_BY_TIER, UNIQUE_BASES, UNIQUE_TIERS_READY, buildMap, mobDef, tierOfLevel, flareTile, mapHash, type MobType } from '@fdn/world';
 
 /** Mapas importados de Flare (docs/MAPAS_FLARE.md): datos de tools/src/flare/maps.ts y atlas de tools/src/flare/mapatlas.ts. */
 const meta = JSON.parse(readFileSync(new URL('../../client/public/assets/meta.json', import.meta.url), 'utf8')) as Record<string, { pos?: Record<string, number[]> }>;
@@ -61,7 +61,7 @@ test('mazmorra D1: puerta con nivel mínimo, jefe, tier de mazmorra y mapas temp
     const sup = MAPS.canon_goblin, cueva = MAPS.cueva_goblin, minas = MAPS.minas_goblin;
     const door = sup.links.find((l) => l.to.map === 'cueva_goblin')!;
     assert.equal(door.kind, 'door');
-    assert.equal(door.gate?.lvl, 2);
+    assert.equal(door.gate?.lvl, relevel(2));
     for (const m of [cueva, minas]) { assert.ok(m.temporary); const w = buildMap(m.id); assert.ok(w.dungeon); assert.ok(w.zones.every((z) => z.tier === 'dungeon' || z.type === 'goblin_jefe')); }
     assert.ok(buildMap('minas_goblin').zones.some((z) => z.type === 'goblin_jefe'));
     const n = mobDef('goblin', { lvl: 3 }), g = mobDef('goblin', { lvl: 3, tier: 'dungeon' });
@@ -70,7 +70,7 @@ test('mazmorra D1: puerta con nivel mínimo, jefe, tier de mazmorra y mapas temp
 
 test('ítems únicos: catálogo coherente, tier por nivel y jefes de D1-D3 con sus ítems', () => {
     const names = ALL_BASES.map((b) => b.name); assert.equal(new Set(names).size, names.length, 'nombres repetidos');
-    assert.equal(tierOfLevel(1), 1); assert.equal(tierOfLevel(5), 1); assert.equal(tierOfLevel(6), 2); assert.equal(tierOfLevel(30), 6); assert.equal(tierOfLevel(40), 7);
+    assert.equal(tierOfLevel(1), 1); assert.equal(tierOfLevel(17), 1); assert.equal(tierOfLevel(18), 2); assert.equal(tierOfLevel(100), 6); assert.equal(tierOfLevel(120), 7);
     for (let t = 1; t <= UNIQUE_TIERS_READY; t++) assert.equal(UNIQUES_BY_TIER[t].length, 16, `banda ${t}: 16 únicos (8 slots)`);
     for (const b of ['goblin_jefe', 'antlion_reina', 'caballero_cripta'] as const) assert.ok(BOSS_UNIQUES[b]!.length >= 2, b);
     for (const u of UNIQUE_BASES) { assert.equal(u.uniq.attrs.length, 2, u.name); assert.ok(u.uniq.attrs.every(([, v]) => v >= 1), u.name); assert.ok(BASE_BY_NAME.get(u.name) === u); }
@@ -97,7 +97,7 @@ test('ítems únicos T4-T7 y jefes D4-D7: cada banda supera a la anterior y la T
         const score = (u: (typeof UNIQUE_BASES)[number]) => (u.dmg?.[1] ?? 0) + (u.def ?? 0) + (u.rm ?? 0) + (u.mag ?? 0);
         assert.ok(score(bu) > Math.min(...peers.map(score)), bu.name);
     }
-    assert.equal(tierOfLevel(35), 7); assert.ok(UNIQUES_BY_TIER[tierOfLevel(40)].length === 16);
+    assert.equal(tierOfLevel(110), 7); assert.ok(UNIQUES_BY_TIER[tierOfLevel(120)].length === 16);
 });
 
 test('uniqueItem: fijos con variación ±10 %, calidad sorteada y extras según la calidad al final de `a`', async () => {

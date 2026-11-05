@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { INTERIORS, MAPS, TEMPLE_RESPAWN, VILLA, VILLA_FLARE, VILLA_BUILDINGS, buildMap, factionHome, getMapDef, respawnTarget, roleOf, roomOf, validateMapGraph, villaDoor, type VillaBuilding } from '@fdn/world';
+import { relevel, INTERIORS, MAPS, TEMPLE_RESPAWN, VILLA, VILLA_FLARE, VILLA_BUILDINGS, buildMap, factionHome, getMapDef, respawnTarget, roleOf, roomOf, validateMapGraph, villaDoor, type VillaBuilding } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
@@ -144,7 +144,7 @@ test('el Portal de Frontera de la villa lleva a la entrada de cada mapa de Flare
     const K = join(villa, 'novata', { x: VILLA.portal.x + 1, y: VILLA.portal.y + 1 });
     villa.handleClientPacket(K.session.sessionId, { payload: { $case: 'waypointRequest', value: { id: 'cenizas_iii' } } } as never);
     assert.equal(reg.pendingOf(K.session.sessionId), undefined);
-    K.p.prog.lvl = 26;
+    K.p.prog.lvl = relevel(26);
     villa.handleClientPacket(K.session.sessionId, { payload: { $case: 'waypointRequest', value: { id: 'cenizas_iii' } } } as never);
     assert.equal(reg.pendingOf(K.session.sessionId)?.map, 'cenizas_iii');
 });

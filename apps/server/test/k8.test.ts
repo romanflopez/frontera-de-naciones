@@ -6,7 +6,7 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { canUseSkill, checkSkill, type WorldMap } from '@fdn/world';
+import { relevel, canUseSkill, checkSkill, type WorldMap } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { Economy } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
@@ -45,7 +45,7 @@ function setup(instance = '') {
     const w = reg.ensure('solmar_legacy', instance);
     const host = (priv(w).mobSim as { host: MobHost } | undefined)?.host;
     priv(w).mobSim = undefined;
-    const join = (name: string, at: { x: number; y: number }, faction: string, cls: string, lvl = 35) => {
+    const join = (name: string, at: { x: number; y: number }, faction: string, cls: string, lvl = relevel(35)) => {
         const log: ServerMessage[] = [], sid = `s-${name}`;
         const persisted = { mapId: w.mapId, worldId: w.mapId, x: at.x, y: at.y, direction: 4, gender: 0, skinColor: 0, hairStyleIndex: 0, underwearColorIndex: 0, movementSpeedMs: 100, runningMode: false, attackMode: true } as PersistedPlayer;
         w.playerConnected(sid, name, (m) => log.push(m), () => {}, persisted);

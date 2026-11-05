@@ -1,6 +1,7 @@
 /**
  * Mobs: definiciones compartidas entre cliente y server (el server los simula, el cliente los dibuja).
  */
+import { powerLevel, relevel } from './tiers';
 export type MobType = 'goblin' | 'zombie' | 'skeleton' | 'barbaro' | 'goblin_elite' | 'antlion' | 'skeleton_mage' | 'fire_ant' | 'wyvern' | 'minotaur' | 'arana' | 'golem' | 'demonio'
     // tipos nuevos (docs/MOBS_NUEVOS.md): siempre al final, el protocolo manda el índice
     | 'hobgoblin' | 'hobgoblin_archer' | 'skeleton_archer' | 'zombie_dark' | 'cursed_grave' | 'ice_ant' | 'antlion_small' | 'wyvern_fire' | 'wyvern_ice'
@@ -74,7 +75,9 @@ export const zoneRespawnSecs = (t: MobType, zone?: { respawn?: number }): number
 export const MOB_AGGRO = 4.5, MOB_ASSIST = 3.2;
 
 /** Curvas de referencia por nivel (mob común): vida, daño promedio por golpe y exp por kill. Los tipos base ya las siguen; sirven para reescalar un tipo a otro nivel. */
-export const mobHpCurve = (l: number): number => 29 + 10.5 * l + 2.75 * l * l;
+/** Curvas en la ESCALA VIEJA (nivel de poder `p`, 1-40): el balance de vida, daño y exp se diseñó ahí. Las públicas reciben el nivel nuevo (1-120). */
+const hpOld = (p: number): number => 29 + 10.5 * p + 2.75 * p * p;
+export const mobHpCurve = (l: number): number => hpOld(powerLevel(l));
 /**
  * Etapa 6b del roadmap: multiplicador del daño de los mobs según su nivel, calibrado con `sim:pve` (tools/src/sim/pve).
  * La vida de las clases se multiplicó ×4,24 para el PvP (docs/COMBATE.md) y el daño de los mobs no: hasta el 15 un común le
@@ -84,34 +87,36 @@ export const mobHpCurve = (l: number): number => 29 + 10.5 * l + 2.75 * l * l;
  * Puntos [nivel, multiplicador]; entre puntos se interpola en línea recta.
  */
 export const MOB_DMG_KNOTS: readonly (readonly [number, number])[] = [[1, 3.5], [6, 3.3], [12, 2.6], [20, 1.4], [25, 1], [30, 0.75], [40, 0.6]];
-export function mobDmgMult(l: number): number {
-    const k = MOB_DMG_KNOTS; if (l <= k[0][0]) return k[0][1];
-    for (let i = 1; i < k.length; i++) if (l <= k[i][0]) { const [a, ma] = k[i - 1], [b, mb] = k[i]; return ma + ((mb - ma) * (l - a)) / (b - a); }
+const dmgMultOld = (p: number): number => {
+    const k = MOB_DMG_KNOTS; if (p <= k[0][0]) return k[0][1];
+    for (let i = 1; i < k.length; i++) if (p <= k[i][0]) { const [a, ma] = k[i - 1], [b, mb] = k[i]; return ma + ((mb - ma) * (p - a)) / (b - a); }
     return k[k.length - 1][1];
-}
+};
+export const mobDmgMult = (l: number): number => dmgMultOld(powerLevel(l));
 /**
  * Los jefes ya tienen su daño pensado a mano (y el motor de jefes les suma mecánicas): llevan la raíz del multiplicador, así un
  * jefe de mazmorra sigue siendo ganable de a uno con el escalado para jugar solo (sim:pve) sin quedar sin peligro.
  */
 export const bossDmgMult = (l: number): number => Math.sqrt(mobDmgMult(l));
+const bossDmgMultOld = (p: number): number => Math.sqrt(dmgMultOld(p));
 /** Daño promedio por golpe de un mob común de nivel `l` (ya con `mobDmgMult`). */
-export const mobDmgCurve = (l: number): number => (2.5 * l + 3) * mobDmgMult(l);
+export const mobDmgCurve = (l: number): number => { const p = powerLevel(l); return (2.5 * p + 3) * dmgMultOld(p); };
 /** Exp por kill de un mob común de nivel `l` (curva de referencia para reescalar tipos; los MOBS base ya la siguen: ~60·l^1,5 / 11). */
-export const mobExpCurve = (l: number): number => (60 * Math.pow(l, 1.5)) / 11;
+export const mobExpCurve = (l: number): number => (60 * Math.pow(powerLevel(l), 1.5)) / 11;
 /**
  * Jefes de las mazmorras de grupo al nivel de su tier (docs/TIERS_DE_ZONA.md): cada uno queda en el nivel más alto de su mazmorra (D1 = 5,
  * D2 = 10 … D6 = 30). Los números de arriba son los de diseño a su nivel viejo; acá se llevan al nuevo con las mismas curvas que los mobs
  * comunes (vida, daño, exp, daño de la habilidad y oro), así que conservan su peso relativo (~11 veces un mob común de su nivel).
  */
-export const BOSS_LEVELS: Partial<Record<MobType, number>> = { goblin_jefe: 5, antlion_reina: 10, caballero_cripta: 15, mago_mayor: 20, wyvern_aire: 25, demonio_foso: 30, verdugo: 40, coloso: 20 };
+export const BOSS_LEVELS: Partial<Record<MobType, number>> = { goblin_jefe: relevel(5), antlion_reina: relevel(10), caballero_cripta: relevel(15), mago_mayor: relevel(20), wyvern_aire: relevel(25), demonio_foso: relevel(30), verdugo: relevel(40), coloso: relevel(20) };
 // Los números de MOBS son los de diseño (sin el multiplicador): se lo aplica a cada tipo a su propio nivel, también al golpe especial del jefe.
 for (const t of MOB_TYPES) {
-    const b = MOBS[t], k = b.boss ? bossDmgMult(b.lvl) : mobDmgMult(b.lvl), sp = b.boss?.special;
-    MOBS[t] = { ...b, dmg: [Math.max(1, Math.round(b.dmg[0] * k)), Math.max(1, Math.round(b.dmg[1] * k))], ...(b.boss && sp?.dmg ? { boss: { ...b.boss, special: { ...sp, dmg: [Math.round(sp.dmg[0] * k), Math.round(sp.dmg[1] * k)] as [number, number] } } } : {}) };
+    const b = MOBS[t], k = b.boss ? bossDmgMultOld(b.lvl) : dmgMultOld(b.lvl), sp = b.boss?.special;
+    MOBS[t] = { ...b, lvl: b.boss ? b.lvl : relevel(b.lvl), dmg: [Math.max(1, Math.round(b.dmg[0] * k)), Math.max(1, Math.round(b.dmg[1] * k))], ...(b.boss && sp?.dmg ? { boss: { ...b.boss, special: { ...sp, dmg: [Math.round(sp.dmg[0] * k), Math.round(sp.dmg[1] * k)] as [number, number] } } } : {}) };
 }
 for (const [t, L] of Object.entries(BOSS_LEVELS) as [MobType, number][]) {
     const b = MOBS[t], o = b.lvl; if (o === L || !b.boss) continue;
-    const kh = mobHpCurve(L) / mobHpCurve(o), kd = ((2.5 * L + 3) * bossDmgMult(L)) / ((2.5 * o + 3) * bossDmgMult(o)), ke = mobExpCurve(L) / mobExpCurve(o), kg = L / o, sp = b.boss.special;
+    const p = powerLevel(L), kh = hpOld(p) / hpOld(o), kd = ((2.5 * p + 3) * bossDmgMultOld(p)) / ((2.5 * o + 3) * bossDmgMultOld(o)), ke = (60 * Math.pow(p, 1.5)) / 11 / ((60 * Math.pow(o, 1.5)) / 11), kg = p / o, sp = b.boss.special;
     MOBS[t] = {
         ...b, lvl: L, hp: Math.round(b.hp * kh), dmg: [Math.round(b.dmg[0] * kd), Math.round(b.dmg[1] * kd)], exp: Math.round(b.exp * ke),
         boss: { ...b.boss, gold: [Math.round(b.boss.gold[0] * kg), Math.round(b.boss.gold[1] * kg)], special: { ...sp, ...(sp.dmg ? { dmg: [Math.round(sp.dmg[0] * kd), Math.round(sp.dmg[1] * kd)] as [number, number] } : {}) } },
@@ -123,30 +128,30 @@ export const MAX_LEVEL = 120;
  * Kills de un mob común del propio nivel que hacen falta para subir del nivel `l`: 11 en el nivel 1, ~120 en el 10, ~430 en el 30 y ~590 en el 39.
  * Meta: un veterano que farmea en área llega al 40 en ~30 h (≈ 2 días a full); un jugador a un mob por vez, en ~60 h. Es el único mando de la curva.
  */
-export const killsToLevel = (l: number): number => (l < 40 ? Math.round(l * (11 + 0.1 * l)) : Math.round(590 + 3.5 * (l - 39)));
-/** (Del 40 al 120 la curva sigue casi recta: 590 kills en el 39 → ~870 en el 119, unas ~70 mil muertes en total. PROVISORIA: se mide con `sim:pve` cuando haya contenido sobre el 40.) */
+export const killsToLevel = (l: number): number => { const p = powerLevel(l); return p < 40 ? Math.round(p * (11 + 0.1 * p)) : Math.round(590 + 3.5 * (p - 39)); };
+/** (Todas las curvas de este archivo van por el "nivel de poder" (`powerLevel`, escala vieja 1-40): cada nivel nuevo pide ~lo mismo que uno viejo, o sea ~3× más kills en total.) */
 /**
  * Multiplicador de la exp que da CUALQUIER mob según el nivel del jugador (a escala 40): 100 % al nivel 1 y baja en
  * línea recta hasta ~35 % al nivel 40. Un mob "se gasta" a medida que lo superás, y por eso conviene subir de zona. La pendiente es suave a
  * propósito: así la exp que pide cada nivel (que ya lo incluye) sigue creciendo en todo el rango.
  */
-export const levelExpMult = (playerLvl: number): number => Math.max(0.35, 1 - 0.0167 * (Math.max(1, playerLvl) - 1));
+export const levelExpMult = (playerLvl: number): number => Math.max(0.35, 1 - 0.0167 * (powerLevel(Math.max(1, playerLvl)) - 1));
 /**
  * Regla de diferencia de nivel: un mob más de 5 niveles por encima del jugador da menos exp (−10 % por nivel de más, mínimo 10 %: frena
  * que te lleven a una zona alta); uno más de 20 niveles por debajo no da nada.
  */
 export const levelGapMult = (playerLvl: number, mobLvl: number): number => {
-    const gap = mobLvl - playerLvl;
+    const gap = powerLevel(mobLvl) - powerLevel(playerLvl);
     if (gap > 5) return Math.max(0.1, 1 - 0.1 * (gap - 5));
     if (-gap > 20) return 0;
     return 1;
 };
 /** Exp real de un mob común de nivel `l`: la del tipo base de ese nivel si existe (los de nivel bajo dan algo más que la curva), si no la curva. */
-const refExp = (l: number): number => Math.max(mobExpCurve(l), ...Object.values(MOBS).filter((m) => !m.boss && m.lvl === l && m.exp < 3 * mobExpCurve(l)).map((m) => m.exp));
+const refExp = (l: number): number => Math.max(mobExpCurve(l), ...Object.values(MOBS).filter((m) => !m.boss && Math.round(powerLevel(m.lvl)) === Math.round(powerLevel(l)) && m.exp < 3 * mobExpCurve(l)).map((m) => m.exp));
 /** Exp que pide subir del nivel `l` al siguiente (cliente y server usan esta misma función). Ya incluye el multiplicador de exp del nivel. */
 export const expToLevel = (l: number): number => Math.round(refExp(l) * killsToLevel(l) * levelExpMult(l));
 /** Curva anterior (40·L kills sin multiplicador): solo para migrar la exp guardada de las cuentas viejas. */
-export const legacyExpToLevel = (l: number): number => Math.round(refExp(l) * 40 * l);
+export const legacyExpToLevel = (l: number): number => Math.round(refExp(relevel(l)) * 40 * l);
 
 const scaled = new Map<string, MobDef>();
 /**

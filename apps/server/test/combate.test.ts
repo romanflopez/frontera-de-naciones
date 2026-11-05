@@ -2,7 +2,7 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { COMBAT_CAP, CRIT_MULT, aspdTotal, critTotal, leechTotal, meleeIntervalSecs, type MobType, type WorldMap } from '@fdn/world';
+import { relevel, COMBAT_CAP, CRIT_MULT, aspdTotal, critTotal, leechTotal, meleeIntervalSecs, type MobType, type WorldMap } from '@fdn/world';
 import { MobSim, type MobHost } from '../src/mobs.ts';
 import type { Player } from '../src/player.ts';
 import { PvpLimiter, statsFromChar, type CombatStats } from '../src/systems/pvpCombat.ts';
@@ -174,7 +174,7 @@ test('parálisis: pedirla con un hechizo que no paraliza no hace nada', () => {
 
 // ---------- el daño del server coincide con la fórmula ----------
 test('daño de un hechizo: rango de la fórmula con nivel, arma, Magia y el multiplicador de stats', () => {
-    const s = statsFor(withAttrs([{ id: 'mag', v: 20 }]), 'mago', 20);
+    const s = statsFor(withAttrs([{ id: 'mag', v: 20 }]), 'mago', relevel(20));
     const { hit, hits } = setup(s);
     for (let i = 0; i < 50; i++) { hit('bola'); clock += 11000; }
     // Bola = 3× el Daño base mágico: (14..21 + 2·nivel + Magia) × 3, después la Magia de los stats

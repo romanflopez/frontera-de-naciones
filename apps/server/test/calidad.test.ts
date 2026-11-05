@@ -249,7 +249,7 @@ test('drops: caen ~14 únicos por banda subiendo de nivel y ~2 por corrida de ma
     const kills = (L: number) => expToLevel(L) / (mobExpCurve(L) * levelExpMult(L));
     let prev = Infinity;
     for (const t of [1, 2, 3, 4, 5, 6, 7]) {
-        const a = BAND_FROM[t - 1], b = BAND_FROM[t] ? BAND_FROM[t] - 1 : 39; let k = 0; for (let L = a; L <= Math.min(b, 39); L++) k += kills(L);
+        const a = BAND_FROM[t - 1], b = BAND_FROM[t] ? BAND_FROM[t] - 1 : 119; let k = 0; for (let L = a; L <= b; L++) k += kills(L);
         const per = k * uniqueChance(t, 'pit');
         assert.ok(per >= 7 && per <= 20, `T${t}: ${per.toFixed(1)} únicos en la banda (${Math.round(k)} muertes)`);
         assert.ok(UNIQUE_PIT_CHANCE[t - 1] < prev, `T${t}: la chance baja con la banda`); prev = UNIQUE_PIT_CHANCE[t - 1];

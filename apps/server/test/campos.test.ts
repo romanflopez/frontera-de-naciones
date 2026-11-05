@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FLARE_FIELD, MAPS, TRAINING, buildMap, goalStep, linkGateReason, trainingMapFor, trainingOfMap, trainingUnlocked, waypointTarget, type QuestGoal } from '@fdn/world';
+import { relevel, FLARE_FIELD, MAPS, TRAINING, buildMap, goalStep, linkGateReason, trainingMapFor, trainingOfMap, trainingUnlocked, waypointTarget, type QuestGoal } from '@fdn/world';
 
 const S = FLARE_FIELD.solmar, V = FLARE_FIELD.vhar;
 
@@ -45,7 +45,7 @@ test('el atajo y el Portal de Frontera al primer campo piden haber llegado a pie
     const paso0 = TRAINING[0];
     assert.equal(paso0.onFoot, true);
     assert.equal(trainingUnlocked(0, 0, 40), false, 'por nivel no se abre nunca');
-    assert.equal(trainingUnlocked(1, 0, 2), true, 'el Bosque de Piedra sigue abriéndose por nivel');
+    assert.equal(trainingUnlocked(1, 0, relevel(2)), true, 'el Bosque de Piedra sigue abriéndose por nivel');
     assert.equal(trainingMapFor(paso0, 'solmar'), S.eris); assert.equal(trainingMapFor(paso0, 'vhar'), V.eris);
     assert.equal(trainingOfMap(S.eris)?.step, 0); assert.equal(trainingOfMap(V.eris)?.step, 0);
     assert.equal(waypointTarget('campos_de_sal', 'vhar')?.map, V.eris); assert.equal(waypointTarget('campos_de_sal', 'solmar')?.map, S.eris);

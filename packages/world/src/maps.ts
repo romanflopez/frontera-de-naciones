@@ -17,8 +17,7 @@ import { LEGACY_FROM_VHAR, LEGACY_VHAR_LINK } from './vhar/legacy';
 import { buildVharInterior, VHAR_INTERIORS, VHAR_RESPAWN } from './vhar/interiors';
 import { FLARE_ARRIVAL, FLARE_FIELD, flareMaps } from './flare';
 import { tiledMaps } from './tiledmaps';
-import { huntMaps, MINAS_TO_LLANURA, LLANURA } from './hunt';
-import { TIERS, TIER_LIST, TIERS_WITH_CONTENT, tierGateLevel, type Tier } from './tiers';
+import { TIERS, type Tier } from './tiers';
 import { mobDef } from './mobs';
 
 /** Rectángulo de celdas con los dos extremos incluidos (igual que `WorldMap.dungeon`). */
@@ -228,9 +227,7 @@ export const MAPS: Record<string, MapDef> = {
     ...flareMaps({ [FLARE_FIELD.solmar.eris]: { map: VILLA_ID, to: VILLA_FLARE_BACK }, [FLARE_FIELD.vhar.eris]: { map: VHAR_CITADEL_ID, to: VHAR_FLARE_BACK } }),
 };
 // mapas importados de Tiled (pnpm maps:tiled): van después porque sus conexiones llegan al spawn de mapas ya definidos
-// E6: tramo del tier 5 (mapas de caza generados) colgado de las Minas abandonadas
-Object.assign(MAPS, huntMaps());
-MAPS.minas_abandonadas.links.push({ id: 'minas_abandonadas_a_llanura', map: 'minas_abandonadas', ...MINAS_TO_LLANURA.portal, to: { map: LLANURA.id, ...LLANURA.arrive }, kind: 'portal', gate: { lvl: 38 }, msg: 'Cruzás hacia la Llanura del Umbral.' });
+// E6: los mapas de caza generados (hunt.ts) quedan fuera del mundo: con el re-nivelado a 1-120 los mapas existentes cubren todo el rango.
 Object.assign(MAPS, tiledMaps(MAPS));
 
 export const getMapDef = (id: string | undefined): MapDef | undefined => { const c = canonicalMapId(id); return c ? MAPS[c] : undefined; };
@@ -326,8 +323,8 @@ export function reachableFrom(m: WorldMap, sx: number, sy: number, viaPortals = 
 
 /**
  * Reglas de los tiers de zona (docs/TIERS_DE_ZONA.md §5): todo mapa de caza o mazmorra (salvo los de prueba y el viejo) tiene tier, su `lvl`
- * cae dentro del tier y el nivel de cada mob también (los jefes, en el tope del mapa); cada puerta a una mazmorra sale de un mapa del mismo
- * tier y pide al menos el mínimo del tier menos 2; cada tier con contenido (hoy del 1 al 4, `TIERS_WITH_CONTENT`) tiene al menos un mapa abierto y una mazmorra.
+ * empieza dentro del tier y el nivel de cada mob cae dentro del rango del mapa (los jefes, en el tope del mapa); cada puerta a una mazmorra sale de un mapa del mismo
+ * tier (±1) y pide al menos 20 niveles menos que el piso de la mazmorra.
  */
 export function tierErrors(defs: Record<string, MapDef>, built: Map<string, WorldMap>): string[] {
     const errs: string[] = [], open = new Map<Tier, number>(), dung = new Map<Tier, number>();
@@ -335,7 +332,7 @@ export function tierErrors(defs: Record<string, MapDef>, built: Map<string, Worl
         if (d.safe || d.debugOnly || d.legacy) continue;
         if (!d.tier) { errs.push(`${id}: mapa de caza o mazmorra sin tier`); continue; }
         const [t0, t1] = TIERS[d.tier];
-        if (!d.lvl || d.lvl[0] < t0 || d.lvl[1] > t1) errs.push(`${id}: lvl ${JSON.stringify(d.lvl)} fuera del tier ${d.tier} (${t0}-${t1})`);
+        if (!d.lvl || d.lvl[0] < t0 || d.lvl[0] > t1) errs.push(`${id}: lvl ${JSON.stringify(d.lvl)} fuera del tier ${d.tier} (${t0}-${t1})`);
         const m = built.get(id);
         for (const z of m?.zones ?? []) {
             const l = mobDef(z.type, z).lvl;
@@ -345,12 +342,11 @@ export function tierErrors(defs: Record<string, MapDef>, built: Map<string, Worl
         (isDungeon ? dung : open).set(d.tier, ((isDungeon ? dung : open).get(d.tier) ?? 0) + 1);
         for (const l of d.links) {
             const to = defs[l.to.map]; if (!to?.tier || !built.get(l.to.map)?.dungeon || isDungeon) continue;
-            if (to.tier !== d.tier) errs.push(`vínculo '${l.id}': la mazmorra '${l.to.map}' es T${to.tier} y la entrada está en un mapa T${d.tier}`);
-            const need = to.tier === 1 ? 2 : tierGateLevel(to.tier);
+            if (Math.abs(to.tier - d.tier) > 1) errs.push(`vínculo '${l.id}': la mazmorra '${l.to.map}' es T${to.tier} y la entrada está en un mapa T${d.tier}`);
+            const need = to.tier === 1 ? 2 : Math.max(1, (to.lvl?.[0] ?? 1) - 20);
             if ((l.gate?.lvl ?? 0) < need) errs.push(`vínculo '${l.id}': la puerta de la mazmorra pide nivel ${l.gate?.lvl ?? 0}; mínimo ${need}`);
         }
     }
-    for (const t of TIER_LIST) if (t <= TIERS_WITH_CONTENT && ((open.get(t) ?? 0) < 1 || (dung.get(t) ?? 0) < 1)) errs.push(`tier ${t}: tiene ${open.get(t) ?? 0} mapas abiertos y ${dung.get(t) ?? 0} mazmorras (mínimo 1 y 1)`);
     return errs;
 }
 

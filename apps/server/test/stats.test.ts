@@ -124,7 +124,7 @@ test('repartir por el protocolo: llega el pedido, sube la vida máxima del serve
     st.lvl = 3; const hp0 = statsFromChar(st).maxHp; // vida del nivel 3 sin repartir
     J.log.length = 0;
     w.handleClientPacket(J.session.sessionId, { payload: { $case: 'statAllocRequest', value: { action: 'add', stat: 'vit', points: 4 } } } as never);
-    const baseHp3 = 593 + 2 * 76; // vida base del guerrero a nivel 3
+    const baseHp3 = classBaseHp('guerrero', 3); // vida base del guerrero a nivel 3
     assert.equal(st.stats.vit, 14); assert.equal(J.p.combat.maxHp - hp0, Math.round(0.002 * baseHp3 * 4), '4 puntos de Vitalidad = +0,8 % de la vida base');
     const inv = J.log.filter((m) => m.payload?.$case === 'inventoryState').at(-1)!.payload as { value: { statVit: number; statStr: number; statFree: number } };
     assert.equal(inv.value.statVit, 14); assert.equal(inv.value.statStr, 10); assert.equal(inv.value.statFree, statPointsFree(3, st.stats));
@@ -186,8 +186,8 @@ test('migración v2 -> v4 en un solo paso: arregla la exp y agrega los stats', (
 // ---------- tooltip de stats por clase ----------
 test('stats: el tooltip usa los números de la clase y del nivel, y avisa qué stat no le sirve', () => {
     const base = defaultStats();
-    const vit = statTip('vit', 'guerrero', 11, base); // vida base del paladín a nivel 11 = 593 + 10 × 76 = 1353
-    assert.match(vit.perPoint, /\+2,7 de vida/); assert.match(vit.perPoint, /1353/); assert.equal(vit.now, '', 'sin puntos no hay "con tus puntos"');
+    const vit = statTip('vit', 'guerrero', 11, base), hp11 = classBaseHp('guerrero', 11); // vida base del paladín a nivel 11 (escala de nivel de poder)
+    assert.match(vit.perPoint, new RegExp(`\\+${(hp11 * 0.002).toFixed(1).replace('.', ',')} de vida`)); assert.match(vit.perPoint, new RegExp(String(hp11))); assert.equal(vit.now, '', 'sin puntos no hay "con tus puntos"');
     const s = { ...base, str: 30, dex: 30, mag: 20 };
     assert.equal(statTip('str', 'guerrero', 5, s).fit, 'clave'); assert.equal(statTip('str', 'mago', 5, s).fit, 'bajo'); assert.equal(statTip('str', 'healer', 5, s).fit, 'bajo');
     assert.equal(statTip('mag', 'mago', 5, s).fit, 'clave'); assert.equal(statTip('mag', 'healer', 5, s).fit, 'clave'); assert.equal(statTip('mag', 'guerrero', 5, s).fit, 'bajo');

@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { MAX_LEVEL, QUESTS, expToLevel, killsToLevel, legacyExpToLevel, levelExpMult, levelGapMult, mobDef } from '@fdn/world';
+import { relevel, MAX_LEVEL, QUESTS, expToLevel, killsToLevel, legacyExpToLevel, levelExpMult, levelGapMult, mobDef } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { ECON_VERSION, Economy, MAX_LVL, migrateEcon, newEcon, type EconCtx, type KillInfo } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
@@ -36,15 +36,12 @@ const ctx = (): EconCtx => ({ npcs: [], restat: () => {}, ground: { add: () => {
 const kill = (type: Parameters<typeof mobDef>[0], lvl: number): KillInfo => ({ mobId: 1, type, def: mobDef(type, { lvl }), zoneName: 'prueba', origin: 'pit', x: 0, y: 0 });
 
 // ---------- A. curvas ----------
-test('curva: killsToLevel crece, 11 kills en el nivel 1 y ~10.600 en total hasta el 40 y sigue creciendo hasta el 120', () => {
+test('curva: killsToLevel crece, 11 kills en el nivel 1 y ~32.000 en total hasta el 120 (cada nivel nuevo pide lo de un nivel viejo)', () => {
     assert.equal(killsToLevel(1), 11);
-    assert.equal(killsToLevel(10), 120);
-    assert.ok(Math.abs(killsToLevel(30) - 420) <= 5 && Math.abs(killsToLevel(39) - 581) <= 5);
+    assert.ok(Math.abs(killsToLevel(relevel(10)) - 120) <= 6 && Math.abs(killsToLevel(relevel(30)) - 420) <= 12, 'los anclajes conservan los kills de la escala vieja');
     let total = 0, prev = 0;
-    for (let l = 1; l < 40; l++) { const k = killsToLevel(l); assert.ok(k > prev, `nivel ${l}`); prev = k; total += k; }
-    assert.ok(total > 10_000 && total < 11_500, `kills totales ${total}`);
-    for (let l = 40; l < MAX_LEVEL; l++) { const k = killsToLevel(l); assert.ok(k > prev, `nivel ${l}`); prev = k; total += k; }
-    assert.ok(total > 60_000 && total < 80_000, `kills totales hasta el ${MAX_LEVEL}: ${total}`);
+    for (let l = 1; l < MAX_LEVEL; l++) { const k = killsToLevel(l); assert.ok(k >= prev, `nivel ${l}`); prev = k; total += k; }
+    assert.ok(total > 28_000 && total < 40_000, `kills totales hasta el ${MAX_LEVEL}: ${total}`);
 });
 
 test('curva: el multiplicador de exp baja en línea recta de 100 % a ~35 % y nunca sube', () => {
@@ -68,19 +65,22 @@ test('curva: la exp que pide cada nivel es entera, finita y estrictamente crecie
 test('regla de diferencia de nivel: igual o hasta +5 paga entero; más arriba baja; muy por debajo no paga', () => {
     assert.equal(levelGapMult(10, 10), 1);
     assert.equal(levelGapMult(10, 15), 1, 'hasta 5 niveles arriba paga entero');
-    assert.ok(Math.abs(levelGapMult(10, 16) - 0.9) < 1e-9);
-    assert.ok(Math.abs(levelGapMult(1, 12) - 0.4) < 1e-9, 'gap 11');
-    assert.equal(levelGapMult(1, 100), 0.1, 'mínimo 10 %');
-    assert.equal(levelGapMult(30, 10), 1, '20 niveles abajo todavía paga');
-    assert.equal(levelGapMult(30, 9), 0, '21 niveles abajo no paga');
-    assert.equal(levelGapMult(40, 1), 0);
+    const R = relevel; // la regla mide la diferencia en nivel de poder (escala vieja), así que con los niveles nuevos vale lo mismo que antes
+    assert.equal(levelGapMult(R(10), R(10)), 1);
+    assert.equal(levelGapMult(R(10), R(14)), 1, 'hasta 5 niveles arriba paga entero');
+    assert.ok(Math.abs(levelGapMult(R(10), R(16)) - 0.9) < 0.06);
+    assert.ok(Math.abs(levelGapMult(1, R(12)) - 0.4) < 0.06, 'gap 11');
+    assert.equal(levelGapMult(1, 120), 0.1, 'mínimo 10 %');
+    assert.equal(levelGapMult(R(30), R(11)), 1, '19 niveles abajo todavía paga');
+    assert.equal(levelGapMult(R(30), R(9) - 3), 0, 'más de 20 niveles abajo no paga');
+    assert.equal(levelGapMult(120, 1), 0);
 });
 
 // ---------- B. exp, subida de nivel y tope ----------
 test('matar mobs del propio nivel: la cantidad de kills para subir coincide con la curva (±10 %)', () => {
     const { eco, reg, join } = setup(), w = reg.ensure('solmar_legacy');
     const J = join(w, 'ana', { x: 11, y: 11 }), st = J.p.econ!;
-    for (const [lvl, type] of [[1, 'goblin'], [3, 'zombie'], [5, 'skeleton'], [7, 'wyvern']] as const) {
+    for (const [lvl, type] of [[1, 'goblin'], [relevel(3), 'zombie'], [relevel(5), 'skeleton'], [relevel(7), 'wyvern']] as const) {
         st.lvl = lvl; st.exp = 0;
         let kills = 0; while (st.lvl === lvl && kills < 5000) { eco.reward(J.p, ctx(), kill(type, lvl)); kills++; }
         const want = killsToLevel(lvl);
@@ -106,16 +106,16 @@ test('un golpe grande cruza varios niveles de una vez y nunca pasa del 40', () =
 test('mobs muy por debajo del jugador dan 0 de exp y los muy por encima dan menos', () => {
     const { eco, reg, join } = setup(), w = reg.ensure('solmar_legacy');
     const J = join(w, 'carla', { x: 11, y: 11 }), st = J.p.econ!;
-    st.lvl = 40; st.exp = 0;
+    st.lvl = MAX_LEVEL; st.exp = 0;
     eco.reward(J.p, ctx(), kill('goblin', 1));
-    assert.equal(st.exp, 0, 'nivel 40 matando un mob de nivel 1');
-    st.lvl = 3; st.exp = 0;
-    const base = mobDef('antlion', { lvl: 4 }).exp * levelExpMult(3);
-    eco.reward(J.p, ctx(), kill('antlion', 4));
+    assert.equal(st.exp, 0, 'nivel 120 matando un mob de nivel 1');
+    st.lvl = relevel(3); st.exp = 0;
+    const base = mobDef('antlion', { lvl: relevel(4) }).exp * levelExpMult(relevel(3));
+    eco.reward(J.p, ctx(), kill('antlion', relevel(4)));
     assert.ok(Math.abs(st.exp - Math.max(1, Math.round(base))) <= 1, 'un mob apenas por encima paga entero');
     st.exp = 0;
-    eco.reward(J.p, ctx(), kill('antlion', 20));
-    const llevado = st.exp, entero = Math.round(mobDef('antlion', { lvl: 20 }).exp * levelExpMult(3));
+    eco.reward(J.p, ctx(), kill('antlion', relevel(20)));
+    const llevado = st.exp, entero = Math.round(mobDef('antlion', { lvl: relevel(20) }).exp * levelExpMult(relevel(3)));
     assert.ok(llevado < entero * 0.5, `un nivel 3 en una zona de nivel 20 cobra ${llevado} de ${entero}`);
 });
 
@@ -123,7 +123,7 @@ test('la exp de las misiones pesa lo mismo que antes sobre la curva (±1 %)', ()
     const lv: Record<string, number> = { 'Campamento goblin': 1, 'Avanzada goblin': 2, 'Hoyos de hormiga león': 4, 'Pantano muerto': 3, 'Cementerio viejo': 5, 'Ruinas del nigromante': 5, 'Hormiguero ardiente': 6, 'Nidal de ceniza': 7, 'Osario ardiente': 8, 'Cantera del minotauro': 9 };
     const antes = [70, 120, 190, 260, 420, 520, 700, 950, 1150, 1700];
     QUESTS.forEach((q, i) => {
-        const l = lv[q.zone], pctAntes = antes[i] / legacyExpToLevel(l), pctAhora = q.xp / expToLevel(l);
+        const l = lv[q.zone], pctAntes = antes[i] / legacyExpToLevel(l), pctAhora = q.xp / expToLevel(relevel(l));
         assert.ok(Math.abs(pctAhora - pctAntes) <= 0.01, `${q.name}: ${(pctAntes * 100).toFixed(1)} % antes, ${(pctAhora * 100).toFixed(1)} % ahora`);
     });
 });
