@@ -35,8 +35,8 @@ test('los pits tienen un mob distinto cada uno, existen en MOB_TYPES y caen en c
             if (z.kind === 'pit') kinds.set(z.pit!, (kinds.get(z.pit!) ?? new Set()).add(z.type));
         }
         const types = [...kinds.values()].map((s) => [...s][0]);
-        assert.equal(kinds.size, 3, `${d.eris}: tiene que haber 3 pits`);
-        assert.equal(new Set(types).size, 3, `${d.eris}: los 3 pits tienen que tener mobs distintos (${types.join(', ')})`);
+        assert.ok(kinds.size >= 3, `${d.eris}: tiene que haber al menos 3 pits`);
+        assert.equal(new Set(types).size, kinds.size, `${d.eris}: los pits tienen que tener mobs distintos (${types.join(', ')})`);
         if (!d.dungeon) assert.ok(m.zones.some((z) => z.name.startsWith('Merodeadores')), `${d.eris}: faltan mobs sueltos`);
         assert.ok(m.zones.every((z) => (z.type as MobType) && z.n > 0));
     }

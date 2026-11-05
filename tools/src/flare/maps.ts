@@ -29,7 +29,7 @@ interface MapSpec {
     /** Id del mapa en Flare. */ id: string;
     /** Id del mapa en ERIS. */ eris: string; name: string; region: string; pvp: 'off' | 'faction'; lvl: [number, number];
     /** Tier de zona (docs/TIERS_DE_ZONA.md): `lvl` tiene que caer dentro de su rango. */ tier: Tier;
-    pits: [PitSpec, PitSpec, PitSpec]; loose: LooseSpec[];
+    pits: PitSpec[]; loose: LooseSpec[];
     /** Conexiones que Flare no trae (mapas que en Flare no se tocan): `near` = a unos pasos de la entrada, `far` = en el punto más lejano. Hay que declararlas en los dos mapas. */
     extras?: { to: string; where: 'near' | 'far'; kind?: 'portal' | 'door'; gate?: number }[];
     /** Mazmorra de grupo (docs/MAPAS_FLARE.md §5). `respawnMap` = piso 1 (reaparecés ahí si morís en el piso 2). */
@@ -60,9 +60,11 @@ const SPECS: MapSpec[] = [
     { id: 'stonewood', eris: 'bosque_de_piedra', name: 'Bosque de Piedra', region: 'comun', pvp: 'off', lvl: [4, 8], tier: 1,
         pits: [{ name: 'Claro de los goblins', type: 'goblin' }, { name: 'Madriguera hobgoblin', type: 'hobgoblin' }, { name: 'Fuerte del bosque', type: 'goblin_elite' }],
         loose: [{ type: 'goblin' }, { type: 'zombie' }] },
-    { id: 'goblin_camp', eris: 'canon_goblin', name: 'Cañón goblin', region: 'comun', pvp: 'faction', lvl: [8, 14], tier: 1, linkGates: { goblin_cave: 4 },
-        pits: [{ name: 'Empalizada del cañón', type: 'goblin_elite' }, { name: 'Puesto de arqueros', type: 'hobgoblin_archer' }, { name: 'Tienda del cabecilla', type: 'hobgoblin' }],
-        loose: [{ type: 'goblin' }] },
+    // Mapa 2 (niveles 8-20): une el tramo del Cañón con el del Pantano. 5 pits de la entrada al fondo, de más flojo a más duro (8, 11, 14, 17, 20).
+    { id: 'goblin_camp', eris: 'canon_goblin', name: 'Cañón goblin', region: 'comun', pvp: 'faction', lvl: [8, 20], tier: 1, linkGates: { goblin_cave: 4 },
+        pits: [{ name: 'Empalizada del cañón', type: 'goblin_elite' }, { name: 'Puesto de arqueros', type: 'hobgoblin_archer' }, { name: 'Tienda del cabecilla', type: 'hobgoblin' },
+            { name: 'Ciénaga de zombis (cañón)', type: 'zombie' }, { name: 'Pozo oscuro (cañón)', type: 'zombie_dark' }],
+        loose: [{ type: 'goblin' }, { type: 'zombie' }] },
     // D1 (T1): Cueva y minas goblin (2 pisos de cueva, Nv 3-5, jefe final en las minas). La entrada es la del Cañón goblin (Nv 2).
     { id: 'goblin_cave', eris: 'cueva_goblin', name: 'Cueva goblin', region: 'mazmorra', pvp: 'off', lvl: [8, 11], tier: 1, dungeon: true,
         pits: [{ name: 'Guardia de la cueva', type: 'goblin' }, { name: 'Hobgoblins de la gruta', type: 'hobgoblin' }, { name: 'Arqueros del túnel', type: 'hobgoblin_archer' }],
@@ -531,16 +533,16 @@ function convert(spec: MapSpec): object {
     const cells = p.regions.flatMap((r) => { const c = snap(Math.floor(r.x + r.w / 2), Math.floor(r.y + r.h / 2)); if (!c) return []; const rad = clamp(Math.round(Math.max(r.w, r.h) / 2), 4, 12); return [{ ...c, r: rad, n: clamp(Math.round((rad * rad) / 10), 3, 10) }]; });
 
     // 4) 3 pits: k-means determinista con semillas separadas (cerca de la entrada, lejos de la entrada y lo más lejos de ambas).
-    const k = Math.min(3, cells.length);
+    const k = Math.min(spec.pits.length, cells.length);
     const byEntry = [...cells].sort((a, b) => dist(a, entry) - dist(b, entry));
     const seeds = [byEntry[0], byEntry[byEntry.length - 1]];
-    if (k === 3) seeds.push([...cells].sort((a, b) => Math.min(dist(b, seeds[0]), dist(b, seeds[1])) - Math.min(dist(a, seeds[0]), dist(a, seeds[1])))[0]);
+    while (seeds.length < k) seeds.push([...cells].sort((a, b) => Math.min(...seeds.map((q) => dist(b, q))) - Math.min(...seeds.map((q) => dist(a, q))))[0]);
     let centers = seeds.slice(0, k).map((c) => ({ x: c.x, y: c.y }));
     let label = cells.map(() => 0);
     const recenter = () => { centers = centers.map((m, i) => { const mine = cells.filter((_, j) => label[j] === i); return mine.length ? { x: mine.reduce((s, c) => s + c.x, 0) / mine.length, y: mine.reduce((s, c) => s + c.y, 0) / mine.length } : m; }); };
     for (let it = 0; it < 20; it++) { label = cells.map((c) => centers.reduce((best, m, i) => (dist(c, m) < dist(c, centers[best]) ? i : best), 0)); recenter(); }
     // Rebalance: ningún pit queda con menos de ~1/3 de las zonas (mueve la zona más cercana desde el pit más grande).
-    const minSize = Math.max(1, Math.floor(cells.length / 3) - 1);
+    const minSize = Math.max(1, Math.floor(cells.length / k) - 1);
     for (let guard = 0; guard < cells.length; guard++) {
         const sizes = centers.map((_, i) => label.filter((l) => l === i).length);
         const small = sizes.indexOf(Math.min(...sizes)), big = sizes.indexOf(Math.max(...sizes));
@@ -550,7 +552,7 @@ function convert(spec: MapSpec): object {
     }
     const order = centers.map((_, i) => i).sort((a, b) => dist(centers[a], entry) - dist(centers[b], entry)); // A (cerca) -> C (lejos)
     const zones: OutZone[] = [];
-    cells.forEach((c, j) => { const pit = order.indexOf(label[j]), s = spec.pits[pit]; zones.push({ type: s.type, x: c.x, y: c.y, r: c.r, n: c.n, name: s.name, lvl: pitLevel(spec.lvl, pit), kind: 'pit', pit }); });
+    cells.forEach((c, j) => { const pit = order.indexOf(label[j]), s = spec.pits[pit]; zones.push({ type: s.type, x: c.x, y: c.y, r: c.r, n: c.n, name: s.name, lvl: pitLevel(spec.lvl, pit, spec.pits.length), kind: 'pit', pit }); });
 
     // 5) Mobs sueltos: zonas chicas repartidas por todo el mapa entre los pits y lejos de la entrada (1 cada ~250 celdas caminables).
     const rnd = makeRnd(hashStr(spec.id));
@@ -632,6 +634,6 @@ for (const spec of SPECS.filter((s) => !wanted.length || wanted.includes(s.id)))
     const header = `/**\n * Generado por tools/src/flare/maps.ts a partir del mapa '${spec.id}' de Flare (CC-BY-SA 3.0; autores en CREDITS.txt de Flare).\n * Adaptado para ERIS (relleno del vacío, pits, mobs sueltos). No editar a mano: se regenera con pnpm --filter @fdn/tools flare:maps.\n */\n`;
     writeFileSync(join(outDir, spec.id + '.ts'), `${header}import type { FlareMapData } from './types';\n\nexport const DATA: FlareMapData = ${JSON.stringify(out)};\n`);
     rmSync(join(outDir, spec.id + '.json'), { force: true });
-    const pits = [0, 1, 2].map((i) => out.zones.filter((z) => z.pit === i).length), loose = out.zones.filter((z) => z.kind === 'loose').length;
-    console.log(`${spec.id} -> ${spec.eris}: ${out.size}x${out.size}, ${out.walkable} celdas caminables, pits A/B/C = ${pits.join('/')} zonas, ${loose} sueltas, ${out.links.length} vínculos + ${out.extras.length} extra`);
+    const pits = spec.pits.map((_, i) => i).map((i) => out.zones.filter((z) => z.pit === i).length), loose = out.zones.filter((z) => z.kind === 'loose').length;
+    console.log(`${spec.id} -> ${spec.eris}: ${out.size}x${out.size}, ${out.walkable} celdas caminables, zonas por pit = ${pits.join('/')} zonas, ${loose} sueltas, ${out.links.length} vínculos + ${out.extras.length} extra`);
 }

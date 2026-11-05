@@ -26,11 +26,11 @@ export const BAND_FROM: readonly number[] = [1, 18, 35, 52, 69, 86, 103];
 /** Banda de ítems que suelta un mob de nivel `lvl` (las 7 bandas tienen catálogo; la 7 es de ilvl 35). */
 export const itemBandOfLevel = (lvl: number): number => { let b = 1; BAND_FROM.forEach((f, i) => { if (Math.max(1, lvl) >= f) b = i + 1; }); return b; };
 /**
- * Nivel de los mobs de un pit en un mapa que cubre `range` (sub-rango de su tier): A (0) el más bajo, C (2) el más alto, B en el medio.
+ * Nivel de los mobs de un pit en un mapa que cubre `range` (sub-rango de su tier): A (0) el más bajo, el último el más alto y los de en medio repartidos parejo (3 pits por defecto; un mapa que une varios tramos puede traer más).
  * Los sueltos (`pit` indefinido) van al nivel de A.
  */
-export const pitLevel = (range: [number, number], pit?: number): number =>
-    pit === 2 ? range[1] : pit === 1 ? Math.round((range[0] + range[1]) / 2) : range[0];
+export const pitLevel = (range: [number, number], pit?: number, pits = 3): number =>
+    !pit ? range[0] : pit >= pits - 1 ? range[1] : Math.round(range[0] + ((range[1] - range[0]) * pit) / (pits - 1));
 /** Nivel mínimo para cruzar la puerta de una mazmorra del tier `t`: el mínimo del tier menos 2 (sin máximo). */
 export const tierGateLevel = (t: Tier): number => Math.max(1, TIERS[t][0] - 2);
 /** Texto del cartel de zona: "Zona T3 · niveles 21-30". */
