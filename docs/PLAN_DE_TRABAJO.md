@@ -337,6 +337,9 @@ Contador EK por personaje; contribución por nación; tienda de contribución (v
 ### D.0 Renombres y esqueleto del arquero (S) — va primero, bloquea a los demás
 `guerrero` → `paladin`, `healer` → `clerigo` en `kits.ts`, `stats.ts`, sims, cliente, docs y tests (con alias de lectura para cuentas guardadas: `migrateEcon`). Clase `arquero` registrada con kit vacío y oculta en la pantalla de crear hasta que tenga kit. **Pruebas:** F migración de cuentas con clase vieja; A `isClass`; typecheck entero.
 
+### D.20 Balance general (L, después de definir los ítems)
+Ajustar combate y progresión hasta dejar `sim:pvp` y `sim:pve` dentro de objetivo, usando como referencia el material de Helbreath que pase Román. Se detalla cuando los ítems estén definidos. Hasta entonces, cada paso solo tiene que no empeorar las sims. **Pruebas:** D en verde; E con 2 personas.
+
 ### D.12 Movilidad (S, jugando)
 `movementSpeedMs` a 280/170 como primera prueba; correr por defecto, caminar solo al castear; aceleración al arrancar/frenar y giro. Se decide probando con 2 personas. **Pruebas:** E.
 
