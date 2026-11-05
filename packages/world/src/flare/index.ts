@@ -8,7 +8,7 @@
  *   Mazmorras de grupo (una por tier, docs/TIERS_DE_ZONA.md): Cañón goblin -> D1, Altas de Nazia -> D2, Cementerio -> D3, La Brecha -> D4, Cenizas II -> D5, Cenizas III -> D6, Lago Kuuma -> D7
  */
 import type { Prop, WorldMap, Zone } from '../index';
-import type { MapDef, Link } from '../maps';
+import type { MapDef, Link, MapRect } from '../maps';
 import type { MobType } from '../mobs';
 import { DUNGEON_ENTRY_KEYS } from '../quests';
 import { VHAR_SUFFIX, baseMapId, nationOfMap } from '../nations';
@@ -202,6 +202,13 @@ function surfaceRest(d: FlareMapData, seen = new Set<string>()): { map: string; 
     return undefined;
 }
 
+/** Tramo intermedio 60–80: mapas compartidos donde solo una parte tiene PvP. Estas son las zonas PACÍFICAS (entrada y pits de leveo); el resto es PvP. */
+export const PEACE_RECTS: Record<string, MapRect[]> = {
+    paso_de_stormrock: [{ x0: 0, y0: 58, x1: 131, y1: 131 }], // sur: puertas de la Brecha y pits A/B; PvP al norte (pit C y salida a Cenizas I)
+    cenizas_i: [{ x0: 0, y0: 0, x1: 70, y1: 119 }], // oeste: entrada y pit A; PvP al este (pits B/C y salida)
+    cenizas_ii: [{ x0: 0, y0: 66, x1: 119, y1: 119 }], // sur: entrada y pit A; PvP al norte (pits B/C y salidas)
+};
+
 /** Definiciones de mapa de los mapas de Flare. `hub` = vínculo de vuelta del primero a la ciudad que lo une (lo pone maps.ts). */
 export function flareMaps(hubs: Record<string, { map: string; to: Cell }>): Record<string, MapDef> {
     const out: Record<string, MapDef> = {};
@@ -217,6 +224,7 @@ export function flareMaps(hubs: Record<string, { map: string; to: Cell }>): Reco
             id: d.eris, name: d.name, region: d.region, size: d.size, lvl: d.lvl, tier: d.tier, pvp: d.pvp, safe: false,
             spawn: { ...d.entry }, respawn: { ...d.entry }, links, build: () => buildFlareMap(byEris.get(d.eris)!),
         };
+        if (PEACE_RECTS[d.eris]) def.peaceRects = PEACE_RECTS[d.eris];
         if (d.dungeon) {
             // mazmorra: la posición no se guarda (al reconectar volvés a la superficie) y al morir reaparecés en la entrada del piso 1
             const rest = surfaceRest(d); if (!rest) throw new Error(`${d.id}: la mazmorra no lleva a ningún mapa de superficie`);

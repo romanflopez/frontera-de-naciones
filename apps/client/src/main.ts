@@ -1116,13 +1116,14 @@ const efxLocal = (n: string, x: number, y: number, dy = 0) => { const k = FXM?.r
 const efx = (n: string, x: number, y: number, dy = 0) => { efxLocal(n, x, y, dy); if (connected) pvpSend(n, x, y); };
 // ---------- PvP: bandos enemigos (y todos contra todos en la arena) ----------
 const inArena = (x: number, y: number) => !!MAP_DEF.ffaRect && inMapRect(MAP_DEF.ffaRect, Math.floor(x), Math.floor(y));
+const inPeace = (x: number, y: number) => !!MAP_DEF.peaceRects?.some((r) => inMapRect(r, Math.floor(x), Math.floor(y)));
 const facOf = (profile: string) => profile.split(';')[0];
 /** Arenas 2v2 / 3v3 (`/arena`): el equipo es la party; el resto es rival aunque sea de tu nación. El server decide igual (y no deja pegar en la preparación). */
 const onArenaMap = () => MAP_DEF.region === 'arena';
 const teammate = (o: Other) => partyRows.has(o.name);
 const sameSide = (o: Other) => (onArenaMap() ? teammate(o) : facOf(o.profile) === selectedFaction);
 const unseen = (o: Other) => !!o.inv && !P.det && !sameSide(o);
-const isEnemy = (o: Other) => MAP_DEF.pvp !== 'off' && !o.gone && !unseen(o) && !isSafe(o.x, o.y) && !isSafe(P.x, P.y) && (onArenaMap() ? !teammate(o) : MAP_DEF.pvp === 'ffa' || facOf(o.profile) !== selectedFaction || (inArena(P.x, P.y) && inArena(o.x, o.y)));
+const isEnemy = (o: Other) => MAP_DEF.pvp !== 'off' && !o.gone && !unseen(o) && !isSafe(o.x, o.y) && !isSafe(P.x, P.y) && !inPeace(o.x, o.y) && !inPeace(P.x, P.y) && (onArenaMap() ? !teammate(o) : MAP_DEF.pvp === 'ffa' || facOf(o.profile) !== selectedFaction || (inArena(P.x, P.y) && inArena(o.x, o.y)));
 const enemiesNear = (x: number, y: number, r: number) => [...others.values()].filter((o) => isEnemy(o) && Math.hypot(o.x - x, o.y - y) <= r);
 /** Avisa al server qué hechizo lancé y sobre quién; el daño lo calcula el server (el campo dmg ya no se usa). */
 function pvpSend(fx: string, x: number, y: number, targetId = 0n, spell = '', secs = 0, r = 0) { net.send({ $case: 'pvpHitRequest', value: { fx, x, y, targetId, dmg: 0, secs, r, spell } }); }
@@ -2062,7 +2063,7 @@ function render() {
     if (inDungeon(P.x, P.y)) { ctx.fillStyle = 'rgba(12,8,24,.28)'; ctx.fillRect(0, 0, W, H); }
     ctx.textAlign = 'center';
     const zn = isSafe(P.x, P.y) ? null : ZONES.find((z) => near(P.x, P.y, z, z.r + 2)), zl = zn ? mobDef(zn.type, zn).lvl : 0;
-    const zone = isSafe(P.x, P.y) ? `${cityAt(P.x, P.y)?.name ?? 'Zona segura'} · zona segura` : zn ? `${zn.name} · Nv ${Math.max(1, zl - 1)}–${zl + 1}` : '';
+    const zone = isSafe(P.x, P.y) ? `${cityAt(P.x, P.y)?.name ?? 'Zona segura'} · zona segura` : zn ? `${zn.name} · Nv ${Math.max(1, zl - 1)}–${zl + 1}${MAP_DEF.peaceRects ? (inPeace(P.x, P.y) ? ' · sin PvP' : ' · ¡PvP!') : ''}` : '';
     const danger = zl - P.lvl; // verde: tranquila · dorado: a tu nivel · rojo: te pasa por mucho
     if (zone) { ctx.font = "600 13px 'Alegreya SC', Georgia, serif"; ctx.fillStyle = !zn ? 'rgba(214,164,69,.9)' : danger >= 4 ? '#ff6b5a' : danger >= 1 ? '#ffb347' : danger >= -3 ? 'rgba(214,164,69,.9)' : '#8fd18b'; ctx.fillText(zone + (zn && danger >= 4 ? ' · ¡peligrosa!' : ''), W / 2, H - 98); }
 }

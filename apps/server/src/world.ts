@@ -1391,6 +1391,7 @@ export class GameWorld {
         const mode = this.def?.pvp ?? 'faction';
         if (mode === 'off') return false; // ciudades, mazmorras y bosses: sin PvP (docs/MUNDO.md 5.0)
         if (mode === 'ffa') return true;
+        if (this.def?.peaceRects?.some((r) => inMapRect(r, a.posX, a.posY) || inMapRect(r, b.posX, b.posY))) return false; // zona pacífica del tramo 60–80
         const ffa = this.def?.ffaRect, arena = (p: Player) => !!ffa && inMapRect(ffa, p.posX, p.posY);
         return this.factionOf(a) !== this.factionOf(b) || (arena(a) && arena(b));
     }
