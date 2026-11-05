@@ -19,6 +19,7 @@ import type { MobType } from './mobs';
 export * from './mobs';
 export * from './zem';
 export * from './contrib';
+export * from './lastSeen';
 export * from './mobTraits';
 export * from './bosses';
 export * from './economy';

@@ -120,7 +120,7 @@ const mailer = mailerFromEnv();
 function characterListMsg(accKey: string, error = ''): ServerMessage {
     const list = charKeysOf(storage, accKey).map((k) => {
         const rec = storage.get(k)!, econ = economy.load(k), mapId = canonicalMapId(rec.pos?.mapId ?? rec.pos?.worldId);
-        return { name: rec.name, cls: econ?.cls ?? '', faction: econ?.faction ?? '', level: econ?.lvl ?? 1, zone: (mapId && getMapDef(mapId)?.name) || '' };
+        return { name: rec.name, cls: econ?.cls ?? '', faction: econ?.faction ?? '', level: econ?.lvl ?? 1, zone: (mapId && getMapDef(mapId)?.name) || '', lastLogin: rec.pos ? rec.lastLogin : 0 }; // D.18: «nunca entró» si todavía no tiene posición guardada
     });
     return M.characterList(list, MAX_CHARS, error, !storage.get(accKey)?.email); // D.17: una cuenta vieja sin email lo tiene que cargar antes de jugar
 }
@@ -411,6 +411,7 @@ wss.on('connection', (ws, req) => {
         const world = worldOf(session);
         world?.persistVitals(session.sessionId);
         saveChar(session.networkId, world?.snapshot(session.sessionId));
+        { const key = session.networkId.replace(/^acc:/, ''), rec = storage.get(key); if (rec) { rec.lastLogin = Date.now(); storage.put(key, rec); } } // D.18: la última conexión es cuando salió, no cuando entró
         storage.flush(); // la economía se guarda ya al desconectar
         if (!remainsActive) guilds.disconnected(session.sessionId);
         world?.playerDisconnected(session.sessionId, remainsActive);

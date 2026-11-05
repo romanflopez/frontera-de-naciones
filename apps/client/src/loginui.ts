@@ -5,13 +5,13 @@
  */
 import './login.css';
 import './ui/login-craftpix.css';
-import { classBaseHp, classBaseMp } from '@fdn/world';
+import { classBaseHp, classBaseMp, lastSeenText } from '@fdn/world';
 import { mountDoll, resizeDolls } from './paperdoll.ts';
 
 export interface ClassInfo { id: string; name: string; desc: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; armor?: string; spells: string[] }
 export interface FactionInfo { id: string; name: string; col: string; desc: string }
 /** Un personaje de la cuenta, como lo manda el server. */
-export interface CharInfo { name: string; cls: string; faction: string; lvl: number; zone: string }
+export interface CharInfo { name: string; cls: string; faction: string; lvl: number; zone: string; /** última conexión (ms UTC; 0 = nunca) */ last?: number }
 export interface FlowCtx {
     classes: ClassInfo[];
     factions: FactionInfo[];
@@ -41,6 +41,8 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const CLS_COL: Record<string, string> = { mago: '#b872ff', paladin: '#ff5a3c', clerigo: '#f2d36b' };
+/** Una línea de identidad de cada nación (D.18; el tono lo ajusta Román). */
+const FAC_LORE: Record<string, string> = { solmar: 'Gente de bosque y de mar: ciudades claras sobre la costa y una guardia que no duerme.', vhar: 'Gente de nieve y de forja: murallas de hierro, brasas y una ciudadela que nunca se apaga.' };
 const CLS_TAG: Record<string, string> = { mago: 'Domina el poder arcano', paladin: 'Lucha con honor', clerigo: 'Sostiene al grupo' };
 const CLS_LORE: Record<string, string> = {
     mago: 'Los magos canalizan la energía arcana a través de sus hechizos. Pegan de lejos, congelan y queman, pero necesitan maná y poca gente que los toque.',
@@ -165,7 +167,7 @@ export function initLoginUI(ctx: FlowCtx) {
         root.dataset.cls = c.id; root.style.setProperty('--ac', col); root.style.setProperty('--fc', f.col);
         const hpMax = classBaseHp(c.id, sv.lvl), mpMax = classBaseMp(c.id, sv.lvl);
         $('selArt').innerHTML = dollCv(c.id, 0.66); mountDolls($('selArt'));
-        $('selDetail').innerHTML = `<h3>${esc(sv.name)}</h3><p class="dsub"><b style="color:${col}">${c.name}</b> · <b style="color:${f.col}">${f.name}</b></p><ul class="attrs">${bar('Vida', hpMax, top((x) => x.hp + (sv.lvl - 1) * x.hpL))}${bar('Maná', mpMax, top((x) => x.mp + (sv.lvl - 1) * x.mpL))}</ul><dl><dt>Nivel</dt><dd>${sv.lvl}</dd><dt>Zona</dt><dd>${esc(sv.zone || ciudadInicial(f.id))}</dd></dl>`;
+        $('selDetail').innerHTML = `<h3>${esc(sv.name)}</h3><p class="dsub"><b style="color:${col}">${c.name}</b> · <b style="color:${f.col}">${f.name}</b></p><ul class="attrs">${bar('Vida', hpMax, top((x) => x.hp + (sv.lvl - 1) * x.hpL))}${bar('Maná', mpMax, top((x) => x.mp + (sv.lvl - 1) * x.mpL))}</ul><dl><dt>Nivel</dt><dd>${sv.lvl}</dd><dt>Zona</dt><dd>${esc(sv.zone || ciudadInicial(f.id))}</dd><dt>Última conexión</dt><dd>${esc(lastSeenText(sv.last ?? 0))}</dd></dl>`;
         setBusy(false);
     }
     const ciudadInicial = (fid: string) => ctx.cityName(fid);
@@ -211,14 +213,14 @@ export function initLoginUI(ctx: FlowCtx) {
     /** Ficha de la clase o la facción elegida (la columna derecha, donde el diseño del pack pone la apariencia). */
     function fichaCls(c: ClassInfo): string {
         const col = clsCol(c.id);
-        return `<article class="crcard"><h3 style="color:${col}">${esc(c.name)}</h3><p class="crtag">${esc(CLS_TAG[c.id] ?? '')}</p>`
+        return `<article class="crcard"><div class="crhead"><span class="crem">${clsIcon(c.id, col)}</span><div><h3 style="color:${col}">${esc(c.name)}</h3><p class="crtag">${esc(CLS_TAG[c.id] ?? '')}</p></div></div>`
             + `<ul class="crbul">${bullets(c).map((b) => `<li style="--b:${col}">${esc(b)}</li>`).join('')}</ul>`
             + `<p class="crlore">${esc(CLS_LORE[c.id] ?? c.desc)}</p>`
             + `<dl class="crnums"><div><dt>Vida</dt><dd>${c.hp} <small>+${c.hpL}/nivel</small></dd></div><div><dt>Maná</dt><dd>${c.mp} <small>+${c.mpL}/nivel</small></dd></div>`
             + `<div><dt>Cuerpo a cuerpo</dt><dd>${c.melee[0]}–${c.melee[1]}</dd></div><div><dt>Equipo</dt><dd>${esc(c.weapon)}${c.armor ? `, ${esc(c.armor)}` : ''}</dd></div></dl></article>`;
     }
     function fichaFac(f: FactionInfo): string {
-        return `<article class="crcard sm"><h3 style="color:${f.col}">${esc(f.name)}</h3><p class="crlore">${esc(f.desc)}</p>`
+        return `<article class="crcard sm"><div class="crhead"><span class="crem fac">${shield(f.id, f.col)}</span><div><h3 style="color:${f.col}">${esc(f.name)}</h3><p class="crtag">${esc(f.desc)}</p></div></div><p class="crlore">${esc(FAC_LORE[f.id] ?? '')}</p>`
             + `<dl class="crnums"><div><dt>Empezás en</dt><dd>${esc(ctx.cityName(f.id))}</dd></div></dl></article>`;
     }
     function renderCreate() {
