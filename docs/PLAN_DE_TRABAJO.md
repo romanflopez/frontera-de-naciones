@@ -361,5 +361,8 @@ Email obligatorio al crear; contraseña mínima 8; Resend; token de 30 min. Cuen
 ### D.18 Pantallas de entrada (M)
 Muñeco centrado y sin pixelar, modal de borrar con el kit, última conexión en el detalle, fichas de nación/clase. Logos y escudos los pasa Román. **Pruebas:** E.
 
+### D.21 Rendimiento del cliente (M, medido en `docs/RENDIMIENTO.md`)
+Hecho: caché del terreno y perfilador. Falta el arreglo de las hojas de sprites de los mobs (~1,5 GB decodificadas; con 5 tipos de mob a la vez los cuadros se congelan 1,5-3,3 s): recortar y reexportar a la escala que se usa, variante a escala 1, cargar por mapa. Decide Román después de probar `?half`. **Pruebas:** E (`__fdn.prof()` en Cañón goblin con 150+ mobs y 5 tipos a la vista: sin cuadros de más de 100 ms); medir antes y después.
+
 ### D.19 NPCs: tienda directa (S)
 Vendedor abre la tienda sin diálogo; nombre y rol sobre la cabeza. Los sprites nuevos van con el pipeline de arte. **Pruebas:** E.
