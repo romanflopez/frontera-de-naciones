@@ -47,9 +47,8 @@
 
 /* ===== VENDEDOR ===== */
 /* D.16: compra y bolsa lado a lado, cada una con su scroll vertical propio; nunca scroll horizontal ni nombres cortados */
-/* a la derecha del chat (que ocupa hasta ~444 px a la izquierda) y a la izquierda del minimapa; en pantallas angostas vuelve al centro */
-#shop.cw{top:calc(84px + env(safe-area-inset-top,0px));left:max(452px,calc(50% - 350px));transform:none;width:min(700px,calc(100vw - 452px - 212px));height:min(500px,calc(100vh - 300px));min-height:340px;max-height:none;z-index:4}
-@media (max-width:1180px){#shop.cw{left:50%;transform:translateX(-50%);width:min(700px,calc(100vw - 24px))}}
+/* centrada (el chat ahora está abajo a la izquierda, D.15); en pantallas angostas usa casi todo el ancho */
+#shop.cw{top:calc(84px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(700px,calc(100vw - 24px));height:min(500px,calc(100vh - 300px));min-height:340px;max-height:none;z-index:4}
 #shop .role{margin:-2px 2px 8px;text-align:center;font:500 13px/1 "Alegreya",Georgia,serif;letter-spacing:.02em;color:#a7b4c1}
 #shop .role .greet{display:block;margin:8px 6px 0;text-transform:none;letter-spacing:0;font:italic 400 13.5px/1.35 "Alegreya",Georgia,serif;color:#cfc6ad}
 #shop .cw-body{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:12px 10px 8px}
