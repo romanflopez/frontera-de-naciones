@@ -28,3 +28,5 @@ Una línea por duda: qué, dónde, qué opciones se ven.
 
 - **D.11, premios en zem:** las misiones pagan zem **a la bolsa** (en riesgo en zona roja). Si se prefiere, que paguen directo al depósito.
 - **D.7, la tienda de gemas no existe:** `PLAN_DE_TRABAJO.md` dice que el ítem "entra con la tienda de gemas" (`ECONOMIA_Y_MONEDAS.md`), pero no hay moneda de gemas, tienda ni pagos en el código. Se hizo el ticket (el efecto y su seguridad en el server); falta que la tienda lo venda. Hay que definir cuándo se arma esa tienda, cuánto cuesta el ticket y cómo se consiguen las gemas.
+- **D.15, barra de íconos de ventanas:** `REVISION_PANTALLAS.md` §5 pide además pasar los botones (Personaje, Bolsa, Misiones, Libro, Guild, Salir) a una barra de íconos al lado del HUD. No entró en D.15 (el plan solo nombra el chat); queda arriba a la derecha. ¿Va como paso aparte?
+- **D.15, HUD más chico en pantallas angostas:** para que entren chat y HUD a 1366×768 el HUD baja a escala 0,80 (antes 0,85). Si molesta, la salida es achicar más el chat o apilarlo sobre el HUD en esas pantallas.

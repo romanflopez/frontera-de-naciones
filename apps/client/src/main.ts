@@ -15,6 +15,7 @@ import './ui/book-craftpix.css';
 import './ui/bag-craftpix.css';
 import { levelCard, notify } from './ui/notices';
 import { mountChat } from './ui/mountChat';
+import { openChat } from './ui/chatStore';
 import { mountCastBar } from './ui/CastBar';
 import { useCastStore } from './ui/castStore';
 import { spellTypeOf, type SpellType } from './ui/colors';
@@ -1682,7 +1683,7 @@ function showArenaInvite(mode: string, expiresMs: number, mock = false): void {
 window.addEventListener('keydown', (e) => {
     if (!connected || !worldReady) return;
     if (e.target instanceof HTMLInputElement) return;
-    if (e.key === 'Enter') { e.preventDefault(); ($('chatIn') as HTMLInputElement).focus(); return; }
+    if (e.key === 'Enter') { e.preventDefault(); openChat(); return; }
     if (e.key === 'F9') { e.preventDefault(); toggleGm(); return; }
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'q' || e.key === 'Q')) { usePotion('hp'); return; }
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'e' || e.key === 'E')) { usePotion('mp'); return; }
@@ -2252,8 +2253,19 @@ function hud() {
 
 /** Escala del HUD según el viewport (diseño de 1162 px de ancho; no tapa de más el mundo). */
 function layoutHud() {
-    const root = $('hudroot'), sc = clamp(Math.min(innerWidth / 1360, innerHeight / 900), 0.4, 1);
-    const st = document.documentElement.style; st.setProperty('--hud-scale', sc.toFixed(3)); st.setProperty('--hud-h', Math.round((root.offsetHeight + 8) * sc) + 'px');
+    const root = $('hudroot'), st = document.documentElement.style;
+    // D.15: el chat va abajo a la izquierda a la altura del HUD. En pantallas angostas el chat se achica antes que el HUD y, si igual se pisan,
+    // el HUD se corre a la derecha (y recién después baja de escala).
+    // El HUD real es más ancho que su caja: el frasco de vida (#pothp) sobresale por la izquierda y el botón de regreso (#recallBtn) por la derecha. Se miden esos extremos.
+    const cur = parseFloat(st.getPropertyValue('--hud-scale')) || 1, rr = root.getBoundingClientRect(), pl = $('pothp').getBoundingClientRect(), pr = $('recallBtn').getBoundingClientRect();
+    const boxW = root.offsetWidth || 1162, ovL = Math.max(0, (rr.left - pl.left) / cur) || 56, ovR = Math.max(0, (pr.right - rr.right) / cur) || 108;
+    const chatW = innerWidth < 1400 ? 280 : 360, left = 12 + chatW + 10, fullW = boxW + ovL + ovR;
+    let sc = clamp(Math.min(innerWidth / 1360, innerHeight / 900), 0.4, 1);
+    const avail = innerWidth - left - 8;
+    if (fullW * sc > avail) sc = Math.max(0.4, avail / fullW);
+    const natural = (innerWidth - boxW * sc) / 2, shift = Math.max(0, left + ovL * sc - natural);
+    st.setProperty('--chat-w', chatW + 'px'); st.setProperty('--hud-shift', Math.round(shift) + 'px');
+    st.setProperty('--hud-scale', sc.toFixed(3)); st.setProperty('--hud-h', Math.round((root.offsetHeight + 8) * sc) + 'px');
     { const hh = (root.offsetHeight + 8) * sc, ws = clamp(Math.min((innerWidth - 24) / 696, (innerHeight - hh - 96) / 640), 0.45, 1.3); st.setProperty('--win-scale', ws.toFixed(3)); renderTipPos(); }
 }
 addEventListener('resize', layoutHud); layoutHud();
