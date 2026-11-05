@@ -196,7 +196,7 @@ export const inventoryState = (st: Econ): ServerMessage => msg({
         questI: st.q.i, questState: st.q.st, questProg: st.q.prog,
         keysCripta: st.q.keys.cripta, keysFoso: st.q.keys.foso, shardsCripta: st.q.shards.cripta, shardsFoso: st.q.shards.foso,
         unlocked: st.u, cls: st.cls, faction: st.faction, forge: st.forge ?? 0,
-        statStr: st.stats.str, statVit: st.stats.vit, statDex: st.stats.dex, statMag: st.stats.mag, statInt: st.stats.int, statLuk: 10, /* la Suerte se eliminó; el campo queda en el protocolo con el valor neutro */ statFree: statPointsFree(st.lvl, st.stats),
+        statStr: st.stats.str, statVit: st.stats.vit, statDex: st.stats.dex, statMag: st.stats.mag, statLuk: 10, /* la Suerte se eliminó; el campo queda en el protocolo con el valor neutro */ statFree: statPointsFree(st.lvl, st.stats),
         questBook: st.qb ? JSON.stringify(questBookView(st.qb, { mats: st.mats ?? {}, maxUp: Math.max(0, ...st.bag.map((i) => i.up ?? 0), ...Object.values(st.eq).map((i) => i?.up ?? 0)) }, Date.now())) : '',
     },
 });

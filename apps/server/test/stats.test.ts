@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { STAT_CAP, classBaseHp, cleanStats, defaultStats, mobDef, statBonus, statTip, statPointsFree, statPointsTotal, statResetCost } from '@fdn/world';
+import { STAT_CAP, STAT_IDS, classBaseHp, cleanStats, defaultStats, mobDef, statBonus, statTip, statPointsFree, statPointsTotal, statResetCost } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { DROPS } from '../src/drops.ts';
 import { ECON_VERSION, Economy, migrateEcon, newEcon, type EconCtx, type KillInfo } from '../src/economy.ts';
@@ -39,7 +39,7 @@ const lastResult = (log: ServerMessage[]) => { const r = log.filter((m) => m.pay
 // ---------- A. fórmulas ----------
 test('stats: sin repartir no cambian nada, y cada punto da lo que dice el diseño', () => {
     const b0 = statBonus(defaultStats(), 1250);
-    assert.deepEqual(b0, { hp: 0, mp: 0, def: 0, meleeMult: 1, magicMult: 1, critMag: 0 });
+    assert.deepEqual(b0, { hp: 0, mp: 0, def: 0, meleeMult: 1, magicMult: 1 });
     assert.equal(statBonus(undefined).hp, 0, 'cuenta sin stats = sin bonus');
     const s = defaultStats(); s.vit += 10; s.str += 30; s.mag += 20; s.dex += 20;
     const b = statBonus(s, 1250); // la Vitalidad vale +0,2 % de la vida base de la clase por punto
@@ -56,8 +56,8 @@ test('stats: los puntos salen del nivel (10 al crear + 3 por nivel) y los libres
 });
 
 test('stats: cleanStats recorta lo inválido a enteros entre 10 y el tope', () => {
-    const c = cleanStats({ str: 500, vit: -3, dex: 12.9, mag: 'x', luk: 90 }); // luk ya no existe: se descarta y los puntos vuelven solos
-    assert.deepEqual(c, { str: STAT_CAP, vit: 10, dex: 12, int: 10, mag: 10 });
+    const c = cleanStats({ str: 500, vit: -3, dex: 12.9, mag: 'x', luk: 90, int: 80 }); // luk e int ya no existen: se descartan y los puntos vuelven solos
+    assert.deepEqual(c, { str: STAT_CAP, vit: 10, dex: 12, mag: 10 });
     assert.deepEqual(cleanStats(null), defaultStats());
 });
 
@@ -199,15 +199,25 @@ test('stats: el tooltip usa los números de la clase y del nivel, y avisa qué s
     assert.equal(statTip('vit', 'clase_rara', 1, base).fit, 'clave', 'clase desconocida cae al paladín, como classBaseHp');
 });
 
-test('Inteligencia: +0,15 % de crítico en hechizos de daño por punto (tope 35 %), sin efecto en el físico ni en las curas', () => {
-    const s = defaultStats(); s.int += 40;
-    assert.ok(Math.abs(statBonus(s, 1000).critMag - 6) < 1e-9, '40 puntos = 6 %');
-    s.int = STAT_CAP; assert.ok(Math.abs(statBonus(s, 1000).critMag - 28.5) < 1e-9, 'con el tope de 200 puntos: 28,5 %');
-    s.int = 1000; assert.equal(statBonus(s, 1000).critMag, 35, 'tope de seguridad');
-    const base = statsFromChar({ lvl: 20, cls: 'mago', eq: {} }), cs = { ...base, critMag: 100 };
-    const normal = rollSpellDamage('bola', { ...base, critMag: 0 }, false);
-    const crit = rollSpellDamage('bola', cs, false);
-    assert.ok(crit > normal * 1.5, 'con 100 % de crítico el hechizo de daño pega fuerte');
-    const phys = rollSpellDamage('golpe', { ...cs, cls: 'paladin' }, false);
-    assert.ok(phys < crit, 'el físico no usa el crítico de Inteligencia');
+test('D.3: son 4 stats (sin Inteligencia) y el crítico mágico no existe', () => {
+    assert.deepEqual([...STAT_IDS], ['str', 'vit', 'dex', 'mag']);
+    assert.equal('int' in defaultStats(), false);
+    assert.equal('critMag' in statBonus(defaultStats(), 1000), false);
+    for (const id of STAT_IDS) for (const cls of ['paladin', 'mago', 'clerigo']) assert.ok(statTip(id, cls, 20, defaultStats()).perPoint.length > 0);
+    // un hechizo de daño ya no tiene tirada de crítico: mismo rango siempre
+    const base = statsFromChar({ lvl: 20, cls: 'mago', eq: {} }), tope = Math.max(...Array.from({ length: 300 }, () => rollSpellDamage('bola', base, false)));
+    assert.ok(tope < Math.min(...Array.from({ length: 300 }, () => rollSpellDamage('bola', base, false))) * 1.5, 'sin crítico mágico, los golpes no se disparan');
+});
+
+test('F: una cuenta v7 con puntos en Inteligencia los recupera como libres y no pierde nada más', () => {
+    const st = newEcon('mago', 'solmar');
+    st.v = 7; st.lvl = 20; st.gold = 555;
+    st.stats = { str: 10, vit: 25, dex: 10, mag: 40, int: 50 } as never;
+    assert.equal(migrateEcon(st), true);
+    assert.equal(st.v, ECON_VERSION);
+    assert.equal('int' in st.stats, false, 'la clave vieja se descarta');
+    assert.deepEqual(st.stats, { str: 10, vit: 25, dex: 10, mag: 40 });
+    assert.equal(statPointsFree(st.lvl, st.stats), statPointsTotal(20) - 45, 'los 40 puntos de Inteligencia vuelven a libres');
+    assert.equal(st.gold, 555);
+    assert.equal(migrateEcon(st), false, 'migrar dos veces no cambia nada');
 });

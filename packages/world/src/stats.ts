@@ -1,20 +1,20 @@
 /**
  * Puntos de stats del personaje (docs/PLAN_DE_TRABAJO.md paso 1.2): Fuerza, Vitalidad, Destreza y Magia.
+ * Inteligencia se eliminó en D.3 (solo daba crítico mágico, y el crítico mágico se sacó): los puntos que tenían puestos vuelven a libres solos.
  * La Suerte se eliminó (3/11): los bonus de botín quedan fuera de los stats y los ítems; los puntos gastados se devuelven solos
  * (cleanStats descarta la clave vieja y statPointsFree recalcula contra el total por nivel).
  * Cada stat arranca en 10 y no tiene efecto por debajo de eso: los bonus son por punto sobre 10, así un personaje sin repartir juega igual que antes.
  * Cliente y server usan estas mismas funciones (el server decide; el cliente solo muestra y refleja los números).
  */
 import { powerLevel } from './tiers';
-export const STAT_IDS = ['str', 'vit', 'dex', 'int', 'mag'] as const;
+export const STAT_IDS = ['str', 'vit', 'dex', 'mag'] as const;
 export type StatId = (typeof STAT_IDS)[number];
 export type Stats = Record<StatId, number>;
-export const STAT_NAMES: Record<StatId, string> = { str: 'Fuerza', vit: 'Vitalidad', dex: 'Destreza', int: 'Inteligencia', mag: 'Magia' };
+export const STAT_NAMES: Record<StatId, string> = { str: 'Fuerza', vit: 'Vitalidad', dex: 'Destreza', mag: 'Magia' };
 export const STAT_DESC: Record<StatId, string> = {
     str: 'Daño cuerpo a cuerpo (+0,2 % por punto) y un poco de vida.',
     vit: 'Vida (+0,2 % de la vida base de tu clase por punto).',
     dex: 'Defensa (+0,5 por punto).',
-    int: 'Probabilidad de crítico en hechizos de daño (+0,15 % por punto, tope 35 %).',
     mag: 'Maná (+2 por punto) y daño mágico (+0,3 % por punto).',
 };
 /** Valor inicial de cada stat, tope por stat, puntos libres al crear y puntos que da cada nivel. */
@@ -23,7 +23,7 @@ export const STAT_BASE = 10, STAT_CAP = 200, STAT_START_FREE = 10, STAT_PER_LEVE
 export const STAT_RESET_FREE_LVL = 10;
 export const statResetCost = (lvl: number): number => (lvl <= STAT_RESET_FREE_LVL ? 0 : 200 * lvl);
 
-export const defaultStats = (): Stats => ({ str: STAT_BASE, vit: STAT_BASE, dex: STAT_BASE, int: STAT_BASE, mag: STAT_BASE });
+export const defaultStats = (): Stats => ({ str: STAT_BASE, vit: STAT_BASE, dex: STAT_BASE, mag: STAT_BASE });
 /** Puntos que corresponden a un personaje de ese nivel (sin contar los 10 de arranque de cada stat). */
 export const statPointsTotal = (lvl: number): number => STAT_START_FREE + STAT_PER_LEVEL * (Math.max(1, Math.floor(lvl)) - 1);
 export const statPointsSpent = (s: Stats): number => STAT_IDS.reduce((n, id) => n + (s[id] - STAT_BASE), 0);
@@ -38,7 +38,7 @@ export const classBaseHp = (cls: string, lvl: number): number => { const [a, b] 
 export const classBaseMp = (cls: string, lvl: number): number => { const [a, b] = CLASS_MP[cls] ?? CLASS_MP.paladin; return Math.round(a + (powerLevel(Math.max(1, lvl || 1)) - 1) * b); };
 
 /** Lo que dan los stats: se suma a lo de la clase, el nivel y el equipo. */
-export interface StatBonus { hp: number; mp: number; def: number; meleeMult: number; magicMult: number; /** % de crítico en hechizos de daño (Inteligencia) */ critMag: number }
+export interface StatBonus { hp: number; mp: number; def: number; meleeMult: number; magicMult: number }
 /**
  * `baseHp` es la vida base de la clase a ese nivel (classBaseHp): la Vitalidad da +0,2 % de eso por punto,
  * así vale lo mismo para un mago que para un paladín y no se desinfla a nivel alto (antes eran +2,5 planos, trampa).
@@ -47,11 +47,9 @@ export function statBonus(s: Stats | undefined, baseHp = 0): StatBonus {
     const d = (id: StatId): number => Math.max(0, (s?.[id] ?? STAT_BASE) - STAT_BASE);
     return {
         hp: Math.round(0.002 * baseHp * d('vit') + (d('str') * 2) / 3), mp: 2 * d('mag'), def: Math.round(0.5 * d('dex')),
-        meleeMult: 1 + 0.002 * d('str'), magicMult: 1 + 0.003 * d('mag'), critMag: Math.min(INT_CRIT_CAP, INT_CRIT_PER_POINT * d('int')),
+        meleeMult: 1 + 0.002 * d('str'), magicMult: 1 + 0.003 * d('mag'),
     };
 }
-/** Crítico en hechizos de daño por punto de Inteligencia (sobre 10) y su tope, en %. */
-export const INT_CRIT_PER_POINT = 0.15, INT_CRIT_CAP = 35;
 /** Qué tan útil es un stat para una clase: 'clave' (escala sus habilidades), 'util' (ayuda pero no es lo central), 'bajo' (casi no le sirve). */
 export type StatFit = 'clave' | 'util' | 'bajo';
 export interface StatTip {
@@ -69,21 +67,18 @@ const STAT_FIT: Record<string, Record<StatId, [StatFit, string]>> = {
         str: ['clave', 'Clave para el Paladín: todas sus habilidades de daño escalan con Fuerza.'],
         vit: ['clave', 'Más vida para aguantar al frente. Cada punto rinde más a medida que subís de nivel, porque se calcula sobre tu vida base.'],
         dex: ['util', 'Sirve para tankear, pero cada punto rinde poco: a más defensa, menos mejora cada punto nuevo.'],
-        int: ['bajo', 'Solo da crítico a los hechizos de daño: tus habilidades de Paladín no lo usan.'],
         mag: ['bajo', 'Tus habilidades no escalan con Magia: solo te da maná. Tenés poco maná, así que algún punto ayuda, pero no es tu stat.'],
     },
     mago: {
         str: ['bajo', 'Tus hechizos no escalan con Fuerza: solo te da un poco de vida. No pongas puntos acá.'],
         vit: ['util', 'El Mago es frágil: algunos puntos ayudan a sobrevivir, pero tu daño sale de Magia.'],
         dex: ['bajo', 'Poca defensa por punto: casi siempre conviene Magia o Vitalidad.'],
-        int: ['util', 'Cada punto suma chance de crítico a tus hechizos de daño: rinde mucho cuando ya tenés Magia alta.'],
         mag: ['clave', 'Clave para el Mago: sube el daño de todos tus hechizos y te da el maná para lanzarlos.'],
     },
     clerigo: {
         str: ['bajo', 'Tus hechizos y curas no escalan con Fuerza: solo te da un poco de vida. No pongas puntos acá.'],
         vit: ['util', 'Más vida para aguantar un golpe mientras curás.'],
         dex: ['bajo', 'Poca defensa por punto: casi siempre conviene Magia o Vitalidad.'],
-        int: ['bajo', 'Solo da crítico a los hechizos de daño, no a las curas: casi nunca conviene.'],
         mag: ['clave', 'Clave para el Clérigo: sube lo que curás y lo que dañás, y te da el maná para seguir casteando.'],
     },
 };
@@ -107,9 +102,6 @@ export function statTip(id: StatId, cls: string, lvl: number, stats: Stats): Sta
         perPoint = `Por punto: +0,5 de defensa.`;
         const def = Math.round(0.5 * spent), mit = Math.round((def / (100 + def)) * 100);
         now = `+${def} de defensa (${mit} % menos de daño físico, sin contar el equipo)`;
-    } else if (id === 'int') {
-        perPoint = `Por punto: +${pct(INT_CRIT_PER_POINT)} % de crítico en hechizos de daño (tope ${INT_CRIT_CAP} %).`;
-        now = `+${pct(Math.min(INT_CRIT_CAP, INT_CRIT_PER_POINT * spent))} % de crítico en hechizos`;
     } else {
         perPoint = `Por punto: +2 de maná y +0,3 % de daño de hechizos y curas.`;
         now = `+${2 * spent} de maná, +${pct(0.3 * spent)} % de daño y curas`;

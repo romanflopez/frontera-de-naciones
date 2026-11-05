@@ -25,7 +25,7 @@ import type { Player } from './player.ts';
 import type { AccountRecord, Storage } from './storage.ts';
 
 /** v3: nivel máximo 40 y curva de exp nueva (migra la exp guardada conservando la fracción del nivel). v4: puntos de stats. */
-export const ECON_VERSION = 7;
+export const ECON_VERSION = 8;
 export const MAX_LVL = MAX_LEVEL;
 /** Sin límite de oro de juego: el único techo es el técnico (entero exacto en JS / double del protocolo). */
 export const MAX_GOLD = Number.MAX_SAFE_INTEGER;
@@ -269,6 +269,7 @@ export function migrateEcon(st: Econ): boolean {
     }
     // v7 (D.0): guerrero -> paladin, healer -> clerigo.
     st.cls = canonicalClass(st.cls);
+    // v8 (D.3): sin Inteligencia. `cleanStats` (más arriba, corre en toda migración) descarta la clave `int` y los puntos que tenía vuelven a libres (statPointsFree recalcula contra el total por nivel).
     st.v = ECON_VERSION;
     refreshUnlocks(st);
     return true;

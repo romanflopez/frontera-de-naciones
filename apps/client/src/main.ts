@@ -3258,7 +3258,7 @@ function applyInventory(v: InventoryState) {
     for (const sl of SLOTS) P.eq[sl] = null;
     for (const e of v.eq) if (e.item && (SLOTS as string[]).includes(e.slot)) P.eq[e.slot as Slot] = itemFromInv(e.item);
     pots.hp = v.potsHp; pots.mp = v.potsMp; forgeStones = v.forge;
-    stats = { str: v.statStr || 10, vit: v.statVit || 10, dex: v.statDex || 10, int: v.statInt || 10, mag: v.statMag || 10 }; statFree = v.statFree;
+    stats = { str: v.statStr || 10, vit: v.statVit || 10, dex: v.statDex || 10, mag: v.statMag || 10 }; statFree = v.statFree;
     Q.i = v.questI; Q.st = v.questState === 'active' || v.questState === 'ready' ? v.questState : 'new'; Q.prog = v.questProg;
     Q.keys.cripta = v.keysCripta; Q.keys.foso = v.keysFoso; Q.shards.cripta = v.shardsCripta; Q.shards.foso = v.shardsFoso;
     try { QB = v.questBook ? JSON.parse(v.questBook) as QuestBookView : null; } catch { QB = null; }
