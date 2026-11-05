@@ -6,7 +6,7 @@
 <title>Frontera de Naciones</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@500;700&family=Alegreya+Sans:wght@400;500;700&family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700&family=Alegreya+SC:wght@500;700&family=Alegreya+Sans:wght@400;500;700&family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap">
 <style>
 [hidden]{display:none!important}
 /* ===== HUD de Frontera (diseño del usuario): orbes, barra de madera y oro, ventanas Personaje/Inventario ===== */
@@ -569,49 +569,56 @@ canvas:focus{outline:none}
 
       <section class="scr" id="scrLogin" aria-label="Iniciar sesión">
         <form id="loginForm" class="lcard">
-          <div class="field"><label for="nameIn" class="sr">Usuario</label><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><input id="nameIn" maxlength="16" required autocomplete="username" placeholder="Usuario"></div>
-          <div class="field"><label for="passIn" class="sr">Contraseña</label><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><input id="passIn" type="password" minlength="4" maxlength="64" required autocomplete="current-password" placeholder="Contraseña"></div>
-          <div class="field" id="pass2Row" hidden><label for="pass2In" class="sr">Repetir contraseña</label><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><input id="pass2In" type="password" minlength="4" maxlength="64" autocomplete="new-password" placeholder="Repetir contraseña"></div>
-          <label class="remember" id="rememberRow"><input type="checkbox" id="rememberIn" checked><span class="cbx" aria-hidden="true"></span><span>Recordarme</span></label>
-          <button type="submit" id="loginBtn" class="lbtn pri"><span>INICIAR SESIÓN</span></button>
+          <div class="field"><label for="nameIn">Usuario</label><input id="nameIn" maxlength="16" required autocomplete="username" autocapitalize="none" spellcheck="false"></div>
+          <div class="field"><label for="passIn">Contraseña</label>
+            <div class="pw"><input id="passIn" type="password" minlength="4" maxlength="64" required autocomplete="current-password">
+              <button type="button" class="pwtoggle" id="pwToggle" aria-label="Mostrar contraseña" aria-pressed="false" title="Mostrar contraseña">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path class="eye" d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle class="eye" cx="12" cy="12" r="3"/><path class="slash" d="M4 4l16 16"/></svg>
+              </button></div></div>
+          <div class="field" id="pass2Row" hidden><label for="pass2In">Repetir contraseña</label><input id="pass2In" type="password" minlength="4" maxlength="64" autocomplete="new-password"></div>
+          <div class="lrow" id="lrow">
+            <label class="remember" id="rememberRow"><input type="checkbox" id="rememberIn" checked><span class="cbx" aria-hidden="true"></span><span>Recordarme</span></label>
+            <button type="button" id="forgotBtn" class="lnk">¿Olvidaste tu contraseña?</button>
+          </div>
           <div class="err" id="loginErr" role="alert"></div>
-          <p class="hint" id="regHint" hidden>La cuenta se crea con ese usuario y contraseña. Después creás tus personajes (hasta 3): clase, facción y nombre.</p>
+          <button type="submit" id="loginBtn" class="lbtn pri"><span>Iniciar sesión</span></button>
+          <button type="button" id="altBtn" class="lbtn ghost">Crear cuenta</button>
         </form>
       </section>
 
       <section class="scr" id="scrSelect" aria-labelledby="hSel" hidden>
-        <h2 id="hSel" class="stitle">PERSONAJES</h2>
+        <h2 id="hSel" class="stitle">Personajes</h2>
         <ul class="slots" id="slots"></ul>
         <div class="selart" id="selArt" aria-hidden="true"></div>
         <aside class="sdetail" id="selDetail" aria-live="polite"></aside>
         <p class="err selerr" id="selErr" role="alert"></p>
         <div class="delbox" id="delBox" role="alertdialog" aria-labelledby="delT" aria-describedby="delTxt" hidden>
-          <h3 id="delT">BORRAR PERSONAJE</h3>
+          <h3 id="delT">Borrar personaje</h3>
           <p id="delTxt"></p>
           <input id="delIn" maxlength="16" autocomplete="off" spellcheck="false" placeholder="Escribí el nombre para confirmar" aria-label="Escribí el nombre del personaje para confirmar">
           <p class="err" id="delErr" role="alert"></p>
-          <div class="dacts"><button type="button" class="lbtn ghost" id="delNo">CANCELAR</button><button type="button" class="lbtn danger" id="delOk" disabled>BORRAR</button></div>
+          <div class="dacts"><button type="button" class="lbtn ghost" id="delNo">Cancelar</button><button type="button" class="lbtn danger" id="delOk" disabled>Borrar</button></div>
         </div>
-        <div class="acts"><button type="button" class="lbtn ghost" id="selBack">VOLVER</button><button type="button" class="lbtn pri" id="selPlay">JUGAR</button></div>
+        <div class="acts"><button type="button" class="lbtn ghost" id="selBack">Volver</button><button type="button" class="lbtn pri" id="selPlay">Jugar</button></div>
       </section>
 
       <section class="scr" id="scrCreate" aria-labelledby="hCre" hidden>
-        <h2 id="hCre" class="stitle">CREA TU PERSONAJE</h2>
+        <h2 id="hCre" class="stitle">Creá tu personaje</h2>
         <div class="crcol">
-          <section class="crgrp"><h3 id="hFac">FACCIÓN</h3><div class="picks" id="facPicks" role="radiogroup" aria-labelledby="hFac"></div><div id="crFacInfo"></div></section>
-          <section class="crgrp"><h3 id="hCls">CLASE</h3><div class="picks" id="clsPicks" role="radiogroup" aria-labelledby="hCls"></div></section>
+          <section class="crgrp"><h3 id="hFac">Facción</h3><div class="picks" id="facPicks" role="radiogroup" aria-labelledby="hFac"></div><div id="crFacInfo"></div></section>
+          <section class="crgrp"><h3 id="hCls">Clase</h3><div class="picks" id="clsPicks" role="radiogroup" aria-labelledby="hCls"></div></section>
         </div>
         <div class="crart" id="crArt" aria-hidden="true"></div>
         <div class="crside" id="crSide"></div>
         <div class="crfoot">
-          <label for="crName" class="sr">Nombre del personaje</label>
-          <input id="crName" class="crname" maxlength="16" autocomplete="off" spellcheck="false" placeholder="NOMBRE DEL PERSONAJE" aria-describedby="crErr">
+          <label for="crName" class="crlbl">Nombre del personaje</label>
+          <input id="crName" class="crname" maxlength="16" autocomplete="off" spellcheck="false" aria-describedby="crErr">
           <p class="err crerr" id="crErr" role="alert"></p>
         </div>
-        <div class="acts"><button type="button" class="lbtn ghost" id="crBack">VOLVER</button><button type="button" class="lbtn pri" id="crOk">CREAR</button></div>
+        <div class="acts"><button type="button" class="lbtn ghost" id="crBack">Volver</button><button type="button" class="lbtn pri" id="crOk">Crear</button></div>
       </section>
     </div>
-    <footer class="lbar" id="lbar"><p class="alt"><span id="altTxt">¿No tenés una cuenta?</span> <button type="button" id="altBtn" class="lnk">Crear cuenta</button> <span class="sep">·</span> <button type="button" id="credBtn" class="lnk">Créditos</button></p></footer>
+    <footer class="lbar" id="lbar"><button type="button" id="credBtn" class="lnk">Créditos</button></footer>
 
     <!-- Atribución de los materiales de terceros. CC-BY-SA 3.0 (el arte de Flare) exige nombrar a los autores e indicar que se
          modificó, y hacerlo de una forma razonable para el medio: un archivo suelto en /assets no alcanza, por eso se muestra acá. -->
@@ -619,7 +626,7 @@ canvas:focus{outline:none}
       <div class="credbox">
         <h2>Créditos y licencias</h2>
         <pre id="credText">Cargando…</pre>
-        <button type="button" id="credClose" class="lbtn pri"><span>CERRAR</span></button>
+        <button type="button" id="credClose" class="lbtn pri"><span>Cerrar</span></button>
       </div>
     </div>
 
