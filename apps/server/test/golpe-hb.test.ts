@@ -19,12 +19,11 @@ test('golpe físico: ataca 100 + (DEX − 50) contra 2 × DEX del objetivo, con 
     assert.equal(hitChance(slow, wall, 'phys'), HIT.min / 100);
 });
 
-test('golpe mágico: 100 + (MAG − 50) contra 100 + (MAG − 50) del objetivo; la DEX no cuenta', () => {
-    const mage = char('mago', 10, 200), plain = char('paladin', 10, 10), dexy = char('paladin', 200, 10);
-    assert.ok(hitChance(mage, plain, 'magic') >= hitChance(plain, mage, 'magic'));
-    assert.equal(hitChance(mage, plain, 'magic'), hitChance(mage, dexy, 'magic'), 'la DEX no esquiva hechizos');
-    // MAG contra MAG parejo: 50 % × K / 50 de HB; con K = 90, 90 % (tope)
-    assert.ok(Math.abs(hitChance(mage, mage, 'magic') - Math.min(HIT.max, HIT.k) / 100) < 1e-9);
+test('golpe mágico: nunca falla, sin importar MAG ni DEX de nadie (D.2)', () => {
+    const mage = char('mago', 10, 200), plain = char('paladin', 10, 10), dexy = char('paladin', 200, 10), magy = char('mago', 10, 5000);
+    for (const [a, d] of [[mage, plain], [plain, mage], [mage, dexy], [mage, magy], [magy, mage], [plain, plain]]) assert.equal(hitChance(a, d, 'magic'), 1);
+    HIT_ROLL.enabled = true;
+    try { assert.equal(hitRoll(plain, magy, 'magic', () => 0.999999), true, 'ni con la peor tirada'); } finally { HIT_ROLL.enabled = false; }
 });
 
 test('la tirada usa la chance (y se apaga con la bandera de los tests)', () => {

@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { potionHp, potionMp, potionLockMs, pvpCap, pvpMpRegen, pvpScale, pvpVsCtrl } from '../src/systems/pvpCombat.ts';
+import { DEFAULT_STATS, hitChance, potionHp, potionMp, potionLockMs, pvpCap, pvpMpRegen, pvpScale, pvpVsCtrl } from '../src/systems/pvpCombat.ts';
 import { SERVER_RULES, cap, potHp, potMp, scale, vsCtrl } from '../../../tools/src/sim/pvp/rules.ts';
 import { runMatchup, ONE_V_ONE, TARGET } from '../../../tools/src/sim/pvp/matchups.ts';
 import { simulate } from '../../../tools/src/sim/pvp/engine.ts';
@@ -31,4 +31,9 @@ test('calibración K7: paladín contra mago y el espejo de paladines duran 20-40
         assert.ok(r.secsMed >= TARGET.oneMin && r.secsMed <= TARGET.oneMax, `${name}: ${r.secsMed} s`);
         assert.ok(r.winnerHpMed <= TARGET.winnerHpMax, `${name}: el ganador queda con ${r.winnerHpMed} %`);
     }
+});
+
+test('D.2: la magia no falla en la sim ni en el server; el físico sí puede fallar', () => {
+    assert.equal(hitChance(DEFAULT_STATS, DEFAULT_STATS, 'magic'), 1);
+    assert.ok(hitChance(DEFAULT_STATS, DEFAULT_STATS, 'phys') < 1);
 });

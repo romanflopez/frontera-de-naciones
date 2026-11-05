@@ -258,17 +258,18 @@ export function progressFromEcon(st: { lvl: number; q: { i: number; keys: Record
 // ---------- golpe en PvP (chance de pegar entre jugadores; doc del proyecto "formulas de stats y hit ratio") ----------
 /**
  * Chance de que un golpe de jugador le pegue a otro jugador: `lo que ataca / lo que defiende × K`, topeada entre 10 % y 90 %.
- * Físico: ataca 100 + (DEX − 50) si DEX > 50; defiende 2 × DEX del objetivo. Mágico: ataca 100 + (MAG − 50) si MAG > 50; defiende 100 + (MAG − 50)
- * del objetivo. La armadura (DF/RM) NO entra acá: ya mitiga el daño después. Solo vale contra jugadores (los monstruos no esquivan).
- * `K` de la referencia es 50 y ahí la armadura entra en la defensa; acá la armadura mitiga el daño aparte, y con K = 90 un duelo parejo dura lo mismo que sin tirada de golpe (calibrado con `sim:pvp`: con 50 el paladín contra paladin tardaba 133 s en vez de 48).
+ * Físico: ataca 100 + (DEX − 50) si DEX > 50; defiende 2 × DEX del objetivo. Mágico: nunca falla (chance 1; ni MAG ni DEX entran).
+ * La armadura (DF/RM) NO entra acá: ya mitiga el daño después. Solo vale contra jugadores (los monstruos no esquivan).
+ * `K` de la referencia es 50 y ahí la armadura entra en la defensa; acá la armadura mitiga el daño aparte, y con K = 90 un duelo parejo dura lo mismo que sin tirada de golpe (calibrado con `sim:pvp`: con 50 el paladín contra paladín tardaba 133 s en vez de 48).
  */
 export const HIT = { skill: 100, k: Number(process.env.FDN_HITK) || 90, min: 10, max: 90, threshold: 50 };
 /** Encendido salvo bajo `node --test` (los tests de combate no dependen del azar; los de golpe lo prenden a mano) o con FDN_HITROLL=0. */
 export const HIT_ROLL = { enabled: process.env.FDN_HITROLL !== '0' && !process.env.NODE_TEST_CONTEXT };
 const above = (n: number): number => Math.max(0, n - HIT.threshold);
 export function hitChance(att: CombatStats, def: CombatStats, kind: DmgKind): number {
-    const a = kind === 'magic' ? HIT.skill + above(att.magStat ?? STAT_BASE) : HIT.skill + above(att.dexStat ?? STAT_BASE);
-    const d = kind === 'magic' ? 100 + above(def.magStat ?? STAT_BASE) : 2 * (def.dexStat ?? STAT_BASE);
+    if (kind === 'magic') return 1; // D.2: la magia nunca falla; se mitiga con RM (DISEÑO.md §5)
+    const a = HIT.skill + above(att.dexStat ?? STAT_BASE);
+    const d = 2 * (def.dexStat ?? STAT_BASE);
     return Math.min(HIT.max, Math.max(HIT.min, (a / Math.max(1, d)) * HIT.k)) / 100;
 }
 /** ¿Pega? (tirada con `rnd`, por defecto Math.random). Apagable con FDN_HITROLL=0. */
@@ -331,6 +332,9 @@ export const pvpMpRegen = (maxMp: number): number => Math.max(PVP_MP_REGEN_MIN, 
 /** Tope de los multiplicadores "sobre controlado" contra jugadores (Juicio y Escudo 1,5× → 1,2×; Esquirla 2× → 1,2×). */
 export const PVP_VS_CTRL_MAX = 1.2;
 /** Daño que llega a un jugador desde otro: primero el multiplicador PvP (antes de la defensa) y después el tope por golpe. */
+/** D.2: la magia ya no falla (antes acertaba ~90 %), así que el daño mágico entre jugadores se compensa con ese 90 % para no mover el balance. Provisorio hasta el balance general (D.20). La quemadura no entra: nunca tiraba golpe. */
+export const PVP_MAGIC_COMP = 0.9;
+export const pvpMagicComp = (raw: number, kind: DmgKind, spell: string): number => kind === 'magic' && spell !== 'quemadura' ? Math.max(1, Math.round(raw * PVP_MAGIC_COMP)) : raw;
 export const pvpScale = (raw: number): number => Math.max(1, Math.round(raw * PVP_DMG_MULT));
 export const pvpCap = (dmg: number, maxHp: number): number => Math.min(dmg, Math.max(1, Math.floor(maxHp * PVP_HIT_CAP)));
 /** Multiplicador "sobre controlado" que se usa contra un jugador. */
