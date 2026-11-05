@@ -5,7 +5,7 @@ import type { ServerMessage } from '@fdn/proto';
 import { STAT_CAP, STAT_IDS, classBaseHp, cleanStats, defaultStats, mobDef, statBonus, statTip, statPointsFree, statPointsTotal, statResetCost } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { DROPS } from '../src/drops.ts';
-import { ECON_VERSION, Economy, migrateEcon, newEcon, type EconCtx, type KillInfo } from '../src/economy.ts';
+import { ECON_VERSION, Economy, RESET_TICKET_MAX, migrateEcon, newEcon, type EconCtx, type KillInfo } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
 import { WorldRegistry, type TransferSession } from '../src/registry.ts';
 import type { PersistedPlayer } from '../src/player.ts';
@@ -220,4 +220,45 @@ test('F: una cuenta v7 con puntos en Inteligencia los recupera como libres y no 
     assert.equal(statPointsFree(st.lvl, st.stats), statPointsTotal(20) - 45, 'los 40 puntos de Inteligencia vuelven a libres');
     assert.equal(st.gold, 555);
     assert.equal(migrateEcon(st), false, 'migrar dos veces no cambia nada');
+});
+
+// ---------- D.7: ticket de reset de stats ----------
+test('A (D.7): el ticket reasigna igual que el reset por oro, sin pagar oro, y gasta uno', () => {
+    const { eco, reg, join } = setup(), w = reg.ensure('solmar_legacy');
+    const J = join(w, 'tico'), st = J.p.econ!;
+    st.lvl = 20; st.gold = 100; st.stats = { ...defaultStats(), str: 30, mag: 15 }; st.resetTickets = 2;
+    J.log.length = 0; eco.statAlloc(J.p, ctx(), 'ticket', '', 0);
+    assert.equal(lastResult(J.log)!.ok, true); assert.deepEqual(st.stats, defaultStats(), 'mismo efecto que el reset por oro');
+    assert.equal(st.gold, 100, 'no cobra oro'); assert.equal(st.resetTickets, 1);
+    const inv = J.log.filter((m) => m.payload?.$case === 'inventoryState').at(-1)!.payload as { value: { resetTickets: number; statFree: number } };
+    assert.equal(inv.value.resetTickets, 1); assert.equal(inv.value.statFree, statPointsFree(20, st.stats));
+});
+
+test('H (D.7): sin ticket no se reasigna, no se gasta un ticket si no hay nada que devolver ni cuando ya es gratis, y un pedido no puede inventar tickets', () => {
+    const { eco, reg, join } = setup(), w = reg.ensure('solmar_legacy');
+    const J = join(w, 'hache'), st = J.p.econ!;
+    st.lvl = 20; st.stats = { ...defaultStats(), str: 30 }; st.resetTickets = 0;
+    J.log.length = 0; eco.statAlloc(J.p, ctx(), 'ticket', '', 0);
+    assert.equal(lastResult(J.log)!.code, 'no_ticket'); assert.equal(st.stats.str, 30, 'sin ticket no hace nada');
+    st.resetTickets = 1; st.stats = defaultStats(); eco.statAlloc(J.p, ctx(), 'ticket', '', 0);
+    assert.equal(lastResult(J.log)!.code, 'nothing'); assert.equal(st.resetTickets, 1, 'no se gasta si no hay puntos repartidos');
+    st.lvl = 8; st.stats = { ...defaultStats(), str: 15 }; eco.statAlloc(J.p, ctx(), 'ticket', '', 0);
+    assert.equal(lastResult(J.log)!.code, 'free'); assert.equal(st.resetTickets, 1, 'hasta el 10 es gratis: no hace falta ticket'); assert.equal(st.stats.str, 15);
+    // por paquete: campos de más (stat, points, otra acción) no suman tickets ni cambian nada
+    st.lvl = 20; st.resetTickets = 0;
+    for (const action of ['reset_ticket', 'TICKET', 'ticket ', 'gm', 'tickets']) w.handleClientPacket(J.session.sessionId, { payload: { $case: 'statAllocRequest', value: { action, stat: 'str', points: 9999 } } } as never);
+    assert.equal(st.resetTickets, 0); assert.equal(st.stats.str, 15);
+    // dos pedidos seguidos con un solo ticket: el segundo ya no tiene ticket
+    st.resetTickets = 1; w.handleClientPacket(J.session.sessionId, { payload: { $case: 'statAllocRequest', value: { action: 'ticket', stat: '', points: 0 } } } as never);
+    st.stats = { ...defaultStats(), str: 40 }; w.handleClientPacket(J.session.sessionId, { payload: { $case: 'statAllocRequest', value: { action: 'ticket', stat: '', points: 0 } } } as never);
+    assert.equal(st.resetTickets, 0); assert.equal(st.stats.str, 40, 'el segundo pedido no tiene ticket');
+});
+
+test('F (D.7): una cuenta v12 arranca con 0 tickets sin perder nada; un valor raro se sanea', () => {
+    const st = newEcon('paladin', 'solmar'); st.v = 12; st.lvl = 33; st.gold = 9; st.zem = 4;
+    assert.equal(migrateEcon(st), true); assert.equal(st.v, ECON_VERSION); assert.equal(st.resetTickets, 0);
+    assert.equal(st.lvl, 33); assert.equal(st.gold, 9); assert.equal(st.zem, 4);
+    assert.equal(migrateEcon(st), false, 'migrar dos veces no cambia nada');
+    const raro = newEcon('mago', 'vhar'); raro.v = 12; (raro as unknown as { resetTickets: unknown }).resetTickets = 5000; migrateEcon(raro); assert.equal(raro.resetTickets, RESET_TICKET_MAX);
+    const neg = newEcon('mago', 'vhar'); neg.v = 12; (neg as unknown as { resetTickets: unknown }).resetTickets = -3; migrateEcon(neg); assert.equal(neg.resetTickets, 0);
 });

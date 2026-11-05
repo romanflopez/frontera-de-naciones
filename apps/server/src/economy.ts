@@ -11,7 +11,7 @@
 import { DROPS } from './drops.ts';
 import {
     ATTR_RANGES, traitExpMult, traitDropMult, BAG_MAX, BASE_BY_NAME, BASES, KEY_IDS, KEYDEFS, POT_MAX, POTS, QUESTS, roleOf, SHARDS_PER_KEY, SHOP_SERVER_RANGE,
-    SHOPS, SLOTS, slotsFor, fitsSlot, TRAINING, cleanStats, defaultStats, expToLevel, expToLevelV8, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, sellPrice, trainingUnlocked,
+    SHOPS, SLOTS, slotsFor, fitsSlot, TRAINING, cleanStats, defaultStats, expToLevel, expToLevelV8, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statPointsFree, statPointsSpent, statResetCost, STAT_RESET_FREE_LVL, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, sellPrice, trainingUnlocked,
     BOSS_UNIQUES, UNIQUES_BY_TIER, SET_PIECES_BY_TIER, UNIQUE_BASES, UP_MAX, UP_MAX_BY_QUALITY, QUALITY_NAMES, EXTRAS_BY_QUALITY, rollExtra, rollExtras, pickExtra, uniqueIlvl, EXTRA_POOL, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, itemBandOfLevel, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
     DAILY_BY_ID, DAILY_EXP_PCT, DUNGEON_KEY, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, junkValue, MAT_REFORJA, reforgeGold, reforgeStones, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
@@ -25,7 +25,9 @@ import type { Player } from './player.ts';
 import type { AccountRecord, Storage } from './storage.ts';
 
 /** v3: nivel máximo 40 y curva de exp nueva (migra la exp guardada conservando la fracción del nivel). v4: puntos de stats. */
-export const ECON_VERSION = 12;
+/** Tope de tickets de reset de stats que se pueden tener. */
+export const RESET_TICKET_MAX = 99;
+export const ECON_VERSION = 13;
 export const MAX_LVL = MAX_LEVEL;
 /** Sin límite de oro de juego: el único techo es el técnico (entero exacto en JS / double del protocolo). */
 export const MAX_GOLD = Number.MAX_SAFE_INTEGER;
@@ -51,6 +53,8 @@ export interface Econ {
     zem?: number;
     /** D.10: kills válidos a jugadores de la otra nación (permanente), contribución gastable y total ganado, víctimas recientes (para el cooldown de 4 h), títulos comprados y el puesto. */
     ek?: number; contrib?: number; contribTotal?: number; ekSeen?: Record<string, number>; titles?: string[]; title?: string;
+    /** Tickets de reset de stats (D.7): reasignar sin pagar oro. Todavía no se consiguen jugando: los va a vender la tienda de gemas (hoy, `/gm ticket`). */
+    resetTickets?: number;
     /** Piedras de forja de antes de D.9: `migrateEcon` las pasa a `zem` 1:1 y borra el campo. */
     forge?: number;
     /** Materiales apilables levantados del suelo (systems/loot.ts), por id. Las cuentas viejas no lo tienen. */
@@ -296,6 +300,8 @@ export function migrateEcon(st: Econ): boolean {
     if (st.v < 12 && st.qb && st.lvl < 61) {
         const d = st.qb.d; d.ids = d.ids.filter((id) => id !== 'frontera'); delete d.prog.frontera; d.done = d.done.filter((id) => id !== 'frontera');
     }
+    // v13 (D.7): tickets de reset de stats; las cuentas viejas arrancan en 0 y un valor raro se sanea.
+    if (st.v < 13) st.resetTickets = clampInt(Number(st.resetTickets) || 0, 0, RESET_TICKET_MAX, 0);
     st.v = ECON_VERSION;
     refreshUnlocks(st);
     return true;
@@ -461,10 +467,11 @@ export class Economy {
     private touch(p: Player): void { const acc = this.acc(p.accountKey); if (acc && p.econ) { acc.econ = p.econ; this.storage.put(p.accountKey, acc); } }
 
     /** SOLO GM: fija el nivel (exp a 0) y/o suma oro. */
-    gmSet(p: Player, o: { lvl?: number; gold?: number; keys?: number }): boolean {
+    gmSet(p: Player, o: { lvl?: number; gold?: number; keys?: number; tickets?: number }): boolean {
         const st = p.econ; if (!st) return false;
         if (o.lvl !== undefined) { st.lvl = clampInt(o.lvl, 1, MAX_LVL); st.exp = 0; refreshUnlocks(st); }
         if (o.gold !== undefined) addGold(st, o.gold);
+        if (o.tickets !== undefined) st.resetTickets = clampInt((st.resetTickets ?? 0) + o.tickets, 0, RESET_TICKET_MAX, 0);
         if (o.keys !== undefined) for (const k of Object.keys(st.q.keys) as KeyId[]) st.q.keys[k] = clampInt(o.keys, 0, 99);
         this.touch(p);
         return true;
@@ -686,6 +693,13 @@ export class Economy {
                 if (st.gold < cost) return fail('gold', `Reasignar cuesta ${cost} de oro.`);
                 addGold(st, -cost); st.stats = defaultStats();
                 return done(cost > 0 ? `Reasignaste tus puntos por ${cost} de oro.` : 'Reasignaste tus puntos (gratis hasta el nivel 10).', true);
+            }
+            if (action === 'ticket') { // D.7: mismo efecto que el reset por oro, pagado con un ticket
+                if (statResetCost(st.lvl) === 0) return fail('free', `Hasta el nivel ${STAT_RESET_FREE_LVL} reasignar es gratis: no hace falta gastar un ticket.`);
+                if ((st.resetTickets ?? 0) < 1) return fail('no_ticket', 'No tenés tickets de reset de stats.');
+                if (statPointsSpent(st.stats) === 0) return fail('nothing', 'No tenés puntos repartidos para devolver: no se gasta el ticket.');
+                st.resetTickets = (st.resetTickets ?? 0) - 1; st.stats = defaultStats();
+                return done(`Reasignaste tus puntos con un ticket (te quedan ${st.resetTickets}).`, true);
             }
             return fail('bad_action', 'Acción inválida.');
         });

@@ -1336,6 +1336,11 @@ export class GameWorld {
                 if (!this.econ?.gmSet(p, { gold: n })) return ['Tu personaje todavía no tiene economía.'];
                 this.econ.snapshot(p); return [`Oro: ${n >= 0 ? '+' : ''}${n}.`];
             }
+            case 'ticket': {
+                const n = num(args[0]) ?? 1;
+                if (!this.econ?.gmSet(p, { tickets: n })) return ['Tu personaje todavía no tiene economía.'];
+                this.econ.snapshot(p); return [`Tickets de reset de stats: ${n >= 0 ? '+' : ''}${n} (tenés ${p.econ?.resetTickets ?? 0}).`];
+            }
             case 'llaves': {
                 const n = num(args[0]) ?? 20;
                 if (!this.econ?.gmSet(p, { keys: n })) return ['Tu personaje todavía no tiene economía.'];

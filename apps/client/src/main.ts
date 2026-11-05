@@ -135,6 +135,8 @@ interface Item extends Base { id: number; rar: Rarity; attrs: { id: AttrId; v: n
 const itName = (it: { name: string; up?: number }) => (it.up ? `+${it.up} ` : '') + it.name;
 /** EK, contribución y títulos (D.10): los manda el server en `inventoryState`. */
 let ek = 0, contribBal = 0, myTitle = '';
+/** Tickets de reset de stats (D.7): los manda el server. */
+let resetTickets = 0;
 let zemBag = 0; // zem de la bolsa (D.9; antes piedras de forja). La forja usa solo el del depósito.
 /** Puntos de stats repartidos y libres (los manda el server en InventoryState; el server decide, esto solo se muestra y se refleja en los números). */
 let stats: Stats = defaultStats(), statFree = 0;
@@ -2316,7 +2318,7 @@ function renderAttrs() {
         return `<div class="atr" tabindex="0" data-tip="${id}" aria-label="${esc(STAT_NAMES[id] + ': ' + STAT_DESC[id])}"><span>${STAT_NAMES[id]}</span><b>${stats[id]}</b><button type="button" class="atrb" data-stat="${id}" ${can ? '' : 'disabled'} aria-label="Sumar un punto a ${STAT_NAMES[id]}">+</button></div>`;
     }).join('');
     const cost = statResetCost(P.lvl);
-    const h = `<div class="atrh"><span>Puntos libres: <b>${statFree}</b></span><button type="button" class="atrr" id="statReset" title="${cost ? `Cuesta ${cost} de oro` : 'Gratis hasta el nivel 10'}">Reasignar${cost ? ` (${cost} oro)` : ''}</button></div><div class="atrg">${rows}</div>`;
+    const h = `<div class="atrh"><span>Puntos libres: <b>${statFree}</b></span><button type="button" class="atrr" id="statReset" title="${cost ? `Cuesta ${cost} de oro` : 'Gratis hasta el nivel 10'}">Reasignar${cost ? ` (${cost} oro)` : ''}</button>${cost && resetTickets > 0 ? `<button type="button" class="atrr" id="statTicket" title="Gasta un ticket de reset en vez de oro">Usar ticket (${resetTickets})</button>` : ''}</div><div class="atrg">${rows}</div>`;
     if ($('attrs').dataset.h !== h) { $('attrs').dataset.h = h; $('attrs').innerHTML = h; if (tipStat) { tipEl = $('attrs').querySelector<HTMLElement>(`[data-tip="${tipStat}"]`); renderStatTip(); } }
 }
 /** Tooltip de cada stat: lo que da un punto con los números de tu clase y nivel, y si te sirve (para no gastar puntos a ciegas). */
@@ -2339,6 +2341,7 @@ $('attrs').addEventListener('click', (e) => {
     const t = e.target as HTMLElement, b = t.closest('button[data-stat]') as HTMLButtonElement | null;
     if (b && !b.disabled) { net.send({ $case: 'statAllocRequest', value: { action: 'add', stat: b.dataset.stat as StatId, points: e.shiftKey ? Math.min(5, statFree) : 1 } }); return; }
     if (t.closest('#statReset')) net.send({ $case: 'statAllocRequest', value: { action: 'reset', stat: '', points: 0 } });
+    if (t.closest('#statTicket')) net.send({ $case: 'statAllocRequest', value: { action: 'ticket', stat: '', points: 0 } });
 });
 /** Muñeco real del personaje (idle) en el retrato. */
 function drawPortrait(T: number) {
@@ -3290,7 +3293,7 @@ function applyInventory(v: InventoryState) {
     P.bag = v.bag.map(itemFromInv);
     for (const sl of SLOTS) P.eq[sl] = null;
     for (const e of v.eq) if (e.item && (SLOTS as string[]).includes(e.slot)) P.eq[e.slot as Slot] = itemFromInv(e.item);
-    pots.hp = v.potsHp; pots.mp = v.potsMp; zemBag = v.zem; ek = v.ek; contribBal = v.contrib; myTitle = v.title; contribUI.onState({ ek: v.ek, contrib: v.contrib, titles: v.titles, title: v.title });
+    pots.hp = v.potsHp; pots.mp = v.potsMp; zemBag = v.zem; ek = v.ek; contribBal = v.contrib; myTitle = v.title; resetTickets = v.resetTickets; contribUI.onState({ ek: v.ek, contrib: v.contrib, titles: v.titles, title: v.title });
     stats = { str: v.statStr || 10, vit: v.statVit || 10, dex: v.statDex || 10, mag: v.statMag || 10 }; statFree = v.statFree; capDf = v.capDf || 60; capRm = v.capRm || 75; capNextAt = Number(v.capNextAt);
     Q.i = v.questI; Q.st = v.questState === 'active' || v.questState === 'ready' ? v.questState : 'new'; Q.prog = v.questProg;
     Q.keys.cripta = v.keysCripta; Q.keys.foso = v.keysFoso; Q.shards.cripta = v.shardsCripta; Q.shards.foso = v.shardsFoso;
