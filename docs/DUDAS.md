@@ -19,3 +19,6 @@ Una línea por duda: qué, dónde, qué opciones se ven.
 - **D.18, muñeco pixelado:** ahora es nítido y de escala entera, pero el sprite es de 64 px; para que no se vea pixelado hacen falta sprites en mayor resolución (HD / bundle de SmallScaleInt).
 - **D.18, estilo global:** sin versales ni dorado se aplicó solo a las 3 pantallas de entrada; HUD, tiendas y ventanas siguen con `Alegreya SC`/`Cinzel` y bordes dorados. Confirmar que la regla vale para todo y en qué paso va.
 
+- **D.16, depende de D.15 y se hizo solo la tienda:** el marco de la tienda se ancla a la derecha del chat actual (~444 px); cuando D.15 mueva el chat al lado del HUD hay que revisar ese `left`. Opción: tomar el ancho del chat de una variable CSS.
+- **D.16, vender sin confirmación:** tocar un ítem de la bolsa lo vende al instante. Opción: confirmar solo desde cierta rareza (el server igual decide).
+- **D.16, borde dorado del marco de las ventanas:** viene del kit (`.cw`) y se dejó; entra en la decisión de estilo global de D.18.
