@@ -262,3 +262,19 @@ test('drops: caen ~14 únicos por banda subiendo de nivel y ~2 por corrida de ma
         assert.ok(perRun >= 1.6 && perRun <= 2.4, `${d}: ${perRun.toFixed(2)} únicos por corrida (${mobs} mobs)`);
     });
 });
+
+// ---------- E3: extras con peso por ranura, sin velocidad de ataque, con daño plano ----------
+test('extras E3: aspd no sale; las armas sacan daño plano/crítico y las armaduras vida/defensa; el daño plano suma al arma', async () => {
+    const { EXTRA_POOL, rollExtras, pickExtra } = await import('@fdn/world');
+    assert.ok(!EXTRA_POOL.includes('aspd') && EXTRA_POOL.includes('dmg'));
+    const count = (slot: Parameters<typeof rollExtras>[0]) => { const c: Record<string, number> = {}; for (let i = 0; i < 3000; i++) for (const [id] of rollExtras(slot, 20, 2)) c[id] = (c[id] ?? 0) + 1; return c; };
+    const w = count('arma'), a = count('armadura');
+    assert.ok(!w.aspd && !a.aspd);
+    assert.ok((w.dmg ?? 0) > (w.leech ?? 0) * 2, 'en el arma el daño plano sale bastante más que el robo de vida');
+    assert.ok(!a.dmg && !a.poison && !a.leech, 'la armadura no saca daño plano, veneno ni robo de vida');
+    assert.ok((a.df ?? 0) > (a.crit ?? 0) * 2, 'en la armadura la defensa sale más que el crítico');
+    assert.equal(pickExtra('arma', []), undefined);
+    const base = statsFromChar({ lvl: 10, cls: 'guerrero', eq: { arma: { n: 'Espada corta', r: 0, a: [] } } } as never);
+    const plus = statsFromChar({ lvl: 10, cls: 'guerrero', eq: { arma: { n: 'Espada corta', r: 2, a: [{ id: 'dmg', v: 3 }] } } } as never);
+    assert.deepEqual([plus.wdmg[0] - base.wdmg[0], plus.wdmg[1] - base.wdmg[1]], [3, 3]);
+});

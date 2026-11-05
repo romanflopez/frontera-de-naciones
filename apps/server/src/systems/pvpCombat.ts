@@ -221,9 +221,9 @@ export function statsFromChar(o: StatSource | undefined, uncapCrit = false): Com
     if (!o) return { ...DEFAULT_STATS };
     const cls = isClass(o.cls) ? o.cls : 'guerrero', lvl = Math.max(1, Math.min(MAX_LEVEL, Number(o.lvl) || 1));
     const s: CombatStats = { lvl, cls, meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 0, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 1, maxMp: 0, savedMp: 0, dmgBonus: 0 };
-    let bonusHp = 0, bonusMp = 0, itemCrit = 0, itemAspd = 0, itemLeech = 0, itemDf = 0, itemRm = 0;
+    let bonusHp = 0, bonusMp = 0, itemDmg = 0, itemCrit = 0, itemAspd = 0, itemLeech = 0, itemDf = 0, itemRm = 0;
     const names: string[] = [], fx = new Set<string>();
-    const addAttr = (a: { id: string; v: number }): void => { if (a.id === 'mag') s.mag += a.v; else if (a.id === 'hp') bonusHp += a.v; else if (a.id === 'mp') bonusMp += a.v; else if (a.id === 'df') itemDf += a.v; else if (a.id === 'rm' || a.id === 'fres' || a.id === 'ires') itemRm += a.v; /* fres/ires: atributos viejos, ahora valen RM 1:1 */ else if (a.id === 'rpar') s.rpar += a.v; else if (a.id === 'crit') itemCrit += a.v; else if (a.id === 'aspd') itemAspd += a.v; else if (a.id === 'leech') itemLeech += a.v; else if (a.id === 'poison') s.poison += a.v; };
+    const addAttr = (a: { id: string; v: number }): void => { if (a.id === 'mag') s.mag += a.v; else if (a.id === 'hp') bonusHp += a.v; else if (a.id === 'mp') bonusMp += a.v; else if (a.id === 'df') itemDf += a.v; else if (a.id === 'rm' || a.id === 'fres' || a.id === 'ires') itemRm += a.v; /* fres/ires: atributos viejos, ahora valen RM 1:1 */ else if (a.id === 'rpar') s.rpar += a.v; else if (a.id === 'crit') itemCrit += a.v; else if (a.id === 'aspd') itemAspd += a.v; else if (a.id === 'leech') itemLeech += a.v; else if (a.id === 'poison') s.poison += a.v; else if (a.id === 'dmg') itemDmg += a.v; };
     for (const [slot, it] of Object.entries(o.eq ?? {})) {
         if (!it) continue;
         names.push(it.n);
@@ -233,6 +233,7 @@ export function statsFromChar(o: StatSource | undefined, uncapCrit = false): Com
         const f = UNIQUE_BY_NAME.get(it.n)?.uniq.fx; if (f && (it.r ?? 0) >= 4) fx.add(f); // el efecto especial solo está activo en la calidad Dorado
     }
     for (const bonus of activeSets(names)) for (const [id, v] of bonus.stats) addAttr({ id, v }); // bonos de set (2/4/6 piezas): pasan por los mismos topes
+    if (itemDmg > 0 && s.wdmg[1] > 0) s.wdmg = [s.wdmg[0] + itemDmg, s.wdmg[1] + itemDmg]; // daño plano de los afijos: suma al golpe del arma equipada
     if (fx.size) s.fx = [...fx];
     s.def += itemDfTotal(itemDf); s.rm += itemRmTotal(itemRm); // la DF/RM de ATRIBUTOS se topea; la base de las armaduras no
     s.crit = uncapCrit ? Math.min(100, CRIT_BASE + itemCrit) : critTotal(itemCrit); s.aspd = aspdTotal(itemAspd); s.leech = leechTotal(itemLeech); s.poison = Math.min(100, s.poison); // topes del paso 1.3

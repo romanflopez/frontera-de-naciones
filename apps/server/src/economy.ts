@@ -12,7 +12,7 @@ import { DROPS } from './drops.ts';
 import {
     ATTR_RANGES, traitExpMult, traitDropMult, BAG_MAX, BASE_BY_NAME, BASES, KEY_IDS, KEYDEFS, POT_MAX, POTS, QUESTS, roleOf, SHARDS_PER_KEY, SHOP_SERVER_RANGE,
     SHOPS, SLOTS, slotsFor, fitsSlot, TRAINING, cleanStats, defaultStats, expToLevel, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statPointsFree, statResetCost, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, sellPrice, trainingUnlocked,
-    BOSS_UNIQUES, UNIQUES_BY_TIER, SET_PIECES_BY_TIER, UNIQUE_BASES, UP_MAX, UP_MAX_BY_QUALITY, QUALITY_NAMES, EXTRAS_BY_QUALITY, rollExtra, rollExtras, uniqueIlvl, EXTRA_POOL, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, itemBandOfLevel, type UniqueBase,
+    BOSS_UNIQUES, UNIQUES_BY_TIER, SET_PIECES_BY_TIER, UNIQUE_BASES, UP_MAX, UP_MAX_BY_QUALITY, QUALITY_NAMES, EXTRAS_BY_QUALITY, rollExtra, rollExtras, pickExtra, uniqueIlvl, EXTRA_POOL, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, itemBandOfLevel, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
     DAILY_BY_ID, DAILY_EXP_PCT, DUNGEON_KEY, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, junkValue, MAT_REFORJA, reforgeGold, reforgeStones, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
     mainComplete, newQuestBook, repeatGold, rewardUniques, rollDailies, type QuestBook, type QuestEvent, type QuestHave, type QuestReward,
@@ -557,7 +557,7 @@ export class Economy {
             st.mats![MAT_REFORJA] = have - stones; addGold(st, -gold);
             const fixed = u.uniq.attrs.map(([id]) => id), other = it.a.filter((_, j) => j >= nBase && j !== idx).map((x) => x.id);
             const pool = EXTRA_POOL.filter((id) => !fixed.includes(id) && !other.includes(id));
-            const id = pool[Math.floor(Math.random() * pool.length)];
+            const id = pickExtra(u.slot, pool) ?? pool[Math.floor(Math.random() * pool.length)];
             const v = rollExtra(id, uniqueIlvl(u), u.slot, it.r);
             const prev = it.a[idx]; it.a[idx] = { id, v }; it.rf = rf + 1;
             return done(`Reforjado: ${prev.id} ${prev.v} → ${id} ${v}. La próxima reforja de ${it.n} cuesta ${reforgeStones(rf + 1)} piedra${reforgeStones(rf + 1) > 1 ? 's' : ''}.`, true);

@@ -32,7 +32,7 @@ export const FX_INFO: Record<FxId, { name: string; text: string }> = {
 interface Def { tier: number; arch: Arch; name: string; look?: string; off?: string; boss?: MobType; mult?: number; ilvl?: number; attrs?: [AttrId, AttrId]; fx?: FxId; set?: string }
 
 /** Punto medio de cada atributo (ver ATTR_RANGES): los fijos de un único son este valor por un factor de la banda. */
-const MID: Record<AttrId, number> = { crit: 4, aspd: 8, leech: 4, hp: 16, mp: 13, mag: 4, exp: 6, poison: 11, rpar: 10, df: 6, rm: 8 };
+const MID: Record<AttrId, number> = { crit: 4, aspd: 8, leech: 4, hp: 16, mp: 13, mag: 4, exp: 6, poison: 11, rpar: 10, df: 6, rm: 8, dmg: 2 };
 /**
  * Pares de atributos fijos de cada arquetipo. Cada ítem toma uno según su banda, así que dos armas de una mano de bandas distintas
  * NO traen siempre lo mismo (identidad por ítem): aspd+crit, crit+robo, aspd+veneno, robo+aspd…
@@ -274,10 +274,28 @@ export const QUALITY_HI_ROLL = 3;
  * Valor = (a + b·ilvl) × ranura × q — fórmula de afijos estilo Dreadmyst, lineal con el nivel del ítem
  * (los porcentajes crecen poco porque ya tienen tope total en el server: COMBAT_CAP).
  */
-export const EXTRA_POOL: AttrId[] = ['crit', 'aspd', 'leech', 'hp', 'mp', 'mag', 'poison', 'rpar', 'df', 'rm'];
+export const EXTRA_POOL: AttrId[] = ['crit', 'leech', 'hp', 'mp', 'mag', 'poison', 'rpar', 'df', 'rm', 'dmg'];
+/**
+ * Pesos de cada extra según el tipo de ranura (E3 del diseño de nivel 120, proporciones de la referencia: en las armaduras mandan
+ * vida, defensa y resistencias; en las armas, daño plano, crítico y veneno; los raros —robo de vida, maná— salen poco).
+ * `aspd` ya no sale como extra: la velocidad de ataque queda solo en los fijos de algunos únicos y sets.
+ */
+export const EXTRA_WEIGHTS: Record<'arma' | 'armadura' | 'joya', Partial<Record<AttrId, number>>> = {
+    arma: { dmg: 4, crit: 3, poison: 2, mag: 3, leech: 1, hp: 1, mp: 1 },
+    armadura: { hp: 4, df: 4, rm: 3, rpar: 3, mp: 2, mag: 1, crit: 1 },
+    joya: { hp: 3, df: 2, rm: 2, rpar: 2, mp: 2, crit: 2, mag: 2, leech: 1, poison: 1, dmg: 1 },
+};
+const weightClass = (slot: Slot): 'arma' | 'armadura' | 'joya' => (slot === 'arma' ? 'arma' : slot === 'amuleto' || slot === 'anillo' || slot === 'anillo2' ? 'joya' : 'armadura');
+/** Sortea un extra de `pool` con los pesos de la ranura (los que no tienen peso para esa ranura no salen). */
+export function pickExtra(slot: Slot, pool: AttrId[], rnd: () => number = Math.random): AttrId | undefined {
+    const w = EXTRA_WEIGHTS[weightClass(slot)], cand = pool.filter((id) => (w[id] ?? 0) > 0);
+    const total = cand.reduce((a, id) => a + w[id]!, 0); if (!total) return undefined;
+    let r = rnd() * total; for (const id of cand) { r -= w[id]!; if (r < 0) return id; }
+    return cand[cand.length - 1];
+}
 const EXTRA_SCALE: Record<AttrId, [number, number]> = {
     hp: [8, 2.4], mp: [3, 0.9], mag: [1.5, 0.32], df: [1.5, 0.35], rm: [2, 0.45],
-    crit: [2, 0.05], aspd: [4, 0.1], leech: [2, 0.05], poison: [6, 0.15], rpar: [5, 0.12], exp: [0, 0],
+    crit: [2, 0.05], aspd: [4, 0.1], leech: [2, 0.05], poison: [6, 0.15], rpar: [5, 0.12], exp: [0, 0], dmg: [0.6, 0.11],
 };
 /** Multiplicador por ranura (Dreadmyst: pecho/arma 1×, cabeza y futuros guantes/botas 0,65×, anillos/amuleto 0,5×). */
 export const SLOT_EXTRA_MULT: Record<Slot, number> = { arma: 1, armadura: 1, cabeza: 0.65, guantes: 0.65, botas: 0.65, amuleto: 0.5, anillo: 0.5, anillo2: 0.5 };
@@ -325,7 +343,8 @@ export function rollExtra(id: AttrId, ilvl: number, slot: Slot, quality: number,
 export function rollExtras(slot: Slot, ilvl: number, quality: number, exclude: AttrId[] = [], rnd: () => number = Math.random): [AttrId, number][] {
     const pool = EXTRA_POOL.filter((id) => !exclude.includes(id)), out: [AttrId, number][] = [];
     for (let i = 0; i < (EXTRAS_BY_QUALITY[quality] ?? 0) && pool.length; i++) {
-        const j = Math.floor(rnd() * pool.length), id = pool.splice(j, 1)[0];
+        const id = pickExtra(slot, pool, rnd); if (!id) break;
+        pool.splice(pool.indexOf(id), 1);
         out.push([id, rollExtra(id, ilvl, slot, quality, rnd)]);
     }
     return out;

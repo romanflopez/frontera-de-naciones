@@ -22,10 +22,10 @@ export const BAG_MAX = 18;
 export const POT_MAX = 99;
 
 /** 'df' = defensa física, 'rm' = resistencia mágica (ver docs/COMBATE.md). Los viejos 'fres'/'ires' se convierten en 'rm' al cargar. */
-export type AttrId = 'crit' | 'aspd' | 'leech' | 'hp' | 'mp' | 'mag' | 'exp' | 'poison' | 'rpar' | 'df' | 'rm';
+export type AttrId = 'crit' | 'aspd' | 'leech' | 'hp' | 'mp' | 'mag' | 'exp' | 'poison' | 'rpar' | 'df' | 'rm' | 'dmg';
 /** Rango base de cada atributo (el botín lo escala con el nivel del mob). */
 export const ATTR_RANGES: Record<AttrId, [number, number]> = {
-    crit: [2, 6], aspd: [4, 12], leech: [2, 6], hp: [8, 25], mp: [6, 20], mag: [2, 6], exp: [3, 10], poison: [6, 16], rpar: [5, 15], df: [3, 9], rm: [4, 12],
+    crit: [2, 6], aspd: [4, 12], leech: [2, 6], hp: [8, 25], mp: [6, 20], mag: [2, 6], exp: [3, 10], poison: [6, 16], rpar: [5, 15], df: [3, 9], rm: [4, 12], dmg: [1, 4],
 };
 export const ATTR_IDS = Object.keys(ATTR_RANGES) as AttrId[];
 /** Clave del generador de botín del server -> atributo. */

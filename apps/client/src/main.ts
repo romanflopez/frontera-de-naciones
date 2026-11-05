@@ -127,7 +127,7 @@ const RAR: Rarity[] = [
 const ATTR_FMT: Record<AttrId, (v: number) => string> = {
     crit: (v) => `+${v}% crítico`, aspd: (v) => `+${v}% velocidad de ataque`, leech: (v) => `${v}% robo de vida`, hp: (v) => `+${v} vida`, mp: (v) => `+${v} maná`,
     mag: (v) => `+${v} daño mágico`, exp: (v) => `+${v}% exp de caza`, poison: (v) => `${v}% chance de veneno`, rpar: (v) => `+${v}% resistencia a parálisis`,
-    df: (v) => `+${v} defensa`, rm: (v) => `+${v} resistencia mágica`,
+    df: (v) => `+${v} defensa`, rm: (v) => `+${v} resistencia mágica`, dmg: (v) => `+${v} daño del arma`,
 };
 const ATTRS = ATTR_IDS.map((id) => ({ id, r: ATTR_RANGES[id], f: ATTR_FMT[id] }));
 interface Item extends Base { id: number; rar: Rarity; attrs: { id: AttrId; v: number }[]; /** nivel de mejora (+N) */ up?: number; /** reforjas hechas */ rf?: number }
@@ -214,7 +214,7 @@ function syncMobs(list: { id: number; type: number; zone: number; x: number; y: 
 
 // ---------- stats ----------
 function totals() {
-    const t = { crit: 0, aspd: 0, leech: 0, hp: 0, mp: 0, mag: 0, exp: 0, poison: 0, rpar: 0, rm: 0, df: 0, def: 0, wdmg: [0, 0] as [number, number] };
+    const t = { crit: 0, aspd: 0, leech: 0, hp: 0, mp: 0, mag: 0, exp: 0, poison: 0, rpar: 0, rm: 0, df: 0, dmg: 0, def: 0, wdmg: [0, 0] as [number, number] };
     let rmAttr = 0; const worn: string[] = [];
     const add = (a: { id: AttrId; v: number }) => { if (a.id === 'rm') rmAttr += a.v; else t[a.id] += a.v; };
     for (const s of SLOTS) {
@@ -228,6 +228,7 @@ function totals() {
     const sb = statBonus(stats, classBaseHp(CLS.id, P.lvl)); t.hp += sb.hp; t.mp += sb.mp; // los puntos de Vitalidad, Fuerza, Magia y Destreza (mismos números que el server)
     t.df = itemDfTotal(t.df) + sb.def; t.rm += itemRmTotal(rmAttr); // DF y RM de ATRIBUTOS con su tope (60 y 75); la base de las armaduras no
     t.def += t.df; // el atributo 'df' suma a la defensa
+    if (t.dmg > 0 && t.wdmg[1] > 0) t.wdmg = [t.wdmg[0] + t.dmg, t.wdmg[1] + t.dmg]; // daño plano de los afijos (mismo cálculo que el server)
     return t;
 }
 // ---------- clases ----------
