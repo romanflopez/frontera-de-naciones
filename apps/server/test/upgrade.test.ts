@@ -31,14 +31,20 @@ function setup() {
         reg.sessionHook = (id) => (id === session.sessionId ? { session } : undefined);
         return { session, log, p: world.playerOf(session.sessionId)! };
     };
-    return { reg, eco, join };
+    // D.9: la forja gasta el zem del DEPÓSITO de la cuenta
+    const zem = (name: string, n?: number): number => {
+        const acc = mem.get(`acc-${name}`) as AccountRecord & { vault?: { v: 1; items: []; gold: number; stacks: Record<string, number>; nextUid: number; ops: number[] } };
+        if (n !== undefined) acc.vault = { v: 1, items: [], gold: 0, stacks: n > 0 ? { zem: n } : {}, nextUid: 1, ops: [] };
+        return acc.vault?.stacks.zem ?? 0;
+    };
+    return { reg, eco, join, zem };
 }
 
 test('mejora +N: gasta piedras y oro, puede fallar sin bajar, arranca en 33 %, tope +5 y solo ítems únicos', () => {
-    const { reg, join } = setup(), w = reg.ensure('solmar_herreria');
+    const { reg, join, zem } = setup(), w = reg.ensure('solmar_herreria');
     const npc = buildMap('solmar_herreria').npcs.find((n) => roleOf(n) === 'armero')!;
     const J = join(w, 'herrero', MAPS.solmar_herreria.spawn); J.p.setPosition(npc.x + 1, npc.y + 1);
-    const st = J.p.econ!; st.gold = 100_000; st.forge = 100;
+    const st = J.p.econ!; st.gold = 100_000; zem('herrero', 100);
     st.bag.push({ u: 900, n: 'Hoja de sal', r: 2, a: [{ id: 'aspd', v: 8 }, { id: 'crit', v: 4 }] }, { u: 901, n: 'Espada corta', r: 0, a: [] });
     const up = (uid = 900) => { J.log.length = 0; J.p.econ!; w.handleClientPacket(J.session.sessionId, { payload: { $case: 'econUpgradeRequest', value: { npcId: npc.id, uid } } } as never); return (J.log.filter((m) => m.payload?.$case === 'econResult').at(-1)!.payload as any).value; };
     const it = () => st.bag.find((x) => x.u === 900)!, rnd = Math.random;
@@ -46,15 +52,16 @@ test('mejora +N: gasta piedras y oro, puede fallar sin bajar, arranca en 33 %, t
         Math.random = () => 0; // todo sale bien
         // el límite de ritmo de acciones (20 por ráfaga) no estorba: son pocas
         for (let i = 1; i <= 3; i++) assert.equal(up().ok, true, `+${i}`);
-        assert.equal(it().up, 3); assert.equal(st.forge, 100 - 3 * (1 + 2 + 3)); assert.equal(st.gold, 100_000 - 40 * 1 * (1 + 2 + 3));
+        assert.equal(it().up, 3); assert.equal(zem('herrero'), 100 - 3 * (1 + 2 + 3)); assert.equal(st.gold, 100_000 - 40 * 1 * (1 + 2 + 3));
         Math.random = () => 0.95; // falla la de +4 (25 %): se pierde el costo, el ítem queda igual
-        const f = up(); assert.equal(f.ok, true); assert.match(f.text, /falló/); assert.equal(it().up, 3); assert.equal(st.forge, 82 - 12); assert.equal(st.gold, 100_000 - 240 - 160);
+        const f = up(); assert.equal(f.ok, true); assert.match(f.text, /falló/); assert.equal(it().up, 3); assert.equal(zem('herrero'), 82 - 12); assert.equal(st.gold, 100_000 - 240 - 160);
         Math.random = () => 0; assert.equal(up().ok, true); assert.equal(it().up, 4);
         assert.equal(up().ok, true); assert.equal(it().up, 5);
         const m = up(); assert.equal(m.ok, false); assert.equal(m.code, 'max');
         assert.equal(up(901).code, 'not_unique');
-        st.forge = 0; it().up = 0; assert.equal(up().code, 'stones');
-        st.forge = 10; st.gold = 0; assert.equal(up().code, 'gold');
+        zem('herrero', 0); it().up = 0; assert.equal(up().code, 'stones');
+        st.zem = 500; assert.equal(up().code, 'stones', 'el zem de la bolsa no sirve: tiene que estar en el depósito'); st.zem = 0;
+        zem('herrero', 10); st.gold = 0; assert.equal(up().code, 'gold');
     } finally { Math.random = rnd; }
 });
 
@@ -72,10 +79,10 @@ test('mejora +N: sube los stats base (+4 % por nivel) en el cálculo de combate 
 
 
 test('mejora +N: desde +8 cada intento gasta una copia de repuesto', () => {
-    const { reg, join } = setup(), w = reg.ensure('solmar_herreria');
+    const { reg, join, zem } = setup(), w = reg.ensure('solmar_herreria');
     const npc = buildMap('solmar_herreria').npcs.find((n) => roleOf(n) === 'armero')!;
     const J = join(w, 'herrero', MAPS.solmar_herreria.spawn); J.p.setPosition(npc.x + 1, npc.y + 1);
-    const st = J.p.econ!; st.gold = 1_000_000; st.forge = 1000;
+    const st = J.p.econ!; st.gold = 1_000_000; zem('herrero', 1000);
     st.bag.push({ u: 900, n: 'Hoja de sal', r: 4, a: [{ id: 'aspd', v: 8 }, { id: 'crit', v: 4 }], up: 7 });
     const up = () => { J.log.length = 0; w.handleClientPacket(J.session.sessionId, { payload: { $case: 'econUpgradeRequest', value: { npcId: npc.id, uid: 900 } } } as never); return (J.log.filter((m) => m.payload?.$case === 'econResult').at(-1)!.payload as any).value; };
     const rnd = Math.random;

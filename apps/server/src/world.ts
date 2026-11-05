@@ -23,7 +23,7 @@ import { guildTagOf } from './guild.ts';
 /** Perfil `faccion;clase;look` más la etiqueta de guild como 4.ª parte (vacía = sin guild); lo que mande el cliente en esa parte se ignora. */
 const withGuildTag = (profile: string, tag: string): string => { const parts = profile.split(';').slice(0, 3); while (parts.length < 3) parts.push(''); return tag ? `${parts.join(';')};${tag}` : parts.join(';'); };
 import { MobSim } from './mobs.ts';
-import { PROJECTILES, projectileFlightMs, projectileHits, pvpRegionAt, type PvpRegion } from '@fdn/world';
+import { PROJECTILES, projectileFlightMs, projectileHits, pvpRegionAt, ZEM_ID, ZEM_NAME, type PvpRegion } from '@fdn/world';
 import { ARENA_RULES, MOB_TYPES, POISON_SECS, arenaHealMult, meleeIntervalSecs, type MobType, type WorldMap } from '@fdn/world';
 import { Player, type PersistedPlayer, type Send } from './player.ts';
 import type { Economy, EconCtx } from './economy.ts';
@@ -1701,9 +1701,31 @@ export class GameWorld {
         const k = p.lastDamager && Date.now() - p.lastDamager.t < 15000 ? p.lastDamager : null;
         const note = M.pvpKill(p.playerId, k?.id ?? 0n, p.characterName, k?.name ?? '');
         this.pvpQuestCredit(p, k?.id);
+        this.pvpDeathDrop(p, k?.id);
         for (const o of this.players.values()) if (!o.disconnected) o.send(note);
         this.sendVitals(p, true);
         console.log(`[Mundo:${this.id}] ${p.characterName} murió${k ? ` (${k.name})` : ''}`);
+    }
+    /**
+     * Caída por morir contra un jugador de la otra nación en zona roja (D.9, DISEÑO.md §5b): todo el zem de la bolsa y `min(10 % del oro, nivel × 100)`
+     * quedan en el suelo, reservados `LOOT_OWNED_MS` (30 s) para el que mató y su party; después son de cualquiera. El equipo no se cae nunca.
+     * Contra mobs, en arena o fuera de la zona roja no cae nada. La región sale de la posición que tiene el server.
+     */
+    private pvpDeathDrop(victim: Player, killerId?: bigint): void {
+        if (!killerId || this.arena || !this.econ || !victim.econ || this.inArenaAt(victim) || this.pvpRegion(victim) !== 'roja') return;
+        const killer = this.playersById.get(killerId);
+        if (!killer || killer === victim || killer.disconnected || this.factionOf(killer) === this.factionOf(victim)) return;
+        const lost = this.econ.takePvpLoss(victim); if (lost.zem <= 0 && lost.gold <= 0) return;
+        const owners = this.partyInRange(killer).map((m) => m.sessionId), x = Math.floor(victim.posX), y = Math.floor(victim.posY);
+        const pile = (itemId: string, itemName: string, amount: number) => {
+            if (amount <= 0) return;
+            const e = this.floorLoot.spawn(x, y, { itemId, itemName, amount }, owners.length ? owners : [killer.sessionId]), m = M.lootSpawn(e);
+            for (const o of this.nearbyPlayers(e.x, e.y)) { this.floorLoot.markSeen(o.sessionId, e.lootId); o.send(m); }
+        };
+        pile(ZEM_ID, ZEM_NAME, lost.zem); pile('gold', 'Oro', lost.gold);
+        const what = [lost.zem > 0 ? `${lost.zem} zem` : '', lost.gold > 0 ? `${lost.gold} de oro` : ''].filter(Boolean).join(' y ');
+        victim.send(M.sendMessage(`Caíste en zona roja: perdiste ${what}. ${killer.characterName} y su party lo pueden levantar 30 s.`));
+        killer.send(M.sendMessage(`Botín de ${victim.characterName}: ${what} en el suelo, reservado 30 s para vos y tu party.`));
     }
     /**
      * Encargo "Defensa de la frontera": ganó una pelea contra la otra nación en un mapa de facción. No cuenta si la víctima

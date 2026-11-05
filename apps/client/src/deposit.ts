@@ -13,7 +13,7 @@
 import { BAG_MAX, DEPOT_SLOTS, DEPOT_STACKS, DEPOT_STACK_BY_ID, DEPOT_STACK_MAX, type AttrId, type Base, type DepotStackDef, type DepotStackId, type KeyId } from '@fdn/world';
 import type { DepositState, InvItem } from '@fdn/proto';
 import type { Net, ServerPayload } from './net.ts';
-import { coinIcon, keyIcon, potionIcon, shardIcon } from './itemicons.ts';
+import { coinIcon, keyIcon, miscIconUrl, potionIcon, shardIcon } from './itemicons.ts';
 
 type SendFn = Net['send'];
 type Side = 'bag' | 'dep';
@@ -27,6 +27,8 @@ export interface DepositDeps<I extends DepItem> {
     pots: () => { hp: number; mp: number };
     keys: () => Record<KeyId, number>;
     shards: () => Record<KeyId, number>;
+    /** Zem de la bolsa (D.9). */
+    zem: () => number;
     fromInv: (v: InvItem) => I;
     icon: (it: I) => string;
     attrText: (a: { id: AttrId; v: number }) => string;
@@ -117,10 +119,10 @@ const CSS = `
 #dep.narrow .gside.r{justify-content:flex-end}
 `;
 
-const STACK_ICON = (d: DepotStackDef): string => (d.kind === 'pot' ? potionIcon(d.ref as 'hp' | 'mp') : d.kind === 'key' ? keyIcon(d.ref) : shardIcon(d.ref));
-const STACK_COL: Record<DepotStackDef['kind'], string> = { pot: '#8a3a34', key: '#c9a227', shard: '#6a4aa0' };
+const STACK_ICON = (d: DepotStackDef): string => (d.kind === 'pot' ? potionIcon(d.ref as 'hp' | 'mp') : d.kind === 'zem' ? miscIconUrl('piedra_reforja') : d.kind === 'key' ? keyIcon(d.ref) : shardIcon(d.ref));
+const STACK_COL: Record<DepotStackDef['kind'], string> = { pot: '#8a3a34', key: '#c9a227', shard: '#6a4aa0', zem: '#c9833a' };
 const stackRc = (d: DepotStackDef) => (d.id === 'pot_mp' ? '#345a8a' : STACK_COL[d.kind]);
-const stackNameCol = (d: DepotStackDef) => (d.kind === 'pot' ? (d.ref === 'hp' ? '#e0524a' : '#4a8fe0') : d.kind === 'key' ? '#ffd24a' : '#b99cff');
+const stackNameCol = (d: DepotStackDef) => (d.kind === 'pot' ? (d.ref === 'hp' ? '#e0524a' : '#4a8fe0') : d.kind === 'key' ? '#ffd24a' : d.kind === 'zem' ? '#e5a65a' : '#b99cff');
 /** "1.234.567" o "1234567" -> 1234567 (null si no es un entero positivo). */
 export function parseAmount(s: string): number | null {
     const t = s.replace(/[.\s_]/g, '').trim();
@@ -195,7 +197,7 @@ export function createDepositUI<I extends DepItem>(d: DepositDeps<I>): DepositUI
     };
 
     // ---------- cantidades ----------
-    const carried = (s: DepotStackDef): number => (s.kind === 'pot' ? d.pots()[s.ref as 'hp' | 'mp'] : (s.kind === 'key' ? d.keys() : d.shards())[s.ref as KeyId]) ?? 0;
+    const carried = (s: DepotStackDef): number => (s.kind === 'zem' ? d.zem() : s.kind === 'pot' ? d.pots()[s.ref as 'hp' | 'mp'] : (s.kind === 'key' ? d.keys() : d.shards())[s.ref as KeyId]) ?? 0;
     const stored = (id: DepotStackId): number => st.stacks.find((x) => x.id === id)?.qty ?? 0;
     /** Cuánto se puede mover de un stack de un lado al otro, como máximo. */
     const movable = (side: Side, s: DepotStackDef): number => (side === 'bag'
