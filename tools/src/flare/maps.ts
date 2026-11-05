@@ -52,6 +52,8 @@ interface MapSpec {
     widen?: number;
     /** Multiplica los mobs de cada zona (pits y sueltos): mapas que van a concentrar mucha gente subiendo (por defecto 1). */
     mobMult?: number;
+    /** Mapa de leveo propio de cada nación (NATION_SPLIT_MAPS): sale sin PvP, pero el terreno se arma con el estilo abierto de los mapas de facción (`pvp: 'faction'`). */
+    nation?: boolean;
 }
 
 /** Un mapa por entrada. Pit A = el más cerca de la entrada (el más fácil), C = el más lejos. Los nombres de zona son únicos entre mapas. */
@@ -63,7 +65,7 @@ const SPECS: MapSpec[] = [
         pits: [{ name: 'Claro de los goblins', type: 'goblin' }, { name: 'Madriguera hobgoblin', type: 'hobgoblin' }, { name: 'Fuerte del bosque', type: 'goblin_elite' }],
         loose: [{ type: 'goblin' }, { type: 'zombie' }] },
     // Mapa 2 (niveles 8-20): une el tramo del Cañón con el del Pantano. 5 pits de la entrada al fondo, de más flojo a más duro (8, 11, 14, 17, 20).
-    { id: 'goblin_camp', eris: 'canon_goblin', name: 'Cañón goblin', region: 'comun', pvp: 'faction', lvl: [8, 20], tier: 1, mobMult: 3, linkGates: { goblin_cave: 4 },
+    { id: 'goblin_camp', eris: 'canon_goblin', name: 'Cañón goblin', region: 'comun', pvp: 'faction', nation: true, lvl: [8, 20], tier: 1, mobMult: 3, linkGates: { goblin_cave: 4 },
         pits: [{ name: 'Empalizada del cañón', type: 'goblin_elite' }, { name: 'Puesto de arqueros', type: 'hobgoblin_archer' }, { name: 'Tienda del cabecilla', type: 'hobgoblin' },
             { name: 'Ciénaga de zombis (cañón)', type: 'zombie' }, { name: 'Pozo oscuro (cañón)', type: 'zombie_dark' }],
         loose: [{ type: 'goblin' }, { type: 'zombie' }] },
@@ -622,7 +624,7 @@ function convert(spec: MapSpec): object {
     }
 
     return {
-        id: spec.id, eris: spec.eris, name: spec.name, region: spec.region, pvp: spec.pvp, lvl: spec.lvl, tier: spec.tier, ...(spec.dungeon ? { dungeon: true } : {}), ...(spec.respawnMap ? { respawnMap: spec.respawnMap } : {}), tileset: tsName, size: N, flareSize: [p.w, p.h], entry,
+        id: spec.id, eris: spec.eris, name: spec.name, region: spec.region, pvp: spec.nation ? 'off' : spec.pvp, lvl: spec.lvl, tier: spec.tier, ...(spec.dungeon ? { dungeon: true } : {}), ...(spec.respawnMap ? { respawnMap: spec.respawnMap } : {}), tileset: tsName, size: N, flareSize: [p.w, p.h], entry,
         source: `Flare (flare-game) mods/empyrean_campaign/maps/${spec.id}.txt`, license: 'CC-BY-SA-3.0 (adaptado: ver docs/MAPAS_FLARE.md)',
         walkable, zones, links, extras, layers: { background, object }, blocked: reach.map((r) => r.map((v) => (v ? 0 : 1))),
     };

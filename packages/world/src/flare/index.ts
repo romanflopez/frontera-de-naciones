@@ -11,6 +11,7 @@ import type { Prop, WorldMap, Zone } from '../index';
 import type { MapDef, Link } from '../maps';
 import type { MobType } from '../mobs';
 import { DUNGEON_ENTRY_KEYS } from '../quests';
+import { VHAR_SUFFIX, baseMapId, nationOfMap } from '../nations';
 import { flareTile, type FlareMapData } from './types';
 import { DATA as SALTED_FIELD } from './salted_field';
 import { DATA as STONEWOOD } from './stonewood';
@@ -59,12 +60,33 @@ const SALTED_FIELD_VHAR: FlareMapData = {
 };
 const STONEWOOD_2: FlareMapData = {
     ...STONEWOOD,
-    extras: [...STONEWOOD.extras, { to: SALTED_FIELD_VHAR.eris, cell: { x: 1, y: 6 }, kind: 'walk', arrive: { x: 56, y: 12 } }],
+    extras: [...STONEWOOD.extras, { to: SALTED_FIELD_VHAR.eris, cell: { x: 1, y: 6 }, kind: 'walk', arrive: { x: 56, y: 12 } }, { to: 'canon_goblin_vhar', cell: { x: 51, y: 77 }, kind: 'walk', arrive: { x: 5, y: 2 } }],
+};
+/**
+ * Mapas de leveo propios de cada nación (src/nations.ts): Solmar usa los de siempre y Vhar tiene una copia de cada uno (zonas renombradas,
+ * porque el validador no admite el mismo nombre de zona en dos mapas) con sus salidas y mazmorras hacia las copias de Vhar. Los puntos de
+ * contacto con mapas compartidos (el Bosque de Piedra y el Pantano de Merrimead) tienen una puerta aparte para cada nación.
+ */
+const SPLIT_BASE = [GOBLIN_CAMP, GOBLIN_CAVE, PERDITION_MINES];
+const SPLIT_IDS = new Set(SPLIT_BASE.map((d) => d.id)), SPLIT_ERIS = new Set(SPLIT_BASE.map((d) => d.eris));
+const vharCopy = (d: FlareMapData, linkTo: Record<string, Partial<{ tx: number; ty: number }>> = {}): FlareMapData => ({
+    ...d, id: d.id + VHAR_SUFFIX, eris: d.eris + VHAR_SUFFIX, name: `${d.name} (Vhar)`,
+    ...(d.respawnMap ? { respawnMap: d.respawnMap + VHAR_SUFFIX } : {}),
+    zones: d.zones.map((z) => ({ ...z, name: `${z.name} (Vhar)` })),
+    links: d.links.map((l) => (SPLIT_IDS.has(l.to) ? { ...l, to: l.to + VHAR_SUFFIX } : { ...l, ...linkTo[l.to] })),
+    extras: d.extras.map((e) => (SPLIT_ERIS.has(e.to) ? { ...e, to: e.to + VHAR_SUFFIX } : e)),
+});
+// llega a los mapas compartidos junto a la puerta de su nación, no junto a la de Solmar
+const GOBLIN_CAMP_VHAR = vharCopy(GOBLIN_CAMP, { stonewood: { tx: 51, ty: 76 }, merrimead_swamp: { tx: 3, ty: 19 } });
+const GOBLIN_CAVE_VHAR = vharCopy(GOBLIN_CAVE), PERDITION_MINES_VHAR = vharCopy(PERDITION_MINES);
+const MERRIMEAD_SWAMP_2: FlareMapData = {
+    ...MERRIMEAD_SWAMP,
+    extras: [...MERRIMEAD_SWAMP.extras, { to: GOBLIN_CAMP_VHAR.eris, cell: { x: 1, y: 19 }, kind: 'walk', arrive: { x: 52, y: 17 } }],
 };
 export type { FlareMapData } from './types';
 
 /** En el orden de la cadena: la primera es la que une el portal de las ciudades. */
-export const FLARE_DATA: FlareMapData[] = [SALTED_FIELD, SALTED_FIELD_VHAR, STONEWOOD_2, GOBLIN_CAMP, MERRIMEAD_SWAMP, NAZIA_HIGHLANDS, LOCHPORT_CEMETERY, SOUTHERN_RIDGE, THE_BREACH, GOBLIN_CAVE, PERDITION_MINES, ANTLION_NEST, STORMROCK_RUINS, ST_MARIA_2, ST_MARIA_3, WIZARDS_TOWER_1, WIZARDS_TOWER_2, TEMPLE_OF_MEZ_1, TEMPLE_OF_MEZ_2, UNDERWORLD_STRONGHOLD_1, THE_PIT, STORMROCK_PASS, UNDERWORLD, UNDERWORLD_CATACOMBS, UNDERWORLD_MINES, BLACK_OAK_FARM, OASIS, LAKE_KUUMA, GROT_LAGOON, ABANDONED_MINES, FORT_AMIR, TORTURE_CHAMBERS];
+export const FLARE_DATA: FlareMapData[] = [SALTED_FIELD, SALTED_FIELD_VHAR, STONEWOOD_2, GOBLIN_CAMP, MERRIMEAD_SWAMP_2, NAZIA_HIGHLANDS, LOCHPORT_CEMETERY, SOUTHERN_RIDGE, THE_BREACH, GOBLIN_CAVE, PERDITION_MINES, ANTLION_NEST, STORMROCK_RUINS, ST_MARIA_2, ST_MARIA_3, WIZARDS_TOWER_1, WIZARDS_TOWER_2, TEMPLE_OF_MEZ_1, TEMPLE_OF_MEZ_2, UNDERWORLD_STRONGHOLD_1, THE_PIT, STORMROCK_PASS, UNDERWORLD, UNDERWORLD_CATACOMBS, UNDERWORLD_MINES, BLACK_OAK_FARM, OASIS, LAKE_KUUMA, GROT_LAGOON, ABANDONED_MINES, FORT_AMIR, TORTURE_CHAMBERS, GOBLIN_CAMP_VHAR, GOBLIN_CAVE_VHAR, PERDITION_MINES_VHAR];
 const byFlareId = new Map(FLARE_DATA.map((d) => [d.id, d]));
 const byEris = new Map(FLARE_DATA.map((d) => [d.eris, d]));
 export const FLARE_FIRST = FLARE_DATA[0];
@@ -178,11 +200,11 @@ export function flareMaps(hubs: Record<string, { map: string; to: Cell }>): Reco
     for (const d of FLARE_DATA) {
         const links = flareLinks(d);
         // puertas con llave (docs/LLAVES.md): la entrada desde la superficie al primer piso pide la llave de esa mazmorra
-        if (!d.dungeon) for (const l of links) { const k = DUNGEON_ENTRY_KEYS[l.to.map]; if (k) l.gate = { ...(l.gate ?? {}), key: k }; }
+        if (!d.dungeon) for (const l of links) { const k = DUNGEON_ENTRY_KEYS[baseMapId(l.to.map)]; if (k) l.gate = { ...(l.gate ?? {}), key: k }; }
         const hub = hubs[d.eris];
         if (hub) links.push({ id: d === FLARE_FIRST ? 'campos_a_ciudad' : `${d.eris}_a_ciudad`, map: d.eris, ...FLARE_BACK, to: { map: hub.map, ...hub.to }, kind: 'portal', gate: { faction: FIELD_FACTION[d.eris] }, msg: 'Cruzás el portal de vuelta a la ciudad.' });
         // al campo de una nación se entra desde el Bosque de Piedra solo siendo de esa nación (las ciudades ya llevan a la suya)
-        for (const l of links) { const f = FIELD_FACTION[l.to.map]; if (f && !FIELD_ERIS.has(d.eris)) l.gate = { ...(l.gate ?? {}), faction: f }; }
+        for (const l of links) { const f = FIELD_FACTION[l.to.map] ?? nationOfMap(l.to.map); if (f && !FIELD_ERIS.has(d.eris)) l.gate = { ...(l.gate ?? {}), faction: f }; }
         const def: MapDef = {
             id: d.eris, name: d.name, region: d.region, size: d.size, lvl: d.lvl, tier: d.tier, pvp: d.pvp, safe: false,
             spawn: { ...d.entry }, respawn: { ...d.entry }, links, build: () => buildFlareMap(byEris.get(d.eris)!),

@@ -52,8 +52,8 @@ test('las puertas de D1 y D2 piden su llave; los pasos entre pisos, no', () => {
     for (const id of ['cueva_goblin', 'minas_goblin', 'nido_hormiga_leon', 'ruinas_de_stormrock']) {
         for (const l of getMapDef(id)!.links) assert.equal(l.gate?.key, undefined, `${l.id} no pide llave`);
     }
-    assert.match(linkGateReason(DOOR, { qi: 0, lvl: 5, keys: {}, unlocked: [] }) ?? '', /Llave de la cueva/);
-    assert.equal(linkGateReason(DOOR, { qi: 0, lvl: 5, keys: { llave_cueva: 1 }, unlocked: [] }), null);
+    assert.match(linkGateReason(DOOR, { qi: 0, lvl: 5, keys: {}, unlocked: [], faction: 'solmar' }) ?? '', /Llave de la cueva/);
+    assert.equal(linkGateReason(DOOR, { qi: 0, lvl: 5, keys: { llave_cueva: 1 }, unlocked: [], faction: 'solmar' }), null);
 });
 
 test('receta: 8 colmillos + 60 de oro arman la llave de la cueva, en cualquier lado; si falta algo, avisa qué', () => {

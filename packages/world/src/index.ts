@@ -13,6 +13,7 @@ import { extendCities } from './cities';
 import { extendTraining, type TrainingStep } from './training';
 import { extendVharGate } from './vhar/legacy';
 export { CITIES, HUBS, cityAt, type City } from './cities';
+export { NATION_SPLIT_MAPS, VHAR_SUFFIX, mapForNation, baseMapId, nationOfMap } from './nations';
 export { FIELD_MAP, trainingMapFor, trainingOfMap, trainingLockedMsg, TRAINING, TRAINING_IDS, WAYPOINT_RANGE, CITY_PORTAL_OFFSET, LEGACY_CITY_PORTALS, trainingUnlocked, portalGate, type TrainingStep, type PortalProgress, type Waypoint } from './training';
 import type { MobType } from './mobs';
 export * from './mobs';

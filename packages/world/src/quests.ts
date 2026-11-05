@@ -14,6 +14,7 @@
  */
 import type { MobType } from './mobs';
 import { powerLevel } from './tiers';
+import { baseMapId } from './nations';
 import { BOSS_UNIQUES, UNIQUES_BY_TIER, type UniqueBase } from './uniques';
 
 // ---------- materiales nuevos (los sueltan los mobs; la receta de las llaves va en el paso de llaves) ----------
@@ -408,7 +409,7 @@ export interface QuestHave { mats: Record<string, number>; maxUp: number }
 
 /** Cuánto suma un evento a un objetivo (0 si no le corresponde). Los de "tener" (collect) no avanzan por eventos. */
 /** Los dos campos de entrada (uno por nación) cuentan como el mismo mapa para las misiones (docs/CIUDADES.md §8). */
-const questMap = (m: string | undefined): string | undefined => (m === 'campos_de_sal_vhar' ? 'campos_de_sal' : m);
+const questMap = (m: string | undefined): string | undefined => (m === undefined ? m : baseMapId(m));
 export function goalStep(g: QuestGoal, e: QuestEvent): number {
     switch (g.k) {
         case 'kill': return e.k === 'kill' && g.mobs.includes(e.type) && (!g.map || g.map === questMap(e.map)) ? 1 : 0;
