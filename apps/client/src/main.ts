@@ -1496,13 +1496,19 @@ cv.addEventListener('pointerleave', () => { mouse = { x: -1, y: -1 }; });
 // ---------- chat por canales: Global, Nación (tu facción), Party y Guild ----------
 const CHAT_NET = new Set<ChatChannel>(['global', 'comercio', 'area', 'party', 'guild', 'nacion']);
 function chatChannel(c: string): ChatChannel { const k = (c || 'global') as ChatChannel; return CHAT_NET.has(k) ? k : 'global'; }
-const CHAT_HELP = () => `Comandos: /meditar, /diag (fps, ping y correcciones de movimiento)${DEBUG ? ', /look' : ''}; chat: /g global, /c comercio, /a área, /n nación, /p party, /gu guild; party: /invitar /aceptar /rechazar /salir /expulsar /lider; guild: /guild (crear <nombre> <ETIQUETA>, invitar, aceptar, rechazar, salir, expulsar, ascender, bajar, lider, lema, disolver; O abre la ventana); arena: /arena (2v2, 3v3, salir, aceptar, rechazar, ranking, rating)`;
+const CHAT_HELP = () => `Comandos: /meditar, /diag (fps, ping y correcciones de movimiento), /fps (tope de cuadros: libre, 144, 60)${DEBUG ? ', /look' : ''}; chat: /g global, /c comercio, /a área, /n nación, /p party, /gu guild; party: /invitar /aceptar /rechazar /salir /expulsar /lider; guild: /guild (crear <nombre> <ETIQUETA>, invitar, aceptar, rechazar, salir, expulsar, ascender, bajar, lider, lema, disolver; O abre la ventana); arena: /arena (2v2, 3v3, salir, aceptar, rechazar, ranking, rating)`;
 /** Lo que se escribe en el ChatBox: comandos locales, o mensaje al server por el canal de la pestaña (o el del prefijo). */
 chatBus.on('chat:send', ({ text, channel }) => {
     cv.focus({ preventScroll: true });
     if (!connected) return;
     if (/^\/meditar$/i.test(text)) { toggleMeditate(); return; }
     if (/^\/diag$/i.test(text)) { diag.toggle(); return; }
+    { const m = /^\/fps(?:\s+(\S+))?$/i.exec(text); if (m) {
+        const a = (m[1] ?? '').toLowerCase();
+        if (a === 'libre' || a === '0' || a === 'off') fpsCap = 0; else if (/^\d+$/.test(a) && Number(a) >= 20 && Number(a) <= 1000) fpsCap = Number(a); else { log(`Tope de fps: ${fpsCap || 'libre (sigue al monitor)'}. Uso: /fps libre | /fps 144 | /fps 60`); return; }
+        try { localStorage.setItem('fdn.fpscap', String(fpsCap)); } catch { /* sin almacenamiento */ }
+        log(`Tope de fps: ${fpsCap || 'libre (sigue al monitor)'}.`); return;
+    } }
     if (DEBUG && /^\/look(\s|$)/i.test(text)) { lookCommand(text); return; }
     if (partyCommand(text)) return;
     if (guildCommand(text)) return;
@@ -2857,16 +2863,18 @@ const diag = {
     on: false, el: null as HTMLElement | null, timer: 0,
     frames: [] as { t: number; ms: number }[], snaps: [] as number[], posSent: [] as number[], rtts: [] as { t: number; ms: number }[], sent: new Map<number, number>(),
     frame(tf: number, t: number, dt: number) { this.frames.push({ t, ms: dt * 1000 }); void tf; },
+    renders: [] as { t: number; ms: number }[],
+    render(ms: number) { this.renders.push({ t: now(), ms }); },
     ping(seq: number) { this.sent.set(seq, performance.now()); if (this.sent.size > 20) this.sent.delete(this.sent.keys().next().value as number); },
     pong(seq: number) { const t0 = this.sent.get(seq); if (t0 === undefined) return; this.sent.delete(seq); this.rtts.push({ t: now(), ms: performance.now() - t0 }); },
     text(): string {
         const t = now(), cut = (a: { t: number }[], s: number) => { while (a.length && t - a[0].t > s) a.shift(); };
-        cut(this.frames, 5); cut(this.rtts, 30);
+        cut(this.frames, 5); cut(this.rtts, 30); cut(this.renders, 5);
         while (this.snaps.length && t - this.snaps[0] > 60) this.snaps.shift();
         while (this.posSent.length && t - this.posSent[0] > 2) this.posSent.shift();
         const f = this.frames.map((x) => x.ms), avg = f.reduce((a, b) => a + b, 0) / Math.max(1, f.length), max = Math.max(0, ...f), long = f.filter((x) => x > 25).length;
         const r = this.rtts.map((x) => x.ms), ra = r.reduce((a, b) => a + b, 0) / Math.max(1, r.length), rm = Math.max(0, ...r);
-        return `cuadros: ${(1000 / Math.max(1, avg)).toFixed(0)} fps · peor cuadro ${max.toFixed(0)} ms · tirones >25 ms: ${long} (5 s)\nping: ${r.length ? ra.toFixed(0) : '?'} ms (máx ${rm.toFixed(0)}) · posiciones enviadas: ${(this.posSent.length / 2).toFixed(0)}/s\ncorrecciones del server: ${this.snaps.length} (último minuto)`;
+        return `cuadros: ${(1000 / Math.max(1, avg)).toFixed(0)} fps · peor cuadro ${max.toFixed(0)} ms · tirones >25 ms: ${long} (5 s) · dibujo ${(this.renders.reduce((a, b) => a + b.ms, 0) / Math.max(1, this.renders.length)).toFixed(1)} ms (máx ${Math.max(0, ...this.renders.map((x) => x.ms)).toFixed(1)}) · tope ${fpsCap || 'libre'}\nping: ${r.length ? ra.toFixed(0) : '?'} ms (máx ${rm.toFixed(0)}) · posiciones enviadas: ${(this.posSent.length / 2).toFixed(0)}/s\ncorrecciones del server: ${this.snaps.length} (último minuto)`;
     },
     toggle() {
         this.on = !this.on;
@@ -3093,13 +3101,18 @@ function minimapTick() {
         mobs, npcs: MAP.npcs.map((n) => ({ x: n.x, y: n.y, role: roleOf(n) })),
     }));
 }
+/** Tope de cuadros por segundo (0 = libre: sigue al monitor, 144/240 Hz). Se cambia con /fps y se recuerda. */
+let fpsCap = (() => { try { const v = Number(localStorage.getItem('fdn.fpscap')); return v >= 20 && v <= 1000 ? v : 0; } catch { return 0; } })();
+let lastDrawTs = 0;
 function frame(ts: number = performance.now()) {
+    if (fpsCap > 0 && lastDrawTs && ts - lastDrawTs < 1000 / fpsCap - 1.5) { requestAnimationFrame(frame); return; }
+    lastDrawTs = ts;
     // El paso de simulación sale del reloj del propio cuadro (rAF), que es parejo; performance.now() dentro del callback varía con la carga y mete temblor al moverse.
     const T = now(); const tf = ts / 1000; let dt = Math.min(0.1, Math.max(0, tf - last)); diag.frame(tf, T, dt); last = tf;
     if (hitstop > 0) { hitstop -= dt; dt = 0; }
     if (!mapLoading) { update(dt); checkPortals(); checkLinks(); wpTick(); npcTick(); }
     updateCam(Math.min(0.05, T - lastCam)); lastCam = T;
-    updateHover(); render(); hud(); winTick(T); minimapTick(); requestAnimationFrame(frame);
+    updateHover(); { const r0 = performance.now(); render(); diag.render(performance.now() - r0); } hud(); winTick(T); minimapTick(); requestAnimationFrame(frame);
     perf.frames++; { const t = performance.now(); if (t - perf.since >= 1000) { perf.fps = (perf.frames * 1000) / (t - perf.since); perf.frames = 0; perf.since = t; } }
 }
 

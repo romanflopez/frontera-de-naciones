@@ -64,7 +64,7 @@ function createWindow() {
         show: false,
         autoHideMenuBar: true,
         title: 'ERIS',
-        webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: path.join(__dirname, 'preload.cjs') },
+        webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: path.join(__dirname, 'preload.cjs'), backgroundThrottling: false },
     });
     win.once('ready-to-show', () => win.show());
 
@@ -110,6 +110,8 @@ if (!app.requestSingleInstanceLock()) {
         if (w) { if (w.isMinimized()) w.restore(); w.focus(); }
     });
 
+    // Sin tope de cuadros propio: con FDN_UNCAPPED=1 se apagan el límite de Chromium y el vsync (más fps que el monitor, puede mostrar tearing).
+    if (process.env.FDN_UNCAPPED === '1') { app.commandLine.appendSwitch('disable-frame-rate-limit'); app.commandLine.appendSwitch('disable-gpu-vsync'); }
     app.whenReady().then(() => {
         if (!DEV_URL) protocol.handle('app', serveClient);
         createWindow();
