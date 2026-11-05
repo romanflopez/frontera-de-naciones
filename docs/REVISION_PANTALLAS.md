@@ -118,6 +118,7 @@ Código: `apps/client/index.html` (bloque `#login`), `apps/client/src/loginui.ts
   - La grilla de la bolsa muestra **todas las casillas sin scroll** (p. ej. 5×8 = 40) y el scroll existe solo si de verdad hay más; la ventana de personaje separa equipo/atributos/stats en pestañas si no entra, en lugar de apilar y scrollear.
   - `--win-scale` baja solo como último recurso (piso 0,8 en vez de 0,45): antes de achicar, se reorganiza.
   - Con el chat al lado del HUD (§5), el espacio reservado baja de 200 px a lo que mide el HUD real.
+- [x] **Tienda (vendedores) rota** (Román, 5/11; D.16 parcial). Era un solo componente (`renderShop` en `main.ts`, estilos en `bag-craftpix.css`) compartido por mercader, armero, armadurero, joyero y alquimista: una grilla de 2 columnas dentro de un marco de 392 px (el cuerpo medía 559 px: scroll horizontal y tarjetas angostas con el nombre cortado). Ahora: Comprar y Tu bolsa **lado a lado**, filas con nombre completo (hasta 2 líneas), rareza/tipo y precio con moneda, cada panel con su scroll **solo vertical**, sin scroll horizontal; el marco queda a la derecha del chat y a la izquierda del minimapa (en < 1180 px vuelve al centro; en < 720 px se apilan). Falta: confirmar antes de vender y el oro del jugador con etiqueta.
 - [ ] Mismo criterio para libro, misiones, tienda, depósito, subasta y arena: una pasada ventana por ventana en una pantalla de 1366×768, que es la peor que vale la pena soportar.
 
 **Falta**
