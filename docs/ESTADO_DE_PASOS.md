@@ -9,6 +9,7 @@ Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última a
 | 0.1 CI mínimo | **Hecho** | Corre en cada push y pull request: tipos de los 5 paquetes, tests del server y build del cliente (~1 min). Se comprobó que queda verde en `main` y rojo con un test roto. Falta (en GitHub): exigir el chequeo en Settings → Branches |
 | 0.2 Legal y catálogos | Pendiente | |
 | 0.3 Deploy de prueba | Pendiente | |
+| **D.2 La magia no falla** | **Implementado** (falta calibrar el mago en `sim:pvp`) | `hitChance` devuelve 1 para daño mágico (`pvpCombat.ts`); `magStat` ya no entra en la tirada. El físico sigue con DEX. El cartel «Falló» solo sale en físico. Tests en `golpe-hb.test.ts` y `sim-pvp.test.ts` |
 | **1.1 Techo 40 y curva de nivel** | **Implementado** (faltan la simulación y la prueba manual) | Ver abajo |
 | **1.2 Puntos de stats** | **Implementado** (falta la prueba de balance con el script de combate) | Ver abajo |
 | **1.3 Atributos autoritativos y topes** | **Implementado** (faltan crítico con cargas, topes de absorción y la prueba manual) | Ver abajo |

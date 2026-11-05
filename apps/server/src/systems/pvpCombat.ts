@@ -258,8 +258,8 @@ export function progressFromEcon(st: { lvl: number; q: { i: number; keys: Record
 // ---------- golpe en PvP (chance de pegar entre jugadores; doc del proyecto "formulas de stats y hit ratio") ----------
 /**
  * Chance de que un golpe de jugador le pegue a otro jugador: `lo que ataca / lo que defiende × K`, topeada entre 10 % y 90 %.
- * Físico: ataca 100 + (DEX − 50) si DEX > 50; defiende 2 × DEX del objetivo. Mágico: ataca 100 + (MAG − 50) si MAG > 50; defiende 100 + (MAG − 50)
- * del objetivo. La armadura (DF/RM) NO entra acá: ya mitiga el daño después. Solo vale contra jugadores (los monstruos no esquivan).
+ * Físico: ataca 100 + (DEX − 50) si DEX > 50; defiende 2 × DEX del objetivo. Mágico: nunca falla (chance 1; ni MAG ni DEX entran).
+ * La armadura (DF/RM) NO entra acá: ya mitiga el daño después. Solo vale contra jugadores (los monstruos no esquivan).
  * `K` de la referencia es 50 y ahí la armadura entra en la defensa; acá la armadura mitiga el daño aparte, y con K = 90 un duelo parejo dura lo mismo que sin tirada de golpe (calibrado con `sim:pvp`: con 50 el paladín contra paladín tardaba 133 s en vez de 48).
  */
 export const HIT = { skill: 100, k: Number(process.env.FDN_HITK) || 90, min: 10, max: 90, threshold: 50 };
@@ -267,8 +267,9 @@ export const HIT = { skill: 100, k: Number(process.env.FDN_HITK) || 90, min: 10,
 export const HIT_ROLL = { enabled: process.env.FDN_HITROLL !== '0' && !process.env.NODE_TEST_CONTEXT };
 const above = (n: number): number => Math.max(0, n - HIT.threshold);
 export function hitChance(att: CombatStats, def: CombatStats, kind: DmgKind): number {
-    const a = kind === 'magic' ? HIT.skill + above(att.magStat ?? STAT_BASE) : HIT.skill + above(att.dexStat ?? STAT_BASE);
-    const d = kind === 'magic' ? 100 + above(def.magStat ?? STAT_BASE) : 2 * (def.dexStat ?? STAT_BASE);
+    if (kind === 'magic') return 1; // D.2: la magia nunca falla; se mitiga con RM (DISEÑO.md §5)
+    const a = HIT.skill + above(att.dexStat ?? STAT_BASE);
+    const d = 2 * (def.dexStat ?? STAT_BASE);
     return Math.min(HIT.max, Math.max(HIT.min, (a / Math.max(1, d)) * HIT.k)) / 100;
 }
 /** ¿Pega? (tirada con `rnd`, por defecto Math.random). Apagable con FDN_HITROLL=0. */
