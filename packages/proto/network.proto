@@ -143,6 +143,7 @@ message ClientMessage {
     TradeRequest trade_request = 1300;
     // Guilds (ver docs/GUILDS.md). Rango propio de tags desde 1500.
     GuildRequest guild_request = 1500;
+    ContribRequest contrib_request = 1600;
   }
   // P0-A: el cliente ya no fija números de combate (velocidad de movimiento, de ataque, de casteo, alcance, daño, stun).
   // Los calcula el server. Tags retirados: no reutilizar.
@@ -1556,6 +1557,11 @@ message InventoryState {
   int32 cap_df = 28;
   int32 cap_rm = 29;
   int64 cap_next_at = 30;
+  // EK y contribución (D.10): kills a jugadores de la otra nación, contribución gastable, títulos comprados y el puesto.
+  int32 ek = 31;
+  int32 contrib = 32;
+  repeated string titles = 33;
+  string title = 34;
 }
 /** Respuesta a una acción de economía: ok=false con un motivo (code) y texto para mostrar. */
 message EconResult { bool ok = 1; string code = 2; string text = 3; }
@@ -1713,6 +1719,8 @@ message DepositState {
  *   crest   = cambiar el escudo (arg = "forma,fondo,figura,símbolo", índices); motd = cambiar el lema (arg); disband = disolver (solo el líder, cofre vacío).
  *   info    = pedir el estado (GuildState).
  */
+/** Tienda de contribución (D.10): action = buy | equip | unequip; id = el del título. */
+message ContribRequest { string action = 1; string id = 2; }
 message GuildRequest {
   string action = 1;
   string name = 2;

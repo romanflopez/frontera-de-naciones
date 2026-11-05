@@ -20,7 +20,7 @@ import { useCastStore } from './ui/castStore';
 import { spellTypeOf, type SpellType } from './ui/colors';
 import { chatBus, logToChat, type ChatChannel } from './ui/chatStore';
 import { drawPortalFloor, drawPortalFx, setPortalSheet, PORTAL_CITY, PORTAL_ZONE } from './portal';
-import { stepFree, leadAim, projectileFlightMs, pvpRegionAt } from '@fdn/world';
+import { stepFree, leadAim, projectileFlightMs, pvpRegionAt, CONTRIB_BY_ID } from '@fdn/world';
 import { checkSkill, skillDeniedText, canUseSkill, skillLevel } from '@fdn/world';
 import { DEFAULT_MAP, RECALL, STAT_CAP, classBaseHp, classBaseMp, itemDfTotal, itemRmTotal, STAT_DESC, STAT_IDS, STAT_BASE, STAT_RESET_FREE_LVL, statTip, STAT_NAMES, defaultStats, expToLevel, statBonus, critTotal, aspdTotal, traitLabel, traitHpMult, leechTotal, meleeIntervalSecs, statResetCost, type StatId, type Stats, factionHome, HUBS, MAPS, getMapDef, inMapRect, linkGateReason, mapHash, MOB_TYPES, mobDef, TRAINING, trainingUnlocked, portalGate, type MobType, type MobDef, type TrainingStep, type Waypoint, type Link, type MapDef, type WorldMap, WAYPOINT_RANGE } from '@fdn/world';
 import { UNIQUE_BY_NAME, UP_MAX, UP_MAX_BY_QUALITY, EXTRAS_BY_QUALITY, FX_INFO, JUNK_MATS, MAT_REFORJA, junkValue, reforgeGold, reforgeStones, activeSets, setOfPiece, slotsFor, upGold, upMult, upStones, ALL_BASES, ATTR_IDS, ATTR_RANGES, BAG_MAX, BASES, KEYDEFS, KEY_IDS, POTS, QUESTS, SHARDS_PER_KEY, SHOPS, SLOTS, fitsSlot, TALK_RANGE, roleOf, trainingLockedMsg, trainingOfMap, sellPrice, type AttrId, type Base, type KeyId, type Slot, type Stock } from '@fdn/world';
@@ -37,6 +37,7 @@ import { createMinimap, type Minimap } from './minimap.ts';
 import { createAuctionUI } from './auction.ts';
 import { createDepositUI } from './deposit.ts';
 import { createGuildUI } from './guild.ts';
+import { createContribUI } from './contrib.ts';
 import { createTradeUI } from './trade.ts';
 import { createCursor } from './cursor.ts';
 import { installErrorReporting, watchForNewVersion } from './ops.ts';
@@ -132,6 +133,8 @@ const ATTR_FMT: Record<AttrId, (v: number) => string> = {
 const ATTRS = ATTR_IDS.map((id) => ({ id, r: ATTR_RANGES[id], f: ATTR_FMT[id] }));
 interface Item extends Base { id: number; rar: Rarity; attrs: { id: AttrId; v: number }[]; /** nivel de mejora (+N) */ up?: number; /** reforjas hechas */ rf?: number }
 const itName = (it: { name: string; up?: number }) => (it.up ? `+${it.up} ` : '') + it.name;
+/** EK, contribución y títulos (D.10): los manda el server en `inventoryState`. */
+let ek = 0, contribBal = 0, myTitle = '';
 let zemBag = 0; // zem de la bolsa (D.9; antes piedras de forja). La forja usa solo el del depósito.
 /** Puntos de stats repartidos y libres (los manda el server en InventoryState; el server decide, esto solo se muestra y se refleja en los números). */
 let stats: Stats = defaultStats(), statFree = 0;
@@ -1592,6 +1595,8 @@ function guildCommand(text: string): boolean {
 }
 /** Etiqueta de guild de otro jugador: la 4.ª parte del perfil, que pone el server. */
 const guildTagOf = (profile: string) => profile.split(';')[3] ?? '';
+/** Título de otro jugador: la 5.ª parte del perfil (el id; el nombre sale de la tienda). */
+const titleOf = (profile: string): string => CONTRIB_BY_ID.get(profile.split(';')[4] ?? '')?.name ?? '';
 const taggedName = (name: string, tag: string) => (tag ? `[${tag}] ${name}` : name);
 
 type PartyRow = { name: string; level: number; hp: number; maxHp: number; mp: number; maxMp: number; map: string; leader: boolean; online: boolean };
@@ -1710,6 +1715,7 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'i' || e.key === 'I') toggleBag();
     if (e.key === 'c' || e.key === 'C') toggleChar();
     if (e.key === 'o' || e.key === 'O') guild.toggle();
+    if (e.key === 'n' || e.key === 'N') contribUI.toggle();
     if (e.key === 'l' || e.key === 'L') toggleQuestLog();
     if (e.key === 'p' || e.key === 'P') toggleSpellBook();
     if (e.key === 'Escape') { if (P.casting || P.ready) cancelCast('Hechizo cancelado.'); else P.target = null; }
@@ -2016,8 +2022,8 @@ function render() {
         } } });
     objs.sort((a, b) => a.d - b.d).forEach((o) => o.f());
     // nombres arriba de todo
-    for (const o of others.values()) { if (unseen(o)) continue; const p = iso(o.x, o.y); nameTag(taggedName(o.name, guildTagOf(o.profile)), p.x, p.y - 70, factionCol(o.profile.split(';')[0]), o.gone ? 0.5 : 1); if (o.maxHp && o.hp !== undefined && (o.hp < o.maxHp || (o.shield ?? 0) > 0)) { const f = Math.max(0, o.hp / o.maxHp); ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - 17, p.y - 66, 34, 5); ctx.fillStyle = isEnemy(o) ? '#d9443a' : '#58b85a'; ctx.fillRect(p.x - 16, p.y - 65, 32 * f, 3); if ((o.shield ?? 0) > 0) { ctx.fillStyle = '#9fd8ff'; ctx.fillRect(p.x - 16, p.y - 65, 32 * Math.min(1, o.shield! / o.maxHp), 1.5); } } }
-    { const p = iso(P.x, P.y); nameTag(taggedName(P.name, guild.state?.tag ?? ''), p.x, p.y - 70, factionCol(selectedFaction)); }
+    for (const o of others.values()) { if (unseen(o)) continue; const p = iso(o.x, o.y); nameTag(taggedName(o.name, guildTagOf(o.profile)), p.x, p.y - 70, factionCol(o.profile.split(';')[0]), o.gone ? 0.5 : 1); { const tt = titleOf(o.profile); if (tt) nameTag(`«${tt}»`, p.x, p.y - 82, '#d6a445', o.gone ? 0.5 : 0.9, 9); } if (o.maxHp && o.hp !== undefined && (o.hp < o.maxHp || (o.shield ?? 0) > 0)) { const f = Math.max(0, o.hp / o.maxHp); ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - 17, p.y - 66, 34, 5); ctx.fillStyle = isEnemy(o) ? '#d9443a' : '#58b85a'; ctx.fillRect(p.x - 16, p.y - 65, 32 * f, 3); if ((o.shield ?? 0) > 0) { ctx.fillStyle = '#9fd8ff'; ctx.fillRect(p.x - 16, p.y - 65, 32 * Math.min(1, o.shield! / o.maxHp), 1.5); } } }
+    { const p = iso(P.x, P.y); nameTag(taggedName(P.name, guild.state?.tag ?? ''), p.x, p.y - 70, factionCol(selectedFaction)); const mt = CONTRIB_BY_ID.get(myTitle)?.name; if (mt) nameTag(`«${mt}»`, p.x, p.y - 82, '#d6a445', 0.9, 9); }
     drawPortalLabels(); drawLinkLabels();
     for (const n of MAP.npcs) {
         const p = iso(n.x + 0.5, n.y + 0.5);
@@ -2213,7 +2219,7 @@ function hud() {
         const locked = !canUseSkill(CLS.id, P.lvl, s.id ?? ''); el.classList.toggle('locked', locked); if (locked) el.dataset.lvl = `Nv ${skillLevel(CLS.id, s.id ?? '') ?? '-'}`;
     });
     const tt = totals(), wd: [number, number] = tt.wdmg[1] > 0 ? tt.wdmg : CLS.melee;
-    const chips: [string, string][] = [['Nv.', String(P.lvl)], ['Exp', `${Math.floor(P.exp).toLocaleString('es-AR')} / ${expNeed().toLocaleString('es-AR')}`], ['Ataque', `${wd[0]}–${wd[1]}`], ['Defensa', `${tt.def} · RM ${tt.rm}`], ['Vel. mov.', Math.round((270 / P.stepMs) * 100) + '%'], ['Crítico', critTotal(tt.crit) + '%'], ['Tope DF / RM', `${capDf} / ${capRm}${capNextAt > 0 ? ' · sube el lunes' : ''}`]];
+    const chips: [string, string][] = [['Nv.', String(P.lvl)], ['Exp', `${Math.floor(P.exp).toLocaleString('es-AR')} / ${expNeed().toLocaleString('es-AR')}`], ['Ataque', `${wd[0]}–${wd[1]}`], ['Defensa', `${tt.def} · RM ${tt.rm}`], ['Vel. mov.', Math.round((270 / P.stepMs) * 100) + '%'], ['Crítico', critTotal(tt.crit) + '%'], ['EK', `${ek} · contribución ${contribBal} (N)`], ['Tope DF / RM', `${capDf} / ${capRm}${capNextAt > 0 ? ' · sube el lunes' : ''}`]];
     const ch = chips.map(([k, v]) => `<div class="chp"><u>◆</u><span>${k}</span><b>${v}</b></div>`).join('');
     if ($('chips').dataset.h !== ch) { $('chips').dataset.h = ch; $('chips').innerHTML = ch; layoutHud(); }
     const m = P.target && mobs.includes(P.target) ? P.target : null;
@@ -2795,6 +2801,7 @@ const auction = createAuctionUI({ send: (p) => net.send(p), bag: () => P.bag, go
 /** Dar e Intercambiar entre jugadores (ventana propia en trade.ts; el server valida todo, ver docs/INTERCAMBIO.md). */
 const trade = createTradeUI({ send: (p) => net.send(p), bag: () => P.bag, gold: () => P.gold, fromInv: itemFromInv, icon: ico, attrText, esc, fmt: fmtNum, toast });
 /** Guild (ventana propia en guild.ts; el server valida todo, ver docs/GUILDS.md). El cofre compartido es una pestaña del depósito. */
+const contribUI = createContribUI({ send: (p) => net.send(p), esc });
 const guild = createGuildUI({ send: (p) => net.send(p), esc, me: () => P.name, mapName: (id) => getMapDef(id)?.name ?? id, toast });
 const deposit = createDepositUI({ send: (p) => net.send(p), bag: () => P.bag, gold: () => P.gold, pots: () => pots, keys: () => Q.keys, shards: () => Q.shards, zem: () => zemBag, fromInv: itemFromInv, icon: ico, attrText, esc, fmt: fmtNum, requestClose: () => closeShop(), guild: () => (guild.state ? { name: guild.state.name, tag: guild.state.tag } : null) });
 $('openGuild').addEventListener('click', () => guild.toggle());
@@ -3283,7 +3290,7 @@ function applyInventory(v: InventoryState) {
     P.bag = v.bag.map(itemFromInv);
     for (const sl of SLOTS) P.eq[sl] = null;
     for (const e of v.eq) if (e.item && (SLOTS as string[]).includes(e.slot)) P.eq[e.slot as Slot] = itemFromInv(e.item);
-    pots.hp = v.potsHp; pots.mp = v.potsMp; zemBag = v.zem;
+    pots.hp = v.potsHp; pots.mp = v.potsMp; zemBag = v.zem; ek = v.ek; contribBal = v.contrib; myTitle = v.title; contribUI.onState({ ek: v.ek, contrib: v.contrib, titles: v.titles, title: v.title });
     stats = { str: v.statStr || 10, vit: v.statVit || 10, dex: v.statDex || 10, mag: v.statMag || 10 }; statFree = v.statFree; capDf = v.capDf || 60; capRm = v.capRm || 75; capNextAt = Number(v.capNextAt);
     Q.i = v.questI; Q.st = v.questState === 'active' || v.questState === 'ready' ? v.questState : 'new'; Q.prog = v.questProg;
     Q.keys.cripta = v.keysCripta; Q.keys.foso = v.keysFoso; Q.shards.cripta = v.shardsCripta; Q.shards.foso = v.shardsFoso;

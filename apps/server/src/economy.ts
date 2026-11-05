@@ -16,7 +16,7 @@ import {
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
     DAILY_BY_ID, DAILY_EXP_PCT, DUNGEON_KEY, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, junkValue, MAT_REFORJA, reforgeGold, reforgeStones, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
     mainComplete, newQuestBook, repeatGold, rewardUniques, rollDailies, type QuestBook, type QuestEvent, type QuestHave, type QuestReward,
-    canonicalClass, ZEM_CHANCE, ZEM_BOSS, ZEM_ID, pvpGoldLoss,
+    canonicalClass, ZEM_CHANCE, ZEM_BOSS, ZEM_ID, pvpGoldLoss, CONTRIB_BY_ID, CONTRIB_PER_KILL, EK_COOLDOWN_MS, EK_SEEN_MAX, ekLevelOk,
 } from '@fdn/world';
 import { DAILY_INDEX_BASE, dailyOffers, dayKey } from './dailyShop.ts';
 import { canPickup, GROUND_MAX_PER_OWNER, PICKUP_RANGE, type GroundApi } from './ground.ts';
@@ -25,7 +25,7 @@ import type { Player } from './player.ts';
 import type { AccountRecord, Storage } from './storage.ts';
 
 /** v3: nivel máximo 40 y curva de exp nueva (migra la exp guardada conservando la fracción del nivel). v4: puntos de stats. */
-export const ECON_VERSION = 10;
+export const ECON_VERSION = 11;
 export const MAX_LVL = MAX_LEVEL;
 /** Sin límite de oro de juego: el único techo es el técnico (entero exacto en JS / double del protocolo). */
 export const MAX_GOLD = Number.MAX_SAFE_INTEGER;
@@ -49,6 +49,8 @@ export interface Econ {
     eq: Record<Slot, SItem | null>;
     /** Zem de la bolsa (D.9): riesgo en PvP de zona roja; la forja gasta el del depósito. Las cuentas viejas no lo tienen: 0. */
     zem?: number;
+    /** D.10: kills válidos a jugadores de la otra nación (permanente), contribución gastable y total ganado, víctimas recientes (para el cooldown de 4 h), títulos comprados y el puesto. */
+    ek?: number; contrib?: number; contribTotal?: number; ekSeen?: Record<string, number>; titles?: string[]; title?: string;
     /** Piedras de forja de antes de D.9: `migrateEcon` las pasa a `zem` 1:1 y borra el campo. */
     forge?: number;
     /** Materiales apilables levantados del suelo (systems/loot.ts), por id. Las cuentas viejas no lo tienen. */
@@ -232,6 +234,16 @@ export function importLegacy(json: string, trusted = false): Econ | null {
  * v2 -> v3: tope de nivel 40 y curva de exp nueva: se conserva la fracción de progreso del nivel (no se regalan ni se quitan niveles),
  * y un nivel por encima del tope se recorta a 40 con la exp en cero.
  */
+/** Deja EK, contribución, víctimas recientes y títulos en un estado válido (números enteros ≥ 0, títulos que existen y sin repetir, el puesto tiene que ser uno comprado). */
+export function cleanContrib(st: Econ): void {
+    const n = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
+    st.ek = n(st.ek); st.contrib = n(st.contrib); st.contribTotal = Math.max(n(st.contribTotal), st.contrib);
+    const seen: Record<string, number> = {};
+    if (st.ekSeen && typeof st.ekSeen === 'object') for (const [k, t] of Object.entries(st.ekSeen)) if (typeof t === 'number' && Number.isFinite(t) && k.length <= 80) seen[k] = t;
+    st.ekSeen = seen;
+    st.titles = Array.isArray(st.titles) ? [...new Set(st.titles.filter((t): t is string => typeof t === 'string' && CONTRIB_BY_ID.has(t)))] : [];
+    st.title = typeof st.title === 'string' && st.titles.includes(st.title) ? st.title : '';
+}
 export function migrateEcon(st: Econ): boolean {
     if (st.v >= ECON_VERSION) return false;
     if (st.v < 3) {
@@ -278,6 +290,8 @@ export function migrateEcon(st: Econ): boolean {
     }
     // v10 (D.9): la piedra de forja pasa a ser zem, 1:1. Quedan en la bolsa (el zem de la bolsa es riesgo en PvP: hay que depositarlo para forjar).
     if (st.v < 10) { st.zem = Math.max(0, Math.floor(st.zem ?? 0)) + Math.max(0, Math.floor(Number(st.forge) || 0)); delete st.forge; }
+    // v11 (D.10): EK, contribución y títulos. Las cuentas viejas arrancan en 0; si el guardado trae algo raro se sanea.
+    if (st.v < 11) cleanContrib(st);
     st.v = ECON_VERSION;
     refreshUnlocks(st);
     return true;
@@ -378,6 +392,45 @@ export class Economy {
         return st;
     }
 
+    /**
+     * Un kill a un jugador de la otra nación en zona roja (D.10): suma 1 EK y `CONTRIB_PER_KILL` de contribución si es válido.
+     * Válido = pasa la regla de nivel (no en mapas de 81+) y es la primera vez en 4 h que este jugador cuenta contra la misma víctima.
+     * `victimKey` = cuenta de la víctima. Devuelve lo que sumó, o null si no cuenta (y por qué en `why`).
+     */
+    pvpKill(p: Player, victimKey: string, victimLvl: number, mapTier?: number, now = Date.now()): { ek: number; contrib: number } | { why: 'level' | 'cooldown' } {
+        const st = p.econ; if (!st || !victimKey) return { why: 'level' };
+        cleanContrib(st);
+        if (!ekLevelOk(st.lvl, victimLvl, mapTier)) return { why: 'level' };
+        const seen = st.ekSeen!, last = seen[victimKey];
+        if (last !== undefined && now - last < EK_COOLDOWN_MS) return { why: 'cooldown' };
+        seen[victimKey] = now;
+        for (const [k, t] of Object.entries(seen)) if (now - t >= EK_COOLDOWN_MS) delete seen[k]; // lo vencido ya no importa
+        const keys = Object.keys(seen); if (keys.length > EK_SEEN_MAX) for (const k of keys.sort((a, b) => seen[a] - seen[b]).slice(0, keys.length - EK_SEEN_MAX)) delete seen[k];
+        st.ek = (st.ek ?? 0) + 1; st.contrib = (st.contrib ?? 0) + CONTRIB_PER_KILL; st.contribTotal = (st.contribTotal ?? 0) + CONTRIB_PER_KILL;
+        this.touch(p); this.snapshot(p);
+        return { ek: st.ek, contrib: CONTRIB_PER_KILL };
+    }
+    /** Tienda de contribución: `buy` (gasta contribución), `equip` / `unequip` (el título que se ve sobre el nombre). Devuelve true si cambió el título puesto. */
+    contribAction(p: Player, ctx: EconCtx, action: string, id: string): boolean {
+        let titleChanged = false;
+        this.run(p, ctx, (st) => {
+            cleanContrib(st);
+            if (action === 'unequip') { if (!st.title) return fail('no_title', 'No tenés ningún título puesto.'); st.title = ''; titleChanged = true; return done('Te sacaste el título.'); }
+            const it = CONTRIB_BY_ID.get(id); if (!it) return fail('bad_item', 'Eso no está en la tienda.');
+            if (action === 'buy') {
+                if (st.titles!.includes(it.id)) return fail('owned', 'Ya tenés ese título.');
+                if ((st.contrib ?? 0) < it.cost) return fail('contrib', `Necesitás ${it.cost} de contribución (tenés ${st.contrib ?? 0}).`);
+                st.contrib = (st.contrib ?? 0) - it.cost; st.titles!.push(it.id);
+                return done(`Compraste el título «${it.name}».`);
+            }
+            if (action === 'equip') {
+                if (!st.titles!.includes(it.id)) return fail('not_owned', 'Primero tenés que comprarlo.');
+                st.title = it.id; titleChanged = true; return done(`Te pusiste el título «${it.name}».`);
+            }
+            return fail('bad_action', 'Acción inválida.');
+        });
+        return titleChanged;
+    }
     /** Depósito de la cuenta dueña del personaje (el que usa deposit.ts), o undefined si todavía no tiene. */
     private vaultOf(key: string): { stacks?: Record<string, number> } | undefined {
         const holder = this.storage.get(key)?.owner ?? key;
