@@ -6,7 +6,7 @@
  */
 import { buildSolmar, type WorldMap } from './index';
 import { HUBS } from './cities';
-import { buildPruebaCaza, buildPruebaMazmorra, PRUEBA_CAZA, PRUEBA_MAZMORRA } from './testmaps';
+import { buildPruebaCaza, buildPruebaMazmorra, buildPruebaPelea, PRUEBA_CAZA, PRUEBA_MAZMORRA, PRUEBA_PELEA } from './testmaps';
 import { ARENA as ARENA_MAP, ARENA_MAPS, buildArena } from './arena';
 import { TRAINING, trainingMapFor, type PortalProgress } from './training';
 import { KEY_RECIPES, keyMatName } from './quests';
@@ -181,8 +181,17 @@ export const MAPS: Record<string, MapDef> = {
             // el mapa viejo ya no tiene portal hacia acá (un solo portal por ciudad): la salida del claro es de una sola vía
             { id: 'caza_a_solmar', map: PRUEBA_CAZA.id, ...PRUEBA_CAZA.toLegacy, to: { map: 'solmar_legacy', x: 11, y: 12 }, kind: 'oneway', msg: 'Volvés a Solmar.' },
             { id: 'caza_a_mazmorra', map: PRUEBA_CAZA.id, ...PRUEBA_CAZA.door, to: { map: PRUEBA_MAZMORRA.id, ...PRUEBA_MAZMORRA.fromCaza }, kind: 'door', gate: { lvl: 2 }, msg: 'Bajás a la Mazmorra de prueba.' },
+            { id: 'caza_a_pelea', map: PRUEBA_CAZA.id, x: 10, y: 56, to: { map: PRUEBA_PELEA.id, ...PRUEBA_PELEA.fromCaza }, kind: 'portal', msg: 'Cruzás al Campo de pelea.' },
         ],
         build: buildPruebaCaza,
+    },
+    [PRUEBA_PELEA.id]: {
+        id: PRUEBA_PELEA.id, name: 'Campo de pelea', region: 'prueba', size: PRUEBA_PELEA.size, lvl: [1, 5], pvp: 'faction', safe: false, debugOnly: true,
+        spawn: { ...PRUEBA_PELEA.fromCaza }, respawn: { ...PRUEBA_PELEA.respawn },
+        links: [
+            { id: 'pelea_a_caza', map: PRUEBA_PELEA.id, ...PRUEBA_PELEA.toCaza, to: { map: PRUEBA_CAZA.id, x: 11, y: 57 }, kind: 'portal', msg: 'Volvés al Claro de prueba.' },
+        ],
+        build: buildPruebaPelea,
     },
     [PRUEBA_MAZMORRA.id]: {
         id: PRUEBA_MAZMORRA.id, name: 'Mazmorra de prueba', region: 'prueba', size: PRUEBA_MAZMORRA.size, lvl: [3, 5], pvp: 'off', safe: false, debugOnly: true,

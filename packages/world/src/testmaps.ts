@@ -129,3 +129,35 @@ export function buildPruebaMazmorra(): WorldMap {
     ];
     return { size: N, tiles, blocked, safe, props, decals: [], zones, buildings: [], npcs: [], spawn: { ...C.fromCaza }, fire: { x: 4, y: 42 }, dungeon: { x0: 0, y0: 0, x1: N - 1, y1: N - 1 } };
 }
+
+/**
+ * Campo de pelea: mapa abierto y plano para probar el PvP con el campo de visión fijo (nada de árboles ni piedras que tapen o frenen:
+ * se ve y se pega a cualquier punto de la pantalla). Un refugio seguro en una esquina y unos pocos mobs lejos, para ver cómo se siente
+ * correr, castear y esquivar. Más adelante, versiones más grandes.
+ */
+export const PRUEBA_PELEA = {
+    id: 'prueba_pelea', size: 48,
+    /** Llegada desde el claro de prueba, portal de vuelta y celda de respawn (dentro del refugio). */
+    fromCaza: { x: 5, y: 42 }, toCaza: { x: 3, y: 42 }, respawn: { x: 6, y: 43 },
+};
+
+export function buildPruebaPelea(): WorldMap {
+    const N = PRUEBA_PELEA.size;
+    const { pick } = makeRnd(7711);
+    const tiles: number[][] = [], blocked: boolean[][] = [], safe: boolean[][] = [];
+    const refuge = (x: number, y: number) => x >= 2 && x <= 9 && y >= 39 && y <= 46;
+    for (let y = 0; y < N; y++) {
+        tiles.push([]); blocked.push([]); safe.push([]);
+        for (let x = 0; x < N; x++) {
+            tiles[y].push(refuge(x, y) ? pick(STONE) : pick(GRASS));
+            blocked[y].push(x === 0 || y === 0 || x === N - 1 || y === N - 1);
+            safe[y].push(refuge(x, y));
+        }
+    }
+    const zones: Zone[] = [
+        { type: 'goblin', x: 24, y: 24, r: 5, n: 4, name: 'Campo de pelea: goblins' },
+        { type: 'goblin_elite', x: 38, y: 12, r: 4, n: 2, name: 'Campo de pelea: avanzada' },
+        { type: 'skeleton', x: 14, y: 12, r: 4, n: 3, name: 'Campo de pelea: huesos', lvl: 4 },
+    ];
+    return { size: N, tiles, blocked, safe, props: [], decals: [], zones, buildings: [], npcs: [], spawn: { ...PRUEBA_PELEA.fromCaza }, fire: { x: 7, y: 41 } };
+}

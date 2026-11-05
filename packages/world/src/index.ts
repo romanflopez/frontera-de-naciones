@@ -29,7 +29,7 @@ export * from './maps';
 export * from './arena';
 export * from './tiers';
 export { TILED_DATA } from './tiledmaps';
-export { PRUEBA_CAZA, PRUEBA_MAZMORRA } from './testmaps';
+export { PRUEBA_CAZA, PRUEBA_MAZMORRA, PRUEBA_PELEA } from './testmaps';
 
 export const MAP_SIZE = 40;
 
