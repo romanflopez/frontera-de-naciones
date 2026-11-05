@@ -161,3 +161,50 @@ export function buildPruebaPelea(): WorldMap {
     ];
     return { size: N, tiles, blocked, safe, props: [], decals: [], zones, buildings: [], npcs: [], spawn: { ...PRUEBA_PELEA.fromCaza }, fire: { x: 7, y: 41 } };
 }
+
+/**
+ * Gran claro (etapa E5 del diseño HB de nivel 120): mapa de prueba de 250x250 celdas con la densidad de un mapa de caza de Helbreath
+ * (~350 objetos vivos, la capacidad de los mapas de caza de HB) para medir cuadros por segundo del cliente y carga del server antes de
+ * decidir el tamaño de los mapas reales. Solo para GM (debugOnly): se entra por un portal del Campo de pelea.
+ */
+export const PRUEBA_GRANDE = {
+    id: 'prueba_grande', size: 250,
+    /** Llegada desde el Campo de pelea, portal de vuelta y respawn (dentro del refugio de la esquina sudoeste). */
+    fromPelea: { x: 5, y: 243 }, toPelea: { x: 3, y: 243 }, respawn: { x: 6, y: 244 },
+};
+/** Mobs vivos que pone el gran claro (14 zonas de 25). */
+export const PRUEBA_GRANDE_MOBS = 350;
+
+export function buildPruebaGrande(): WorldMap {
+    const N = PRUEBA_GRANDE.size, C = PRUEBA_GRANDE;
+    const { rnd, pick } = makeRnd(2501);
+    const tiles: number[][] = [], blocked: boolean[][] = [], safe: boolean[][] = [];
+    const props: Prop[] = [];
+    const refuge = (x: number, y: number) => x >= 2 && x <= 11 && y >= 238 && y <= 247;
+    for (let y = 0; y < N; y++) {
+        tiles.push([]); blocked.push([]); safe.push([]);
+        for (let x = 0; x < N; x++) {
+            tiles[y].push(refuge(x, y) ? pick(STONE) : pick(GRASS));
+            blocked[y].push(x === 0 || y === 0 || x === N - 1 || y === N - 1);
+            safe[y].push(refuge(x, y));
+        }
+    }
+    const keep: [number, number][] = [[C.fromPelea.x, C.fromPelea.y], [C.toPelea.x, C.toPelea.y], [C.respawn.x, C.respawn.y]];
+    const keepNear = (x: number, y: number) => keep.some(([kx, ky]) => Math.abs(x - kx) <= 2 && Math.abs(y - ky) <= 2);
+    const prop = (id: number, x: number, y: number, block: boolean) => { props.push({ id, x: x + 0.5, y: y + 0.5 }); if (block) blocked[y][x] = true; };
+    prop(102, 7, 240, true); // fogata
+    for (let y = 1; y < N - 1; y++) for (let x = 1; x < N - 1; x++) {
+        if (blocked[y][x] || safe[y][x] || keepNear(x, y)) continue;
+        const r = rnd();
+        if (r < 0.04) prop(pick(TREES), x, y, true);
+        else if (r < 0.06) prop(pick(ROCKS), x, y, true);
+        else if (r < 0.13) prop(pick(FLOWERS), x, y, false);
+    }
+    const types = ['goblin', 'skeleton', 'zombie', 'barbaro', 'antlion', 'goblin_elite', 'skeleton_mage'] as const;
+    const zones: Zone[] = [];
+    for (let i = 0; i < 14; i++) {
+        const col = i % 7, row = Math.floor(i / 7);
+        zones.push({ type: types[i % types.length], x: 30 + col * 30, y: 70 + row * 90, r: 9, n: 25, name: `Gran claro: zona ${i + 1}`, lvl: 4 });
+    }
+    return { size: N, tiles, blocked, safe, props, decals: [], zones, buildings: [], npcs: [], spawn: { ...C.fromPelea }, fire: { x: 7, y: 240 } };
+}

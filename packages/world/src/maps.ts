@@ -6,7 +6,7 @@
  */
 import { buildSolmar, type WorldMap } from './index';
 import { HUBS } from './cities';
-import { buildPruebaCaza, buildPruebaMazmorra, buildPruebaPelea, PRUEBA_CAZA, PRUEBA_MAZMORRA, PRUEBA_PELEA } from './testmaps';
+import { buildPruebaCaza, buildPruebaGrande, buildPruebaMazmorra, buildPruebaPelea, PRUEBA_CAZA, PRUEBA_GRANDE, PRUEBA_MAZMORRA, PRUEBA_PELEA } from './testmaps';
 import { ARENA as ARENA_MAP, ARENA_MAPS, buildArena } from './arena';
 import { TRAINING, trainingMapFor, type PortalProgress } from './training';
 import { KEY_RECIPES, keyMatName } from './quests';
@@ -190,8 +190,17 @@ export const MAPS: Record<string, MapDef> = {
         spawn: { ...PRUEBA_PELEA.fromCaza }, respawn: { ...PRUEBA_PELEA.respawn },
         links: [
             { id: 'pelea_a_caza', map: PRUEBA_PELEA.id, ...PRUEBA_PELEA.toCaza, to: { map: PRUEBA_CAZA.id, x: 11, y: 57 }, kind: 'portal', msg: 'Volvés al Claro de prueba.' },
+            { id: 'pelea_a_grande', map: PRUEBA_PELEA.id, x: 8, y: 40, to: { map: PRUEBA_GRANDE.id, ...PRUEBA_GRANDE.fromPelea }, kind: 'portal', msg: 'Cruzás al Gran claro (250x250).' },
         ],
         build: buildPruebaPelea,
+    },
+    [PRUEBA_GRANDE.id]: {
+        id: PRUEBA_GRANDE.id, name: 'Gran claro de prueba', region: 'prueba', size: PRUEBA_GRANDE.size, lvl: [1, 5], pvp: 'faction', safe: false, debugOnly: true,
+        spawn: { ...PRUEBA_GRANDE.fromPelea }, respawn: { ...PRUEBA_GRANDE.respawn },
+        links: [
+            { id: 'grande_a_pelea', map: PRUEBA_GRANDE.id, ...PRUEBA_GRANDE.toPelea, to: { map: PRUEBA_PELEA.id, x: 7, y: 41 }, kind: 'portal', msg: 'Volvés al Campo de pelea.' },
+        ],
+        build: buildPruebaGrande,
     },
     [PRUEBA_MAZMORRA.id]: {
         id: PRUEBA_MAZMORRA.id, name: 'Mazmorra de prueba', region: 'prueba', size: PRUEBA_MAZMORRA.size, lvl: [3, 5], pvp: 'off', safe: false, debugOnly: true,
