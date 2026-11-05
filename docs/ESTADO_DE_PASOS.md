@@ -6,7 +6,7 @@ Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última a
 
 | Paso | Estado | Detalle |
 |---|---|---|
-| **D.0 Renombres y esqueleto del arquero** | **Implementado** (falta la prueba manual de la fila 1 de `COLA.md`) | `guerrero` → `pala`, `healer` → `clerigo`. `ECON_VERSION` 7 migra las cuentas; `canonicalClass` lee los ids viejos en guardados previos. `arquero` queda registrado con kit vacío: no aparece en crear personaje y el server rechaza crearlo. `sim:pvp` y `sim:pve` dan exactamente los mismos números que antes del cambio |
+| **D.0 Renombres y esqueleto del arquero** | **Implementado** (falta la prueba manual de la fila 1 de `COLA.md`) | `guerrero` → `pala`, `healer` → `clerigo` (en pantalla: Paladín, Clérigo, Mago; Arquero cuando se habilite). `ECON_VERSION` 7 migra las cuentas; `canonicalClass` lee los ids viejos en guardados previos. `arquero` queda registrado con kit vacío: no aparece en crear personaje y el server rechaza crearlo. `sim:pvp` y `sim:pve` dan exactamente los mismos números que antes del cambio |
 | 0.1 CI mínimo | **Hecho** | Corre en cada push y pull request: tipos de los 5 paquetes, tests del server y build del cliente (~1 min). Se comprobó que queda verde en `main` y rojo con un test roto. Falta (en GitHub): exigir el chequeo en Settings → Branches |
 | 0.2 Legal y catálogos | Pendiente | |
 | 0.3 Deploy de prueba | Pendiente | |

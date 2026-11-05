@@ -150,7 +150,7 @@ export function many(spec: Omit<PveSpec, 'seed'>, n: number, seed0 = 1000) {
 export function farm(cls: Cls, lvl: number, secs: number, seed: number, travel: number, regen: (maxHp: number, resting: boolean) => number, meditate: { pct: number; min: number }) {
     const s = buildStats(cls, lvl), foe = foeAt('comun', lvl);
     let c: Carry = { hp: s.maxHp, mp: s.maxMp, potAt: -1e9, windAt: -1e9 }, clock = 0, kills = 0, rest = 0, deaths = 0, pots = 0, i = 0;
-    const needMp = cls === 'pala' ? 0 : 0.25; // el pala sigue con el ataque básico sin maná
+    const needMp = cls === 'pala' ? 0 : 0.25; // el paladín sigue con el ataque básico sin maná
     const pass = (dt: number, resting: boolean) => {
         c.hp = Math.min(s.maxHp, c.hp + regen(s.maxHp, resting) * dt);
         c.mp = Math.min(s.maxMp, c.mp + (resting ? Math.max(meditate.min, s.maxMp * meditate.pct) : combatMpRegen(s.maxMp)) * dt);

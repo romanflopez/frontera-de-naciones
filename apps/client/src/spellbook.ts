@@ -7,7 +7,7 @@ import { spellIcon } from './icons.ts';
 /** Qué hace cada habilidad, en una o dos frases (sin números que cambien con el balance: esos salen del hechizo). */
 export const SKILL_DESC: Record<string, { kind: 'daño' | 'control' | 'cura' | 'defensa' | 'utilidad' | 'buff'; text: string }> = {
     ataque: { kind: 'daño', text: 'Golpe básico con el arma. Sin costo de maná.' },
-    // Pala
+    // Paladín
     golpe: { kind: 'daño', text: 'Golpe de arma cuerpo a cuerpo. Pega más con armas lentas y pesadas.' },
     juicio: { kind: 'daño', text: 'Golpe sagrado a corta distancia que te devuelve la mitad del daño como vida. Pega más fuerte a un enemigo aturdido y genera el triple de amenaza.' },
     giro: { kind: 'daño', text: 'Dos barridos que pegan a todos los enemigos alrededor. Triple de amenaza.' },

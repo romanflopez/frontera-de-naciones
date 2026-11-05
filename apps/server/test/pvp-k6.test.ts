@@ -207,7 +207,7 @@ test('K7: en combate PvP el maná regenera al menos 5 por segundo (1 %); fuera d
     const { w, A, B, hit } = setup('pala', 'pala');
     assert.equal(pvpMpRegen(84), 5); assert.equal(pvpMpRegen(1000), 10); // el PvP no cambia con la etapa 6b
     assert.equal(combatMpRegen(84), 3); assert.equal(combatMpRegen(1000), 20);
-    A.p.combat.maxMp = 84; // un pala de nivel 12
+    A.p.combat.maxMp = 84; // un paladín de nivel 12
     A.p.mp = 0; advance(w, 1100);
     const calm = A.p.mp; assert.ok(calm >= 3 && calm <= 6, `fuera del PvP: ${calm}`);
     hit('ataque', A, B); A.p.mp = 0; advance(w, 1100);

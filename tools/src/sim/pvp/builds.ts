@@ -7,7 +7,7 @@ import { powerLevel, STAT_BASE, STAT_CAP, statPointsTotal, type Stats } from '@f
 import { statsFromChar, type CombatStats } from '../../../../apps/server/src/systems/pvpCombat.ts';
 
 export type Cls = 'pala' | 'mago' | 'clerigo';
-export const CLS_NAME: Record<Cls, string> = { pala: 'pala', mago: 'mago', clerigo: 'clerigo' };
+export const CLS_NAME: Record<Cls, string> = { pala: 'paladín', mago: 'mago', clerigo: 'clérigo' };
 
 type Eq = Record<string, { n: string; up?: number }>;
 /** Equipo por tramo: hasta 15 (D1-D3), 16-30, 31-40. */
@@ -31,7 +31,7 @@ const GEAR: Record<Cls, [Eq, Eq, Eq]> = {
 };
 /** Reparto de los puntos libres: [atributo, fracción]. */
 const SPLIT: Record<Cls, [keyof Stats, number][]> = {
-    pala: [['dex', 0.31], ['str', 0.27], ['vit', 0.42]], // como el pala de HB: ~120 DEX, ~106 FUE y el resto VIT
+    pala: [['dex', 0.31], ['str', 0.27], ['vit', 0.42]], // como el paladín de HB: ~120 DEX, ~106 FUE y el resto VIT
     mago: [['mag', 0.65], ['vit', 0.35]],
     clerigo: [['mag', 0.5], ['vit', 0.5]],
 };

@@ -124,7 +124,7 @@ test('repartir por el protocolo: llega el pedido, sube la vida máxima del serve
     st.lvl = 3; const hp0 = statsFromChar(st).maxHp; // vida del nivel 3 sin repartir
     J.log.length = 0;
     w.handleClientPacket(J.session.sessionId, { payload: { $case: 'statAllocRequest', value: { action: 'add', stat: 'vit', points: 4 } } } as never);
-    const baseHp3 = classBaseHp('pala', 3); // vida base del pala a nivel 3
+    const baseHp3 = classBaseHp('pala', 3); // vida base del paladín a nivel 3
     assert.equal(st.stats.vit, 14); assert.equal(J.p.combat.maxHp - hp0, Math.round(0.002 * baseHp3 * 4), '4 puntos de Vitalidad = +0,8 % de la vida base');
     const inv = J.log.filter((m) => m.payload?.$case === 'inventoryState').at(-1)!.payload as { value: { statVit: number; statStr: number; statFree: number } };
     assert.equal(inv.value.statVit, 14); assert.equal(inv.value.statStr, 10); assert.equal(inv.value.statFree, statPointsFree(3, st.stats));
@@ -186,7 +186,7 @@ test('migración v2 -> v4 en un solo paso: arregla la exp y agrega los stats', (
 // ---------- tooltip de stats por clase ----------
 test('stats: el tooltip usa los números de la clase y del nivel, y avisa qué stat no le sirve', () => {
     const base = defaultStats();
-    const vit = statTip('vit', 'pala', 11, base), hp11 = classBaseHp('pala', 11); // vida base del pala a nivel 11 (escala de nivel de poder)
+    const vit = statTip('vit', 'pala', 11, base), hp11 = classBaseHp('pala', 11); // vida base del paladín a nivel 11 (escala de nivel de poder)
     assert.match(vit.perPoint, new RegExp(`\\+${(hp11 * 0.002).toFixed(1).replace('.', ',')} de vida`)); assert.match(vit.perPoint, new RegExp(String(hp11))); assert.equal(vit.now, '', 'sin puntos no hay "con tus puntos"');
     const s = { ...base, str: 30, dex: 30, mag: 20 };
     assert.equal(statTip('str', 'pala', 5, s).fit, 'clave'); assert.equal(statTip('str', 'mago', 5, s).fit, 'bajo'); assert.equal(statTip('str', 'clerigo', 5, s).fit, 'bajo');
@@ -196,7 +196,7 @@ test('stats: el tooltip usa los números de la clase y del nivel, y avisa qué s
     assert.equal(statTip('str', 'pala', 5, s).now, `+${(b.meleeMult - 1) * 100 | 0} % de daño, +${b.hp} de vida`);
     assert.match(statTip('dex', 'pala', 5, s).now, new RegExp(`\\+${b.def} de defensa`));
     assert.match(statTip('mag', 'mago', 5, s).now, new RegExp(`\\+${b.mp} de maná`));
-    assert.equal(statTip('vit', 'clase_rara', 1, base).fit, 'clave', 'clase desconocida cae al pala, como classBaseHp');
+    assert.equal(statTip('vit', 'clase_rara', 1, base).fit, 'clave', 'clase desconocida cae al paladín, como classBaseHp');
 });
 
 test('Inteligencia: +0,15 % de crítico en hechizos de daño por punto (tope 35 %), sin efecto en el físico ni en las curas', () => {

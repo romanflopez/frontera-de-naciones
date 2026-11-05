@@ -25,7 +25,7 @@ const URL = process.argv[2] ?? 'ws://localhost:8113/ws';
 const DATA_DIR = process.env.DATA_DIR ?? '';
 const RUN = Math.random().toString(36).slice(2, 6);
 /** Desde el paso 1.3 el server calcula el daño: para matar rápido se piden varios hechizos distintos a la vez (cada uno tiene su recarga). */
-const BURST = ['golpe', 'aturdir', 'ataque']; // golpes instantáneos del pala (los bots son palas)
+const BURST = ['golpe', 'aturdir', 'ataque']; // golpes instantáneos del paladín (los bots son paladines)
 function hitBurst(b: { send: (m: never) => void }, mobId: number) { for (const spell of BURST) b.send({ $case: 'mobHitRequest', value: { mobId, dmg: 0, melee: false, crit: false, parSecs: 0, poisonSecs: 0, spell } } as never); }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -176,7 +176,7 @@ async function main() {
     check(fresh.loaded?.exists === false && fresh.inv === null, '(n) cuenta nueva: sin personaje hasta el primer save');
     await fresh.saveClaim('pala');
     check(!!fresh.inv && fresh.inv.goldD === 0 && fresh.inv.lvl === 1 && fresh.inv.bag.length === 0 && fresh.inv.potsHp === 3, '(a) personaje nuevo: kit inicial, sin oro, aunque el save dijera otra cosa');
-    check(fresh.inv?.eq.some((e) => e.slot === 'arma' && e.item?.base === 'Espada corta') === true, '(n) kit de pala: Espada corta equipada');
+    check(fresh.inv?.eq.some((e) => e.slot === 'arma' && e.item?.base === 'Espada corta') === true, '(n) kit de paladín: Espada corta equipada');
 
     // ---------- (b) sin oro ----------
     await fresh.goNear('armero_s');
@@ -360,10 +360,10 @@ async function main() {
             for (let i = 0; i < 40 && !target; i++) { await sleep(100); target = K.mobs.filter((m) => Math.hypot(m.x - K.x, m.y - K.y) < 9).sort((a, b) => a.hp - b.hp)[0]; }
             if (!target) { await K.warp(kcell![0], kcell![1]); continue; }
             K.rewards.length = 0;
-            // el server calcula el daño y cobra maná: se pega como un pala (ataque y golpe cada ~0,9 s) hasta que muera
+            // el server calcula el daño y cobra maná: se pega como un paladín (ataque y golpe cada ~0,9 s) hasta que muera
             for (let k = 0; k < 14 && !K.rewards.length && K.mobs.some((m) => m.id === target!.id); k++) {
                 K.send({ $case: 'mobHitRequest', value: { mobId: target.id, dmg: 0, melee: true, crit: false, parSecs: 0, poisonSecs: 0, spell: 'ataque' } });
-                K.send({ $case: 'mobHitRequest', value: { mobId: target.id, dmg: 0, melee: true, crit: false, parSecs: 0, poisonSecs: 0, spell: 'golpe' } }); // el pala no tira saetas (kits, K1)
+                K.send({ $case: 'mobHitRequest', value: { mobId: target.id, dmg: 0, melee: true, crit: false, parSecs: 0, poisonSecs: 0, spell: 'golpe' } }); // el paladín no tira saetas (kits, K1)
                 await sleep(900);
             }
             await sleep(300);

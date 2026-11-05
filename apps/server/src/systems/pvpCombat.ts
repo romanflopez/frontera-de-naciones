@@ -71,7 +71,7 @@ export const PVP_SPELLS: Record<string, PvpSpell> = {
     ignicion: { mp: 30, dmg: [14, 21], k: 0.5, stat: 'mag', range: VIEW_RANGE, cd: 5, cast: false, burn: true },                // Ignición: instantánea + quemadura
     bola: { mp: 72, kind: 'eruption', dmg: [14, 21], k: 3, stat: 'mag', range: VIEW_RANGE, cd: 10, burn: true, vsBurn: 1.4 },  // Bola de fuego: cast 1,5 s, un objetivo
     lluvia: { mp: 90, kind: 'cataclysm', dmg: [14, 21], k: 1.2, stat: 'mag', range: VIEW_RANGE, cd: 18, aoe: 4.5, burn: true }, // Infierno: cast 2,4 s, área
-    // Pala. Daño = múltiplo del Daño base físico (arma).
+    // Paladín. Daño = múltiplo del Daño base físico (arma).
     golpe: { mp: 10, dmg: [14, 20], lvlK: 2, stat: 'wdmg', range: 2.8, cd: 0.9, melee: true },                        // Golpe: cuerpo a cuerpo, sin cast
     juicio: { mp: 15, dmg: [14, 20], k: 1.5, stat: 'wdmg', range: 4, cd: 1.4, cast: true, lifesteal: 0.5, vsCtrl: 1.5, threat: 3 }, // Juicio: cast 1 s
     escudo: { mp: 36, dmg: [14, 20], k: 2.3, stat: 'wdmg', secs: 3, range: 10, cd: 9, cast: false, vsCtrl: 1.5, threat: 5 },    // Escudo vengador: aturde 3 s
@@ -83,7 +83,7 @@ export const PVP_SPELLS: Record<string, PvpSpell> = {
 /** Hechizos cuyo control es un aturdido (no una parálisis): llevan su propio rendimiento decreciente. */
 export const STUN_SPELLS = new Set(['aturdir', 'escudo', 'reprender']);
 /**
- * Habilidades de clase (las valida y cobra el server): Mago = blink; Pala (id interno 'pala', persistido) = carga, giro, grito.
+ * Habilidades de clase (las valida y cobra el server): Mago = blink; Paladín (id interno 'pala', persistido) = carga, giro, grito.
  * Van aparte de PVP_SPELLS a propósito: no se pueden pedir por pvpHitRequest para pegar sin moverse.
  */
 export interface ClassSkill extends PvpSpell { cls: ClassId;
@@ -180,7 +180,7 @@ export const healAmount = (frac: number, caster: CombatStats, targetMaxHp: numbe
 export const AOE_MAX_TARGETS: Record<string, number> = { lluvia: 5, giro: 4, nova: 5, aura: 5, novasagrada: 5 };
 /** Quemadura: pulsos, cada cuánto (s) y fracción del Daño base por pulso (6 × ¼ = 1,5×). */
 export const BURN_TICKS = 6, BURN_EVERY = 0.5, BURN_K = 0.25;
-/** Aura sagrada: el pala se cura esta fracción del daño de cada pulso (Valdrys no da el número). */
+/** Aura sagrada: el paladín se cura esta fracción del daño de cada pulso (Valdrys no da el número). */
 export const AURA_HEAL_FRAC = 0.25;
 /** Amenaza que genera una habilidad por punto de daño. */
 export const threatOf = (id: string): number => (PVP_SPELLS[id] ?? SKILLS[id])?.threat ?? 1;
@@ -190,7 +190,7 @@ export const AOE_FALLOFF = 0.12, AOE_MIN_MULT = 0.5, AOE_GROUP_MS = 250;
 /** Multiplicador de daño del objetivo número `index` (0 = el más cercano al centro): 100 %, 88 %, 76 %, 64 %, 52 %... mínimo 50 %. */
 export const aoeMult = (index: number): number => Math.max(AOE_MIN_MULT, 1 - AOE_FALLOFF * Math.max(0, index));
 export const FURY_MS = 60000, FURY_CD_MS = 90000;
-/** Furia por clase: el mago la tira más fuerte (todo su daño), el pala más débil. */
+/** Furia por clase: el mago la tira más fuerte (todo su daño), el paladín más débil. */
 export const FURY_MULT: Record<string, number> = { mago: 1.35, pala: 1.15, clerigo: 1.2 };
 /** Costos de maná de los hechizos de utilidad que cobra el server (iguales a los del cliente). */
 export const UTIL_MP = { furia: 15, invisibilidad: 40, detectar: 30, remover: 30 } as const;
@@ -260,7 +260,7 @@ export function progressFromEcon(st: { lvl: number; q: { i: number; keys: Record
  * Chance de que un golpe de jugador le pegue a otro jugador: `lo que ataca / lo que defiende × K`, topeada entre 10 % y 90 %.
  * Físico: ataca 100 + (DEX − 50) si DEX > 50; defiende 2 × DEX del objetivo. Mágico: ataca 100 + (MAG − 50) si MAG > 50; defiende 100 + (MAG − 50)
  * del objetivo. La armadura (DF/RM) NO entra acá: ya mitiga el daño después. Solo vale contra jugadores (los monstruos no esquivan).
- * `K` de la referencia es 50 y ahí la armadura entra en la defensa; acá la armadura mitiga el daño aparte, y con K = 90 un duelo parejo dura lo mismo que sin tirada de golpe (calibrado con `sim:pvp`: con 50 el pala contra pala tardaba 133 s en vez de 48).
+ * `K` de la referencia es 50 y ahí la armadura entra en la defensa; acá la armadura mitiga el daño aparte, y con K = 90 un duelo parejo dura lo mismo que sin tirada de golpe (calibrado con `sim:pvp`: con 50 el paladín contra pala tardaba 133 s en vez de 48).
  */
 export const HIT = { skill: 100, k: Number(process.env.FDN_HITK) || 90, min: 10, max: 90, threshold: 50 };
 /** Encendido salvo bajo `node --test` (los tests de combate no dependen del azar; los de golpe lo prenden a mano) o con FDN_HITROLL=0. */
@@ -316,14 +316,14 @@ export function potionHpSplit(total: number): number[] {
 export const PVP_COMBAT_MS = 10000;
 /**
  * Multiplicador global del daño contra jugadores. Calibrado con `sim:pvp` (K7): con ×0,6 ninguna pelea terminaba (la vida
- * de los jugadores ya se había multiplicado ×4,24 para peleas largas). Con ×1 pala contra mago y los espejos de pala
+ * de los jugadores ya se había multiplicado ×4,24 para peleas largas). Con ×1 pala contra mago y los espejos de paladín
  * duran 25-40 s (a nivel 120 con 357 puntos de estadísticas hizo falta ×1,5). Queda como palanca: si la vida o el daño cambian, se vuelve a correr la simulación.
  */
 export const PVP_DMG_MULT = 1.5;
 /** Ningún golpe solo saca más que esta fracción de la vida máxima de un jugador (K7: se mantiene; casi nunca llega a actuar hasta el 40). */
 export const PVP_HIT_CAP = 0.25;
 /**
- * Piso de la regeneración de maná en combate PvP (por segundo). Con el 1 % (mínimo 2) el pala, con 84 de maná a nivel 12,
+ * Piso de la regeneración de maná en combate PvP (por segundo). Con el 1 % (mínimo 2) el paladín, con 84 de maná a nivel 12,
  * pasaba más de la mitad de la pelea sin poder usar nada (K7). Solo vale mientras estás en combate contra jugadores.
  */
 export const PVP_MP_REGEN_MIN = 5;

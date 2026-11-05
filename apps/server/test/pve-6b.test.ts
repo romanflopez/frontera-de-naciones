@@ -41,8 +41,8 @@ test('6b: el maná regenera más contra monstruos (2 %, mínimo 3) y el PvP qued
     assert.equal(pvpMpRegen(84), 5); assert.equal(pvpMpRegen(1000), 10);
 });
 
-// Nota (integración con main, 4/11): con el modelo de ítems nuevo (equipo por ilvl) el pala de nivel 20 recibe un poco menos (5,7 %); piso bajado de 6 a 5 (también en 30 y 40).
-test('6b: con la curva, un común de tu nivel le saca al pala una parte chica pero real de la vida (sim:pve)', () => {
+// Nota (integración con main, 4/11): con el modelo de ítems nuevo (equipo por ilvl) el paladín de nivel 20 recibe un poco menos (5,7 %); piso bajado de 6 a 5 (también en 30 y 40).
+test('6b: con la curva, un común de tu nivel le saca al paladín una parte chica pero real de la vida (sim:pve)', () => {
     for (const [L, lo, hi] of [[relevel(10), 3, 15], [relevel(20), 5, 16], [relevel(30), 4, 18], [120, 4, 18]] as const) {
         const r = many({ cls: 'pala', lvl: L, foe: foeAt('comun', L) }, 12);
         assert.ok(r.win === 1, `gana nivel ${L}`);

@@ -63,7 +63,7 @@ test('kits: el escape o acercamiento de cada clase sale a la vez, en el nivel 20
 
 test('kits: clase y nivel', () => {
     assert.equal(canUseSkill('mago', kitLevel(1), 'proyectil'), true);
-    assert.equal(canUseSkill('pala', kitLevel(40), 'proyectil'), false, 'el pala no tira saetas');
+    assert.equal(canUseSkill('pala', kitLevel(40), 'proyectil'), false, 'el paladín no tira saetas');
     assert.equal(canUseSkill('mago', kitLevel(40), 'carga'), false, 'el mago no carga');
     assert.deepEqual(checkSkill('mago', kitLevel(8), 'bola'), { ok: false, reason: 'nivel', need: kitLevel(9) });
     assert.equal(canUseSkill('mago', kitLevel(9), 'bola'), true);
@@ -75,7 +75,7 @@ test('kits: clase y nivel', () => {
 });
 
 // ---------- H. el cliente pide lo que no le corresponde ----------
-test('server: un pala que pide un hechizo de mago no castea ni pega', () => {
+test('server: un paladín que pide un hechizo de mago no castea ni pega', () => {
     const { w, mago, pala } = setup();
     setLevel(pala.p, 40);
     const hp = mago.p.hp;
@@ -109,7 +109,7 @@ test('server: habilidades de clase (carga, blink) respetan clase y nivel', () =>
     assert.equal(denied(mago.log, 'carga'), 1, 'el mago no carga');
 });
 
-test('server: invisibilidad es del mago; el pala no la puede pedir', () => {
+test('server: invisibilidad es del mago; el paladín no la puede pedir', () => {
     const { w, mago, pala } = setup();
     pkt(w, pala.sid, 'invisibilityRequest', {});
     assert.equal(pala.p.status.isInvisible, false);
@@ -156,7 +156,7 @@ test('K2: la Carga sagrada aturde al llegar (y no frena)', () => {
     assert.ok(mago.p.isParalyzed(Date.now()), 'quedó aturdido');
 });
 
-// ---------- K3: habilidades de área del mago y del pala, por el mundo ----------
+// ---------- K3: habilidades de área del mago y del paladín, por el mundo ----------
 test('K3: Nova de escarcha congela y daña a un enemigo pegado; antes del nivel 5 no sale', () => {
     const { w, mago, pala } = setup();
     pala.p.setPosition(mago.p.posX + 1, mago.p.posY);
@@ -168,7 +168,7 @@ test('K3: Nova de escarcha congela y daña a un enemigo pegado; antes del nivel 
     assert.ok(pala.p.isParalyzed(Date.now()), 'congelado');
 });
 
-test('K3: Mandato y Aura sagrada son del pala y piden nivel 7 y 12', () => {
+test('K3: Mandato y Aura sagrada son del paladín y piden nivel 7 y 12', () => {
     assert.deepEqual(checkSkill('pala', kitLevel(6), 'mandato'), { ok: false, reason: 'nivel', need: kitLevel(7) });
     assert.deepEqual(checkSkill('pala', kitLevel(11), 'aura'), { ok: false, reason: 'nivel', need: kitLevel(12) });
     assert.equal(canUseSkill('mago', kitLevel(40), 'mandato'), false);

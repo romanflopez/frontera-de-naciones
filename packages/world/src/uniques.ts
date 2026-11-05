@@ -202,7 +202,7 @@ const DEFS: Def[] = [
     { tier: 7, arch: 'amuO', name: 'Amuleto de brasa eterna', set: 'brasa' }, { tier: 7, arch: 'anilloO', name: 'Sello de brasa eterna', set: 'brasa' }, { tier: 7, arch: 'anilloD', name: 'Aro de brasa eterna', set: 'brasa' },
 ];
 
-// ---------- sets por clase: cada banda tiene uno de pala, uno de mago y uno de clérigo (los ítems no se comparten entre clases) ----------
+// ---------- sets por clase: cada banda tiene uno de paladín, uno de mago y uno de clérigo (los ítems no se comparten entre clases) ----------
 type SetClass = 'pala' | 'mago' | 'clerigo';
 const CLASS_SET_PIECES: Record<SetClass, { arch: Arch; n: string }[]> = {
     pala: [{ arch: 'arma1', n: 'Espada' }, { arch: 'armPes', n: 'Coraza' }, { arch: 'cabF', n: 'Yelmo' }, { arch: 'guanF', n: 'Guanteletes' }, { arch: 'botaF', n: 'Grebas' }, { arch: 'amuD', n: 'Colgante' }, { arch: 'anilloD', n: 'Sello' }, { arch: 'anilloO', n: 'Aro' }],

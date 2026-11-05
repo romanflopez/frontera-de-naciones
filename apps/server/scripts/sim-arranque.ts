@@ -1,5 +1,5 @@
 /**
- * Simulación del arranque (niveles 1-3): cuánto aguanta un Mago / Pala contra goblins comunes y de élite, cuánto tarda en
+ * Simulación del arranque (niveles 1-3): cuánto aguanta un Mago / Paladín contra goblins comunes y de élite, cuánto tarda en
  * matarlos y cuánto cuesta subir al nivel 2. Resultados en docs/COMBATE.md ("Arranque del nivel 1-3").
  *
  * Usa el MobSim REAL del server (IA, velocidad, ataques, respawn de apps/server/src/mobs.ts) y las fórmulas reales de

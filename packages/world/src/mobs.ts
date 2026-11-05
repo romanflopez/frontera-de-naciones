@@ -81,8 +81,8 @@ export const mobHpCurve = (l: number): number => hpOld(powerLevel(l));
 /**
  * Etapa 6b del roadmap: multiplicador del daño de los mobs según su nivel, calibrado con `sim:pve` (tools/src/sim/pve).
  * La vida de las clases se multiplicó ×4,24 para el PvP (docs/COMBATE.md) y el daño de los mobs no: hasta el 15 un común le
- * sacaba al pala 1-3 % de la vida y no había peligro. Al revés, desde el 25 las peleas se alargan y el élite le ganaba.
- * Con esta curva un común de tu nivel le saca al pala ~3 % de la vida al nivel 1, ~9 % al 10 y ~10-13 % del 20 al 40
+ * sacaba al paladín 1-3 % de la vida y no había peligro. Al revés, desde el 25 las peleas se alargan y el élite le ganaba.
+ * Con esta curva un común de tu nivel le saca al paladín ~3 % de la vida al nivel 1, ~9 % al 10 y ~10-13 % del 20 al 40
  * (la referencia de Dreadmyst: el común gasta una parte chica pero real de la vida; el élite, 3× su vida, pide una poción).
  * Puntos [nivel, multiplicador]; entre puntos se interpola en línea recta.
  */

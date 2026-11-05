@@ -1,7 +1,7 @@
 /**
  * Validación de sim-arranque.ts contra un server REAL en marcha: un bot por clase pelea contra los goblins de la zona
  * ('Campamento goblin' o 'Avanzada goblin' de solmar_legacy) con las mismas reglas del cliente (Proyectil del mago, ataque
- * cuerpo a cuerpo del pala, pociones a <40 % de vida) y se anota si gana o muere y cuánto tarda.
+ * cuerpo a cuerpo del paladín, pociones a <40 % de vida) y se anota si gana o muere y cuánto tarda.
  *
  *   cd apps/server
  *   DATA_DIR=<carpeta vacía> PORT=8211 FDN_DEBUG_TRUST_SAVE=1 FDN_DEBUG_WARP=1 npx tsx src/index.ts   (en otra terminal)
@@ -97,7 +97,7 @@ async function trial(cls: 'mago' | 'pala', lvl: number, zoneName: string) {
             }
             else if (cls === 'mago' && b.mp < 8 && tgt.d <= 1.9) { nextAct = now + 850; setTimeout(() => b.send({ $case: 'mobHitRequest', value: { mobId: tgt.m.id, dmg: 0, melee: true, crit: false, parSecs: 0, poisonSecs: 0, spell: 'ataque' } }), 180); }
         }
-        // el pala espera en su sitio hasta que alguien se acerque a 4,5 celdas (los mobs lo notan solos); el mago pega primero
+        // el paladín espera en su sitio hasta que alguien se acerque a 4,5 celdas (los mobs lo notan solos); el mago pega primero
         if (cls === 'pala' && mine.length && !b.taken.length && now - t0 > 1000 && tgt && tgt.d > 5) { /* se acerca hasta 4 celdas */ }
         await sleep(50);
     }

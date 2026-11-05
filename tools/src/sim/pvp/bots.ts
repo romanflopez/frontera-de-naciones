@@ -34,7 +34,7 @@ function common(w: Sim, f: Fighter): { act: Act; potion?: 'hp' | 'mp' } | { poti
     return { potion };
 }
 
-/** Pala: cierra la distancia con Escudo vengador, Martillo y Carga; en cuerpo a cuerpo Aura, Juicio, Golpe y Barrido. Corta casteos. */
+/** Paladín: cierra la distancia con Escudo vengador, Martillo y Carga; en cuerpo a cuerpo Aura, Juicio, Golpe y Barrido. Corta casteos. */
 export const paladin: Policy = (f, w) => {
     const c = common(w, f); if ('act' in c) return c as ReturnType<Policy>;
     const t = target(w, f, 4); if (!t) return { act: null, ...c };
@@ -62,14 +62,14 @@ export const mage: Policy = (f, w) => {
     const t = target(w, f, 15); if (!t) return { act: null, ...c };
     const close = nearest(w, f), dc = w.dist(f, close), melee = close.cls === 'pala';
     const d = w.dist(f, t), ctrl = w.ctrlLeftMs(t), mp = f.mp;
-    // peligro: un pala pegado
+    // peligro: un paladín pegado
     if (melee && dc <= 3 && w.ctrlLeftMs(close) < 600) {
         const a = use(w, f, 'nova') ?? use(w, f, 'blink');
         if (a) return { act: a, ...c };
         if (f.cast && f.cast.at - w.now < 250) return { act: null, ...c }; // termina el cast
         return { act: away(w, f, close), ...c };
     }
-    // un pala que se acerca: frenarlo o congelarlo antes de que llegue
+    // un paladín que se acerca: frenarlo o congelarlo antes de que llegue
     if (melee && dc <= 9 && w.ctrlLeftMs(close) < 800) {
         const a = (dc <= 7 ? use(w, f, 'paralisis', close) : null) ?? (!isSlow(w, close) ? use(w, f, 'esquirla', close) : null);
         if (a) return { act: a, ...c };
@@ -100,7 +100,7 @@ export const clerigo: Policy = (f, w) => {
         if (melee && dc <= 2.5 && f.cast.id !== 'curacion') return { act: use(w, f, 'novasagrada') ?? null, ...c };
         return { act: null, ...c };
     }
-    // Bendición: cuando un pala llega o alguien del equipo está controlado
+    // Bendición: cuando un paladín llega o alguien del equipo está controlado
     const blessT = w.allies(f).find((a) => w.ctrlLeftMs(a) >= 1500) ?? (melee && dc <= 10 && f.hp / f.s.maxHp < 0.9 ? f : undefined);
     if (blessT) { const a = use(w, f, 'bendicion', blessT); if (a) return { act: a, ...c }; }
     // cortar casteos y frenar al que llega

@@ -41,7 +41,7 @@ export const classBaseMp = (cls: string, lvl: number): number => { const [a, b] 
 export interface StatBonus { hp: number; mp: number; def: number; meleeMult: number; magicMult: number; /** % de crítico en hechizos de daño (Inteligencia) */ critMag: number }
 /**
  * `baseHp` es la vida base de la clase a ese nivel (classBaseHp): la Vitalidad da +0,2 % de eso por punto,
- * así vale lo mismo para un mago que para un pala y no se desinfla a nivel alto (antes eran +2,5 planos, trampa).
+ * así vale lo mismo para un mago que para un paladín y no se desinfla a nivel alto (antes eran +2,5 planos, trampa).
  */
 export function statBonus(s: Stats | undefined, baseHp = 0): StatBonus {
     const d = (id: StatId): number => Math.max(0, (s?.[id] ?? STAT_BASE) - STAT_BASE);
@@ -63,13 +63,13 @@ export interface StatTip {
     /** Consejo para esa clase, en una frase. */
     advice: string;
 }
-/** Qué stat escala cada clase: el Pala pega con Fuerza (todas sus habilidades de daño), el Mago y el Clérigo con Magia (hechizos y curas). Salen de `stat` en pvpCombat.ts. */
+/** Qué stat escala cada clase: el Paladín pega con Fuerza (todas sus habilidades de daño), el Mago y el Clérigo con Magia (hechizos y curas). Salen de `stat` en pvpCombat.ts. */
 const STAT_FIT: Record<string, Record<StatId, [StatFit, string]>> = {
     pala: {
-        str: ['clave', 'Clave para el Pala: todas sus habilidades de daño escalan con Fuerza.'],
+        str: ['clave', 'Clave para el Paladín: todas sus habilidades de daño escalan con Fuerza.'],
         vit: ['clave', 'Más vida para aguantar al frente. Cada punto rinde más a medida que subís de nivel, porque se calcula sobre tu vida base.'],
         dex: ['util', 'Sirve para tankear, pero cada punto rinde poco: a más defensa, menos mejora cada punto nuevo.'],
-        int: ['bajo', 'Solo da crítico a los hechizos de daño: tus habilidades de Pala no lo usan.'],
+        int: ['bajo', 'Solo da crítico a los hechizos de daño: tus habilidades de Paladín no lo usan.'],
         mag: ['bajo', 'Tus habilidades no escalan con Magia: solo te da maná. Tenés poco maná, así que algún punto ayuda, pero no es tu stat.'],
     },
     mago: {

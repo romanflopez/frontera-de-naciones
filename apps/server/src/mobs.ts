@@ -618,7 +618,7 @@ export class MobSim {
         if (slowSecs > 0) m.slow = T + slowSecs;
         if (stunSecs > 0) this.control(p, m, stunSecs, T); // aturdido (corta la carga de un jefe)
         if (m.bs) bossInterrupt(this.bh, m, skill, p); // motor de jefes: Carga, Nova, Giro... cortan el casteo
-        const phys = (SKILLS[skill] ?? PVP_SPELLS[skill])?.stat !== 'mag'; // Nova de escarcha y Nova sagrada son mágicas; las del pala, físicas
+        const phys = (SKILLS[skill] ?? PVP_SPELLS[skill])?.stat !== 'mag'; // Nova de escarcha y Nova sagrada son mágicas; las del paladín, físicas
         if (m.traits & (phys ? TRAIT_ANTI_PHYS : TRAIT_ANTI_MAGIC)) dmg = Math.max(1, Math.round(dmg * ANTI_DAMAGE_MULT));
         m.lastAttacker = p.playerId; m.hp -= dmg; this.addThreat(m, p, dmg * threatOf(skill));
         if (m.par > T && dmg >= m.hpMax * 0.45) m.par = 0;

@@ -1049,7 +1049,7 @@ export class GameWorld {
         return -1;
     }
 
-    /** Pala: Carga / Tajo giratorio / Grito de guerra. */
+    /** Paladín: Carga / Tajo giratorio / Grito de guerra. */
     private handleSkill(p: Player, skill: string, targetId: bigint, mobId: number): void {
         if (skill === 'aliento') return this.startWind(p);
         if (!['carga', 'giro', 'nova', 'mandato', 'aura'].includes(skill) && !(CLERIGO_SKILLS as readonly string[]).includes(skill) && !(K8_SKILLS as readonly string[]).includes(skill)) return;
@@ -1088,7 +1088,7 @@ export class GameWorld {
             this.skillBroadcast(p, 'nova', p.posX, p.posY);
             return;
         }
-        if (skill === 'aura') { // 10 s de pulsos alrededor del pala: pega a los enemigos cerca y lo cura
+        if (skill === 'aura') { // 10 s de pulsos alrededor del paladín: pega a los enemigos cerca y lo cura
             this.skillCommit(p, 'aura');
             for (let k = 1; k <= (sp.pulses ?? 1); k++) this.playerTimer(p, k * (sp.every ?? 0.5) * 1000, () => {
                 if (p.isDead || p.disconnected) return;
@@ -1523,7 +1523,7 @@ export class GameWorld {
             this.skillBroadcast(p, skill, o.posX, o.posY);
             return;
         }
-        if (sp.shield) { // propio (mago y pala) o al aliado elegido (clerigo)
+        if (sp.shield) { // propio (mago y paladín) o al aliado elegido (clerigo)
             const tgt = sp.range > 0 ? this.allyTarget(p, targetId, sp.range) : p;
             if (typeof tgt === 'string') return this.skillDenied(p, skill, tgt);
             this.skillCommit(p, skill);

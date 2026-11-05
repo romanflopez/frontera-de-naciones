@@ -73,7 +73,7 @@ test('K5: el clérigo es una clase jugable con su kit por nivel', () => {
     assert.equal(canUseSkill('pala', kitLevel(40), 'bendicion'), false);
 });
 
-test('K5: la vida del clérigo queda entre la del pala y la del mago; maná: el mago tiene más (etapa 6b, como en Dreadmyst) y el clérigo más que el pala; el personaje nuevo se crea con bastón', () => {
+test('K5: la vida del clérigo queda entre la del paladín y la del mago; maná: el mago tiene más (etapa 6b, como en Dreadmyst) y el clérigo más que el paladín; el personaje nuevo se crea con bastón', () => {
     const h = statsFromChar({ lvl: 10, cls: 'clerigo', eq: {} }), m = statsFromChar({ lvl: 10, cls: 'mago', eq: {} }), g = statsFromChar({ lvl: 10, cls: 'pala', eq: {} });
     assert.equal(h.cls, 'clerigo');
     assert.ok(h.maxHp > m.maxHp && h.maxHp < g.maxHp, `vida ${h.maxHp}`);

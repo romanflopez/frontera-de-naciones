@@ -90,7 +90,7 @@ test('libro guardado roto o viejo: se sanea sin romper', () => {
     assert.deepEqual(cleanQuestBook(undefined), newQuestBook());
 });
 
-test('premios por clase: el mago recibe ítems con Magia y el pala no; los anillos son de todos', () => {
+test('premios por clase: el mago recibe ítems con Magia y el paladín no; los anillos son de todos', () => {
     const w = rewardUniques('class_t1_choice', 'pala'), m = rewardUniques('class_t1_choice', 'mago');
     assert.ok(w.length >= 3 && m.length >= 3);
     assert.ok(w.every((u) => u.slot === 'anillo' || !u.mag)); assert.ok(m.every((u) => u.slot === 'anillo' || (u.mag ?? 0) > 0));
@@ -150,7 +150,7 @@ test('cadena completa en el server: de Campos de Sal a la Reina, con premios, ni
             const gold = st.gold, forge = st.forge ?? 0, bag = st.bag.length;
             if (q.reward.unique?.endsWith('_choice')) {
                 assert.equal(ask('m_turnin').code, 'choose');
-                assert.equal(ask('m_turnin', 'Vara de raíz').code, 'choose', 'un pala no elige el báculo');
+                assert.equal(ask('m_turnin', 'Vara de raíz').code, 'choose', 'un paladín no elige el báculo');
                 const pick = q.reward.unique === 'class_t1_choice' ? 'Hoja de sal' : rewardUniques(q.reward.unique, 'pala')[0].name;
                 assert.equal(ask('m_turnin', pick).ok, true); assert.equal(st.bag.at(-1)!.n, pick);
             } else {

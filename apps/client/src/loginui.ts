@@ -43,7 +43,7 @@ const CLS_TAG: Record<string, string> = { mago: 'Domina el poder arcano', pala: 
 const CLS_LORE: Record<string, string> = {
     mago: 'Los magos canalizan la energía arcana a través de sus hechizos. Pegan de lejos, congelan y queman, pero necesitan maná y poca gente que los toque.',
     clerigo: 'Los clérigos canalizan la luz sagrada: curan y bendicen a los suyos, castigan de lejos y cortan los casteos peligrosos. Pueden cazar solos, pero brillan en grupo.',
-    pala: 'Los palas son maestros del combate cuerpo a cuerpo. Su vida y su resistencia les permiten sostener la línea de frente y frenar a los enemigos.',
+    pala: 'Los paladines son maestros del combate cuerpo a cuerpo. Su vida y su resistencia les permiten sostener la línea de frente y frenar a los enemigos.',
 };
 const clsCol = (id: string) => CLS_COL[id] ?? '#d6a445';
 
