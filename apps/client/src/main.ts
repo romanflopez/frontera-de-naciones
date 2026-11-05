@@ -2031,7 +2031,8 @@ function render() {
     drawPortalLabels(); drawLinkLabels();
     for (const n of MAP.npcs) {
         const p = iso(n.x + 0.5, n.y + 0.5);
-        nameTag(n.name, p.x, p.y - 70, '#9fd36b'); drawRoleMark(roleOf(n), p.x, p.y - 95);
+        nameTag(n.name, p.x, p.y - 70, '#9fd36b'); drawRoleMark(roleOf(n), p.x, p.y - 100);
+        { const rl = SHOPS[roleOf(n)]?.label; if (rl && !n.name.toLowerCase().includes(rl.toLowerCase())) nameTag(rl, p.x, p.y - 82, SHOPS[roleOf(n)].col, 0.95, 9); } // D.19: el rol en texto sobre el nombre (si el nombre no lo dice ya)
         if (roleOf(n) === 'capitan' && questMark()) { ctx.font = "700 22px 'Alegreya SC', Georgia, serif"; ctx.textAlign = 'center'; ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#2a1a00'; ctx.lineWidth = 3; ctx.strokeText(questMark(), p.x, p.y - 118 + Math.sin(now() * 4) * 2); ctx.fillText(questMark(), p.x, p.y - 118 + Math.sin(now() * 4) * 2); }
     }
     for (const p of projs) {
@@ -2841,15 +2842,16 @@ function openShop(n: Npc = MAP.npcs[0]) {
     if (role === 'arenero') { if (shopNpc !== n) closeShop(); openArena(n); return; }
     if (role === 'guardia' || ROLE_LINES[role]) { openTalk(n); return; }
     const def = SHOPS[role]; if (!def) return;
-    shopNpc = n; talkNpc = null; $('qdlg').hidden = true; $('shopName').textContent = n.name; $('shopRole').textContent = def.label; $('shop').hidden = false; renderShop();
-    showBubble(n, def.label, def.greet); log(`${n.name}: «${def.greet}»`);
+    // D.19: hablarle a un vendedor abre directo lo que vende, sin diálogo ni globo: a lo sumo una línea de saludo en la cabecera de la tienda
+    bubble = null; $('npcBubble').hidden = true;
+    shopNpc = n; talkNpc = null; $('qdlg').hidden = true; $('shopName').textContent = n.name; $('shopRole').innerHTML = `${esc(def.label)}${def.greet ? `<span class="greet">«${esc(def.greet)}»</span>` : ''}`; $('shop').hidden = false; renderShop();
 }
-/** Guardias y otros NPC de ambiente: una charla corta, sin tienda. */
+/** Guardias y otros NPC de ambiente: una charla corta, sin tienda. D.19: sale como globo sobre el NPC (y en el log), no como diálogo: el diálogo queda para el Capitán. */
 function openTalk(n: Npc) {
     const role = roleOf(n), lines = (n.id.includes('_v') ? ROLE_LINES[role + '_v'] : undefined) ?? ROLE_LINES[role] ?? GUARD_LINES[n.id.endsWith('_v') || n.id.includes('_v') ? 'v' : 's'];
-    shopNpc = n; talkNpc = null; $('shop').hidden = true;
-    $('qdName').textContent = n.name; setDlgAvatar(n); $('qdlg').hidden = false; $('qdForges').innerHTML = ''; $('qdBtn').hidden = true;
-    $('qdBody').innerHTML = `<small>${(SHOPS[role] ?? SHOPS.guardia).label}</small><br>${lines[Math.floor(R() * lines.length)]}`;
+    shopNpc = n; talkNpc = null; $('shop').hidden = true; $('qdlg').hidden = true;
+    const line = lines[Math.floor(R() * lines.length)];
+    showBubble(n, (SHOPS[role] ?? SHOPS.guardia).label, line, 6); log(`${n.name}: «${line}»`);
 }
 function closeShop() { shopNpc = null; bubble = null; $('npcBubble').hidden = true; $('shop').hidden = true; $('qdlg').hidden = true; closeArena(); auction.close(); deposit.close(); }
 // ---------- ventana de arena (NPC maestro de arena): estado, anotarse, rating y ranking; los datos llegan con `/arena info` ----------

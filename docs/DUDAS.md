@@ -35,3 +35,5 @@ Una línea por duda: qué, dónde, qué opciones se ven.
 - **D.18, logos y escudos:** las fichas llevan el escudo de nación y el emblema de clase dibujados por código. Los logos propios los pasa Román; cuando lleguen se cambian `shield()` y `clsIcon()` en `loginui.ts`.
 - **D.18, línea de identidad de las naciones:** el texto de `FAC_LORE` (Solmar: bosque y mar; Vhar: nieve y forja) lo escribí yo a partir de `REVISION_PANTALLAS.md`; Román lo ajusta.
 - **D.18, muñeco:** sigue siendo pixel art de 64 px (nítido pero pixelado) hasta tener sprites en mayor resolución; la vista previa del set inicial de la clase queda fuera.
+- **D.19, layout de la lista de la tienda:** en `main` la ventana de la tienda deja la lista de ítems apretada en una columna angosta a la derecha (el cuerpo es una grilla de dos columnas de las ventanas del kit). Lo arregla el PR de D.16 (#61, hoy con conflictos); D.19 no toca ese layout. Al mergear los dos hay que revisar que la línea de saludo (`#shop .role .greet`) siga bien.
+- **D.19, sprites y minimapa:** los sprites nuevos de NPC y el ícono de rol en el minimapa no entran (arte). El nombre y el rol en texto sí.
