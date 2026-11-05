@@ -1838,7 +1838,7 @@ export interface InventoryState {
   statFree: number;
   /** Misiones del corte del MVP (cadena, encargos del día y materiales): JSON de QuestBookView (@fdn/world quests.ts). */
   questBook: string;
-  /** Inteligencia (5.º stat, 5/11): crítico en hechizos de daño. Las cuentas viejas valen 10. */
+  /** Inteligencia: se eliminó en D.3. El tag no se reutiliza ni se renumera; el server ya no lo manda (queda en 0). */
   statInt: number;
 }
 

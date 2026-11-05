@@ -37,7 +37,7 @@ const SPLIT: Record<Cls, [keyof Stats, number][]> = {
 };
 
 export function buildStats(cls: Cls, lvl: number): CombatStats {
-    const pts = statPointsTotal(lvl), st: Stats = { str: STAT_BASE, vit: STAT_BASE, dex: STAT_BASE, int: STAT_BASE, mag: STAT_BASE };
+    const pts = statPointsTotal(lvl), st: Stats = { str: STAT_BASE, vit: STAT_BASE, dex: STAT_BASE, mag: STAT_BASE };
     let left = pts;
     SPLIT[cls].forEach(([id, f], i) => { const n = i === SPLIT[cls].length - 1 ? left : Math.round(pts * f); st[id] = Math.min(STAT_CAP, STAT_BASE + n); left -= n; });
     const pl = powerLevel(lvl), eq = GEAR[cls][pl <= 15 ? 0 : pl <= 30 ? 1 : 2];
