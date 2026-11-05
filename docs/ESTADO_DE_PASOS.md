@@ -1,5 +1,7 @@
 # Estado de los pasos del plan
 
+> Las decisiones de diseño viven en [`DISEÑO.md`](DISEÑO.md); este archivo es nota de implementación y estado, y puede estar desactualizado.
+
 Se actualiza a medida que se cierra cada paso de `PLAN_DE_TRABAJO.md`. Última actualización: 3/11/2026 (hasta 3 personajes por cuenta).
 
 | Paso | Estado | Detalle |

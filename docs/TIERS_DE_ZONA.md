@@ -1,5 +1,7 @@
 # Tiers de zona (estilo Albion)
 
+> Las decisiones de diseño viven en [`DISEÑO.md`](DISEÑO.md); este archivo es nota de implementación y estado, y puede estar desactualizado.
+
 Fecha: 1/11/2026. Respuesta a la pregunta de Román: con muchos mapas no se puede regular a mano la dificultad, los mobs y los drops de cada uno. La idea es que **cada zona tenga un tier recomendado**, como en Albion, y que el tier decida casi todo. Entra al plan como **paso 1.5** (después del 1.4), porque también resuelve el problema que dejó el paso 1.1: hoy no hay mapas por encima del nivel ~12.
 
 ## 1. La idea

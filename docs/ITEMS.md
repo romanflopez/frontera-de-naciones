@@ -1,5 +1,7 @@
 # Ítems, runas y mejoras (borrador de diseño)
 
+> Las decisiones de diseño viven en [`DISEÑO.md`](DISEÑO.md); este archivo es nota de implementación y estado, y puede estar desactualizado.
+
 Estado 3/11: **modelo de calidad implementado** (ver `claude/modelo-de-items-y-stats.md` en el proyecto). Únicos de T1 a T7 en 8 slots + jefes D1-D7; el botín viejo con rareza al azar se eliminó. Poder por nivel de ítem (ilvl), mejoras +1 a +11 con tope por calidad, reforja de extras, 4 sets con bonos, efectos de jefe y oferta del día; las runas siguen en diseño.
 
 Implementación: `packages/world/src/uniques.ts` (catálogo, ilvl, calidad, extras, sets y efectos), `apps/server/src/economy.ts` (`reward`, `uniqueItem`, `rollQuality`, `bossQuality`, `reforge`), `apps/server/src/dailyShop.ts` (oferta del día), `apps/server/src/mobs.ts` (efectos de jefe en PvE).

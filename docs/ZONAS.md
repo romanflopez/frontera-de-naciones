@@ -1,5 +1,7 @@
 # Zonas y mobs: curva de nivel
 
+> Las decisiones de diseño viven en [`DISEÑO.md`](DISEÑO.md); este archivo es nota de implementación y estado, y puede estar desactualizado.
+
 Fuente de verdad: `packages/world/src/mobs.ts` (tipos) y las zonas en `index.ts`, `frontier.ts` (páramo, cripta) y `ashlands.ts` (tierras de ceniza, foso).
 El server y el cliente comparten las definiciones: `mobDef(tipo, zona)` devuelve el mob con el nivel de la zona.
 

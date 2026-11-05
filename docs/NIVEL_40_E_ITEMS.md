@@ -1,5 +1,7 @@
 # Nivel máximo 40, curva de exp, daño en área e ítems (análisis)
 
+> Las decisiones de diseño viven en [`DISEÑO.md`](DISEÑO.md); este archivo es nota de implementación y estado, y puede estar desactualizado.
+
 Fecha: 1/11/2026. Pedido: subir el techo a nivel 40, abrir mapas, que los primeros 10 niveles sean más fáciles y después se ponga más difícil aunque los bichos den más exp, revisar el farmeo en área y hacer un análisis profundo de los ítems.
 
 **Cómo leer los números:** son de un modelo simple (guerrero, un bicho a la vez, 85 % del tiempo pegando, 2,5 s entre bichos, 300 kills/hora en un pit, sin muertes ni pociones). Sirven para ver la forma de las curvas y los problemas, **no** para prometer horas reales. Hay que validarlos con `sim-arranque.ts` extendido a 40 antes de fijar valores.

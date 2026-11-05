@@ -1,5 +1,7 @@
 # Roadmap al MVP / beta de ERIS
 
+> Las decisiones de diseño viven en [`DISEÑO.md`](DISEÑO.md); este archivo es nota de implementación y estado, y puede estar desactualizado.
+
 Fecha: 1/11/2026. Es un diagnóstico de qué falta y en qué orden hacerlo, mirando tres referencias: **Helbreath** (lo que vos conocés y querés: PvP de naciones, ítems únicos, mejoras con riesgo), **Dreadmyst** (el loop "chill": limpiar mobs, mejorar equipo, hacer dungeons, arenas 1v1/2v2) y **Apogea** (MMO isométrico hardcore estilo Tibia, sin pay2win, con housing y UI configurable). Estado del juego sacado de los docs y del historial de `main`; si algo cambió y no está en los docs, corregilo.
 
 ## 1. Qué agarro de cada uno (y qué dejo)

@@ -1,5 +1,7 @@
 # Combate — Números base (P0)
 
+> Las decisiones de diseño viven en [`DISEÑO.md`](DISEÑO.md); este archivo es nota de implementación y estado, y puede estar desactualizado.
+
 ## Tamaño y grilla
 - Colisión de personaje: 1 tile
 - Sprite: 2 tiles de alto (huella lógica 1 tile)

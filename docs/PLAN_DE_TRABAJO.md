@@ -294,3 +294,69 @@ World map y wiki; Nv13+ con más mapas; clanes y amigos; guerra de naciones; reb
 3. Dos jugadores: party, mazmorra, jefe, drop para cada uno, reconexión.
 4. Reiniciar el server y comprobar que nada se perdió.
 5. Mirar `FDN_TICK_STATS` durante todo el recorrido.
+
+---
+
+## Cambios que salen de `DISEÑO.md` (sesión 5/11/2026)
+
+Pasos nuevos, en el orden sugerido. Cada uno es chico; juntos alinean el código con las decisiones cerradas.
+
+### D.1 Curva a 30 horas (S)
+`killsToLevel` a la mitad (total ~5.300 kills), meta de `tools/src/sim/pve/targets.ts` a "~1 h al 10, ~30 h al 120". **Pruebas:** D `sim:pve --horas` dentro de ±25 %; A test de nivel actualizado; los primeros 10 niveles siguen en menos de 1 h.
+
+### D.2 La magia no falla (S)
+`hitChance` en `pvpCombat.ts`: `kind` mágico devuelve 1. Sacar `magStat` de la tirada. **Pruebas:** A en `sim-pvp.test.ts`; correr `sim:pvp` y confirmar que los matchups siguen en rango (puede subir el daño del mago: recalibrar si hace falta).
+
+### D.3 4 stats: sacar Inteligencia (M)
+`STAT_IDS` sin `int`; quitar el crit mágico (`critMag`) del server, la sim y el cliente; `cleanStats`/`migrateEcon` devuelven a libres los puntos puestos en `int` (sube `ECON_VERSION`). **Pruebas:** F migración con cuenta vieja; A `stats.test.ts`; E panel de atributos con 4 filas.
+
+### D.4 Remover sobre uno mismo (S)
+Habilidad `remover` para las 3 clases: cast 1,5 s sobre uno mismo (se puede castear paralizado), 1 s sobre otro. Respeta el rendimiento decreciente existente. **Pruebas:** A en `tabla-de-ataque.test.ts`; `sim:pvp` con bots que la usan; E 2 jugadores.
+
+### D.5 PvP por región, no por mapa (M)
+`pvp` pasa de `MapDef` a las regiones/zonas del mapa (puesto seguro, zona abierta, zona roja). `isEnemyPair` mira la región de los dos. Cartel al entrar/salir de zona roja. **Pruebas:** B cruce de región con dos jugadores de distinta nación; H paquete que miente la región; E.
+
+### D.6 Topes de DF/RM por semana del server (S)
+`SERVER_EPOCH` en env; `capsForWeek(semana)` en el server; el cliente muestra el tope actual y cuándo sube. **Pruebas:** A escalera de topes; `sim:pvp` en el tope mínimo y en el máximo; E texto en la ventana de personaje.
+
+### D.7 Ítem de reset de stats por gemas (S)
+Mismo efecto que el reset por oro. Entra con la tienda de gemas (`ECONOMIA_Y_MONEDAS.md`). **Pruebas:** A, H.
+
+### D.8 Compensador de nación con menos población (M, antes de abrir el 80+)
+Diseño en `DISEÑO.md` §11. Bonus de exp/oro a la nación con menos jugadores online en mapas 81+. **Pruebas:** B con conteo simulado; E.
+
+### D.9 Zem y caída en PvP (M)
+Material `zem` reemplaza a la piedra de forja (migración: las piedras guardadas pasan a zem 1:1). Drop 7-10 % en todo mob. Al morir contra un jugador en zona roja: cae todo el zem de la bolsa y `min(10 % del oro, nivel × 100)`, reservado 30 s al que mató/su party. La forja solo acepta zem del depósito. **Pruebas:** A drop y caída; B dos jugadores de distinta nación; H cliente que miente la bolsa; F migración de piedras.
+
+### D.10 EK y contribución (M)
+Contador EK por personaje; contribución por nación; tienda de contribución (visual/consumibles). Kill cuenta en 81+ sin regla de nivel; mismo jugador 1 vez cada 4 h. **Pruebas:** A cooldown; B kills repetidos; E tienda.
+
+### D.11 Quests alineadas al diseño (S)
+`frontera` y el objetivo `pvp` pasan a `minLvl: 61` y a "ganar una pelea en zona roja" (depende de D.5); recompensas `forge` pasan a zem (con D.9). **Pruebas:** A `quests.test`; E encargo del día a nivel 61 en zona roja.
+
+### D.0 Renombres y esqueleto del arquero (S) — va primero, bloquea a los demás
+`guerrero` → `pala`, `healer` → `clerigo` en `kits.ts`, `stats.ts`, sims, cliente, docs y tests (con alias de lectura para cuentas guardadas: `migrateEcon`). Clase `arquero` registrada con kit vacío y oculta en la pantalla de crear hasta que tenga kit. **Pruebas:** F migración de cuentas con clase vieja; A `isClass`; typecheck entero.
+
+### D.12 Movilidad (S, jugando)
+`movementSpeedMs` a 280/170 como primera prueba; correr por defecto, caminar solo al castear; aceleración al arrancar/frenar y giro. Se decide probando con 2 personas. **Pruebas:** E.
+
+### D.13 Cursor nativo (S)
+Flecha como `cursor: url()` con hotspot; el canvas queda solo para anillo de casteo y retícula. Verificar clic→celda con DPR ≠ 1. **Pruebas:** E en pantalla normal y retina.
+
+### D.14 Entrada al mundo sin flash de HUD (S)
+Flag `worldReady`; HUD/chat/minimapa ocultos hasta `InitialGameWorldState` + mapa renderizado; "Viajando a" arriba hasta entonces. **Pruebas:** E entrar y cambiar de mapa.
+
+### D.15 Chat al lado del HUD + colapsable (M)
+Según `REVISION_PANTALLAS.md` §5. **Pruebas:** E en 1366×768 y 1920×1080.
+
+### D.16 Ventanas sin scroll innecesario (M)
+Según `REVISION_PANTALLAS.md` §7; resolución mínima 1366×768. **Pruebas:** E ventana por ventana.
+
+### D.17 Cuenta con email + recuperar contraseña (M)
+Email obligatorio al crear; contraseña mínima 8; Resend; token de 30 min. Cuentas viejas cargan email al entrar. **Pruebas:** A/B/F/H; E flujo completo con un mail real.
+
+### D.18 Pantallas de entrada (M)
+Muñeco centrado y sin pixelar, modal de borrar con el kit, última conexión en el detalle, fichas de nación/clase. Logos y escudos los pasa Román. **Pruebas:** E.
+
+### D.19 NPCs: tienda directa (S)
+Vendedor abre la tienda sin diálogo; nombre y rol sobre la cabeza. Los sprites nuevos van con el pipeline de arte. **Pruebas:** E.
