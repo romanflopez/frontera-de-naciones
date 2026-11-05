@@ -1746,12 +1746,12 @@ export class GameWorld {
         killer.send(M.sendMessage(`Botín de ${victim.characterName}: ${what} en el suelo, reservado 30 s para vos y tu party.`));
     }
     /**
-     * Encargo "Defensa de la frontera": ganó una pelea contra la otra nación en un mapa de facción. No cuenta si la víctima
+     * Encargo "Defensa de la frontera" (desde el nivel 61, D.11): ganó una pelea contra la otra nación EN ZONA ROJA (la región sale de la posición del server). No cuenta si la víctima
      * está más de 5 niveles por debajo (freno al farmeo de novatos). A cada rival se le cuenta una vez por día (dos cuentas
      * de naciones distintas no pueden pasarse kills para completarlo).
      */
     private pvpQuestCredit(victim: Player, killerId?: bigint): void {
-        if (!killerId || this.def?.pvp !== 'faction') return;
+        if (!killerId || this.arena || this.inArenaAt(victim) || this.pvpRegion(victim) !== 'roja') return;
         const killer = this.playersById.get(killerId); if (!killer || killer === victim || !killer.econ || !victim.econ) return;
         if (this.factionOf(killer) === this.factionOf(victim)) return;
         // quests en party [DM]: le cuenta a cada compañero cerca (vivo o muerto), con sus propias reglas (nivel y una vez por rival)

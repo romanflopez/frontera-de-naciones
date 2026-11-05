@@ -2,12 +2,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { relevel,
-    DAILY_LIMIT, DAILY_QUESTS, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, MAPS, REPEAT_MATS, applyQuestEvent, buildMap, cleanQuestBook, dailyEligible, mobDef, msToReset,
+import { relevel, pvpRegionAt,
+    DAILY_BY_ID, DAILY_LIMIT, DAILY_QUESTS, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, MAPS, REPEAT_MATS, applyQuestEvent, buildMap, cleanQuestBook, dailyEligible, mobDef, msToReset,
     newQuestBook, questDay, expToLevel, DUNGEON_KEY, KEY_MAT_NAMES, rewardUniques, roleOf, rollDailies, TRAIT_MUTANT, type MobType,
 } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
-import { Economy, type EconCtx, type KillInfo } from '../src/economy.ts';
+import { ECON_VERSION, Economy, migrateEcon, newEcon, type EconCtx, type KillInfo } from '../src/economy.ts';
 import { PartyService, setParties } from '../src/party.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
 import { WorldRegistry, type TransferSession } from '../src/registry.ts';
@@ -52,14 +52,16 @@ test('encargos del día fijos: todos los de tu nivel, sin sorteo; reinicio a las
     const b = newQuestBook(), t = Date.UTC(2026, 10, 2, 8, 59);
     assert.equal(rollDailies(b, 1, t), true);
     assert.deepEqual(b.d.ids, dailyEligible(1).map((q) => q.id));
-    assert.ok(!b.d.ids.includes('dia_d2') && !b.d.ids.includes('frontera'), 'D2 pide nivel 8 y el PvP nivel 3');
+    assert.ok(!b.d.ids.includes('dia_d2') && !b.d.ids.includes('frontera'), 'D2 pide nivel 8 y el PvP nivel 61');
     const again = newQuestBook(); rollDailies(again, 1, t); assert.deepEqual(again.d.ids, b.d.ids, 'todos ven lo mismo');
     assert.equal(rollDailies(b, 1, t + 60_000 - 1), false, 'mismo día (antes de las 09:00 UTC)');
     assert.equal(questDay(t + 60_000), questDay(t) + 1, 'a las 09:00 UTC cambia el día');
     assert.equal(msToReset(t), 60_000);
     b.d.prog.pits = 7;
-    assert.equal(rollDailies(b, relevel(8), t), true, 'subió al nivel de D2 en el día: se suman D1, D2 y PvP');
-    assert.ok(b.d.ids.includes('dia_d2') && b.d.ids.includes('frontera')); assert.equal(b.d.prog.pits, 7, 'no pierde lo hecho');
+    assert.equal(rollDailies(b, relevel(8), t), true, 'subió al nivel de D2 en el día: se suman D1 y D2');
+    assert.ok(b.d.ids.includes('dia_d2') && !b.d.ids.includes('frontera'), 'el PvP todavía no: pide nivel 61'); assert.equal(b.d.prog.pits, 7, 'no pierde lo hecho');
+    assert.ok(!dailyEligible(60).some((q) => q.id === 'frontera'), 'en el 60 no hay PvP'); assert.ok(dailyEligible(61).some((q) => q.id === 'frontera'), 'en el 61 aparece la Defensa de la frontera');
+    assert.match(DAILY_BY_ID.get('frontera')!.goal.what, /zona roja/);
     b.d.done.push('pits'); b.d.pvp.push('x');
     assert.equal(rollDailies(b, relevel(8), t + 2 * H), true); assert.deepEqual(b.d.done, []); assert.deepEqual(b.d.pvp, []); assert.ok(Object.values(b.d.prog).every((v) => v === 0));
 });
@@ -158,7 +160,7 @@ test('cadena completa en el server: de Campos de Sal a la Reina, con premios, ni
                 const r = ask('m_turnin'); assert.equal(r.ok, true, `${q.name}: ${r.text}`);
                 if (q.reward.unique) { prize = st.bag.at(-1)!.n; assert.ok(rewardUniques('class_t1_random', 'paladin').some((u) => u.name === prize)); assert.equal(st.bag.length, bag + 1); }
             }
-            assert.equal(st.gold, gold + q.reward.gold, q.name); assert.equal(st.zem ?? 0, forge + (q.reward.forge ?? 0));
+            assert.equal(st.gold, gold + q.reward.gold, q.name); assert.equal(st.zem ?? 0, forge + (q.reward.zem ?? 0));
             if (q.id === 'colmillos') assert.ok((st.mats?.colmillo ?? 0) >= 8, 'entregar no gasta los colmillos');
         }
         assert.equal(st.qb!.m.i, MAIN_QUESTS.length);
@@ -203,7 +205,7 @@ test('repetible: 10 materiales iguales por oro o piedra; los de las llaves no se
     assert.equal(ask('r_turnin', 'colmillo|gold').code, 'bad_mat');
     assert.equal(ask('r_turnin', 'goblin_ear|nada').code, 'bad_action');
     const g = st.gold; assert.equal(ask('r_turnin', 'goblin_ear|gold').ok, true); assert.ok(st.gold > g);
-    const f = st.zem ?? 0; assert.equal(ask('r_turnin', 'goblin_ear|forge').ok, true); assert.equal(st.zem, f + 1);
+    const f = st.zem ?? 0; assert.equal(ask('r_turnin', 'goblin_ear|zem').ok, true); assert.equal(st.zem, f + 1);
     assert.equal(ask('r_turnin', 'goblin_ear|gold').code, 'mats'); assert.equal(st.mats.goblin_ear, 3);
 });
 
@@ -216,7 +218,7 @@ test('el libro viaja al cliente en InventoryState.quest_book', () => {
     assert.ok(DAILY_QUESTS.length >= 6 && MAPS.campos_de_sal, 'mapas y pool presentes');
 });
 
-test('encargo PvP: cuenta ganarle a la otra nación en mapa de facción, una vez por rival, no a un novato 6+ niveles abajo ni en mapas sin PvP', () => {
+test('encargo PvP (D.11): cuenta ganarle a la otra nación en zona roja, una vez por rival, no a un novato 6+ niveles abajo ni fuera de la zona roja ni en mapas sin PvP', () => {
     const mem = new MemStorage(), eco = new Economy(mem), reg = new WorldRegistry({ settings, economy: eco });
     const mk = (w: GameWorld, name: string, faction: string) => {
         const persisted: PersistedPlayer = { mapId: w.mapId, worldId: w.mapId, x: MAPS[w.mapId].spawn.x, y: MAPS[w.mapId].spawn.y, direction: 4, gender: 0, skinColor: 0, hairStyleIndex: 0, underwearColorIndex: 0, movementSpeedMs: 270, runningMode: true, attackMode: true };
@@ -225,21 +227,35 @@ test('encargo PvP: cuenta ganarle a la otra nación en mapa de facción, una vez
         w.bindAccount(`s-${name}-${w.mapId}`, `acc-${name}-${w.mapId}`);
         w.onClientSave(`s-${name}-${w.mapId}`, JSON.stringify({ cls: 'paladin', faction }));
         w.handleClientPacket(`s-${name}-${w.mapId}`, { payload: { $case: 'changePlayerProfileRequest', value: { profile: `${faction};paladin;` } } } as never);
-        const p = w.playerOf(`s-${name}-${w.mapId}`)!; p.econ!.lvl = 10; p.econ!.qb!.d = { day: questDay(Date.now()), ids: ['frontera'], prog: { frontera: 0 }, done: [], ess: false, pvp: [] };
+        const p = w.playerOf(`s-${name}-${w.mapId}`)!; p.econ!.lvl = 70; p.econ!.qb!.d = { day: questDay(Date.now()), ids: ['frontera'], prog: { frontera: 0 }, done: [], ess: false, pvp: [] };
         return p;
     };
     const credit = (w: GameWorld, victim: ReturnType<typeof mk>, killer: ReturnType<typeof mk>) => (w as unknown as { pvpQuestCredit(v: unknown, id: bigint): void }).pvpQuestCredit(victim, killer.playerId);
     const faction = reg.ensure('paso_de_stormrock'), safe = reg.ensure('campos_de_sal');
     assert.equal(MAPS.paso_de_stormrock.pvp, 'faction'); assert.equal(MAPS.campos_de_sal.pvp, 'off');
     const a = mk(faction, 'sol', 'solmar'), v = mk(faction, 'vh', 'vhar'), ally = mk(faction, 'sol2', 'solmar');
-    a.econ!.lvl = 10; v.econ!.lvl = 4; credit(faction, v, a); assert.equal(a.econ!.qb!.d.prog.frontera, 0, '6 niveles abajo no cuenta');
-    ally.econ!.lvl = 10; credit(faction, ally, a); assert.equal(a.econ!.qb!.d.prog.frontera, 0, 'misma nación no cuenta');
-    v.econ!.lvl = 5; credit(faction, v, a); assert.equal(a.econ!.qb!.d.prog.frontera, 1); assert.ok(a.econ!.qb!.d.done.includes('frontera'), 'se cobra solo');
+    const open = { x: MAPS.paso_de_stormrock.spawn.x, y: MAPS.paso_de_stormrock.spawn.y }, [red] = redCells('paso_de_stormrock');
+    assert.equal(pvpRegionAt(MAPS.paso_de_stormrock, false, open.x, open.y), 'abierta', 'la entrada es zona abierta');
+    v.setPosition(open.x, open.y); credit(faction, v, a); assert.equal(a.econ!.qb!.d.prog.frontera, 0, 'ganarle en zona abierta no cuenta');
+    v.setPosition(red.x, red.y);
+    a.econ!.lvl = 70; v.econ!.lvl = 64; credit(faction, v, a); assert.equal(a.econ!.qb!.d.prog.frontera, 0, '6 niveles abajo no cuenta');
+    ally.econ!.lvl = 70; ally.setPosition(red.x, red.y); credit(faction, ally, a); assert.equal(a.econ!.qb!.d.prog.frontera, 0, 'misma nación no cuenta');
+    v.econ!.lvl = 65; credit(faction, v, a); assert.equal(a.econ!.qb!.d.prog.frontera, 1); assert.ok(a.econ!.qb!.d.done.includes('frontera'), 'se cobra solo');
     a.econ!.qb!.d.prog.frontera = 0; a.econ!.qb!.d.done = []; credit(faction, v, a); assert.equal(a.econ!.qb!.d.prog.frontera, 0, 'al mismo rival se le cuenta una vez por día');
     const b = mk(safe, 'sol', 'solmar'), w2 = mk(safe, 'vh', 'vhar'); credit(safe, w2, b); assert.equal(b.econ!.qb!.d.prog.frontera, 0, 'sin PvP en el mapa no cuenta');
 });
 
 // ---------- quests en party [DM]: en Dreadmyst las muertes de un compañero no contaban y la gente dejaba de agruparse ----------
+/** Celdas de zona roja caminables y sin puesto seguro (D.11: el encargo de PvP solo cuenta ahí). */
+function redCells(mapId: string, n = 4): { x: number; y: number }[] {
+    const m = buildMap(mapId), def = MAPS[mapId];
+    for (let y = 2; y < m.size - 2; y++) for (let x = 2; x < m.size - n - 1; x++) {
+        let ok = true; for (let i = 0; i < n; i++) if (m.blocked[y][x + i] || m.safe[y]?.[x + i] || pvpRegionAt(def, false, x + i, y) !== 'roja') ok = false;
+        if (ok) return Array.from({ length: n }, (_, i) => ({ x: x + i, y }));
+    }
+    throw new Error('sin zona roja');
+}
+
 function partyWorld(mapId: string, names: string[], faction = 'solmar') {
     const mem = new MemStorage(), eco = new Economy(mem), reg = new WorldRegistry({ settings, economy: eco });
     const w = reg.ensure(mapId);
@@ -301,9 +317,10 @@ test('quests en party: un encargo que se cobra estando muerto puede subir de niv
 test('quests en party: el encargo PvP le cuenta a cada compañero cerca con sus propias reglas', () => {
     const { w, ps: [A, B, C], mk } = partyWorld('paso_de_stormrock', ['sol', 'sol2', 'sol3']);
     try {
-        const V = mk('vh', 'vhar');
-        for (const p of [A, B, C, V]) { p.econ!.lvl = 10; p.econ!.qb!.d = { day: questDay(Date.now()), ids: ['frontera'], prog: { frontera: 0 }, done: [], ess: false, pvp: [] }; }
-        C.econ!.lvl = 20; // la víctima está 10 niveles abajo de C: a él no le cuenta
+        const V = mk('vh', 'vhar'), [red] = redCells('paso_de_stormrock');
+        V.setPosition(red.x, red.y); // D.11: solo cuenta en zona roja
+        for (const p of [A, B, C, V]) { p.econ!.lvl = 70; p.econ!.qb!.d = { day: questDay(Date.now()), ids: ['frontera'], prog: { frontera: 0 }, done: [], ess: false, pvp: [] }; }
+        C.econ!.lvl = 80; // la víctima (70) está 10 niveles abajo de C: a él no le cuenta
         B.setPosition(A.posX + 2, A.posY); C.setPosition(A.posX, A.posY + 2);
         (w as unknown as { pvpQuestCredit(v: unknown, id: bigint): void }).pvpQuestCredit(V, A.playerId);
         assert.ok(A.econ!.qb!.d.done.includes('frontera'));
@@ -322,4 +339,12 @@ test('encargo de dungeon: al cumplirlo devuelve una llave de ese dungeon, una so
     kill('caballero_cripta', { origin: 'dungeon', map: DUNGEON_MAP.d3 });
     assert.equal(st.mats[DUNGEON_KEY.d3], 1, 'la segunda corrida del día no da otra');
     for (const d of DUNGEON_IDS) assert.ok(DUNGEON_KEY[d] && KEY_MAT_NAMES[DUNGEON_KEY[d]], `${d} tiene llave`);
+});
+
+test('F (D.11): una cuenta v11 con la Defensa de la frontera sorteada pero nivel < 61 la pierde; con nivel 61 la conserva', () => {
+    const mk = (lvl: number) => { const st = newEcon('paladin', 'solmar'); st.v = 11; st.lvl = lvl; st.qb = newQuestBook(); st.qb.d = { day: 5, ids: ['pits', 'frontera'], prog: { pits: 3, frontera: 0 }, done: [], ess: false, pvp: [] }; return st; };
+    const bajo = mk(30); assert.equal(migrateEcon(bajo), true);
+    assert.equal(bajo.v, ECON_VERSION); assert.deepEqual(bajo.qb!.d.ids, ['pits']); assert.equal(bajo.qb!.d.prog.frontera, undefined); assert.equal(bajo.qb!.d.prog.pits, 3, 'no toca el resto');
+    const alto = mk(61); migrateEcon(alto); assert.deepEqual(alto.qb!.d.ids, ['pits', 'frontera']);
+    assert.equal(migrateEcon(bajo), false, 'migrar dos veces no cambia nada');
 });

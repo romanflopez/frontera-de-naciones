@@ -2657,7 +2657,7 @@ function renderBook(n: Npc) {
     // repetible
     const extra = Object.entries(QB.mats).filter(([id, c]) => c >= REPEAT_MATS && !RESERVED_MATS.has(id));
     add(`<b>Sobrantes</b>: ${REPEAT_MATS} materiales iguales por oro o una piedra de forja.${extra.length ? '' : ' Todavía no juntaste suficientes.'}`);
-    for (const [id, c] of extra) add(`${matName(id)} <small>×${c}</small>`, [['Oro', () => bookSend(n, 'r_turnin', `${id}|gold`)], ['Zem', () => bookSend(n, 'r_turnin', `${id}|forge`)]], true);
+    for (const [id, c] of extra) add(`${matName(id)} <small>×${c}</small>`, [['Oro', () => bookSend(n, 'r_turnin', `${id}|gold`)], ['Zem', () => bookSend(n, 'r_turnin', `${id}|zem`)]], true);
     const keyMats = Object.keys(QUEST_MATS).filter((id) => QB!.mats[id]).map((id) => `${matName(id)}: ${QB!.mats[id]}`);
     if (keyMats.length) add(`<b>Para las llaves</b>: ${keyMats.join(' · ')}`);
 }
@@ -2669,7 +2669,7 @@ const rewardTile = (src: string, n: string, label: string, col = '#7a6a3e') => `
 /** Recompensas de la cadena: exp, oro, piedras de forja y el único (si hay). */
 function mainRewardsHtml(rw: MainQuest['reward']): string {
     let h = rewardTile(miscIconUrl('pergamino_quest'), `${rw.expPct}%`, 'Exp. de tu nivel', '#8fd4ff') + rewardTile(miscIconUrl('oro'), String(rw.gold), 'Oro', '#d8a53c');
-    if (rw.forge) h += rewardTile(miscIconUrl('piedra_reforja'), String(rw.forge), 'Zem', '#b99cff');
+    if (rw.zem) h += rewardTile(miscIconUrl('piedra_reforja'), String(rw.zem), 'Zem', '#b99cff');
     if (rw.unique) h += rewardTile(miscIconUrl('cofre'), '', rw.unique === 'class_t1_random' ? 'Un único de tu clase' : 'Un único a elección', '#d8a53c');
     return h;
 }
