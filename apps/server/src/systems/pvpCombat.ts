@@ -43,6 +43,8 @@ export type DmgKind = 'phys' | 'magic';
 export const spellDmgKind = (id: string): DmgKind => { const sp = PVP_SPELLS[id]; return sp && (sp.stat === 'melee' || sp.stat === 'wdmg' || sp.melee) ? 'phys' : 'magic'; };
 /** Movimiento: una sola velocidad, la de correr del cliente de referencia (8 cuadros de 39 ms = 312 ms/celda, de EntityMotion.h del cliente 3.82; el ritmo del paso lo marca la animación). Casteás corriendo: el cast te frena y un paso lo corta. WALK_MS = RUN_MS por compatibilidad del protocolo. MOVE_CAP_MS es el piso para buffs de velocidad. */
 export const WALK_MS = 312, RUN_MS = 312, MOVE_CAP_MS = 200;
+/** Alcance máximo de hechizos y habilidades a distancia, en celdas: lo que se ve desde el centro hasta la esquina más lejana de la pantalla (el campo de visión es fijo; ver VIEW_* del cliente), para que se pueda tirar a cualquier punto visible como en el cliente de referencia. */
+export const VIEW_RANGE = 10.5;
 /** Escala de cast times (ms). */
 export const CAST_FAST_MS = 750, CAST_NORMAL_MS = 1000, CAST_HEAVY_MS = 1500, CAST_TELEGRAPH_MS = 2400;
 /** true si el hechizo es un cast (no golpe cuerpo a cuerpo): esos no se pueden lanzar corriendo. */
@@ -63,20 +65,20 @@ export const isCast = (id: string): boolean => { const sp = PVP_SPELLS[id] ?? SK
 export const PVP_SPELLS: Record<string, PvpSpell> = {
     ataque: { mp: 0, dmg: [0, 0], lvlK: 1, stat: 'melee', range: 2.6, cd: 0.3, melee: true },
     // Mago (kits de Valdrys, ver el doc del proyecto kits-de-clase.md). Daño = múltiplo del Daño base mágico.
-    proyectil: { mp: 14, dmg: [14, 21], k: 1, stat: 'mag', range: 15, cd: 0.35 },                                     // Saeta ígnea: cast 0,75 s
-    esquirla: { mp: 24, dmg: [14, 21], k: 1.2, stat: 'mag', range: 15, cd: 0.7, slow: 3, vsCtrl: 2 },                   // Esquirla de hielo: cast 1 s, frena 3 s
-    paralisis: { mp: 36, dmg: [14, 21], k: 0.2, stat: 'mag', secs: 5, range: 15, cd: 6 },                             // Cadenas de hielo: cast 1 s, congela 5 s
-    ignicion: { mp: 30, dmg: [14, 21], k: 0.5, stat: 'mag', range: 15, cd: 5, cast: false, burn: true },                // Ignición: instantánea + quemadura
-    bola: { mp: 72, kind: 'eruption', dmg: [14, 21], k: 3, stat: 'mag', range: 15, cd: 10, burn: true, vsBurn: 1.4 },  // Bola de fuego: cast 1,5 s, un objetivo
-    lluvia: { mp: 90, kind: 'cataclysm', dmg: [14, 21], k: 1.2, stat: 'mag', range: 15, cd: 18, aoe: 4.5, burn: true }, // Infierno: cast 2,4 s, área
+    proyectil: { mp: 14, dmg: [14, 21], k: 1, stat: 'mag', range: VIEW_RANGE, cd: 0.35 },                                     // Saeta ígnea: cast 0,75 s
+    esquirla: { mp: 24, dmg: [14, 21], k: 1.2, stat: 'mag', range: VIEW_RANGE, cd: 0.7, slow: 3, vsCtrl: 2 },                   // Esquirla de hielo: cast 1 s, frena 3 s
+    paralisis: { mp: 36, dmg: [14, 21], k: 0.2, stat: 'mag', secs: 5, range: VIEW_RANGE, cd: 6 },                             // Cadenas de hielo: cast 1 s, congela 5 s
+    ignicion: { mp: 30, dmg: [14, 21], k: 0.5, stat: 'mag', range: VIEW_RANGE, cd: 5, cast: false, burn: true },                // Ignición: instantánea + quemadura
+    bola: { mp: 72, kind: 'eruption', dmg: [14, 21], k: 3, stat: 'mag', range: VIEW_RANGE, cd: 10, burn: true, vsBurn: 1.4 },  // Bola de fuego: cast 1,5 s, un objetivo
+    lluvia: { mp: 90, kind: 'cataclysm', dmg: [14, 21], k: 1.2, stat: 'mag', range: VIEW_RANGE, cd: 18, aoe: 4.5, burn: true }, // Infierno: cast 2,4 s, área
     // Paladín. Daño = múltiplo del Daño base físico (arma).
     golpe: { mp: 10, dmg: [14, 20], lvlK: 2, stat: 'wdmg', range: 2.8, cd: 0.9, melee: true },                        // Golpe: cuerpo a cuerpo, sin cast
     juicio: { mp: 15, dmg: [14, 20], k: 1.5, stat: 'wdmg', range: 4, cd: 1.4, cast: true, lifesteal: 0.5, vsCtrl: 1.5, threat: 3 }, // Juicio: cast 1 s
     escudo: { mp: 36, dmg: [14, 20], k: 2.3, stat: 'wdmg', secs: 3, range: 10, cd: 9, cast: false, vsCtrl: 1.5, threat: 5 },    // Escudo vengador: aturde 3 s
     aturdir: { mp: 30, dmg: [14, 20], k: 0.8, stat: 'wdmg', secs: 3, range: 8, cd: 11, taunt: 3 },                     // Martillo de justicia: aturde y provoca 3 s
     // Healer (K5): el healer sagrado de Valdrys. Daño mágico, como el mago.
-    castigo: { mp: 18, refund: 9, dmg: [14, 21], k: 1.4, stat: 'mag', range: 15, cd: 0.95, lifesteal: 0.35, vsCtrl: 1.5 }, // Castigo: cast 1 s, se cura el 35 %
-    reprender: { mp: 30, dmg: [14, 21], k: 0.8, stat: 'mag', secs: 3, range: 15, cd: 15, cast: false },              // Reprender: instantáneo, aturde 3 s
+    castigo: { mp: 18, refund: 9, dmg: [14, 21], k: 1.4, stat: 'mag', range: VIEW_RANGE, cd: 0.95, lifesteal: 0.35, vsCtrl: 1.5 }, // Castigo: cast 1 s, se cura el 35 %
+    reprender: { mp: 30, dmg: [14, 21], k: 0.8, stat: 'mag', secs: 3, range: VIEW_RANGE, cd: 15, cast: false },              // Reprender: instantáneo, aturde 3 s
 };
 /** Hechizos cuyo control es un aturdido (no una parálisis): llevan su propio rendimiento decreciente. */
 export const STUN_SPELLS = new Set(['aturdir', 'escudo', 'reprender']);
@@ -101,7 +103,7 @@ export const SKILLS: Record<string, ClassSkill> = {
     blink: { cls: 'mago', mp: 0, range: 7.25, cd: 12 },                                                                  // Parpadeo: sin maná (Valdrys)
     pasoluz: { cls: 'healer', mp: 0, range: 6.25, cd: 15 },                                                              // Paso de luz (K8): hasta 6 celdas, se saca el frenado
     nova: { cls: 'mago', mp: 60, dmg: [14, 21], k: 0.8, stat: 'mag', range: 0, cd: 8, aoe: 3, freeze: 2, cast: false }, // Nova de escarcha: congela 2 s alrededor
-    carga: { cls: 'guerrero', mp: 60, dmg: [14, 20], k: 0.6, stat: 'wdmg', range: 15, cd: 18, melee: true, stun: 1, threat: 3 }, // Carga sagrada: aturde 1 s al llegar
+    carga: { cls: 'guerrero', mp: 60, dmg: [14, 20], k: 0.6, stat: 'wdmg', range: VIEW_RANGE, cd: 18, melee: true, stun: 1, threat: 3 }, // Carga sagrada: aturde 1 s al llegar
     giro: { cls: 'guerrero', mp: 36, dmg: [14, 20], k: 0.75, stat: 'wdmg', range: 0, cd: 8, melee: true, aoe: 2, sweeps: 2, threat: 3 }, // Barrido: 2 × 0,75
     mandato: { cls: 'guerrero', mp: 42, range: 0, cd: 6, aoe: 6, taunt: 7 },                                              // Mandato: provoca a los monstruos cercanos 7 s
     aura: { cls: 'guerrero', mp: 48, dmg: [14, 20], k: 0.25, stat: 'wdmg', range: 0, cd: 15, melee: true, aoe: 3, pulses: 20, every: 0.5, threat: 3 }, // Aura sagrada: 10 s de pulsos
@@ -114,13 +116,13 @@ export const SKILLS: Record<string, ClassSkill> = {
     clarividencia: { cls: 'mago', mp: 60, range: 0, cd: 30, cast: false, buff: 'clarividencia', buffSecs: 10 },           // Clarividencia: +25 % de crítico de hechizos
     intelecto: { cls: 'mago', mp: 60, range: 0, cd: 10, cast: true, aoe: 14, party: true, buff: 'intelecto', buffSecs: 90, buffSecsLong: BLESSING_LONG_S }, // Intelecto arcano: +Magia (90 s en la arena, 15 min afuera)
     // Healer (K5). Maná: los costos de Valdrys escalados al pool de ERIS (Castigo queda igual: 18).
-    curacion: { cls: 'healer', mp: 48, range: 12, cd: 5, cast: true, heal: 0.4 },                                         // Curación: cast 1,5 s, 40 % de la vida
-    renovar: { cls: 'healer', mp: 26, range: 12, cd: 3, cast: false, hot: { ticks: 4, every: 3, frac: 0.03 }, burn: true }, // Renovar: aliado 12 % en 12 s (1 %/s, no se reaplica hasta que termine); enemigo, quemadura
-    bendicion: { cls: 'healer', mp: 30, range: 12, cd: 20, cast: false, bless: 10 },                                     // Bendición sagrada: 10 s
+    curacion: { cls: 'healer', mp: 48, range: VIEW_RANGE, cd: 5, cast: true, heal: 0.4 },                                         // Curación: cast 1,5 s, 40 % de la vida
+    renovar: { cls: 'healer', mp: 26, range: VIEW_RANGE, cd: 3, cast: false, hot: { ticks: 4, every: 3, frac: 0.03 }, burn: true }, // Renovar: aliado 12 % en 12 s (1 %/s, no se reaplica hasta que termine); enemigo, quemadura
+    bendicion: { cls: 'healer', mp: 30, range: VIEW_RANGE, cd: 20, cast: false, bless: 10 },                                     // Bendición sagrada: 10 s
     novasagrada: { cls: 'healer', mp: 36, dmg: [14, 21], k: 1.2, stat: 'mag', range: 0, cd: 6, aoe: 4.5, cast: false, selfHeal: 0.12 }, // Nova sagrada
-    orbe: { cls: 'healer', mp: 56, range: 12, cd: 10, cast: true, aoe: 4, heal: 0.2 },                                   // Orbe sagrado: cast 1,5 s, 20 % en área
-    guardian: { cls: 'healer', mp: 28, range: 12, cd: 12, cast: false, shield: 0.4 },                                    // Escudo guardián: 40 % de la vida del aliado
-    esfera: { cls: 'healer', mp: 34, range: 12, cd: 8, cast: false, heal: 0.13, bounce: { n: 8, jump: 6 } },             // Esfera celestial: 8 curas del 13 %
+    orbe: { cls: 'healer', mp: 56, range: VIEW_RANGE, cd: 10, cast: true, aoe: 4, heal: 0.2 },                                   // Orbe sagrado: cast 1,5 s, 20 % en área
+    guardian: { cls: 'healer', mp: 28, range: VIEW_RANGE, cd: 12, cast: false, shield: 0.4 },                                    // Escudo guardián: 40 % de la vida del aliado
+    esfera: { cls: 'healer', mp: 34, range: VIEW_RANGE, cd: 8, cast: false, heal: 0.13, bounce: { n: 8, jump: 6 } },             // Esfera celestial: 8 curas del 13 %
     despertar: { cls: 'healer', mp: 54, range: 10, cd: 20, cast: true, revive: 0.5 },                                   // Despertar: cast 2,4 s, revive con 50 %
     grupo: { cls: 'healer', mp: 28, range: 0, cd: 10, cast: true, aoe: 14, party: true, buff: ['fortaleza', 'espiritu'], buffSecs: 90, buffSecsLong: BLESSING_LONG_S }, // Bendición de grupo: Fortaleza + Espíritu divino (90 s en la arena, 15 min afuera)
 };

@@ -12,7 +12,7 @@ import type { AccountRecord, Storage } from '../src/storage.ts';
 import { WorldRegistry } from '../src/registry.ts';
 import type { PersistedPlayer, Player } from '../src/player.ts';
 import type { GameWorld } from '../src/world.ts';
-import { AOE_MAX_TARGETS, CAST_MS, PVP_SPELLS, SKILLS, rollSpellDamage, statsFromChar } from '../src/systems/pvpCombat.ts';
+import { AOE_MAX_TARGETS, CAST_MS, VIEW_RANGE, PVP_SPELLS, SKILLS, rollSpellDamage, statsFromChar } from '../src/systems/pvpCombat.ts';
 
 const settings = loadSettings();
 class MemStorage implements Storage {
@@ -132,7 +132,7 @@ test('K2: tiempos de casteo y forma de cada hechizo como en Valdrys', () => {
     assert.equal(PVP_SPELLS.bola.aoe, undefined, 'Bola de fuego es de un objetivo');
     assert.equal(PVP_SPELLS.lluvia.aoe, 4.5, 'Infierno: radio 4,5');
     assert.equal(PVP_SPELLS.aturdir.range, 8, 'Martillo de justicia: a distancia');
-    assert.equal(SKILLS.carga.range, 15); assert.equal(SKILLS.carga.stun, 1);
+    assert.equal(SKILLS.carga.range, VIEW_RANGE); assert.equal(SKILLS.carga.stun, 1);
     assert.equal(SKILLS.giro.sweeps, 2); assert.equal(SKILLS.blink.mp, 0);
 });
 

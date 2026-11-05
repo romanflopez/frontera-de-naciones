@@ -715,6 +715,8 @@ function syncHp() {
 
 // ---------- hechizos ----------
 type Target = Mob | { x: number; y: number; ground: true } | { x: number; y: number; pvp: Other };
+/** Alcance máximo de los hechizos (celdas): la esquina más lejana de la pantalla; igual que VIEW_RANGE del server. */
+const VIEW_RANGE = 10.5;
 interface Spell { id?: string; instant?: boolean; /** cast propio (s); sin esto, CAST_T */ castT?: number; ctrl?: boolean; fury?: boolean; key: string; name: string; mp: number; cd: number; col: string; range: number; target: boolean; aoe?: number; cast: (m: Target | null) => false | void }
 const isMob = (t: Target | null): t is Mob => !!t && 'hp' in t;
 interface SpellDef extends Omit<Spell, 'key'> { ctrl?: boolean }
@@ -762,11 +764,11 @@ function reviveCast(): false | void {
     skillSend('despertar', t.id);
 }
 const LIB: Record<string, SpellDef> = {
-    proyectil: { name: 'Saeta ígnea', mp: 14, cd: 1.5, col: '#ff9a4a', range: 15, castT: 0.75, target: true, // Firebolt (Valdrys)
+    proyectil: { name: 'Saeta ígnea', mp: 14, cd: 1.5, col: '#ff9a4a', range: VIEW_RANGE, castT: 0.75, target: true, // Firebolt (Valdrys)
         cast(m) { if (!isMob(m)) return false; const t = totals(), dmg = rint(12, 18) + P.lvl * 2 + t.mag; projs.push({ x: P.x, y: P.y, m, spd: 11, dmg, col: '#b9a3ff' }); } },
-    esquirla: { name: 'Esquirla de hielo', mp: 24, cd: 0.8, col: '#9fdcff', range: 15, castT: 1, target: true, // Ice Shard (Valdrys): frena 3 s, 2× sobre congelado
+    esquirla: { name: 'Esquirla de hielo', mp: 24, cd: 0.8, col: '#9fdcff', range: VIEW_RANGE, castT: 1, target: true, // Ice Shard (Valdrys): frena 3 s, 2× sobre congelado
         cast(m) { if (!isMob(m)) return false; projs.push({ x: P.x, y: P.y, m, spd: 12, dmg: 0, col: '#9fdcff', sid: 'esquirla' }); } },
-    ignicion: { name: 'Ignición', mp: 30, cd: 5, col: '#ff6a2a', range: 15, target: true, instant: true, // Ignite (Valdrys): instantánea + quemadura 3 s
+    ignicion: { name: 'Ignición', mp: 30, cd: 5, col: '#ff6a2a', range: VIEW_RANGE, target: true, instant: true, // Ignite (Valdrys): instantánea + quemadura 3 s
         cast(m) { if (!isMob(m)) return false; efx('aroigneo', m.x, m.y); damageMob(m, 'ignicion'); } },
     nova: { name: 'Nova de escarcha', mp: 60, cd: 8, col: '#bfe8ff', range: 0, target: false, aoe: 3, instant: true, // Ice Blast (Valdrys): congela 2 s alrededor
         cast() { skillSend('nova'); } },
@@ -778,15 +780,15 @@ const LIB: Record<string, SpellDef> = {
         cast() { skillSend('mandato'); } },
     aura: { name: 'Aura sagrada', mp: 48, cd: 15, col: '#ffe9a0', range: 0, target: false, instant: true, // Sacred Aura (Valdrys): 10 s de pulsos
         cast() { skillSend('aura'); } },
-    paralisis: { name: 'Cadenas de hielo', mp: 36, cd: 6, col: '#7fd6ff', range: 15, castT: 1, target: true, ctrl: true, // Chains of Ice (Valdrys)
+    paralisis: { name: 'Cadenas de hielo', mp: 36, cd: 6, col: '#7fd6ff', range: VIEW_RANGE, castT: 1, target: true, ctrl: true, // Chains of Ice (Valdrys)
         cast(m) { return control(m, 'paralisis', 5, 'Paralizaste', 'La parálisis', 'cadenas'); } },
     aturdir: { name: 'Martillo de justicia', mp: 30, cd: 11, col: '#ffd24a', range: 8, target: true, ctrl: true, instant: true, // Hammer of Justice (Valdrys)
         cast(m) { return control(m, 'aturdir', 3, 'Aturdiste', 'El aturdimiento', 'aturde'); } },
-    bola: { name: 'Bola de fuego', mp: 72, cd: 10, col: '#ff8a3d', range: 15, castT: 1.5, target: true, // Fireball (Valdrys): un objetivo, 3×
+    bola: { name: 'Bola de fuego', mp: 72, cd: 10, col: '#ff8a3d', range: VIEW_RANGE, castT: 1.5, target: true, // Fireball (Valdrys): un objetivo, 3×
         cast(m) { if (!isMob(m)) return false; const t = totals(), dmg = (rint(14, 21) + P.lvl * 2 + t.mag) * 3; projs.push({ x: P.x, y: P.y, m, spd: 9, dmg, col: '#ff8a3d', sid: 'bola' }); } },
     golpe: { name: 'Golpe brutal', mp: 10, cd: 1, col: '#ffb347', range: 2, target: true, instant: true, // Strike
         cast(m) { if (!isMob(m)) return false; efx('tajobrutal', m.x, m.y); damageMob(m, 'golpe'); } },
-    lluvia: { name: 'Infierno', mp: 90, cd: 18, col: '#ff7a2f', range: 15, castT: 2.4, target: true, aoe: 4.5, // Inferno (Valdrys)
+    lluvia: { name: 'Infierno', mp: 90, cd: 18, col: '#ff7a2f', range: VIEW_RANGE, castT: 2.4, target: true, aoe: 4.5, // Inferno (Valdrys)
         cast(m) { if (!m) return false; zone(m.x, m.y, 4.5, 1, 0, () => Math.round((rint(14, 21) + P.lvl * 2 + totals().mag) * 1.2), 'meteoro', 0, 'lluvia'); } },
     remover: { name: 'Purga', mp: 30, cd: 24, col: '#9fe8ff', range: 0, target: false, instant: true, // Cleanse (Valdrys): saca congelado, aturdido y frenado
         cast() { if (P.frozenUntil <= now() && P.slowEnd <= now()) { toast('No tenés nada que purgar.'); return false; } net.send({ $case: 'removerRequest', value: {} }); } },
@@ -796,7 +798,7 @@ const LIB: Record<string, SpellDef> = {
         cast() { efx('spread', P.x, P.y); net.send({ $case: 'detectInvisibleRequest', value: {} }); } },
     blink: { name: 'Parpadeo', mp: 0, cd: 12, col: '#b9a3ff', range: 0, target: false, instant: true,
         cast() { const d = blinkDest(); if (!d) { toast('No hay lugar para el Blink hacia ahí.'); return false; } net.send({ $case: 'blinkRequest', value: { x: d.x, y: d.y, skill: 'blink' } }); } },
-    carga: { name: 'Carga sagrada', mp: 60, cd: 18, col: '#ff9a4a', range: 15, target: true, instant: true,
+    carga: { name: 'Carga sagrada', mp: 60, cd: 18, col: '#ff9a4a', range: VIEW_RANGE, target: true, instant: true,
         cast(m) { if (!isMob(m)) return false; skillSend('carga', 0n, m.id); } },
     giro: { name: 'Barrido', mp: 36, cd: 8, col: '#ffd0a0', range: 0, target: false, aoe: 2, instant: true,
         cast() { skillSend('giro'); } },
@@ -815,9 +817,9 @@ const LIB: Record<string, SpellDef> = {
         cast() { skillSend('clarividencia'); } },
     intelecto: { name: 'Intelecto arcano', mp: 60, cd: 10, col: '#b9a3ff', range: 0, target: false, castT: 0.8, aoe: 14, // Arcane Intellect: +8 de Magia a la party y a los aliados cerca: 15 min afuera, 90 s en la arena
         cast() { skillSend('intelecto'); } },
-    guardian: { name: 'Escudo guardián', mp: 28, cd: 12, col: '#bfe8ff', range: 12, target: false, instant: true, // Guardian Shield: escudo del 40 % de la vida del aliado
+    guardian: { name: 'Escudo guardián', mp: 28, cd: 12, col: '#bfe8ff', range: VIEW_RANGE, target: false, instant: true, // Guardian Shield: escudo del 40 % de la vida del aliado
         cast() { return healCast('guardian', 12); } },
-    esfera: { name: 'Esfera celestial', mp: 34, cd: 8, col: '#fff2a8', range: 12, target: false, instant: true, // Celestial Sphere: 13 % que salta 8 veces entre aliados
+    esfera: { name: 'Esfera celestial', mp: 34, cd: 8, col: '#fff2a8', range: VIEW_RANGE, target: false, instant: true, // Celestial Sphere: 13 % que salta 8 veces entre aliados
         cast() { return healCast('esfera', 12); } },
     despertar: { name: 'Despertar', mp: 54, cd: 20, col: '#ffffff', range: 10, castT: 2.4, target: false, // Reawaken: revive con 50 % (en mazmorra o arena, dentro de los 10 s)
         cast() { return reviveCast(); } },
@@ -828,19 +830,19 @@ const LIB: Record<string, SpellDef> = {
     aliento: { name: 'Segundo aliento', mp: 0, cd: 210, col: '#7fe0a0', range: 0, target: false, instant: true, // Second Wind (Valdrys): 3 s quieto, la mitad de vida y maná
         cast() { if (P.hp >= maxHp() && P.mp >= maxMp()) { toast('Ya tenés la vida y el maná llenos.'); return false; } P.path = []; P.target = null; P.engage = false; P.pickup = null; P.queued = null; cancelCast(); skillSend('aliento'); } },
     // Healer (K5): el server cura, cobra y valida. Las curas van al aliado elegido (click en alguien de tu nación) o a vos.
-    castigo: { name: 'Castigo', mp: 18, cd: 1, col: '#ffe680', range: 15, castT: 1, target: true, // Smite (Valdrys): devuelve 9 de maná y te cura el 35 % del daño
+    castigo: { name: 'Castigo', mp: 18, cd: 1, col: '#ffe680', range: VIEW_RANGE, castT: 1, target: true, // Smite (Valdrys): devuelve 9 de maná y te cura el 35 % del daño
         cast(m) { if (!isMob(m)) return false; efx('solar', m.x, m.y, 8); damageMob(m, 'castigo'); } },
-    reprender: { name: 'Reprender', mp: 30, cd: 15, col: '#fff2a8', range: 15, target: true, ctrl: true, instant: true, // Chastise (Valdrys): aturde 3 s
+    reprender: { name: 'Reprender', mp: 30, cd: 15, col: '#fff2a8', range: VIEW_RANGE, target: true, ctrl: true, instant: true, // Chastise (Valdrys): aturde 3 s
         cast(m) { return control(m, 'reprender', 3, 'Aturdiste', 'El aturdimiento', 'solar'); } },
-    curacion: { name: 'Curación', mp: 48, cd: 5, col: '#8af0a8', range: 12, castT: 1.5, target: false, // Generous Heal (Valdrys): 40 % de la vida
+    curacion: { name: 'Curación', mp: 48, cd: 5, col: '#8af0a8', range: VIEW_RANGE, castT: 1.5, target: false, // Generous Heal (Valdrys): 40 % de la vida
         cast() { return healCast('curacion', 12); } },
-    renovar: { name: 'Renovar', mp: 26, cd: 3, col: '#b8f5a0', range: 12, target: false, instant: true, // Renew (Valdrys): cura en 6 s; con el cursor sobre un enemigo, lo quema
+    renovar: { name: 'Renovar', mp: 26, cd: 3, col: '#b8f5a0', range: VIEW_RANGE, target: false, instant: true, // Renew (Valdrys): cura en 6 s; con el cursor sobre un enemigo, lo quema
         cast() { return renewCast(); } },
-    bendicion: { name: 'Bendición sagrada', mp: 30, cd: 20, col: '#ffe9a0', range: 12, target: false, instant: true, // Holy Blessing (Valdrys): 10 s
+    bendicion: { name: 'Bendición sagrada', mp: 30, cd: 20, col: '#ffe9a0', range: VIEW_RANGE, target: false, instant: true, // Holy Blessing (Valdrys): 10 s
         cast() { return healCast('bendicion', 12); } },
     novasagrada: { name: 'Nova sagrada', mp: 36, cd: 6, col: '#fff0b0', range: 0, target: false, aoe: 4.5, instant: true, // Holy Nova (Valdrys)
         cast() { skillSend('novasagrada'); } },
-    orbe: { name: 'Orbe sagrado', mp: 56, cd: 10, col: '#a8ffd0', range: 12, castT: 1.5, target: false, // Holy Orb (Valdrys): 20 % al objetivo y a los de al lado
+    orbe: { name: 'Orbe sagrado', mp: 56, cd: 10, col: '#a8ffd0', range: VIEW_RANGE, castT: 1.5, target: false, // Holy Orb (Valdrys): 20 % al objetivo y a los de al lado
         cast() { return healCast('orbe', 12); } },
     furia: { name: 'Furia', mp: 15, cd: 90, col: '#ffd23f', range: 0, target: false,
         cast() { sfx('berserk', 0.7); efxLocal('pilar', P.x, P.y); pvpSend('pilar', P.x, P.y, 0n, 'furia'); P.fury = now() + 60; float(P.x, P.y - 0.4, '¡FURIA!', '#ffd23f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd23f' }); log(`Furia: +${selectedClass === 'mago' ? 35 : selectedClass === 'healer' ? 20 : 15}% de daño por 60 s.`, true); } },
