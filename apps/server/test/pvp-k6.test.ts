@@ -57,9 +57,9 @@ function setup(clsA = 'mago', clsB = 'guerrero') {
 }
 
 // ---------- funciones puras ----------
-test('PvP: multiplicador (×1 desde K7) antes de la defensa, tope del 25 % por golpe y bonus sobre controlado de 1,2× como mucho', () => {
-    assert.equal(pvpScale(100), Math.round(100 * PVP_DMG_MULT)); assert.equal(pvpScale(1), 1);
-    assert.equal(PVP_DMG_MULT, 1);
+test('PvP: multiplicador (×1,5 desde el re-nivel a 120) antes de la defensa, tope del 25 % por golpe y bonus sobre controlado de 1,2× como mucho', () => {
+    assert.equal(pvpScale(100), Math.round(100 * PVP_DMG_MULT)); assert.ok(pvpScale(1) >= 1);
+    assert.equal(PVP_DMG_MULT, 1.5);
     assert.equal(pvpCap(900, 1000), 250); assert.equal(pvpCap(100, 1000), 100);
     assert.equal(pvpVsCtrl(1.5), 1.2); assert.equal(pvpVsCtrl(2), 1.2); assert.equal(pvpVsCtrl(1.1), 1.1);
     assert.equal(PVP_HIT_CAP, 0.25);
@@ -120,7 +120,7 @@ test('el recall se bloquea 10 s después de recibir daño de un jugador', () => 
 });
 
 // ---------- pociones ----------
-test('pociones: bloqueo de 1 min en PvE; al entrar en PvP se acorta a 30 s y la poción cura un cuarto', () => {
+test('pociones: mismo bloqueo (1 min) y misma poción en PvE y en PvP', () => {
     const { w, A, B, hit } = setup('guerrero', 'guerrero');
     const max = B.p.combat.maxHp;
     B.p.hp = Math.round(max * 0.3);
@@ -132,14 +132,15 @@ test('pociones: bloqueo de 1 min en PvE; al entrar en PvP se acorta a 30 s y la 
     B.p.hp = Math.round(max * 0.3); const hp1 = B.p.hp;
     pkt(w, B.sid, 'potionRequest', { kind: 0 }); advance(w, 3000);
     assert.equal(B.p.hp, hp1, 'en PvE no se puede tomar otra antes del minuto');
-    hit('ataque', A, B); // entra en PvP: el bloqueo pasa a 30 s desde la última poción
+    hit('ataque', A, B); // entra en PvP: el bloqueo es el mismo
     assert.ok(B.p.potionReadyAt <= B.p.lastPotionAt + POTION_LOCK_PVP_MS);
     advance(w, POTION_LOCK_PVP_MS);
     B.p.hp = Math.round(max * 0.3); // que la poción no llene la barra
     hit('ataque', A, B); const hp2 = B.p.hp;
     pkt(w, B.sid, 'potionRequest', { kind: 0 }); advance(w, 2200);
-    assert.equal(B.p.hp, hp2 + potionHp(max, true), 'PvP: poción chica');
-    assert.equal(potionHp(max, true), Math.round(max * 0.1), 'un cuarto de la normal (40 % → 10 %)');
+    assert.equal(B.p.hp, hp2 + potionHp(max, true), 'PvP: la misma poción que en PvE');
+    assert.equal(potionHp(max, true), potionHp(max), 'igual a la normal (40 %)');
+    assert.equal(POTION_LOCK_PVP_MS, POTION_LOCK_PVE_MS);
     assert.equal(last(B.log, 'abilityState').cooldownTotalMs, POTION_LOCK_PVP_MS);
 });
 

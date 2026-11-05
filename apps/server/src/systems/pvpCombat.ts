@@ -293,12 +293,12 @@ export function paralysisSecs(base: number, s: CombatStats): number {
  * Bloqueo compartido entre pociones (vida o maná), independiente de los hechizos (K6, kits-de-clase.md §3):
  * en PvE es el minuto de Valdrys; en una pelea contra jugadores, 30 s y pociones de un cuarto (calibrado con sim:pvp, K7).
  */
-export const POTION_LOCK_PVE_MS = 60000, POTION_LOCK_PVP_MS = 30000;
+export const POTION_LOCK_PVE_MS = 60000, POTION_LOCK_PVP_MS = 60000;
 /**
- * En PvP la poción cura esta fracción de la normal. Calibrado con `sim:pvp` (K7): con 10 s y la mitad, las pociones
- * curaban más por segundo de lo que pega cualquier clase y ninguna pelea terminaba. 30 s y un cuarto (vida 10 %, maná 12,5 %).
+ * En PvP la poción cura esta fracción de la normal. Desde el re-nivel a 120 es 1: pociones iguales en PvP y PvE (como en HB).
+ * `sim:pvp` a nivel 120 mostró que el tamaño de la poción casi no mueve las peleas; lo que las regula es el daño.
  */
-export const POTION_PVP_MULT = 0.25;
+export const POTION_PVP_MULT = 1;
 /** Tolerancia por jitter de red: el server acepta una poción si pasó el bloqueo menos esto. */
 export const POTION_GCD_SLACK_MS = 100;
 /** Vida: parte instantánea y el resto en `POTION_HOT_TICKS` ticks cada `POTION_HOT_EVERY_MS` (2 s en total). */
@@ -317,9 +317,9 @@ export const PVP_COMBAT_MS = 10000;
 /**
  * Multiplicador global del daño contra jugadores. Calibrado con `sim:pvp` (K7): con ×0,6 ninguna pelea terminaba (la vida
  * de los jugadores ya se había multiplicado ×4,24 para peleas largas). Con ×1 paladín contra mago y los espejos de paladín
- * duran 25-40 s. Queda como palanca: si la vida o el daño cambian, se vuelve a correr la simulación.
+ * duran 25-40 s (a nivel 120 con 357 puntos de estadísticas hizo falta ×1,5). Queda como palanca: si la vida o el daño cambian, se vuelve a correr la simulación.
  */
-export const PVP_DMG_MULT = 1;
+export const PVP_DMG_MULT = 1.5;
 /** Ningún golpe solo saca más que esta fracción de la vida máxima de un jugador (K7: se mantiene; casi nunca llega a actuar hasta el 40). */
 export const PVP_HIT_CAP = 0.25;
 /**

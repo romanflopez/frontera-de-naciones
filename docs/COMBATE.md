@@ -97,7 +97,7 @@ El PvE no cambia. Todo esto vive en `apps/server/src/systems/pvpCombat.ts` (cons
 | Sin abridor | el primer golpe a alguien que no estaba en combate PvP no usa Furia ni bonus sobre controlado o quemado (no hay críticos en PvP) | `pvpHitRequest`, `handleSkill` |
 | Sobre controlado | tope 1,2× contra jugadores (Juicio y Escudo 1,5×, Esquirla 2×) (`PVP_VS_CTRL_MAX`) | `pvpHitRequest` |
 | Recall | bloqueado 10 s después de recibir daño de un jugador; el canal de 8 s quieto sigue igual | `startRecall` |
-| Pociones | bloqueo compartido: 60 s en PvE, 30 s en PvP con pociones de un cuarto (vida 10 %, maná 12,5 %; eran 10 s y la mitad, K7); al entrar en PvP el bloqueo se acorta a 30 s desde la última; al morir se libera | `usePotion`, `markPvp` |
+| Pociones | bloqueo compartido de 60 s y misma poción (vida 40 %, maná 50 %) en PvE y en PvP (antes 30 s y un cuarto en PvP); al morir se libera | `usePotion`, `markPvp` |
 | Maná en PvP | en combate PvP el maná regenera 1 % por segundo con piso de 5/s (`PVP_MP_REGEN_MIN`, K7); afuera sigue 1 % con piso de 2 | `regenMana` |
 | Segundo aliento (`aliento`, todas las clases, tecla Y) | 3 s quieto, recarga 3,5 min, cura 50 % de vida y maná (−30 % envenenado, cuando exista el veneno en jugadores). Lo cortan un golpe directo (la quemadura no), un control, moverse o cualquier otra acción; cortado no gasta la recarga | `startWind` / `finishWind` |
 | Invisibilidad | recarga 60 s; se corta al atacar, castear, usar una habilidad o recibir daño | `invisibilityRequest`, `startCast`, `damagePlayer` |
