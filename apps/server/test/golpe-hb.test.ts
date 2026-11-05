@@ -7,7 +7,7 @@ import { defaultStats } from '@fdn/world';
 const char = (cls: string, dex: number, mag: number) => statsFromChar({ lvl: 120, cls, stats: { ...defaultStats(), dex, mag }, eq: {} } as never);
 
 test('golpe físico: ataca 100 + (DEX − 50) contra 2 × DEX del objetivo, con tope 10-90 %', () => {
-    const naked = char('guerrero', 10, 10), tank = char('guerrero', 120, 10), ace = char('guerrero', 200, 10);
+    const naked = char('paladin', 10, 10), tank = char('paladin', 120, 10), ace = char('paladin', 200, 10);
     assert.equal(hitChance(naked, naked, 'phys'), HIT.max / 100, 'sin DEX nadie esquiva: tope 90 %');
     assert.equal(hitChance(ace, naked, 'phys'), HIT.max / 100);
     // DEX 200 contra DEX 200: (100 + 150) / 400 × K
@@ -20,14 +20,14 @@ test('golpe físico: ataca 100 + (DEX − 50) contra 2 × DEX del objetivo, con 
 });
 
 test('golpe mágico: nunca falla, sin importar MAG ni DEX de nadie (D.2)', () => {
-    const mage = char('mago', 10, 200), plain = char('guerrero', 10, 10), dexy = char('guerrero', 200, 10), magy = char('mago', 10, 5000);
+    const mage = char('mago', 10, 200), plain = char('paladin', 10, 10), dexy = char('paladin', 200, 10), magy = char('mago', 10, 5000);
     for (const [a, d] of [[mage, plain], [plain, mage], [mage, dexy], [mage, magy], [magy, mage], [plain, plain]]) assert.equal(hitChance(a, d, 'magic'), 1);
     HIT_ROLL.enabled = true;
     try { assert.equal(hitRoll(plain, magy, 'magic', () => 0.999999), true, 'ni con la peor tirada'); } finally { HIT_ROLL.enabled = false; }
 });
 
 test('la tirada usa la chance (y se apaga con la bandera de los tests)', () => {
-    const a = char('guerrero', 120, 10), b = char('guerrero', 120, 10), p = hitChance(a, b, 'phys');
+    const a = char('paladin', 120, 10), b = char('paladin', 120, 10), p = hitChance(a, b, 'phys');
     assert.equal(HIT_ROLL.enabled, false, 'bajo node --test la tirada está apagada: los tests de combate no dependen del azar');
     assert.equal(hitRoll(a, b, 'phys', () => 0.9999), true, 'apagada: siempre pega');
     HIT_ROLL.enabled = true;

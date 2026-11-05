@@ -111,7 +111,7 @@
    "v2",
    5
   ],
-  "_healer": "",
+  "_clerigo": "",
   "castigo": [
    "v2",
    87
@@ -512,7 +512,7 @@
   ]
  },
  "set_bases": {
-  "guerrero": {
+  "paladin": {
    "arma": [
     64,
     65,
@@ -660,7 +660,7 @@
     98
    ]
   },
-  "healer": {
+  "clerigo": {
    "arma": [
     81,
     82,
@@ -737,7 +737,7 @@
  },
  "sets": {
   "cobre": [
-   "guerrero",
+   "paladin",
    1,
    "#b87333"
   ],
@@ -747,12 +747,12 @@
    "#5aa83c"
   ],
   "lino": [
-   "healer",
+   "clerigo",
    1,
    "#d9c9a3"
   ],
   "hierroviejo": [
-   "guerrero",
+   "paladin",
    2,
    "#8a8f96"
   ],
@@ -762,12 +762,12 @@
    "#e0a030"
   ],
   "musgo": [
-   "healer",
+   "clerigo",
    2,
    "#6b8e3a"
   ],
   "bruma": [
-   "guerrero",
+   "paladin",
    3,
    "#8fa6b8"
   ],
@@ -777,12 +777,12 @@
    "#7fd0ff"
   ],
   "rocio": [
-   "healer",
+   "clerigo",
    3,
    "#9fe3d0"
   ],
   "alba": [
-   "guerrero",
+   "paladin",
    4,
    "#e8c34a"
   ],
@@ -792,12 +792,12 @@
    "#e07040"
   ],
   "aurora": [
-   "healer",
+   "clerigo",
    4,
    "#f0a0c0"
   ],
   "cenit": [
-   "guerrero",
+   "paladin",
    5,
    "#ffd24a"
   ],
@@ -807,12 +807,12 @@
    "#2f5fd8"
   ],
   "santuario": [
-   "healer",
+   "clerigo",
    5,
    "#fff2c8"
   ],
   "hierronegro": [
-   "guerrero",
+   "paladin",
    6,
    "#3a3a42"
   ],
@@ -822,12 +822,12 @@
    "#b03a2a"
   ],
   "vela": [
-   "healer",
+   "clerigo",
    6,
    "#f2c25a"
   ],
   "brasa": [
-   "guerrero",
+   "paladin",
    7,
    "#ff5a1f"
   ],
@@ -837,7 +837,7 @@
    "#3aa0ff"
   ],
   "pira": [
-   "healer",
+   "clerigo",
    7,
    "#ffb347"
   ]

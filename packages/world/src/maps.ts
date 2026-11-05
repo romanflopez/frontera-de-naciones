@@ -73,6 +73,8 @@ export interface MapDef {
     tempRects?: MapRect[];
     /** Zona de todos contra todos dentro de un mapa `faction` (el Coliseo del mapa original). */
     ffaRect?: MapRect;
+    /** Zonas sin PvP dentro de un mapa con PvP (tramo intermedio 60–80: la entrada y la mitad de leveo son pacíficas, el resto es PvP). */
+    peaceRects?: MapRect[];
     music?: string;
     /**
      * Mapa de pruebas sin entrada desde el mundo (los de la Fase 1): no hace falta alcanzarlo desde el mapa inicial; los tests

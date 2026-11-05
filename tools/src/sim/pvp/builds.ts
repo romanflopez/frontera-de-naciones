@@ -6,14 +6,14 @@
 import { powerLevel, STAT_BASE, STAT_CAP, statPointsTotal, type Stats } from '@fdn/world';
 import { statsFromChar, type CombatStats } from '../../../../apps/server/src/systems/pvpCombat.ts';
 
-export type Cls = 'guerrero' | 'mago' | 'healer';
-export const CLS_NAME: Record<Cls, string> = { guerrero: 'paladín', mago: 'mago', healer: 'healer' };
+export type Cls = 'paladin' | 'mago' | 'clerigo';
+export const CLS_NAME: Record<Cls, string> = { paladin: 'paladín', mago: 'mago', clerigo: 'clérigo' };
 
 type Eq = Record<string, { n: string; up?: number }>;
 /** Equipo por tramo: hasta 15 (D1-D3), 16-30, 31-40. */
 const GEAR: Record<Cls, [Eq, Eq, Eq]> = {
     // equipo de tienda hasta T1 y únicos de banda desde ahí: la tienda ya no iguala a los únicos (≤ 75 %), así que el equipo representativo de cada tramo es el único de su banda
-    guerrero: [
+    paladin: [
         { arma: { n: 'Espada del Cañón' }, armadura: { n: 'Cota del pantanero' }, cabeza: { n: 'Yelmo de caña' }, anillo: { n: 'Anillo opaco' } },
         { arma: { n: 'Hacha de guerra de Stormrock', up: 3 }, armadura: { n: 'Coraza de la Brecha', up: 3 }, cabeza: { n: 'Yelmo del minero caído', up: 3 }, anillo: { n: 'Anillo opaco', up: 3 } },
         { arma: { n: 'Hachón de las cámaras', up: 6 }, armadura: { n: 'Placas del carcelero', up: 6 }, cabeza: { n: 'Yelmo del carcelero', up: 6 }, anillo: { n: 'Anillo opaco', up: 6 } },
@@ -23,7 +23,7 @@ const GEAR: Record<Cls, [Eq, Eq, Eq]> = {
         { arma: { n: 'Cayado del investigador', up: 3 }, armadura: { n: 'Túnica de la torre', up: 3 }, cabeza: { n: 'Capucha del aprendiz de la torre', up: 3 }, anillo: { n: 'Anillo opaco', up: 3 } },
         { arma: { n: 'Cetro del puerto de la perdición', up: 6 }, armadura: { n: 'Túnica del abismo', up: 6 }, cabeza: { n: 'Capucha del suplicio', up: 6 }, anillo: { n: 'Anillo opaco', up: 6 } },
     ],
-    healer: [
+    clerigo: [
         { arma: { n: 'Cayado del cenagal' }, armadura: { n: 'Túnica del cenagal' }, cabeza: { n: 'Gorro del brujo del pantano' }, anillo: { n: 'Anillo opaco' } },
         { arma: { n: 'Cayado del investigador', up: 3 }, armadura: { n: 'Túnica de la torre', up: 3 }, cabeza: { n: 'Capucha del aprendiz de la torre', up: 3 }, anillo: { n: 'Anillo opaco', up: 3 } },
         { arma: { n: 'Cetro del puerto de la perdición', up: 6 }, armadura: { n: 'Túnica del abismo', up: 6 }, cabeza: { n: 'Capucha del suplicio', up: 6 }, anillo: { n: 'Anillo opaco', up: 6 } },
@@ -31,9 +31,9 @@ const GEAR: Record<Cls, [Eq, Eq, Eq]> = {
 };
 /** Reparto de los puntos libres: [atributo, fracción]. */
 const SPLIT: Record<Cls, [keyof Stats, number][]> = {
-    guerrero: [['dex', 0.31], ['str', 0.27], ['vit', 0.42]], // como el guerrero de HB: ~120 DEX, ~106 FUE y el resto VIT
+    paladin: [['dex', 0.31], ['str', 0.27], ['vit', 0.42]], // como el paladín de HB: ~120 DEX, ~106 FUE y el resto VIT
     mago: [['mag', 0.65], ['vit', 0.35]],
-    healer: [['mag', 0.5], ['vit', 0.5]],
+    clerigo: [['mag', 0.5], ['vit', 0.5]],
 };
 
 export function buildStats(cls: Cls, lvl: number): CombatStats {

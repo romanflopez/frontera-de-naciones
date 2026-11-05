@@ -6,6 +6,7 @@
  */
 import type { WorldMap, Portal } from './index';
 import { HUBS } from './cities';
+import { baseMapId, mapForNation } from './nations';
 
 export interface TrainingStep {
     id: string;
@@ -31,11 +32,11 @@ export const TRAINING: TrainingStep[] = [
     T(0, 'campos_de_sal', 'Campos de Sal', 1, '#8fd05a', true),
     T(1, 'bosque_de_piedra', 'Bosque de Piedra', 4, '#a6d24e'),
     T(2, 'canon_goblin', 'Cañón goblin', 8, '#c4d24a'),
-    T(3, 'pantano_de_merrimead', 'Pantano de Merrimead', 17, '#d3cf4a'),
-    T(4, 'altas_de_nazia', 'Altas de Nazia', 23, '#e0b64a'),
+    T(3, 'pantano_de_merrimead', 'Pantano de Merrimead', 21, '#d3cf4a'),
+    T(4, 'altas_de_nazia', 'Altas de Nazia', 29, '#e0b64a'),
     T(5, 'cementerio_de_lochport', 'Cementerio de Lochport', 37, '#e69a48'),
     T(6, 'risco_del_sur', 'Risco del Sur', 45, '#e5804a'),
-    T(7, 'la_brecha', 'La Brecha', 55, '#e5654a'),
+    T(7, 'la_brecha', 'La Brecha', 53, '#e5654a'),
     T(8, 'paso_de_stormrock', 'Paso de Stormrock', 61, '#7fc6e8'),
     T(9, 'cenizas_i', 'Cenizas I', 69, '#e04a5a'),
     T(10, 'cenizas_ii', 'Cenizas II', 74, '#cf4a86'),
@@ -51,9 +52,9 @@ export const TRAINING_IDS = TRAINING.map((t) => t.id);
 /** Campo de entrada (nivel 1-2) de cada facción: el paso 0 del menú lleva al de la propia nación. */
 export const FIELD_MAP: Record<string, string> = { solmar: 'campos_de_sal', vhar: 'campos_de_sal_vhar' };
 /** Mapa al que lleva el paso `t` para alguien de la facción `faction`. */
-export const trainingMapFor = (t: TrainingStep, faction: string): string => (t.step === 0 ? FIELD_MAP[faction] ?? t.map : t.map);
+export const trainingMapFor = (t: TrainingStep, faction: string): string => (t.step === 0 ? FIELD_MAP[faction] ?? t.map : mapForNation(t.map, faction));
 /** Paso del menú al que pertenece un mapa (los dos campos de entrada cuentan como el paso 0), o undefined. */
-export const trainingOfMap = (mapId: string): TrainingStep | undefined => TRAINING.find((t) => t.map === mapId || (t.step === 0 && Object.values(FIELD_MAP).includes(mapId)));
+export const trainingOfMap = (mapId: string): TrainingStep | undefined => TRAINING.find((t) => t.map === baseMapId(mapId) || (t.step === 0 && Object.values(FIELD_MAP).includes(mapId)));
 /** Aviso cuando el portal del paso `t` todavía está cerrado. */
 export const trainingLockedMsg = (t: TrainingStep): string =>
     t.onFoot ? `Portal bloqueado (${t.zone}): todavía no conocés el camino. Llegá a pie una vez y se abre.` : `Portal bloqueado (${t.zone}): se abre al llegar al nivel ${t.lvl}.`;

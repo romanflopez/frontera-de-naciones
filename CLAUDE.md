@@ -13,11 +13,11 @@ MMO 2D isométrico en TypeScript (server autoritativo + cliente web). Monorepo p
 
 ## Reglas fijas
 - **El server decide todo** (oro, ítems, stats, daño, exp, drops). El cliente pide y dibuja. Nada de reglas de juego en `apps/client`.
-- **Tests en verde o no se mergea**: `pnpm test`, typecheck de los 5 paquetes, y `sim:pvp` / `sim:pve` cuando tocás combate o progresión. Todo paso trae sus tests (ver tipos A-H en `PLAN_DE_TRABAJO.md` §0).
+- **Tests en verde o no se mergea**: `pnpm test` y typecheck de los 5 paquetes. Cuando tocás combate o progresión, corrés `sim:pvp` / `sim:pve` y no pueden empeorar: la cantidad de resultados fuera de objetivo no sube respecto de `main` y el PR muestra el antes y el después (hoy salen en rojo; el balance se arregla en el paso D.20). Todo paso trae sus tests (ver tipos A-H en `PLAN_DE_TRABAJO.md` §0).
 - **Protocolo**: tags nuevos siempre al final de `packages/proto/network.proto`; nunca renumerar.
 - **Datos guardados**: todo cambio lleva migración (`ECON_VERSION` + `migrateEcon`) y su test F.
 - Las curvas, tablas de drop y probabilidades viven **solo en el server**; el cliente no las conoce.
-- Nombres de clase: `pala`, `clerigo`, `mago`, `arquero` (después del paso D.0). Stats: `str`, `vit`, `dex`, `mag` (después de D.3).
+- Nombres de clase: `paladin`, `clerigo`, `mago`, `arquero` (después del paso D.0). Stats: `str`, `vit`, `dex`, `mag` (después de D.3).
 - No commiteás ni pusheás a `main`; trabajás en tu rama y dejás el PR. No borrás archivos sin que el paso lo pida.
 - Español rioplatense en docs, comentarios y textos del juego.
 

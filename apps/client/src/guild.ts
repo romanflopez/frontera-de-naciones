@@ -66,7 +66,7 @@ export function crestSvg(c: Crest, size = 32): string {
 }
 
 const RANK_LABEL: Record<string, string> = { lider: 'Líder', oficial: 'Oficial', miembro: 'Miembro' };
-const CLS_LABEL: Record<string, string> = { guerrero: 'Paladín', paladin: 'Paladín', mago: 'Mago', healer: 'Healer' };
+const CLS_LABEL: Record<string, string> = { paladin: 'Paladín', mago: 'Mago', clerigo: 'Clérigo', arquero: 'Arquero' };
 /** "hace 3 min" / "hace 2 d" a partir de un epoch ms. */
 export function ago(ms: number, now = Date.now()): string {
     const s = Math.max(0, Math.round((now - ms) / 1000));

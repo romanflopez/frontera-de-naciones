@@ -71,7 +71,7 @@ test('en el mundo: lo levanta uno y se reparte solo entre la party cerca; el de 
         const sid = `s-${name}`, sp = MAPS.campos_de_sal.spawn;
         w.playerConnected(sid, name, () => {}, () => {}, { mapId: w.mapId, worldId: w.mapId, x: sp.x, y: sp.y, direction: 4, gender: 0, skinColor: 0, hairStyleIndex: 0, underwearColorIndex: 0, movementSpeedMs: 270, runningMode: true, attackMode: true });
         mem.put(`acc-${name}`, { name, salt: '', hash: '', created: 0, lastLogin: 0 }); w.bindAccount(sid, `acc-${name}`);
-        w.onClientSave(sid, JSON.stringify({ cls: 'guerrero', faction: 'solmar' }));
+        w.onClientSave(sid, JSON.stringify({ cls: 'paladin', faction: 'solmar' }));
         const p = w.playerOf(sid)!; p.econ!.gold = 0; p.econ!.mats = {}; return p;
     };
     const [A, B, C, X] = ['ana', 'beto', 'caro', 'xavi'].map(mk);
@@ -102,7 +102,7 @@ test('modo personal: el botín del mob va directo a la bolsa del que mató y su 
         const sid = `s-${name}`, sp = MAPS.campos_de_sal.spawn;
         w.playerConnected(sid, name, () => {}, () => {}, { mapId: w.mapId, worldId: w.mapId, x: sp.x, y: sp.y, direction: 4, gender: 0, skinColor: 0, hairStyleIndex: 0, underwearColorIndex: 0, movementSpeedMs: 270, runningMode: true, attackMode: true });
         mem.put(`acc-${name}`, { name, salt: '', hash: '', created: 0, lastLogin: 0 }); w.bindAccount(sid, `acc-${name}`);
-        w.onClientSave(sid, JSON.stringify({ cls: 'guerrero', faction: 'solmar' }));
+        w.onClientSave(sid, JSON.stringify({ cls: 'paladin', faction: 'solmar' }));
         const p = w.playerOf(sid)!; p.econ!.gold = 0; p.econ!.mats = {}; return p;
     };
     const [A, B, C] = ['ana', 'beto', 'caro'].map(mk);

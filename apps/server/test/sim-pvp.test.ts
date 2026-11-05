@@ -20,7 +20,7 @@ test('las fórmulas de la sim dan lo mismo que el server con las reglas del serv
 });
 
 test('la simulación es determinista por semilla', () => {
-    const run = () => simulate({ lvl: 12, rules: SERVER_RULES, seed: 4242, teams: [[{ cls: 'guerrero', policy: BOTS.guerrero }], [{ cls: 'mago', policy: BOTS.mago }]] });
+    const run = () => simulate({ lvl: 12, rules: SERVER_RULES, seed: 4242, teams: [[{ cls: 'paladin', policy: BOTS.paladin }], [{ cls: 'mago', policy: BOTS.mago }]] });
     const a = run(), b = run();
     assert.equal(a.secs, b.secs); assert.equal(a.winner, b.winner); assert.equal(a.winnerHpPct, b.winnerHpPct);
 });

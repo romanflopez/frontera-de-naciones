@@ -16,6 +16,7 @@ import {
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
     DAILY_BY_ID, DAILY_EXP_PCT, DUNGEON_KEY, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, junkValue, MAT_REFORJA, reforgeGold, reforgeStones, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
     mainComplete, newQuestBook, repeatGold, rewardUniques, rollDailies, type QuestBook, type QuestEvent, type QuestHave, type QuestReward,
+    canonicalClass,
 } from '@fdn/world';
 import { DAILY_INDEX_BASE, dailyOffers, dayKey } from './dailyShop.ts';
 import { canPickup, GROUND_MAX_PER_OWNER, PICKUP_RANGE, type GroundApi } from './ground.ts';
@@ -24,7 +25,7 @@ import type { Player } from './player.ts';
 import type { AccountRecord, Storage } from './storage.ts';
 
 /** v3: nivel máximo 40 y curva de exp nueva (migra la exp guardada conservando la fracción del nivel). v4: puntos de stats. */
-export const ECON_VERSION = 6;
+export const ECON_VERSION = 7;
 export const MAX_LVL = MAX_LEVEL;
 /** Sin límite de oro de juego: el único techo es el técnico (entero exacto en JS / double del protocolo). */
 export const MAX_GOLD = Number.MAX_SAFE_INTEGER;
@@ -61,8 +62,8 @@ export interface Econ {
     imported?: { at: number; gold: number; lvl: number; items: number; clipped: string[] };
 }
 
-const CLASS_KIT: Record<string, { weapon: string; armor: string }> = { guerrero: { weapon: 'Espada corta', armor: 'Coraza de cuero' }, mago: { weapon: 'Báculo de fresno', armor: 'Túnica de mago' },
-    healer: { weapon: 'Báculo de fresno', armor: 'Túnica de mago' } }; // healer con bastón (K5); sus ítems propios de T1-T2 van aparte
+const CLASS_KIT: Record<string, { weapon: string; armor: string }> = { paladin: { weapon: 'Espada corta', armor: 'Coraza de cuero' }, mago: { weapon: 'Báculo de fresno', armor: 'Túnica de mago' },
+    clerigo: { weapon: 'Báculo de fresno', armor: 'Túnica de mago' } }; // clerigo con bastón (K5); sus ítems propios de T1-T2 van aparte
 const FACTIONS = ['solmar', 'vhar'];
 
 const clampInt = (v: unknown, lo: number, hi: number, def = lo): number => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.floor(v))) : def);
@@ -169,13 +170,16 @@ function cleanImportItem(st: Econ, v: unknown, clipped: string[], trusted = fals
 // ---------- estado ----------
 /** Personaje nuevo con el kit inicial; undefined si la clase o la facción no existen (no se confía en lo que manda el cliente). */
 export function newEconChecked(cls: unknown, faction: unknown): Econ | undefined {
-    return typeof cls === 'string' && CLASS_KIT[cls] && FACTIONS.includes(String(faction)) ? newEcon(cls, String(faction)) : undefined;
+    if (typeof cls !== 'string') return undefined;
+    const id = canonicalClass(cls);
+    return CLASS_KIT[id] && FACTIONS.includes(String(faction)) ? newEcon(id, String(faction)) : undefined;
 }
 
-export function newEcon(cls: string, faction: string): Econ {
-    const kit = CLASS_KIT[cls] ?? CLASS_KIT.guerrero;
+export function newEcon(rawCls: string, faction: string): Econ {
+    const cls = canonicalClass(rawCls); // los guardados viejos (importLegacy) llegan con el id anterior
+    const kit = CLASS_KIT[cls] ?? CLASS_KIT.paladin;
     const st: Econ = {
-        v: ECON_VERSION, cls: CLASS_KIT[cls] ? cls : 'guerrero', faction: FACTIONS.includes(faction) ? faction : 'solmar',
+        v: ECON_VERSION, cls: CLASS_KIT[cls] ? cls : 'paladin', faction: FACTIONS.includes(faction) ? faction : 'solmar',
         lvl: 1, exp: 0, gold: 0, stats: defaultStats(), hp: 1, mp: 0, bag: [], eq: emptyEq(), pots: { hp: 3, mp: 3 },
         q: { i: 0, st: 'new', prog: 0, keys: { cripta: 0, foso: 0 }, shards: { cripta: 0, foso: 0 } }, qb: newQuestBook(), u: [], nextUid: 1,
     };
@@ -263,6 +267,8 @@ export function migrateEcon(st: Econ): boolean {
         }
         for (const i of [...st.bag, ...SLOTS.map((sl) => st.eq[sl])]) if (i) i.a = i.a.filter((x) => (x.id as string) !== 'exp');
     }
+    // v7 (D.0): guerrero -> paladin, healer -> clerigo.
+    st.cls = canonicalClass(st.cls);
     st.v = ECON_VERSION;
     refreshUnlocks(st);
     return true;
@@ -380,7 +386,7 @@ export class Economy {
      * Mago: Báculo del camposanto, Mortaja bordada, Capuchón de duelo y un anillo armado con lo mejor para hechizos (Magia, maná y vida).
      */
     gmBis(p: Player, cls: string): string[] | null {
-        const st = p.econ; if (!st || (cls !== 'mago' && cls !== 'healer')) return null; // el healer usa el mismo set de Magia
+        const st = p.econ; if (!st || (cls !== 'mago' && cls !== 'clerigo')) return null; // el clérigo usa el mismo set de Magia
         // Todo en Dorado con las tiradas al máximo y la mejora al tope; los extras son los mejores para hechizos (Magia, maná, vida, RM)
         const top = (name: string): SItem => {
             const u = UNIQUE_BY_NAME.get(name); if (!u) throw new Error(`BiS: no existe ${name}`);

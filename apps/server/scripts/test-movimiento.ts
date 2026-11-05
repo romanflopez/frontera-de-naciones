@@ -56,7 +56,7 @@ class Bot {
 function seed(name: string) {
     const dir = join(DATA_DIR, 'accounts'); mkdirSync(dir, { recursive: true });
     const salt = randomBytes(16), key = Buffer.from(name.normalize('NFC').toLowerCase(), 'utf8').toString('hex');
-    const character = { v: 1, faction: 'solmar', cls: 'guerrero', lvl: 20, exp: 0, gold: 0, hp: 500, mp: 50, bag: [], eq: { arma: null, armadura: null, cabeza: null, anillo: null },
+    const character = { v: 1, faction: 'solmar', cls: 'paladin', lvl: 20, exp: 0, gold: 0, hp: 500, mp: 50, bag: [], eq: { arma: null, armadura: null, cabeza: null, anillo: null },
         q: { i: 0, st: 'new', prog: 0, keys: { cripta: 0, foso: 0 }, shards: { cripta: 0, foso: 0 } }, pots: { hp: 3, mp: 0 }, u: [] };
     writeFileSync(join(dir, `${key}.json`), JSON.stringify({ name, salt: salt.toString('hex'), hash: scryptSync('test1234', salt, 32).toString('hex'), created: Date.now(), lastLogin: Date.now(), character: JSON.stringify(character) }));
 }

@@ -865,7 +865,7 @@ export interface StatusUpdate {
   buffs: string[];
 }
 
-/** Mago: Blink (máx. 7 celdas) o healer: Paso de luz (máx. 6) a la celda (x, y). El server valida y responde con PlayerTeleported + SkillEffect. */
+/** Mago: Blink (máx. 7 celdas) o clérigo: Paso de luz (máx. 6) a la celda (x, y). El server valida y responde con PlayerTeleported + SkillEffect. */
 export interface BlinkRequest {
   x: number;
   y: number;
@@ -873,9 +873,9 @@ export interface BlinkRequest {
 }
 
 /**
- * Habilidades de clase: carga, giro, grito, nova, mandato, aura, las del healer (curacion, renovar, bendicion, novasagrada, orbe) y las de K8
+ * Habilidades de clase: carga, giro, grito, nova, mandato, aura, las del clérigo (curacion, renovar, bendicion, novasagrada, orbe) y las de K8
  *  (represalia, escudodivino, amparo, escudomana, clarividencia, intelecto, guardian, esfera, despertar, grupo).
- *  carga necesita target_id (jugador) o mob_id; las curas del healer, target_id del aliado (0 = a sí mismo); renovar a un enemigo, target_id o mob_id.
+ *  carga necesita target_id (jugador) o mob_id; las curas del clérigo, target_id del aliado (0 = a sí mismo); renovar a un enemigo, target_id o mob_id.
  */
 export interface SkillRequest {
   skill: string;

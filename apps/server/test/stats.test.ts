@@ -21,7 +21,7 @@ class MemStorage implements Storage {
 }
 function setup() {
     const mem = new MemStorage(), eco = new Economy(mem), reg = new WorldRegistry({ settings, economy: eco });
-    const join = (world: GameWorld, name: string, cls = 'guerrero') => {
+    const join = (world: GameWorld, name: string, cls = 'paladin') => {
         const log: ServerMessage[] = [];
         const session: TransferSession = { sessionId: `s-${name}`, worldId: world.id };
         const persisted: PersistedPlayer = { mapId: world.mapId, worldId: world.mapId, x: 11, y: 11, direction: 4, gender: 0, skinColor: 0, hairStyleIndex: 0, underwearColorIndex: 0, movementSpeedMs: 270, runningMode: true, attackMode: true };
@@ -62,7 +62,7 @@ test('stats: cleanStats recorta lo inválido a enteros entre 10 y el tope', () =
 });
 
 test('stats: la vida, el maná, la defensa y el daño del combate salen de los puntos', () => {
-    const base = newEcon('guerrero', 'solmar'), con = newEcon('guerrero', 'solmar');
+    const base = newEcon('paladin', 'solmar'), con = newEcon('paladin', 'solmar');
     con.stats = { ...defaultStats(), vit: 30, mag: 25, dex: 20, str: 40 };
     const a = statsFromChar(base), b = statsFromChar(con);
     const vitHp = Math.round(0.002 * 593 * 20); // nivel 1: vida base 593
@@ -124,7 +124,7 @@ test('repartir por el protocolo: llega el pedido, sube la vida máxima del serve
     st.lvl = 3; const hp0 = statsFromChar(st).maxHp; // vida del nivel 3 sin repartir
     J.log.length = 0;
     w.handleClientPacket(J.session.sessionId, { payload: { $case: 'statAllocRequest', value: { action: 'add', stat: 'vit', points: 4 } } } as never);
-    const baseHp3 = classBaseHp('guerrero', 3); // vida base del guerrero a nivel 3
+    const baseHp3 = classBaseHp('paladin', 3); // vida base del paladín a nivel 3
     assert.equal(st.stats.vit, 14); assert.equal(J.p.combat.maxHp - hp0, Math.round(0.002 * baseHp3 * 4), '4 puntos de Vitalidad = +0,8 % de la vida base');
     const inv = J.log.filter((m) => m.payload?.$case === 'inventoryState').at(-1)!.payload as { value: { statVit: number; statStr: number; statFree: number } };
     assert.equal(inv.value.statVit, 14); assert.equal(inv.value.statStr, 10); assert.equal(inv.value.statFree, statPointsFree(3, st.stats));
@@ -170,7 +170,7 @@ test('antitrampa: el guardado del cliente no puede fijar stats, ni al crear ni d
 
 // ---------- F. migración ----------
 test('migración v3 -> v4: la cuenta sin stats recibe los de arranque y sus puntos libres por nivel', () => {
-    const st = newEcon('guerrero', 'solmar'); st.v = 3; st.lvl = 12; delete (st as { stats?: unknown }).stats;
+    const st = newEcon('paladin', 'solmar'); st.v = 3; st.lvl = 12; delete (st as { stats?: unknown }).stats;
     assert.equal(migrateEcon(st), true);
     assert.deepEqual(st.stats, defaultStats()); assert.equal(st.v, ECON_VERSION);
     assert.equal(statPointsFree(st.lvl, st.stats), 10 + 3 * 11);
@@ -186,15 +186,15 @@ test('migración v2 -> v4 en un solo paso: arregla la exp y agrega los stats', (
 // ---------- tooltip de stats por clase ----------
 test('stats: el tooltip usa los números de la clase y del nivel, y avisa qué stat no le sirve', () => {
     const base = defaultStats();
-    const vit = statTip('vit', 'guerrero', 11, base), hp11 = classBaseHp('guerrero', 11); // vida base del paladín a nivel 11 (escala de nivel de poder)
+    const vit = statTip('vit', 'paladin', 11, base), hp11 = classBaseHp('paladin', 11); // vida base del paladín a nivel 11 (escala de nivel de poder)
     assert.match(vit.perPoint, new RegExp(`\\+${(hp11 * 0.002).toFixed(1).replace('.', ',')} de vida`)); assert.match(vit.perPoint, new RegExp(String(hp11))); assert.equal(vit.now, '', 'sin puntos no hay "con tus puntos"');
     const s = { ...base, str: 30, dex: 30, mag: 20 };
-    assert.equal(statTip('str', 'guerrero', 5, s).fit, 'clave'); assert.equal(statTip('str', 'mago', 5, s).fit, 'bajo'); assert.equal(statTip('str', 'healer', 5, s).fit, 'bajo');
-    assert.equal(statTip('mag', 'mago', 5, s).fit, 'clave'); assert.equal(statTip('mag', 'healer', 5, s).fit, 'clave'); assert.equal(statTip('mag', 'guerrero', 5, s).fit, 'bajo');
+    assert.equal(statTip('str', 'paladin', 5, s).fit, 'clave'); assert.equal(statTip('str', 'mago', 5, s).fit, 'bajo'); assert.equal(statTip('str', 'clerigo', 5, s).fit, 'bajo');
+    assert.equal(statTip('mag', 'mago', 5, s).fit, 'clave'); assert.equal(statTip('mag', 'clerigo', 5, s).fit, 'clave'); assert.equal(statTip('mag', 'paladin', 5, s).fit, 'bajo');
     // los números del tooltip son los de statBonus (los que aplica el server)
-    const b = statBonus(s, classBaseHp('guerrero', 5));
-    assert.equal(statTip('str', 'guerrero', 5, s).now, `+${(b.meleeMult - 1) * 100 | 0} % de daño, +${b.hp} de vida`);
-    assert.match(statTip('dex', 'guerrero', 5, s).now, new RegExp(`\\+${b.def} de defensa`));
+    const b = statBonus(s, classBaseHp('paladin', 5));
+    assert.equal(statTip('str', 'paladin', 5, s).now, `+${(b.meleeMult - 1) * 100 | 0} % de daño, +${b.hp} de vida`);
+    assert.match(statTip('dex', 'paladin', 5, s).now, new RegExp(`\\+${b.def} de defensa`));
     assert.match(statTip('mag', 'mago', 5, s).now, new RegExp(`\\+${b.mp} de maná`));
     assert.equal(statTip('vit', 'clase_rara', 1, base).fit, 'clave', 'clase desconocida cae al paladín, como classBaseHp');
 });
@@ -208,6 +208,6 @@ test('Inteligencia: +0,15 % de crítico en hechizos de daño por punto (tope 35 
     const normal = rollSpellDamage('bola', { ...base, critMag: 0 }, false);
     const crit = rollSpellDamage('bola', cs, false);
     assert.ok(crit > normal * 1.5, 'con 100 % de crítico el hechizo de daño pega fuerte');
-    const phys = rollSpellDamage('golpe', { ...cs, cls: 'guerrero' }, false);
+    const phys = rollSpellDamage('golpe', { ...cs, cls: 'paladin' }, false);
     assert.ok(phys < crit, 'el físico no usa el crítico de Inteligencia');
 });

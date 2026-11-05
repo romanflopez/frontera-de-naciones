@@ -18,9 +18,12 @@
 @media (prefers-reduced-motion:reduce){.ldscreen .ldbar i::after{animation:none}.ldscreen .ldbar i{transition:none}}
 body:has(.ldscreen:not([hidden])) #chatRoot{display:none}
 
-/* viaje entre mapas: el destino arriba del LOADING, con fundido de entrada/salida */
-#maploading{opacity:0;transition:opacity .3s}
-#maploading.on{opacity:1}
+/* viaje entre mapas: el destino arriba del LOADING. Tapa en el acto y se funde al salir (.out); main.ts lo maneja con worldReady */
+#maploading{opacity:1;transition:opacity .3s}
+#maploading.out{opacity:0}
+
+/* D.14: HUD, chat y minimapa no existen para el jugador hasta que el mundo esté listo (body.world-ready) */
+body:not(.world-ready) :is(#hudroot,#chatRoot,#log,#buffs,#bagBtn,#party,#partyInvite,#target,#focus,#quest,#npcBubble,#toast,#notif,#net,#help,.mm,.mm-big){visibility:hidden !important}
 #maploading .ldbox{gap:10px}
 #maploading .ldk{font:500 12px/1 "Alegreya SC",Georgia,serif;letter-spacing:.34em;text-transform:uppercase;color:#9fb6c8;text-shadow:0 1px 3px #000}
 #maploading .ldname{margin:0;font:500 30px/1.1 "Alegreya SC",Georgia,serif;letter-spacing:.12em;text-transform:uppercase;color:#eef4f8;text-shadow:0 2px 6px #000,0 0 18px rgba(90,160,230,.45)}

@@ -47,7 +47,7 @@ function setup() {
         return { sid, log, p };
     };
     const A = join('caster', { x: 30, y: 20 }, 'solmar', 'mago');
-    const B = join('blanco', { x: 38, y: 20 }, 'vhar', 'guerrero');
+    const B = join('blanco', { x: 38, y: 20 }, 'vhar', 'paladin');
     const launch = (spell: string, ax = B.p.posX + 0.5, ay = B.p.posY + 0.5) => pkt(w, A.sid, 'projectileLaunchRequest', { spell, targetId: B.p.playerId, aimX: ax, aimY: ay });
     const cast = (spell: string, c: ReturnType<typeof clock>) => { pkt(w, A.sid, 'spellCastStartRequest', { spellId: 0, spell }); c.advance(castMsOf(spell) + 100); };
     return { w, A, B, launch, cast };

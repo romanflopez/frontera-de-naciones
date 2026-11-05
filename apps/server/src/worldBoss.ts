@@ -3,14 +3,14 @@
  * Argentina) para que no lo campeen, en uno de los mapas abiertos de su tier, también al azar. Se anuncia en el chat de todos al aparecer,
  * cuando le quedan 10 minutos y al morir o irse. Vive en memoria: si el server se reinicia, se vuelve a sortear la hora de ese día.
  */
-import { MAPS, MOBS, WORLD_BOSS } from '@fdn/world';
+import { MAPS, MOBS, WORLD_BOSS, nationOfMap } from '@fdn/world';
 import type { GameWorld } from './world.ts';
 
 const H = 3_600_000, DAY = 24 * H, ART = 3 * H; // Argentina = UTC-3, sin horario de verano
 /** Día calendario de Argentina. */
 export const artDay = (now: number): number => Math.floor((now - ART) / DAY);
-/** Mapas donde puede salir: los abiertos (no mazmorras) del tier del jefe. */
-export const worldBossMaps = (): string[] => Object.values(MAPS).filter((d) => !!d.lvl && d.lvl[0] >= WORLD_BOSS.lvl[0] && d.lvl[1] <= WORLD_BOSS.lvl[1] && !d.temporary).map((d) => d.id);
+/** Mapas donde puede salir: los abiertos compartidos (ni mazmorras ni mapas de leveo de una nación) del rango del jefe. */
+export const worldBossMaps = (): string[] => Object.values(MAPS).filter((d) => !!d.lvl && d.lvl[0] >= WORLD_BOSS.lvl[0] && d.lvl[1] <= WORLD_BOSS.lvl[1] && !d.temporary && !nationOfMap(d.id)).map((d) => d.id);
 
 export interface WorldBossDeps {
     ensure(mapId: string): GameWorld;

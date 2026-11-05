@@ -5,7 +5,7 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { AccountRecord, Storage } from './storage.ts';
 import type { Econ } from './economy.ts';
-import { TRAINING, trainingUnlocked } from '@fdn/world';
+import { CREATABLE_CLASS_IDS, TRAINING, canonicalClass, trainingUnlocked } from '@fdn/world';
 
 const NAME_RE = /^[\p{L}\p{N}_\- ]{2,16}$/u;
 const MAX_FAILS_PER_NAME = 5, MAX_FAILS_PER_IP = 25, WINDOW_MS = 10 * 60 * 1000;
@@ -113,7 +113,6 @@ export function deleteCharacter(storage: Storage, accKey: string, rawName: strin
 const num = (v: unknown, lo: number, hi: number, def = lo): number => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.floor(v))) : def);
 const word = (v: unknown, max: number): string | null => (typeof v === 'string' && v.length > 0 && v.length <= max && /^[\p{L}\p{N}_\- ().']+$/u.test(v) ? v : null);
 const KEYS = ['cripta', 'foso'] as const;
-const CLASSES = ['guerrero', 'mago', 'healer'];
 const SLOTS = ['arma', 'armadura', 'cabeza', 'guantes', 'botas', 'amuleto', 'anillo', 'anillo2'] as const;
 
 interface SavedItem { n: string; r: number; a: { id: string; v: number }[] }
@@ -130,7 +129,7 @@ export function sanitizeCharacter(raw: string): string | null {
     let o: Record<string, unknown>;
     try { o = JSON.parse(raw) as Record<string, unknown>; } catch { return null; }
     if (!o || typeof o !== 'object') return null;
-    const faction = word(o.faction, 12), cls = typeof o.cls === 'string' && CLASSES.includes(o.cls) ? o.cls : null;
+    const faction = word(o.faction, 12), cls = typeof o.cls === 'string' && (CREATABLE_CLASS_IDS as readonly string[]).includes(canonicalClass(o.cls)) ? canonicalClass(o.cls) : null;
     if (!faction || !cls) return null;
     const q = (o.q ?? {}) as Record<string, unknown>, keys = (q.keys ?? {}) as Record<string, unknown>, shards = (q.shards ?? {}) as Record<string, unknown>;
     const pots = (o.pots ?? {}) as Record<string, unknown>, eq = (o.eq ?? {}) as Record<string, unknown>;
