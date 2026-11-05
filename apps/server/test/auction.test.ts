@@ -20,7 +20,7 @@ class MemStorage implements Storage {
 function setup(now = { t: 1_000_000 }) {
     const storage = new MemStorage();
     const mk = (key: string, name: string, gold = 1000): Actor => {
-        const econ = newEcon('pala', 'solmar'); econ.gold = gold; econ.bag = [];
+        const econ = newEcon('paladin', 'solmar'); econ.gold = gold; econ.bag = [];
         storage.put(key, { name, salt: '', hash: '', created: 0, lastLogin: 0, econ });
         return { key, name, econ };
     };
@@ -195,7 +195,7 @@ test('búsqueda: filtros por slot, rareza, texto, nivel, precio, orden y página
 test('persistencia: al reiniciar (archivos) no se pierde nada', () => {
     const dir = mkdtempSync(join(tmpdir(), 'fdn-ah-'));
     const st1 = new FileStorage(dir, 10_000);
-    const econ = newEcon('pala', 'solmar'); econ.gold = 500; econ.bag = [{ u: 99, n: 'Maza', r: 1, a: [{ id: 'hp', v: 9 }] }]; econ.nextUid = 100;
+    const econ = newEcon('paladin', 'solmar'); econ.gold = 500; econ.bag = [{ u: 99, n: 'Maza', r: 1, a: [{ id: 'hp', v: 9 }] }]; econ.nextUid = 100;
     st1.put('aa', { name: 'V', salt: '', hash: '', created: 0, lastLogin: 0, econ });
     const ah1 = new AuctionHouse(st1); ah1.log = () => {};
     const ah1b = new AuctionHouse(st1); void ah1b;
@@ -288,7 +288,7 @@ test('historial: tope de entradas por cuenta (se descartan las más viejas)', as
 test('historial: persiste con la casa y una casa vieja sin historial carga igual', () => {
     const dir = mkdtempSync(join(tmpdir(), 'fdn-ahh-'));
     const st1 = new FileStorage(dir, 10_000);
-    const mkAcc = (key: string, gold: number) => { const econ = newEcon('pala', 'solmar'); econ.gold = gold; econ.bag = []; st1.put(key, { name: key, salt: '', hash: '', created: 0, lastLogin: 0, econ }); return { key, name: key.toUpperCase(), econ }; };
+    const mkAcc = (key: string, gold: number) => { const econ = newEcon('paladin', 'solmar'); econ.gold = gold; econ.bag = []; st1.put(key, { name: key, salt: '', hash: '', created: 0, lastLogin: 0, econ }); return { key, name: key.toUpperCase(), econ }; };
     const s = mkAcc('aa', 500), b = mkAcc('bb', 500);
     const ah1 = new AuctionHouse(st1); ah1.log = () => {};
     assert.equal(ah1.post(s, give(s.econ), 200).ok, true);
@@ -305,7 +305,7 @@ test('historial: persiste con la casa y una casa vieja sin historial carga igual
     const st3 = new MemStorage(); st3.put(AH_STORAGE_KEY, { name: '(casa)', salt: '', hash: '', created: 0, lastLogin: 0, auction: { v: 1, nextId: 5, nextMail: 1, listings: [], mail: {} } } as AccountRecord);
     const ah3 = new AuctionHouse(st3); ah3.log = () => {};
     assert.deepEqual(ah3.history('aa'), []);
-    const x = { key: 'aa', name: 'X', econ: newEcon('pala', 'solmar') }; x.econ.gold = 100; x.econ.bag = [];
+    const x = { key: 'aa', name: 'X', econ: newEcon('paladin', 'solmar') }; x.econ.gold = 100; x.econ.bag = [];
     assert.equal(ah3.post(x, give(x.econ), 10).ok, true); assert.deepEqual(kinds(ah3, 'aa'), ['post']);
 });
 

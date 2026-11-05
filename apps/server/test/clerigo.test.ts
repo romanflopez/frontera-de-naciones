@@ -51,7 +51,7 @@ function setup() {
         return { sid, log, p };
     };
     const clerigo = join('clerigo', { x: 30, y: 20 }, 'solmar', 'clerigo');
-    const aliado = join('aliado', { x: 32, y: 20 }, 'solmar', 'pala');
+    const aliado = join('aliado', { x: 32, y: 20 }, 'solmar', 'paladin');
     const enemigo = join('enemigo', { x: 34, y: 20 }, 'vhar', 'mago');
     return { w, clerigo, aliado, enemigo };
 }
@@ -63,21 +63,21 @@ const skill = (w: GameWorld, sid: string, s: string, targetId = 0n, mobId = 0) =
 
 // ---------- la clase ----------
 test('K5: el clérigo es una clase jugable con su kit por nivel', () => {
-    assert.deepEqual([...CLASS_IDS], ['pala', 'mago', 'clerigo', 'arquero']);
+    assert.deepEqual([...CLASS_IDS], ['paladin', 'mago', 'clerigo', 'arquero']);
     for (const [id, lvl] of [['castigo', 1], ['curacion', 1], ['renovar', 3], ['bendicion', 5], ['novasagrada', 7], ['reprender', 9], ['orbe', 12]] as const) {
         assert.equal(canUseSkill('clerigo', kitLevel(lvl), id), true, `${id} a nivel ${lvl}`);
         if (lvl > 1) assert.deepEqual(checkSkill('clerigo', kitLevel(lvl) - 1, id), { ok: false, reason: 'nivel', need: kitLevel(lvl) });
     }
     assert.equal(canUseSkill('clerigo', kitLevel(40), 'bola'), false, 'no tira bolas de fuego');
     assert.equal(canUseSkill('mago', kitLevel(40), 'curacion'), false, 'el mago ya no cura aliados');
-    assert.equal(canUseSkill('pala', kitLevel(40), 'bendicion'), false);
+    assert.equal(canUseSkill('paladin', kitLevel(40), 'bendicion'), false);
 });
 
 test('K5: la vida del clérigo queda entre la del paladín y la del mago; maná: el mago tiene más (etapa 6b, como en Dreadmyst) y el clérigo más que el paladín; el personaje nuevo se crea con bastón', () => {
-    const h = statsFromChar({ lvl: 10, cls: 'clerigo', eq: {} }), m = statsFromChar({ lvl: 10, cls: 'mago', eq: {} }), g = statsFromChar({ lvl: 10, cls: 'pala', eq: {} });
+    const h = statsFromChar({ lvl: 10, cls: 'clerigo', eq: {} }), m = statsFromChar({ lvl: 10, cls: 'mago', eq: {} }), g = statsFromChar({ lvl: 10, cls: 'paladin', eq: {} });
     assert.equal(h.cls, 'clerigo');
     assert.ok(h.maxHp > m.maxHp && h.maxHp < g.maxHp, `vida ${h.maxHp}`);
-    assert.ok(m.maxMp > h.maxMp && h.maxMp > g.maxMp, `maná: mago ${m.maxMp}, clerigo ${h.maxMp}, pala ${g.maxMp}`);
+    assert.ok(m.maxMp > h.maxMp && h.maxMp > g.maxMp, `maná: mago ${m.maxMp}, clerigo ${h.maxMp}, paladin ${g.maxMp}`);
     const st = newEcon('clerigo', 'vhar');
     assert.equal(st.cls, 'clerigo');
     assert.equal(st.eq.arma?.n, 'Báculo de fresno');
@@ -231,10 +231,10 @@ test('veneno sobre un jugador: la curación que recibe baja un 30 % y el cliente
 
 test('veneno: un golpe físico con chance de veneno del equipo envenena a un jugador enemigo', () => {
     const { w, clerigo, enemigo } = setup();
-    const pala = clerigo; // cualquiera sirve para el golpe básico
-    pala.p.combat = { ...pala.p.combat, poison: 100 };
-    enemigo.p.setPosition(pala.p.posX + 1, pala.p.posY);
-    pkt(w, pala.sid, 'pvpHitRequest', { fx: '', x: enemigo.p.posX, y: enemigo.p.posY, targetId: enemigo.p.playerId, dmg: 0, secs: 0, r: 0, spell: 'ataque' });
+    const paladin = clerigo; // cualquiera sirve para el golpe básico
+    paladin.p.combat = { ...paladin.p.combat, poison: 100 };
+    enemigo.p.setPosition(paladin.p.posX + 1, paladin.p.posY);
+    pkt(w, paladin.sid, 'pvpHitRequest', { fx: '', x: enemigo.p.posX, y: enemigo.p.posY, targetId: enemigo.p.playerId, dmg: 0, secs: 0, r: 0, spell: 'ataque' });
     assert.ok(enemigo.p.hp < enemigo.p.combat.maxHp, 'pegó');
     assert.ok(enemigo.p.status.poisonEndTime > Date.now(), 'quedó envenenado');
 });
@@ -304,25 +304,25 @@ function mobSetup() {
         const p = { playerId: id, posX: x, posY: 20, disconnected: false, isDead: false, status: { isInvisible: false }, combat: statsFromChar({ lvl: 12, cls, eq: {} }), pvp: new PvpLimiter(), send: () => {} } as unknown as Player;
         p.pvp.meleeGapMs = meleeIntervalSecs(0) * 1000; players.push(p); return p;
     };
-    const pala = mk(1n, 'pala', 11), clerigo = mk(2n, 'clerigo', 15);
+    const paladin = mk(1n, 'paladin', 11), clerigo = mk(2n, 'clerigo', 15);
     const blocked = Array.from({ length: N }, () => new Array<boolean>(N).fill(false)), safe = Array.from({ length: N }, () => new Array<boolean>(N).fill(false));
     const map = { size: N, tiles: [], blocked, safe, props: [], decals: [], zones: [{ type: 'goblin', x: 12, y: 20, r: 1, n: 2, name: 'prueba' }], buildings: [], npcs: [], spawn: { x: 1, y: 1 }, fire: { x: -50, y: -50 } } as unknown as WorldMap;
     const host: MobHost = {
-        players: () => players, playerById: (id) => players.find((p) => p.playerId === id), nearby: () => [pala], after: () => {},
+        players: () => players, playerById: (id) => players.find((p) => p.playerId === id), nearby: () => [paladin], after: () => {},
         hurt: () => {}, stun: () => 0, reward: () => {}, pay: () => true, heal: () => {}, refundMp: (_p, n) => { refunds.push(n); },
     };
     const sim = new MobSim(map, host);
     const raws = [...(sim as unknown as { mobs: Map<number, { id: number; hp: number; hpMax: number; traits: number; x: number }> }).mobs.values()];
     for (const m of raws) { m.traits = 0; m.hp = m.hpMax = 1e6; }
-    return { sim, pala, clerigo, raws, refunds };
+    return { sim, paladin, clerigo, raws, refunds };
 }
 
 test('curar genera amenaza sobre los monstruos que pelean con el curado, y solo sobre esos', () => {
-    const { sim, pala, clerigo, raws } = mobSetup();
+    const { sim, paladin, clerigo, raws } = mobSetup();
     const [m1, m2] = raws;
     m2.x = 36; // lejos: no viene a ayudar
-    sim.hit(pala, { mobId: m1.id, dmg: 0, melee: false, crit: false, parSecs: 0, poisonSecs: 0, spell: 'golpe' });
-    assert.equal(sim.healThreat(clerigo, pala, 100), 1, 'solo el mob que pelea con el pala');
+    sim.hit(paladin, { mobId: m1.id, dmg: 0, melee: false, crit: false, parSecs: 0, poisonSecs: 0, spell: 'golpe' });
+    assert.equal(sim.healThreat(clerigo, paladin, 100), 1, 'solo el mob que pelea con el paladin');
     assert.equal(sim.threatOn(m1.id, clerigo), 100);
     assert.equal(sim.threatOn(m2.id, clerigo), 0);
     assert.equal(HEAL_THREAT, 0.5);

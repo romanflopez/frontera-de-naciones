@@ -203,30 +203,30 @@ const DEFS: Def[] = [
 ];
 
 // ---------- sets por clase: cada banda tiene uno de paladín, uno de mago y uno de clérigo (los ítems no se comparten entre clases) ----------
-type SetClass = 'pala' | 'mago' | 'clerigo';
+type SetClass = 'paladin' | 'mago' | 'clerigo';
 const CLASS_SET_PIECES: Record<SetClass, { arch: Arch; n: string }[]> = {
-    pala: [{ arch: 'arma1', n: 'Espada' }, { arch: 'armPes', n: 'Coraza' }, { arch: 'cabF', n: 'Yelmo' }, { arch: 'guanF', n: 'Guanteletes' }, { arch: 'botaF', n: 'Grebas' }, { arch: 'amuD', n: 'Colgante' }, { arch: 'anilloD', n: 'Sello' }, { arch: 'anilloO', n: 'Aro' }],
+    paladin: [{ arch: 'arma1', n: 'Espada' }, { arch: 'armPes', n: 'Coraza' }, { arch: 'cabF', n: 'Yelmo' }, { arch: 'guanF', n: 'Guanteletes' }, { arch: 'botaF', n: 'Grebas' }, { arch: 'amuD', n: 'Colgante' }, { arch: 'anilloD', n: 'Sello' }, { arch: 'anilloO', n: 'Aro' }],
     mago: [{ arch: 'armaM', n: 'Vara' }, { arch: 'armMag', n: 'Túnica' }, { arch: 'cabM', n: 'Capucha' }, { arch: 'guanM', n: 'Guantes' }, { arch: 'botaM', n: 'Sandalias' }, { arch: 'amuO', n: 'Talismán' }, { arch: 'anilloO', n: 'Sello' }, { arch: 'anilloD', n: 'Aro' }],
     clerigo: [{ arch: 'armaM', n: 'Cayado' }, { arch: 'armMag', n: 'Manto' }, { arch: 'cabM', n: 'Cofia' }, { arch: 'guanM', n: 'Mitones' }, { arch: 'botaM', n: 'Zapatos' }, { arch: 'amuO', n: 'Relicario' }, { arch: 'anilloO', n: 'Sello' }, { arch: 'anilloD', n: 'Aro' }],
 };
-/** Sets generados (los 7 escritos a mano de arriba cubren: pala T1, T3, T4, T5, T7 y mago T2, T6). */
+/** Sets generados (los 7 escritos a mano de arriba cubren: paladin T1, T3, T4, T5, T7 y mago T2, T6). */
 export const CLASS_SETS: { id: string; name: string; tier: number; cls: SetClass; suffix: string; faction: 'solmar' | 'vhar'; bonus: AttrId[][] }[] = [];
 const BONUS_BY_CLASS: Record<SetClass, AttrId[][]> = {
-    pala: [['hp', 'aspd'], ['crit', 'leech'], ['hp', 'crit'], ['aspd', 'crit', 'leech']],
+    paladin: [['hp', 'aspd'], ['crit', 'leech'], ['hp', 'crit'], ['aspd', 'crit', 'leech']],
     mago: [['mp', 'mag'], ['mag', 'crit'], ['mp', 'hp'], ['mag', 'mp', 'leech']],
     clerigo: [['mp', 'hp'], ['rm', 'rpar'], ['mp', 'mag'], ['rpar', 'hp', 'rm']],
 };
 const EXTRA_CLASS_SETS: [number, SetClass, string, string][] = [
     [1, 'mago', 'savia', 'de savia'], [1, 'clerigo', 'lino', 'de lino'],
-    [2, 'pala', 'hierroviejo', 'de hierro viejo'], [2, 'clerigo', 'musgo', 'de musgo'],
+    [2, 'paladin', 'hierroviejo', 'de hierro viejo'], [2, 'clerigo', 'musgo', 'de musgo'],
     [3, 'mago', 'escarcha', 'de escarcha'], [3, 'clerigo', 'rocio', 'de rocío'],
     [4, 'mago', 'ocaso', 'del Ocaso'], [4, 'clerigo', 'aurora', 'de la Aurora'],
     [5, 'mago', 'zafiro', 'del Zafiro'], [5, 'clerigo', 'santuario', 'del Santuario'],
-    [6, 'pala', 'hierronegro', 'de Hierro Negro'], [6, 'clerigo', 'vela', 'de la Vela'],
+    [6, 'paladin', 'hierronegro', 'de Hierro Negro'], [6, 'clerigo', 'vela', 'de la Vela'],
     [7, 'mago', 'ascuaazul', 'de Ascua Azul'], [7, 'clerigo', 'pira', 'de la Pira Santa'],
 ];
 for (const [tier, cls, id, suffix] of EXTRA_CLASS_SETS) {
-    CLASS_SETS.push({ id, name: `${CLASS_SET_PIECES[cls][1].n} ${suffix}`.replace(/^\S+ /, '').replace(/^/, cls === 'pala' ? 'Armadura ' : cls === 'mago' ? 'Atuendo ' : 'Vestimenta '), tier, cls, suffix, faction: tier >= 6 ? 'vhar' : 'solmar', bonus: BONUS_BY_CLASS[cls] });
+    CLASS_SETS.push({ id, name: `${CLASS_SET_PIECES[cls][1].n} ${suffix}`.replace(/^\S+ /, '').replace(/^/, cls === 'paladin' ? 'Armadura ' : cls === 'mago' ? 'Atuendo ' : 'Vestimenta '), tier, cls, suffix, faction: tier >= 6 ? 'vhar' : 'solmar', bonus: BONUS_BY_CLASS[cls] });
     for (const pc of CLASS_SET_PIECES[cls]) DEFS.push({ tier, arch: pc.arch === 'arma1' && tier % 2 === 0 ? 'arma2' : pc.arch, name: `${pc.n} ${suffix}`, set: id });
 }
 

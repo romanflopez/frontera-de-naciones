@@ -13,7 +13,7 @@ export const ttkRange = (lvl: number): [number, number] => [0.8 + 0.2 * lvl, 6 +
 /** Vida que saca un común de tu nivel (% de la máxima): hasta el 10 sube de a poco (fácil al principio), después una banda fija. */
 export function tookRange(cls: Cls, lvl: number): [number, number] {
     const lo = lvl <= 10 ? 1 + 0.4 * lvl : 5, hi = lvl <= 10 ? 8 + 0.7 * lvl : 15;
-    return cls === 'pala' ? [lo, hi] : cls === 'mago' ? [lo * 0.5, hi * 1.6] : [lo * 0.5, hi * 2.2]; // mago y clérigo no kitean en la sim; el clérigo se cura lo que recibe
+    return cls === 'paladin' ? [lo, hi] : cls === 'mago' ? [lo * 0.5, hi * 1.6] : [lo * 0.5, hi * 2.2]; // mago y clérigo no kitean en la sim; el clérigo se cura lo que recibe
 }
 export const PVE_TARGETS = {
     eliteWin: 0.8, maxRest: 0.25, maxDeathsPerHour: 0.5,

@@ -21,7 +21,7 @@ type RewardInfo = { participants?: bigint[]; type: MobType };
 function setup(type: MobType, traits = 0) {
     clock += 100_000;
     const mkPlayer = (id: bigint, x: number, y: number): Player =>
-        ({ playerId: id, posX: x, posY: y, disconnected: false, isDead: false, status: { isInvisible: false }, combat: statsFromChar({ lvl: 12, cls: 'pala', eq: {} }), pvp: new PvpLimiter(), send: (_m: ServerMessage) => {} }) as unknown as Player;
+        ({ playerId: id, posX: x, posY: y, disconnected: false, isDead: false, status: { isInvisible: false }, combat: statsFromChar({ lvl: 12, cls: 'paladin', eq: {} }), pvp: new PvpLimiter(), send: (_m: ServerMessage) => {} }) as unknown as Player;
     const p1 = mkPlayer(7n, 14, 20), p2 = mkPlayer(8n, 15, 20);
     const blocked = Array.from({ length: N }, () => new Array<boolean>(N).fill(false)), safe = Array.from({ length: N }, () => new Array<boolean>(N).fill(false));
     const map = { size: N, tiles: [], blocked, safe, props: [], decals: [], zones: [{ type, x: 14, y: 20, r: 0, n: 1, name: 'prueba' }], buildings: [], npcs: [], spawn: { x: 1, y: 1 }, fire: { x: -50, y: -50 } } as unknown as WorldMap;

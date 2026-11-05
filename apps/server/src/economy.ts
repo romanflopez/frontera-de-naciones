@@ -62,7 +62,7 @@ export interface Econ {
     imported?: { at: number; gold: number; lvl: number; items: number; clipped: string[] };
 }
 
-const CLASS_KIT: Record<string, { weapon: string; armor: string }> = { pala: { weapon: 'Espada corta', armor: 'Coraza de cuero' }, mago: { weapon: 'Báculo de fresno', armor: 'Túnica de mago' },
+const CLASS_KIT: Record<string, { weapon: string; armor: string }> = { paladin: { weapon: 'Espada corta', armor: 'Coraza de cuero' }, mago: { weapon: 'Báculo de fresno', armor: 'Túnica de mago' },
     clerigo: { weapon: 'Báculo de fresno', armor: 'Túnica de mago' } }; // clerigo con bastón (K5); sus ítems propios de T1-T2 van aparte
 const FACTIONS = ['solmar', 'vhar'];
 
@@ -177,9 +177,9 @@ export function newEconChecked(cls: unknown, faction: unknown): Econ | undefined
 
 export function newEcon(rawCls: string, faction: string): Econ {
     const cls = canonicalClass(rawCls); // los guardados viejos (importLegacy) llegan con el id anterior
-    const kit = CLASS_KIT[cls] ?? CLASS_KIT.pala;
+    const kit = CLASS_KIT[cls] ?? CLASS_KIT.paladin;
     const st: Econ = {
-        v: ECON_VERSION, cls: CLASS_KIT[cls] ? cls : 'pala', faction: FACTIONS.includes(faction) ? faction : 'solmar',
+        v: ECON_VERSION, cls: CLASS_KIT[cls] ? cls : 'paladin', faction: FACTIONS.includes(faction) ? faction : 'solmar',
         lvl: 1, exp: 0, gold: 0, stats: defaultStats(), hp: 1, mp: 0, bag: [], eq: emptyEq(), pots: { hp: 3, mp: 3 },
         q: { i: 0, st: 'new', prog: 0, keys: { cripta: 0, foso: 0 }, shards: { cripta: 0, foso: 0 } }, qb: newQuestBook(), u: [], nextUid: 1,
     };
@@ -267,7 +267,7 @@ export function migrateEcon(st: Econ): boolean {
         }
         for (const i of [...st.bag, ...SLOTS.map((sl) => st.eq[sl])]) if (i) i.a = i.a.filter((x) => (x.id as string) !== 'exp');
     }
-    // v7 (D.0): guerrero -> pala, healer -> clerigo.
+    // v7 (D.0): guerrero -> paladin, healer -> clerigo.
     st.cls = canonicalClass(st.cls);
     st.v = ECON_VERSION;
     refreshUnlocks(st);

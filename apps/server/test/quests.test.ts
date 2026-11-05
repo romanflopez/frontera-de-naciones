@@ -23,7 +23,7 @@ class MemStorage implements Storage {
 }
 const H = 3_600_000;
 
-function setup(cls = 'pala') {
+function setup(cls = 'paladin') {
     const mem = new MemStorage(), eco = new Economy(mem), reg = new WorldRegistry({ settings, economy: eco });
     const town = reg.ensure('solmar_ayuntamiento'), smithy = reg.ensure('solmar_herreria');
     const cap = buildMap('solmar_ayuntamiento').npcs.find((n) => roleOf(n) === 'capitan')!;
@@ -91,10 +91,10 @@ test('libro guardado roto o viejo: se sanea sin romper', () => {
 });
 
 test('premios por clase: el mago recibe ítems con Magia y el paladín no; los anillos son de todos', () => {
-    const w = rewardUniques('class_t1_choice', 'pala'), m = rewardUniques('class_t1_choice', 'mago');
+    const w = rewardUniques('class_t1_choice', 'paladin'), m = rewardUniques('class_t1_choice', 'mago');
     assert.ok(w.length >= 3 && m.length >= 3);
     assert.ok(w.every((u) => u.slot === 'anillo' || !u.mag)); assert.ok(m.every((u) => u.slot === 'anillo' || (u.mag ?? 0) > 0));
-    assert.ok(rewardUniques('boss_d2_choice', 'pala').every((u) => u.uniq.boss === 'antlion_reina'));
+    assert.ok(rewardUniques('boss_d2_choice', 'paladin').every((u) => u.uniq.boss === 'antlion_reina'));
 });
 
 test('el camino recorre los mapas en orden de nivel y cada objetivo de matar apunta a un mob que vive en ese mapa', () => {
@@ -151,11 +151,11 @@ test('cadena completa en el server: de Campos de Sal a la Reina, con premios, ni
             if (q.reward.unique?.endsWith('_choice')) {
                 assert.equal(ask('m_turnin').code, 'choose');
                 assert.equal(ask('m_turnin', 'Vara de raíz').code, 'choose', 'un paladín no elige el báculo');
-                const pick = q.reward.unique === 'class_t1_choice' ? 'Hoja de sal' : rewardUniques(q.reward.unique, 'pala')[0].name;
+                const pick = q.reward.unique === 'class_t1_choice' ? 'Hoja de sal' : rewardUniques(q.reward.unique, 'paladin')[0].name;
                 assert.equal(ask('m_turnin', pick).ok, true); assert.equal(st.bag.at(-1)!.n, pick);
             } else {
                 const r = ask('m_turnin'); assert.equal(r.ok, true, `${q.name}: ${r.text}`);
-                if (q.reward.unique) { prize = st.bag.at(-1)!.n; assert.ok(rewardUniques('class_t1_random', 'pala').some((u) => u.name === prize)); assert.equal(st.bag.length, bag + 1); }
+                if (q.reward.unique) { prize = st.bag.at(-1)!.n; assert.ok(rewardUniques('class_t1_random', 'paladin').some((u) => u.name === prize)); assert.equal(st.bag.length, bag + 1); }
             }
             assert.equal(st.gold, gold + q.reward.gold, q.name); assert.equal(st.forge ?? 0, forge + (q.reward.forge ?? 0));
             if (q.id === 'colmillos') assert.ok((st.mats?.colmillo ?? 0) >= 8, 'entregar no gasta los colmillos');
@@ -222,8 +222,8 @@ test('encargo PvP: cuenta ganarle a la otra nación en mapa de facción, una vez
         w.playerConnected(`s-${name}-${w.mapId}`, name, () => {}, () => {}, persisted);
         mem.put(`acc-${name}-${w.mapId}`, { name, salt: '', hash: '', created: 0, lastLogin: 0 });
         w.bindAccount(`s-${name}-${w.mapId}`, `acc-${name}-${w.mapId}`);
-        w.onClientSave(`s-${name}-${w.mapId}`, JSON.stringify({ cls: 'pala', faction }));
-        w.handleClientPacket(`s-${name}-${w.mapId}`, { payload: { $case: 'changePlayerProfileRequest', value: { profile: `${faction};pala;` } } } as never);
+        w.onClientSave(`s-${name}-${w.mapId}`, JSON.stringify({ cls: 'paladin', faction }));
+        w.handleClientPacket(`s-${name}-${w.mapId}`, { payload: { $case: 'changePlayerProfileRequest', value: { profile: `${faction};paladin;` } } } as never);
         const p = w.playerOf(`s-${name}-${w.mapId}`)!; p.econ!.lvl = 10; p.econ!.qb!.d = { day: questDay(Date.now()), ids: ['frontera'], prog: { frontera: 0 }, done: [], ess: false, pvp: [] };
         return p;
     };
@@ -247,8 +247,8 @@ function partyWorld(mapId: string, names: string[], faction = 'solmar') {
         w.playerConnected(sid, name, () => {}, () => {}, persisted);
         mem.put(`acc-${name}`, { name, salt: '', hash: '', created: 0, lastLogin: 0 });
         w.bindAccount(sid, `acc-${name}`);
-        w.onClientSave(sid, JSON.stringify({ cls: 'pala', faction: fac }));
-        w.handleClientPacket(sid, { payload: { $case: 'changePlayerProfileRequest', value: { profile: `${fac};pala;` } } } as never);
+        w.onClientSave(sid, JSON.stringify({ cls: 'paladin', faction: fac }));
+        w.handleClientPacket(sid, { payload: { $case: 'changePlayerProfileRequest', value: { profile: `${fac};paladin;` } } } as never);
         return w.playerOf(sid)!;
     };
     const ps = names.map((n) => mk(n));

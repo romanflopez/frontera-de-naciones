@@ -512,7 +512,7 @@
   ]
  },
  "set_bases": {
-  "pala": {
+  "paladin": {
    "arma": [
     64,
     65,
@@ -737,7 +737,7 @@
  },
  "sets": {
   "cobre": [
-   "pala",
+   "paladin",
    1,
    "#b87333"
   ],
@@ -752,7 +752,7 @@
    "#d9c9a3"
   ],
   "hierroviejo": [
-   "pala",
+   "paladin",
    2,
    "#8a8f96"
   ],
@@ -767,7 +767,7 @@
    "#6b8e3a"
   ],
   "bruma": [
-   "pala",
+   "paladin",
    3,
    "#8fa6b8"
   ],
@@ -782,7 +782,7 @@
    "#9fe3d0"
   ],
   "alba": [
-   "pala",
+   "paladin",
    4,
    "#e8c34a"
   ],
@@ -797,7 +797,7 @@
    "#f0a0c0"
   ],
   "cenit": [
-   "pala",
+   "paladin",
    5,
    "#ffd24a"
   ],
@@ -812,7 +812,7 @@
    "#fff2c8"
   ],
   "hierronegro": [
-   "pala",
+   "paladin",
    6,
    "#3a3a42"
   ],
@@ -827,7 +827,7 @@
    "#f2c25a"
   ],
   "brasa": [
-   "pala",
+   "paladin",
    7,
    "#ff5a1f"
   ],

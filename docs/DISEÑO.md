@@ -36,7 +36,7 @@ Referencias: Helbreath (PvP, naciones, casteo, items), Dreadmyst (mazmorras, loo
 
 ## 4. Clases y stats
 
-- **Cuatro clases en el MVP: pala, clérigo, mago y arquero.** (En el código: `pala`, `clerigo`, `mago`, `arquero`; el arquero está registrado sin kit y no se puede crear todavía.) Roles: pala = melee/tank, dueño del golpe direccional y de los controles duros; clérigo = sustain y soporte, existe por las mazmorras; mago = daño mágico, dueño del `ground` (área y predicción); arquero = daño físico a distancia, dueño del `projectile` (aim en línea). Cuatro clases son 10 matchups de PvP: se balancean con `sim:pvp` después, no antes. No hay berserk: la Furia es un hechizo que da stats ofensivos, sin quitar defensa ni vida.
+- **Cuatro clases en el MVP: paladín, clérigo, mago y arquero.** (En el código: `paladin`, `clerigo`, `mago`, `arquero`; el arquero está registrado sin kit y no se puede crear todavía.) Roles: paladín = melee/tank, dueño del golpe direccional y de los controles duros; clérigo = sustain y soporte, existe por las mazmorras; mago = daño mágico, dueño del `ground` (área y predicción); arquero = daño físico a distancia, dueño del `projectile` (aim en línea). Cuatro clases son 10 matchups de PvP: se balancean con `sim:pvp` después, no antes. No hay berserk: la Furia es un hechizo que da stats ofensivos, sin quitar defensa ni vida.
 - **4 stats:** Fuerza (daño físico, requisitos de armas pesadas), Vitalidad (vida), Destreza (precisión, evasión, requisitos de arcos/armas livianas), Magia (maná, daño mágico, requisitos de hechizos). **Se elimina Inteligencia** (solo daba crit mágico, y el crit mágico se saca).
 - Stats iniciales fijos por clase. **3 puntos por nivel, a mano.** Reset: gratis hasta nivel 10, después por oro (`200 × nivel`), y un **ítem de reset en la tienda de gemas** (comodidad, no poder).
 - **Kits** de habilidades por clase, completos hacia el nivel 60.
@@ -110,7 +110,7 @@ Referencias: Helbreath (PvP, naciones, casteo, items), Dreadmyst (mazmorras, loo
 
 1. Un mundo compartido, sin mapas espejo ni shards.
 2. Tope 120, ~30 h al tope, 12 tiers de 10.
-3. Cuatro clases (pala, clérigo, mago, arquero), 4 stats, puntos a mano con reset.
+3. Cuatro clases (paladín, clérigo, mago, arquero), 4 stats, puntos a mano con reset.
 4. Magia no falla; crit solo físico y solo PvE; DF/RM con topes por semana.
 5. Paralizar con rendimiento decreciente + Remover propio.
 6. 7 bandas de ítems, 5 calidades, +N sin destrucción, botín personal.

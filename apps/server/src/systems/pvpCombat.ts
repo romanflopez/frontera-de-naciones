@@ -83,7 +83,7 @@ export const PVP_SPELLS: Record<string, PvpSpell> = {
 /** Hechizos cuyo control es un aturdido (no una parálisis): llevan su propio rendimiento decreciente. */
 export const STUN_SPELLS = new Set(['aturdir', 'escudo', 'reprender']);
 /**
- * Habilidades de clase (las valida y cobra el server): Mago = blink; Paladín (id interno 'pala', persistido) = carga, giro, grito.
+ * Habilidades de clase (las valida y cobra el server): Mago = blink; Paladín (id interno 'paladin', persistido) = carga, giro, grito.
  * Van aparte de PVP_SPELLS a propósito: no se pueden pedir por pvpHitRequest para pegar sin moverse.
  */
 export interface ClassSkill extends PvpSpell { cls: ClassId;
@@ -103,15 +103,15 @@ export const SKILLS: Record<string, ClassSkill> = {
     blink: { cls: 'mago', mp: 0, range: 7.25, cd: 12 },                                                                  // Parpadeo: sin maná (Valdrys)
     pasoluz: { cls: 'clerigo', mp: 0, range: 6.25, cd: 15 },                                                              // Paso de luz (K8): hasta 6 celdas, se saca el frenado
     nova: { cls: 'mago', mp: 60, dmg: [14, 21], k: 0.8, stat: 'mag', range: 0, cd: 8, aoe: 3, freeze: 2, cast: false }, // Nova de escarcha: congela 2 s alrededor
-    carga: { cls: 'pala', mp: 60, dmg: [14, 20], k: 0.6, stat: 'wdmg', range: VIEW_RANGE, cd: 18, melee: true, stun: 1, threat: 3 }, // Carga sagrada: aturde 1 s al llegar
-    giro: { cls: 'pala', mp: 36, dmg: [14, 20], k: 0.75, stat: 'wdmg', range: 0, cd: 8, melee: true, aoe: 2, sweeps: 2, threat: 3 }, // Barrido: 2 × 0,75
-    mandato: { cls: 'pala', mp: 42, range: 0, cd: 6, aoe: 6, taunt: 7 },                                              // Mandato: provoca a los monstruos cercanos 7 s
-    aura: { cls: 'pala', mp: 48, dmg: [14, 20], k: 0.25, stat: 'wdmg', range: 0, cd: 15, melee: true, aoe: 3, pulses: 20, every: 0.5, threat: 3 }, // Aura sagrada: 10 s de pulsos
+    carga: { cls: 'paladin', mp: 60, dmg: [14, 20], k: 0.6, stat: 'wdmg', range: VIEW_RANGE, cd: 18, melee: true, stun: 1, threat: 3 }, // Carga sagrada: aturde 1 s al llegar
+    giro: { cls: 'paladin', mp: 36, dmg: [14, 20], k: 0.75, stat: 'wdmg', range: 0, cd: 8, melee: true, aoe: 2, sweeps: 2, threat: 3 }, // Barrido: 2 × 0,75
+    mandato: { cls: 'paladin', mp: 42, range: 0, cd: 6, aoe: 6, taunt: 7 },                                              // Mandato: provoca a los monstruos cercanos 7 s
+    aura: { cls: 'paladin', mp: 48, dmg: [14, 20], k: 0.25, stat: 'wdmg', range: 0, cd: 15, melee: true, aoe: 3, pulses: 20, every: 0.5, threat: 3 }, // Aura sagrada: 10 s de pulsos
     // K8 (nivel 15 a 35). Id interno `grito` = Bendición de poder (reemplaza al Grito de guerra; el id queda por las barras guardadas).
-    represalia: { cls: 'pala', mp: 48, range: 0, cd: 30, cast: false, buff: 'represalia', buffSecs: 10 },             // Aura de represalia: 10 s
-    escudodivino: { cls: 'pala', mp: 45, range: 0, cd: 20, cast: false, shield: 0.6 },                                // Escudo divino: 60 % de la vida
-    grito: { cls: 'pala', mp: 48, range: 0, cd: 10, cast: true, aoe: 14, party: true, buff: 'poder', buffSecs: 60, buffSecsLong: BLESSING_LONG_S }, // Bendición de poder: +Daño (60 s en la arena, 15 min afuera)
-    amparo: { cls: 'pala', mp: 48, range: 0, cd: 10, cast: true, aoe: 14, party: true, buff: 'amparo', buffSecs: 60, buffSecsLong: BLESSING_LONG_S }, // Bendición de amparo: −6 % de daño (60 s en la arena, 15 min afuera)
+    represalia: { cls: 'paladin', mp: 48, range: 0, cd: 30, cast: false, buff: 'represalia', buffSecs: 10 },             // Aura de represalia: 10 s
+    escudodivino: { cls: 'paladin', mp: 45, range: 0, cd: 20, cast: false, shield: 0.6 },                                // Escudo divino: 60 % de la vida
+    grito: { cls: 'paladin', mp: 48, range: 0, cd: 10, cast: true, aoe: 14, party: true, buff: 'poder', buffSecs: 60, buffSecsLong: BLESSING_LONG_S }, // Bendición de poder: +Daño (60 s en la arena, 15 min afuera)
+    amparo: { cls: 'paladin', mp: 48, range: 0, cd: 10, cast: true, aoe: 14, party: true, buff: 'amparo', buffSecs: 60, buffSecsLong: BLESSING_LONG_S }, // Bendición de amparo: −6 % de daño (60 s en la arena, 15 min afuera)
     escudomana: { cls: 'mago', mp: 45, range: 0, cd: 10, cast: false, shield: 0.33 },                                     // Escudo de maná: 33 % de la vida
     clarividencia: { cls: 'mago', mp: 60, range: 0, cd: 30, cast: false, buff: 'clarividencia', buffSecs: 10 },           // Clarividencia: +25 % de crítico de hechizos
     intelecto: { cls: 'mago', mp: 60, range: 0, cd: 10, cast: true, aoe: 14, party: true, buff: 'intelecto', buffSecs: 90, buffSecsLong: BLESSING_LONG_S }, // Intelecto arcano: +Magia (90 s en la arena, 15 min afuera)
@@ -191,7 +191,7 @@ export const AOE_FALLOFF = 0.12, AOE_MIN_MULT = 0.5, AOE_GROUP_MS = 250;
 export const aoeMult = (index: number): number => Math.max(AOE_MIN_MULT, 1 - AOE_FALLOFF * Math.max(0, index));
 export const FURY_MS = 60000, FURY_CD_MS = 90000;
 /** Furia por clase: el mago la tira más fuerte (todo su daño), el paladín más débil. */
-export const FURY_MULT: Record<string, number> = { mago: 1.35, pala: 1.15, clerigo: 1.2 };
+export const FURY_MULT: Record<string, number> = { mago: 1.35, paladin: 1.15, clerigo: 1.2 };
 /** Costos de maná de los hechizos de utilidad que cobra el server (iguales a los del cliente). */
 export const UTIL_MP = { furia: 15, invisibilidad: 40, detectar: 30, remover: 30 } as const;
 /** Maná por clase (base, por nivel) y poción: mismas cuentas que el cliente. */
@@ -208,10 +208,10 @@ export const potionMp = (maxMp: number, pvp = false) => Math.max(pvp ? 20 : 40, 
 
 export interface CombatStats { lvl: number; /** Destreza y Magia repartidas (para la chance de golpe y de impacto mágico en PvP) */ dexStat?: number; magStat?: number; /** nivel de poder (escala vieja 1-40): el daño y las curas por nivel se miden con este */ plvl: number; cls: string; /** multiplicadores de daño por Fuerza (físico) y Magia (hechizos) */ meleeMult: number; magicMult: number; /** % de crítico en hechizos de daño (Inteligencia) */ critMag?: number; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; /** crítico total %, velocidad de ataque %, robo de vida % y chance de veneno % (ya con topes) */ crit: number; aspd: number; leech: number; poison: number; savedHp: number; maxMp: number; savedMp: number; /** K8: Daño base extra (Bendición de poder) */ dmgBonus: number; /** efectos especiales de los ítems Dorado de jefe puestos (docs/ITEMS.md): quemadura, aturdir, vampirismo */ fx?: string[] }
 
-export const DEFAULT_STATS: CombatStats = { lvl: 1, plvl: 1, cls: 'pala', meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 140, maxMp: 40, savedMp: 40, dmgBonus: 0 };
+export const DEFAULT_STATS: CombatStats = { lvl: 1, plvl: 1, cls: 'paladin', meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 140, maxMp: 40, savedMp: 40, dmgBonus: 0 };
 
 /** Las bases de items son las compartidas de @fdn/world (el cliente usa las mismas). */
-const MELEE: Record<string, [number, number]> = { pala: [5, 9], mago: [2, 4], clerigo: [3, 6] };
+const MELEE: Record<string, [number, number]> = { paladin: [5, 9], mago: [2, 4], clerigo: [3, 6] };
 
 /** Lo mínimo del personaje que hace falta para calcular los stats de combate: nivel, clase, vida/maná guardados y el EQUIPO. */
 export interface StatSource { lvl: number; cls: string; stats?: Stats; hp?: number; mp?: number; eq: Partial<Record<string, { n: string; r?: number; a?: { id: string; v: number }[]; up?: number } | null>> }
@@ -219,7 +219,7 @@ export interface StatSource { lvl: number; cls: string; stats?: Stats; hp?: numb
 /** Stats de combate a partir del personaje del server (equipo autoritativo, ver economy.ts). */
 export function statsFromChar(o: StatSource | undefined, uncapCrit = false): CombatStats {
     if (!o) return { ...DEFAULT_STATS };
-    const cls = isClass(o.cls) ? o.cls : 'pala', lvl = Math.max(1, Math.min(MAX_LEVEL, Number(o.lvl) || 1));
+    const cls = isClass(o.cls) ? o.cls : 'paladin', lvl = Math.max(1, Math.min(MAX_LEVEL, Number(o.lvl) || 1));
     const s: CombatStats = { lvl, plvl: Math.round(powerLevel(lvl)), cls, meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 0, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 1, maxMp: 0, savedMp: 0, dmgBonus: 0 };
     let bonusHp = 0, bonusMp = 0, itemDmg = 0, itemCrit = 0, itemAspd = 0, itemLeech = 0, itemDf = 0, itemRm = 0;
     const names: string[] = [], fx = new Set<string>();
@@ -260,7 +260,7 @@ export function progressFromEcon(st: { lvl: number; q: { i: number; keys: Record
  * Chance de que un golpe de jugador le pegue a otro jugador: `lo que ataca / lo que defiende × K`, topeada entre 10 % y 90 %.
  * Físico: ataca 100 + (DEX − 50) si DEX > 50; defiende 2 × DEX del objetivo. Mágico: ataca 100 + (MAG − 50) si MAG > 50; defiende 100 + (MAG − 50)
  * del objetivo. La armadura (DF/RM) NO entra acá: ya mitiga el daño después. Solo vale contra jugadores (los monstruos no esquivan).
- * `K` de la referencia es 50 y ahí la armadura entra en la defensa; acá la armadura mitiga el daño aparte, y con K = 90 un duelo parejo dura lo mismo que sin tirada de golpe (calibrado con `sim:pvp`: con 50 el paladín contra pala tardaba 133 s en vez de 48).
+ * `K` de la referencia es 50 y ahí la armadura entra en la defensa; acá la armadura mitiga el daño aparte, y con K = 90 un duelo parejo dura lo mismo que sin tirada de golpe (calibrado con `sim:pvp`: con 50 el paladín contra paladin tardaba 133 s en vez de 48).
  */
 export const HIT = { skill: 100, k: Number(process.env.FDN_HITK) || 90, min: 10, max: 90, threshold: 50 };
 /** Encendido salvo bajo `node --test` (los tests de combate no dependen del azar; los de golpe lo prenden a mano) o con FDN_HITROLL=0. */
@@ -316,7 +316,7 @@ export function potionHpSplit(total: number): number[] {
 export const PVP_COMBAT_MS = 10000;
 /**
  * Multiplicador global del daño contra jugadores. Calibrado con `sim:pvp` (K7): con ×0,6 ninguna pelea terminaba (la vida
- * de los jugadores ya se había multiplicado ×4,24 para peleas largas). Con ×1 pala contra mago y los espejos de paladín
+ * de los jugadores ya se había multiplicado ×4,24 para peleas largas). Con ×1 paladin contra mago y los espejos de paladín
  * duran 25-40 s (a nivel 120 con 357 puntos de estadísticas hizo falta ×1,5). Queda como palanca: si la vida o el daño cambian, se vuelve a correr la simulación.
  */
 export const PVP_DMG_MULT = 1.5;
@@ -359,7 +359,7 @@ export const BASE_LVL_K = 2;
 export function rollSpellDamage(id: string, s: CombatStats, fury: boolean): number {
     const sp = PVP_SPELLS[id] ?? SKILLS[id]; if (!sp || !sp.dmg) return 0;
     const bonus = s.dmgBonus ?? 0; // Bendición de poder
-    let d = id === 'ataque' ? rint(...(MELEE[s.cls] ?? MELEE.pala)) + s.plvl + rint(s.wdmg[0], s.wdmg[1]) + bonus
+    let d = id === 'ataque' ? rint(...(MELEE[s.cls] ?? MELEE.paladin)) + s.plvl + rint(s.wdmg[0], s.wdmg[1]) + bonus
         : sp.k !== undefined ? (rint(sp.dmg[0], sp.dmg[1]) + s.plvl * BASE_LVL_K + (sp.stat === 'mag' ? s.mag : rint(s.wdmg[0], s.wdmg[1])) + bonus) * sp.k // múltiplo del Daño base (Valdrys)
         : rint(sp.dmg[0], sp.dmg[1]) + s.plvl * (sp.lvlK ?? 0) + (sp.stat === 'mag' ? s.mag : sp.stat === 'wdmg' ? rint(s.wdmg[0], s.wdmg[1]) : 0) + bonus;
     d = Math.round(d * (id === 'ataque' || sp.stat === 'wdmg' || sp.stat === 'melee' || sp.melee ? s.meleeMult : sp.stat === 'mag' ? s.magicMult : 1)); // Fuerza / Magia

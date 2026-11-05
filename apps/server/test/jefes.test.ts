@@ -21,7 +21,7 @@ function arena(type: MobType, at: { x: number; y: number }[] = [{ x: 20, y: 21 }
     const timers: { at: number; fn: () => void }[] = [];
     const players = at.map((c, i) => ({
         playerId: BigInt(10 + i), characterName: `p${i}`, posX: c.x, posY: c.y, disconnected: false, isDead: false, status: { isInvisible: false },
-        combat: statsFromChar({ lvl: 10, cls: 'pala', eq: {} }), pvp: new PvpLimiter(), send: (m: ServerMessage) => sent.push(m),
+        combat: statsFromChar({ lvl: 10, cls: 'paladin', eq: {} }), pvp: new PvpLimiter(), send: (m: ServerMessage) => sent.push(m),
     })) as unknown as Player[];
     const grid = (v: boolean) => Array.from({ length: N }, () => new Array<boolean>(N).fill(v));
     const zones: Zone[] = [{ type, x: 20, y: 20, r: 0, n: 1, name: 'Sala del jefe' }];

@@ -1,4 +1,4 @@
-/** D.0: renombres de clase (guerrero -> pala, healer -> clerigo) y esqueleto del arquero. */
+/** D.0: renombres de clase (guerrero -> paladin, healer -> clerigo) y esqueleto del arquero. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CLASS_IDS, CLASS_KITS, CREATABLE_CLASS_IDS, canUseSkill, canonicalClass, isClass } from '@fdn/world';
@@ -6,14 +6,14 @@ import { ECON_VERSION, importLegacy, migrateEcon, newEcon, newEconChecked } from
 import { sanitizeCharacter } from '../src/accounts.ts';
 
 test('A: isClass acepta los ids nuevos y rechaza los viejos', () => {
-    for (const c of ['pala', 'clerigo', 'mago', 'arquero']) assert.equal(isClass(c), true, c);
-    for (const c of ['guerrero', 'healer', 'paladin', '', 'constructor']) assert.equal(isClass(c), false, c);
+    for (const c of ['paladin', 'clerigo', 'mago', 'arquero']) assert.equal(isClass(c), true, c);
+    for (const c of ['guerrero', 'healer', 'pala', '', 'constructor']) assert.equal(isClass(c), false, c);
 });
 
 test('A: canonicalClass traduce solo los ids viejos', () => {
-    assert.equal(canonicalClass('guerrero'), 'pala');
+    assert.equal(canonicalClass('guerrero'), 'paladin');
     assert.equal(canonicalClass('healer'), 'clerigo');
-    for (const c of ['pala', 'clerigo', 'mago', 'arquero', 'otra', 'constructor', '__proto__']) assert.equal(canonicalClass(c), c);
+    for (const c of ['paladin', 'clerigo', 'mago', 'arquero', 'otra', 'constructor', '__proto__']) assert.equal(canonicalClass(c), c);
 });
 
 test('A: el arquero está registrado, sin kit y sin poder crearse', () => {
@@ -28,7 +28,7 @@ test('H: el server no deja crear un arquero aunque el cliente lo pida', () => {
     assert.equal(sanitizeCharacter(JSON.stringify({ faction: 'solmar', cls: 'arquero' })), null);
 });
 
-for (const [viejo, nuevo] of [['guerrero', 'pala'], ['healer', 'clerigo']] as const) {
+for (const [viejo, nuevo] of [['guerrero', 'paladin'], ['healer', 'clerigo']] as const) {
     test(`F: una cuenta guardada como ${viejo} sigue siendo su clase (${nuevo})`, () => {
         const st = newEcon(nuevo, 'solmar');
         st.cls = viejo; st.v = 6; st.lvl = 12; st.gold = 777;
@@ -46,7 +46,7 @@ for (const [viejo, nuevo] of [['guerrero', 'pala'], ['healer', 'clerigo']] as co
 }
 
 test('F: migrar no cambia a mago ni a una clase ya renombrada', () => {
-    for (const c of ['mago', 'pala', 'clerigo']) {
+    for (const c of ['mago', 'paladin', 'clerigo']) {
         const st = newEcon(c, 'solmar'); st.v = 6;
         migrateEcon(st); assert.equal(st.cls, c);
     }

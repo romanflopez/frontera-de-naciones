@@ -32,7 +32,7 @@ Código: `apps/client/index.html` (bloque `#login`), `apps/client/src/loginui.ts
 
 **Falta**
 - [x] Detalle del personaje: el mapa donde quedó ya está; **agregar última conexión** (Román, 5/11). EK cuando exista.
-- [ ] **Logo/escudo de cada nación** (Solmar, Vhar) y **emblema de cada clase** (pala, clérigo, mago, arquero): hoy se dibujan por código (`shield()`, `clsIcon()`). Román define si van como arte propio o quedan por código.
+- [ ] **Logo/escudo de cada nación** (Solmar, Vhar) y **emblema de cada clase** (paladín, clérigo, mago, arquero): hoy se dibujan por código (`shield()`, `clsIcon()`). Román define si van como arte propio o quedan por código.
 
 ## 3. Crear personaje
 

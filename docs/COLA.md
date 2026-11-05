@@ -6,7 +6,7 @@ columna "Probás" y mergea. Recién ahí arranca el siguiente. Si un paso deja a
 
 | # | Paso | Depende de | Probás vos (2 minutos) |
 |---|---|---|---|
-| 1 | **D.0** Renombres pala/clérigo + esqueleto arquero | — | Entrás con un personaje viejo y sigue siendo su clase; crear personaje muestra 3 clases con nombres nuevos |
+| 1 | **D.0** Renombres paladín/clérigo + esqueleto arquero | — | Entrás con un personaje viejo y sigue siendo su clase; crear personaje muestra 3 clases con nombres nuevos |
 | 2 | **D.14** Entrada sin flash de HUD | — | Login → no se ve HUD ni chat hasta que aparece el mapa; cambiar de mapa igual |
 | 3 | **D.13** Cursor nativo | — | El mouse responde al instante; el clic cae en la celda bajo la flecha; el anillo de casteo sigue andando |
 | 4 | **D.12** Movilidad | D.13 (para probar bien) | Correr es el default; caminás solo al castear; se siente rápido. Si no, tocás los dos números y repetís |

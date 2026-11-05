@@ -234,7 +234,7 @@ function totals() {
 // ---------- clases ----------
 interface ClassDef { id: string; name: string; hidden?: boolean; desc: string; head: string; armor?: string; hp: number; hpL: number; mp: number; mpL: number; melee: [number, number]; weapon: string; spells: string[] }
 const CLASSES: ClassDef[] = [
-    { id: 'pala', name: 'Paladín', desc: 'Tanque: aguanta, aturde y pega cuerpo a cuerpo.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'juicio', 'escudo', 'mandato', 'aturdir', 'aura', 'represalia', 'escudodivino', 'amparo', 'furia', 'giro', 'carga', 'grito', 'remover', 'aliento'] },
+    { id: 'paladin', name: 'Paladín', desc: 'Tanque: aguanta, aturde y pega cuerpo a cuerpo.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'juicio', 'escudo', 'mandato', 'aturdir', 'aura', 'represalia', 'escudodivino', 'amparo', 'furia', 'giro', 'carga', 'grito', 'remover', 'aliento'] },
     { id: 'mago', name: 'Mago', desc: 'Frágil: frío para frenar, fuego para rematar.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 200, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'esquirla', 'paralisis', 'nova', 'ignicion', 'bola', 'lluvia', 'escudomana', 'clarividencia', 'intelecto', 'furia', 'remover', 'invisibilidad', 'detectar', 'blink', 'aliento'] },
     { id: 'clerigo', name: 'Clérigo', desc: 'Apoyo: cura, bendice y corta casteos.', head: 'head_short', armor: 'Túnica de mago', hp: 110, hpL: 14, mp: 110, mpL: 13, melee: [3, 6], weapon: 'Báculo de fresno', spells: ['castigo', 'curacion', 'renovar', 'bendicion', 'novasagrada', 'reprender', 'orbe', 'guardian', 'esfera', 'grupo', 'furia', 'pasoluz', 'despertar', 'detectar', 'aliento'] },
     { id: 'arquero', name: 'Arquero', hidden: true, desc: 'Sin kit todavía.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: [] }, // esqueleto (D.0): no se puede crear hasta que tenga kit
@@ -456,7 +456,7 @@ function onMobDamaged(v: { mobId: number; attackerId: bigint; dmg: number; crit:
     const mine = v.attackerId === myId, poisonTick = v.dmg === 3 && !v.crit && m.poison > now();
     m.hp = v.hp; m.flash = 0.12;
     if (mine && !poisonTick && /goblin/.test(m.sprite ?? '')) sfx('goblin-hit', 0.6); // quejido del goblin (y de sus variantes) al recibir un golpe mío
-    if (mine && !poisonTick && CLS.id === 'pala' && now() - lastMeleeReq < 0.6) {
+    if (mine && !poisonTick && CLS.id === 'paladin' && now() - lastMeleeReq < 0.6) {
         sfx(v.crit ? 'sword-crit' : 'sword-attack', v.crit ? 0.85 : 0.5);
         efxLocal(v.crit ? 'critico' : 'impacto', m.x, m.y); // chispazo del golpe (solo lo veo yo)
         // crítico con el skin del caballero: golpe desde arriba (arranca con la espada ya levantada para que caiga junto con el número)
@@ -3153,7 +3153,7 @@ function storedId(name: string): string {
     return id;
 }
 try { const f = localStorage.getItem('fdn:faction'); if (FACTIONS.some((x) => x.id === f)) selectedFaction = f!; } catch { /* sin almacenamiento */ }
-let selectedClass = 'pala';
+let selectedClass = 'paladin';
 try { const c = localStorage.getItem('fdn:class'); if (CLASSES.some((x) => x.id === c && !x.hidden)) selectedClass = c!; } catch { /* sin almacenamiento */ }
 // pantallas de login / selección / clase / facción / creación (ver loginui.ts)
 const flow = initLoginUI({

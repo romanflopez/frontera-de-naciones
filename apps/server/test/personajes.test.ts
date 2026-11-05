@@ -16,7 +16,7 @@ class MemStorage implements Storage {
 const acct = (st: MemStorage, name: string, extra: Partial<AccountRecord> = {}): string => {
     const key = accountKey(name); st.put(key, { name, salt: 'aa', hash: 'bb', created: 1, lastLogin: 1, ...extra }); return key;
 };
-const mk = (st: MemStorage, acc: string, name: string) => createCharacter(st, acc, name, newEcon('pala', 'solmar'));
+const mk = (st: MemStorage, acc: string, name: string) => createCharacter(st, acc, name, newEcon('paladin', 'solmar'));
 
 test('una cuenta nueva no tiene personajes y puede crear hasta 3', () => {
     const st = new MemStorage(), a = acct(st, 'ana');

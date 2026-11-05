@@ -24,13 +24,13 @@ Math.random = rnd;
 const rint = (a: number, b: number) => Math.floor(a + rnd() * (b - a + 1));
 const DT = 0.05, CAST_T = 0.7, RELEASE_S = 0.2 /* tiempo humano entre "listo" y soltar el hechizo */, STEP = 3.7 /* celdas/s */;
 
-type Cls = 'mago' | 'pala';
+type Cls = 'mago' | 'paladin';
 type Policy = 'basico' | 'avanzado' | 'quieto';
 interface Sc { cls: Cls; lvl: number; mob: MobType; n: number; policy: Policy }
 interface Res { win: boolean; t: number; tDeath: number; hpLeft: number; hpPots: number; mpPots: number; kills: number[]; firstContact: number }
 
-const KIT: Record<Cls, { arma: string; armadura: string }> = { pala: { arma: 'Espada corta', armadura: 'Coraza de cuero' }, mago: { arma: 'Báculo de fresno', armadura: 'Túnica de mago' } };
-const MELEE: Record<Cls, [number, number]> = { pala: [5, 9], mago: [2, 4] };
+const KIT: Record<Cls, { arma: string; armadura: string }> = { paladin: { arma: 'Espada corta', armadura: 'Coraza de cuero' }, mago: { arma: 'Báculo de fresno', armadura: 'Túnica de mago' } };
+const MELEE: Record<Cls, [number, number]> = { paladin: [5, 9], mago: [2, 4] };
 /** Variantes para probar propuestas de balance SIN tocar el juego: SIM_MAGE_HP=20 (vida base extra del mago), SIM_ELITE_DMG=4,7 (daño del goblin de élite). */
 const MAGE_HP = Number(process.env.SIM_MAGE_HP) || 0;
 if (process.env.SIM_ELITE_DMG) { const [a, b] = process.env.SIM_ELITE_DMG.split(',').map(Number); MOBS.goblin_elite.dmg = [a, b]; }
@@ -116,7 +116,7 @@ class Sim {
             if (d <= 1.9 && T >= this.nextMelee) { this.nextMelee = T + 0.85; this.act = { kind: 'melee', start: T, fireAt: T + 0.18, mobId: tgt.id, ready: false }; }
             return;
         }
-        // pala
+        // paladin
         if (d > 1.6) { walk(tgt, 1.2); return; }
         const adj = this.alive.filter((m) => this.dist(m) <= 1.9).length;
         if (sc.policy === 'avanzado' && adj >= 2 && p.mp >= 8 && T >= this.giroCd) { // giro: instantáneo, daño de área (lo calcula el server)
@@ -135,7 +135,7 @@ class Sim {
             let d = rint(...MELEE[sc.cls]) + sc.lvl + rint(c.wdmg[0], c.wdmg[1]); if (rnd() < 0.05) d = Math.round(d * 1.8);
             this.hit(m.id, d, true); return;
         }
-        if (sc.cls === 'pala') { // golpe brutal
+        if (sc.cls === 'paladin') { // golpe brutal
             if (p.mp < 10 || this.dist(m) > 1.9) return; p.mp -= 10;
             this.hit(m.id, rint(14, 20) + 2 * sc.lvl + rint(c.wdmg[0], c.wdmg[1]), true); return;
         }
@@ -195,10 +195,10 @@ const NAMES: Partial<Record<MobType, string>> = { goblin: 'goblin', goblin_elite
 
 log(`Combates simulados: ${RUNS} por celda. Mobs agrupados a ~6 celdas, el jugador no huye ni usa Blink/parálisis. Pociones: vida a <40 %, 3+3 iniciales.`);
 for (const policy of ['basico', 'avanzado'] as Policy[]) {
-    log(`\n### Política ${policy === 'basico' ? 'básica (mago: Proyectil; pala: ataque cuerpo a cuerpo)' : 'avanzada (mago: Proyectil + Bola de fuego en grupos; pala: Golpe brutal + Giro)'}`);
+    log(`\n### Política ${policy === 'basico' ? 'básica (mago: Proyectil; paladin: ataque cuerpo a cuerpo)' : 'avanzada (mago: Proyectil + Bola de fuego en grupos; paladin: Golpe brutal + Giro)'}`);
     log('| Clase | Nv | Mob | Cant. | Gana | T medio combate (s) | T hasta morir desde el contacto (s, mediana) | Vida que queda al ganar | Pociones vida | Mató antes de morir |');
     log('|---|---|---|---|---|---|---|---|---|---|');
-    for (const cls of ['mago', 'pala'] as Cls[]) for (const lvl of [1, 2, 3]) for (const mob of ['goblin', 'goblin_elite'] as MobType[]) for (const n of [1, 2, 4, 6]) {
+    for (const cls of ['mago', 'paladin'] as Cls[]) for (const lvl of [1, 2, 3]) for (const mob of ['goblin', 'goblin_elite'] as MobType[]) for (const n of [1, 2, 4, 6]) {
         const rs: Res[] = []; for (let i = 0; i < RUNS; i++) rs.push(fight({ cls, lvl, mob, n, policy }));
         const wins = rs.filter((r) => r.win), losses = rs.filter((r) => !r.win);
         log(`| ${cls} | ${lvl} | ${NAMES[mob]} | ${n} | ${Math.round((wins.length / RUNS) * 100)} % | ${f1(avg(wins.map((r) => r.t)))} | ${f1(med(losses.map((r) => r.tDeath)))} | ${wins.length ? Math.round(avg(wins.map((r) => r.hpLeft)) * 100) + ' %' : '-'} | ${f1(avg(rs.map((r) => r.hpPots)))} | ${f1(avg(losses.map((r) => r.kills.length)))} |`);
@@ -208,7 +208,7 @@ for (const policy of ['basico', 'avanzado'] as Policy[]) {
 log('\n### Jugador quieto (sin atacar ni tomar pociones): segundos desde el primer golpe recibido hasta morir (mediana)');
 log('| Clase | Nv | Mob | 1 | 2 | 4 | 6 |');
 log('|---|---|---|---|---|---|---|');
-for (const cls of ['mago', 'pala'] as Cls[]) for (const lvl of [1, 2, 3]) for (const mob of ['goblin', 'goblin_elite'] as MobType[]) {
+for (const cls of ['mago', 'paladin'] as Cls[]) for (const lvl of [1, 2, 3]) for (const mob of ['goblin', 'goblin_elite'] as MobType[]) {
     const cells = [1, 2, 4, 6].map((n) => { const rs: Res[] = []; for (let i = 0; i < RUNS; i++) rs.push(fight({ cls, lvl, mob, n, policy: 'quieto' })); return f1(med(rs.filter((r) => !r.win).map((r) => r.tDeath))); });
     log(`| ${cls} | ${lvl} | ${NAMES[mob]} | ${cells.join(' | ')} |`);
 }
@@ -216,7 +216,7 @@ for (const cls of ['mago', 'pala'] as Cls[]) for (const lvl of [1, 2, 3]) for (c
 log('\n### Tiempo por kill (1 mob, jugador nuevo, sin interferencias)');
 log('| Clase | Nv | Mob | Política | Segundos hasta matar (media) |');
 log('|---|---|---|---|---|');
-for (const cls of ['mago', 'pala'] as Cls[]) for (const lvl of [1, 2, 3]) for (const mob of ['goblin', 'goblin_elite'] as MobType[]) for (const policy of ['basico', 'avanzado'] as Policy[]) {
+for (const cls of ['mago', 'paladin'] as Cls[]) for (const lvl of [1, 2, 3]) for (const mob of ['goblin', 'goblin_elite'] as MobType[]) for (const policy of ['basico', 'avanzado'] as Policy[]) {
     const ts: number[] = []; for (let i = 0; i < RUNS; i++) { const r = fight({ cls, lvl, mob, n: 1, policy }); if (r.win) ts.push(r.t); }
     log(`| ${cls} | ${lvl} | ${NAMES[mob]} | ${policy} | ${f1(avg(ts))} |`);
 }
@@ -227,7 +227,7 @@ log(`Kills: ${Math.ceil(need(1) / MOBS.goblin.exp)} goblins o ${Math.ceil(need(1
 log('| Clase | Mob | Política | Minutos (media) | Muertes (media) | Kills |');
 log('|---|---|---|---|---|---|');
 const GR = Math.max(10, Math.round(RUNS / 15));
-for (const cls of ['mago', 'pala'] as Cls[]) for (const mob of ['goblin', 'goblin_elite'] as MobType[]) for (const policy of ['basico', 'avanzado'] as Policy[]) {
+for (const cls of ['mago', 'paladin'] as Cls[]) for (const mob of ['goblin', 'goblin_elite'] as MobType[]) for (const policy of ['basico', 'avanzado'] as Policy[]) {
     const rs = Array.from({ length: GR }, () => grind(cls, mob, 3, policy, need(1)));
     log(`| ${cls} | ${NAMES[mob]} | ${policy} | ${f1(avg(rs.map((r) => r.secs)) / 60)} | ${f1(avg(rs.map((r) => r.deaths)))} | ${f1(avg(rs.map((r) => r.kills)))} |`);
 }

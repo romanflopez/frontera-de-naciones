@@ -9,12 +9,12 @@
  * Furia, invisibilidad y detectar son utilidad compartida (recargas en K6). Segundo aliento (`aliento`) es común a todas las clases.
  */
 
-export type ClassId = 'pala' | 'mago' | 'clerigo' | 'arquero';
+export type ClassId = 'paladin' | 'mago' | 'clerigo' | 'arquero';
 
 /** Habilidad → nivel mínimo, por clase. `ataque` (golpe básico) lo tienen todas. */
 const KITS_BASE: Record<ClassId, Readonly<Record<string, number>>> = {
     // `grito` = Bendición de poder (id viejo del Grito de guerra, queda por las barras guardadas)
-    pala: {
+    paladin: {
         ataque: 1, golpe: 1, juicio: 1, giro: 3, escudo: 5, mandato: 7, aturdir: 9, aura: 12, escudodivino: 15, carga: 20, represalia: 25, grito: 30, amparo: 35,
         furia: 1, remover: 1, aliento: 1,
     },
@@ -45,13 +45,13 @@ export const CLASS_KITS: Record<ClassId, Readonly<Record<string, number>>> = Obj
 ) as Record<ClassId, Readonly<Record<string, number>>>;
 
 /** Clases registradas, en el orden en que se muestran. */
-export const CLASS_IDS: readonly ClassId[] = ['pala', 'mago', 'clerigo', 'arquero'];
+export const CLASS_IDS: readonly ClassId[] = ['paladin', 'mago', 'clerigo', 'arquero'];
 
 /** Clases con las que se puede crear un personaje. El arquero entra acá cuando tenga kit. */
-export const CREATABLE_CLASS_IDS: readonly ClassId[] = ['pala', 'mago', 'clerigo'];
+export const CREATABLE_CLASS_IDS: readonly ClassId[] = ['paladin', 'mago', 'clerigo'];
 
 /** Ids viejos que pueden venir de datos guardados (D.0). Solo para leer: nada nuevo se escribe con estos nombres. */
-const LEGACY_CLASS_IDS: Readonly<Record<string, ClassId>> = { guerrero: 'pala', healer: 'clerigo' };
+const LEGACY_CLASS_IDS: Readonly<Record<string, ClassId>> = { guerrero: 'paladin', healer: 'clerigo' };
 
 /** Traduce un id de clase viejo al actual; cualquier otro valor vuelve igual. */
 export const canonicalClass = (cls: string): string => (Object.hasOwn(LEGACY_CLASS_IDS, cls) ? LEGACY_CLASS_IDS[cls] : cls);

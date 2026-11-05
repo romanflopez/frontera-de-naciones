@@ -31,7 +31,7 @@ Estado de partida (`main`, 1/11): 140 de 141 tests del server en verde (1 saltea
 | Decisión | Bloquea | Valor por defecto |
 |---|---|---|
 | Curva de nivel (exponente de la exp por bicho) | 1.1 | 0,15 (≈ 30 h de veterano hasta el 40) |
-| Cuánto más rápido puede subir el mago en área | 1.4 | máximo 1,6× el pala |
+| Cuánto más rápido puede subir el mago en área | 1.4 | máximo 1,6× el paladín |
 | **Nivel máximo de un ítem y tamaño de banda** (Román: 30 o 35 como máximo de ítem; bandas de 4 o 5) | 3.1 | **Máximo 30, bandas de 5 = 6 bandas** (son los T1-T6 que ya existen en el código y calzan 1 a 1 con las 6 mazmorras). Los niveles 31-40 se juegan con el mismo equipo y se mejoran con +N, runas, ángel, stats y unas pocas armas legendarias |
 | **Tope de bichos que se juntan** (Román: en Helbreath se junta una banda) | 1.4 | Sin tope duro de bichos en aggro; tope de **objetivos por golpe de área** (5 para Bola y Lluvia, 4 para Giro) + el riesgo natural de recibir el daño de toda la banda (ver 1.4) |
 | **Qué se vende con monedas y si pueden usarse en la subasta** (Román quiere ítems exclusivos que incentiven donar) | 3.7 / 0.3 | Monedas solo para **cosmética y conveniencia** (auras, títulos, espacios, tickets). Si se aceptan en la subasta, que sea como mercado entre jugadores y no como tienda de poder. Ver la nota de monetización abajo |
@@ -89,7 +89,7 @@ Estado de partida (`main`, 1/11): 140 de 141 tests del server en verde (1 saltea
 - B: nivel 40 matando bichos nivel 1 recibe exp cero; nivel 5 en party con un 40 en un pit alto recibe la exp reducida.
 - F: una cuenta guardada con nivel mayor a 40 se recorta a 40 sin perder objetos.
 - D: `sim-arranque.ts` extendido a 40: horas por tramo dentro de ±25 % de la meta (modelo un bicho: 0,9 h hasta el 10, 6 h hasta el 20, 24 h hasta el 30, 60 h hasta el 40).
-- E: pala y mago nuevos de 1 a 10 midiendo el tiempo real (objetivo: menos de una hora).
+- E: paladín y mago nuevos de 1 a 10 midiendo el tiempo real (objetivo: menos de una hora).
 **Listo cuando:** tests verdes, la simulación en meta y un veterano de prueba llega al 40 en un tiempo cercano a la meta (~30 h en área).
 
 ### 1.2 Puntos de stats (M-L)
@@ -121,7 +121,7 @@ Estado de partida (`main`, 1/11): 140 de 141 tests del server en verde (1 saltea
 **Pruebas:**
 - A: daño con 1, 2, 3 y 6 objetivos; los multiplicadores de exp por habilidad.
 - B: un mob con vida baja huye según su valentía y no en el resto; un mob anti-mágico recibe el daño reducido de verdad; el mutante da ×3.
-- D: simulación en un pit: el mago en área obtiene ≤ 1,6× la exp por hora del pala.
+- D: simulación en un pit: el mago en área obtiene ≤ 1,6× la exp por hora del paladín.
 - G: un mapa con 60 mobs y mutantes con p95 del tick estable.
 - E: pasar 15 minutos en un pit con cada clase y anotar si se siente repetitivo.
 **Listo cuando:** la ventaja del área está acotada y los pits tienen variedad.
@@ -148,8 +148,8 @@ Estado de partida (`main`, 1/11): 140 de 141 tests del server en verde (1 saltea
 ### 2.3 Jefes de mazmorra (L)
 **Hacer:** dos habilidades por jefe (la actual y una de área o invocación), vida ~11× la curva, premio de un ítem propio por compañero cercano.
 **Pruebas:**
-- D: simulación de grupo: un pala solo pierde; 3-4 jugadores ganan en 2-3 minutos.
-- D: **matriz de composiciones** contra cada jefe: 4 palas, 4 magos y un grupo mixto tienen que poder ganar (el mixto, más rápido). La party no restringe por clase.
+- D: simulación de grupo: un paladín solo pierde; 3-4 jugadores ganan en 2-3 minutos.
+- D: **matriz de composiciones** contra cada jefe: 4 paladines, 4 magos y un grupo mixto tienen que poder ganar (el mixto, más rápido). La party no restringe por clase.
 - B: la curación a un aliado del mago cura de verdad, cuesta maná, respeta la recarga y no cura a jugadores de otra nación.
 - B: el drop del jefe llega una vez por compañero cercano y nunca se duplica; un compañero lejos o muerto no cobra.
 - E: pelear cada jefe con un grupo real y anotar si las habilidades se pueden esquivar o resolver.
@@ -335,7 +335,7 @@ Contador EK por personaje; contribución por nación; tienda de contribución (v
 `frontera` y el objetivo `pvp` pasan a `minLvl: 61` y a "ganar una pelea en zona roja" (depende de D.5); recompensas `forge` pasan a zem (con D.9). **Pruebas:** A `quests.test`; E encargo del día a nivel 61 en zona roja.
 
 ### D.0 Renombres y esqueleto del arquero (S) — va primero, bloquea a los demás
-`guerrero` → `pala`, `healer` → `clerigo` en `kits.ts`, `stats.ts`, sims, cliente, docs y tests (con alias de lectura para cuentas guardadas: `migrateEcon`). Clase `arquero` registrada con kit vacío y oculta en la pantalla de crear hasta que tenga kit. **Pruebas:** F migración de cuentas con clase vieja; A `isClass`; typecheck entero.
+`guerrero` → `paladin`, `healer` → `clerigo` en `kits.ts`, `stats.ts`, sims, cliente, docs y tests (con alias de lectura para cuentas guardadas: `migrateEcon`). Clase `arquero` registrada con kit vacío y oculta en la pantalla de crear hasta que tenga kit. **Pruebas:** F migración de cuentas con clase vieja; A `isClass`; typecheck entero.
 
 ### D.12 Movilidad (S, jugando)
 `movementSpeedMs` a 280/170 como primera prueba; correr por defecto, caminar solo al castear; aceleración al arrancar/frenar y giro. Se decide probando con 2 personas. **Pruebas:** E.

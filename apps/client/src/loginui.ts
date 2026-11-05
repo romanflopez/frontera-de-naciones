@@ -38,12 +38,12 @@ const $ = (id: string) => document.getElementById(id)!;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-const CLS_COL: Record<string, string> = { mago: '#b872ff', pala: '#ff5a3c', clerigo: '#f2d36b' };
-const CLS_TAG: Record<string, string> = { mago: 'Domina el poder arcano', pala: 'Lucha con honor', clerigo: 'Sostiene al grupo' };
+const CLS_COL: Record<string, string> = { mago: '#b872ff', paladin: '#ff5a3c', clerigo: '#f2d36b' };
+const CLS_TAG: Record<string, string> = { mago: 'Domina el poder arcano', paladin: 'Lucha con honor', clerigo: 'Sostiene al grupo' };
 const CLS_LORE: Record<string, string> = {
     mago: 'Los magos canalizan la energía arcana a través de sus hechizos. Pegan de lejos, congelan y queman, pero necesitan maná y poca gente que los toque.',
     clerigo: 'Los clérigos canalizan la luz sagrada: curan y bendicen a los suyos, castigan de lejos y cortan los casteos peligrosos. Pueden cazar solos, pero brillan en grupo.',
-    pala: 'Los paladines son maestros del combate cuerpo a cuerpo. Su vida y su resistencia les permiten sostener la línea de frente y frenar a los enemigos.',
+    paladin: 'Los paladines son maestros del combate cuerpo a cuerpo. Su vida y su resistencia les permiten sostener la línea de frente y frenar a los enemigos.',
 };
 const clsCol = (id: string) => CLS_COL[id] ?? '#d6a445';
 
@@ -194,7 +194,7 @@ export function initLoginUI(ctx: FlowCtx) {
         const sp = (...ids: string[]) => ids.map((i) => ctx.spellName(i)).join(', ');
         if (c.id === 'mago') return [`Hechizos a distancia: ${sp('proyectil', 'bola', 'lluvia')}`, `Congela para controlar (${sp('paralisis')})`, `Mucho maná: ${c.mp} base, +${c.mpL} por nivel`, `Frágil: ${c.hp} de vida base`];
         if (c.id === 'clerigo') return [`Cura a los suyos: ${sp('curacion', 'renovar', 'orbe')}`, `Bendice y protege (${sp('bendicion')})`, `Castiga de lejos y corta casteos (${sp('castigo', 'reprender')})`, `Maná: ${c.mp} base, +${c.mpL} por nivel`];
-        if (c.id === 'pala') return [`Cuerpo a cuerpo: ${c.melee[0]}–${c.melee[1]} de daño`, `Resistente: ${c.hp} de vida base, +${c.hpL} por nivel`, `Aturde y barre (${sp('aturdir', 'giro')})`, `Poco maná: ${c.mp} base`];
+        if (c.id === 'paladin') return [`Cuerpo a cuerpo: ${c.melee[0]}–${c.melee[1]} de daño`, `Resistente: ${c.hp} de vida base, +${c.hpL} por nivel`, `Aturde y barre (${sp('aturdir', 'giro')})`, `Poco maná: ${c.mp} base`];
         return [c.desc];
     }
     /** Íconos de facción y de clase: una sola pantalla de creación, como el diseño del pack. */

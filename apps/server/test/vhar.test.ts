@@ -35,8 +35,8 @@ function setup() {
         world.playerConnected(session.sessionId, name, (m) => log.push(m), () => {}, persisted);
         mem.put(`acc-${name}`, { name, salt: '', hash: '', created: 0, lastLogin: 0 });
         world.bindAccount(session.sessionId, `acc-${name}`);
-        world.onClientSave(session.sessionId, JSON.stringify({ cls: 'pala', faction }));
-        pkt(world, session.sessionId, 'changePlayerProfileRequest', { profile: `${faction};pala;` });
+        world.onClientSave(session.sessionId, JSON.stringify({ cls: 'paladin', faction }));
+        pkt(world, session.sessionId, 'changePlayerProfileRequest', { profile: `${faction};paladin;` });
         sessions.set(session.sessionId, session);
         const p = world.playerOf(session.sessionId)!; p.spawnProtection = false;
         return { session, log, p };

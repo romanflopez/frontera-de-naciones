@@ -83,7 +83,7 @@ Criterio de los pisos: el piso 2 es el mapa de Flare donde está el jefe del tem
 Curva común: `hp(L) = 29 + 10,5·L + 2,75·L²` (`mobs.ts`).
 
 - **Mob común de dungeon:** vida ×2,5, daño ×1,25, exp ×2 (menos que el ×2,5 de vida: el grindeo abierto sigue rindiendo igual o mejor; el atractivo del dungeon es botín y esquirlas). Packs de 4-6, con un élite (vida ×4) cada pack. Ejemplo Nv9: 346 de vida común → ~865.
-- **Jefe final:** vida ~11× la curva de su nivel (hoy los bosses están en ~3-3,5×, pensados para jugar solo). Ejemplos: Nv4 ~1.300, Nv6 ~2.100, Nv8 ~3.200, Nv10 ~4.500, Nv12 ~6.100. Dos habilidades (la actual más una de área o invocación). Objetivo: un pala solo pierde, un grupo de 3-4 gana en 2-3 min.
+- **Jefe final:** vida ~11× la curva de su nivel (hoy los bosses están en ~3-3,5×, pensados para jugar solo). Ejemplos: Nv4 ~1.300, Nv6 ~2.100, Nv8 ~3.200, Nv10 ~4.500, Nv12 ~6.100. Dos habilidades (la actual más una de área o invocación). Objetivo: un paladín solo pierde, un grupo de 3-4 gana en 2-3 min.
 - Los jefes de dungeon siguen **sin reescalarse** por `zone.lvl` (decisión existente).
 
 ## 6. Mobs y animaciones

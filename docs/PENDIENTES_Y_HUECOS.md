@@ -39,7 +39,7 @@ Lo que sabemos: el arte de Flare (mapas y bichos) es de 192×96 por celda y hoy 
 
 | Tema | Por qué importa | Cuándo decidirlo |
 |---|---|---|
-| ~~Clases y roles de grupo~~ | **Decidido (Román, 1/11):** el **mago cura y paraliza**; por ahora no hay curandero (se ve después según lo que pida la gente en la beta). **La party no restringe por clase**: se puede entrar con 4 palas si quieren | Ya decidido (ver §2.1) |
+| ~~Clases y roles de grupo~~ | **Decidido (Román, 1/11):** el **mago cura y paraliza**; por ahora no hay curandero (se ve después según lo que pida la gente en la beta). **La party no restringe por clase**: se puede entrar con 4 paladines si quieren | Ya decidido (ver §2.1) |
 | **Buscar grupo (LFG)** | Con pocos jugadores, juntar gente tiene que ser fácil: un chat y un tablero que lo ayuden | Fase 2 (paso 2.6 del plan) |
 | **Habilidades y talentos** | Helbreath Evolution tiene árbol de talentos y 76 hechizos; ERIS tiene ~14 habilidades fijas y ningún árbol. Define el "build" que mencionaste | Después de los stats (1.2), antes de la beta |
 | **Misiones e historia por tramo** | El "objetivo claro" de cada tramo necesita misiones con sentido; hoy son pocas y casi no dan exp | Fase 2 |
@@ -62,7 +62,7 @@ Propuesta de reparto por área, a ajustar según lo que le guste a cada uno: **S
 
 **Mago de apoyo.** Lo que hay que verificar: en `PVP_SPELLS` y `SKILLS` hay paralizar, aturdir, remover y las habilidades de ataque, pero **no encontré un hechizo de curar a un aliado** (la vida se recupera con pociones y regeneración). Hay que sumar al menos una curación a un objetivo (con costo de maná y recarga) y probarla.
 - **Cuándo vale la pena un curandero aparte:** si en la beta los grupos piden un sanador porque los jefes golpean fuerte y el mago no puede curar y hacer daño a la vez. Una clase nueva cuesta sprites, habilidades y balance (L), así que primero hay que ver si hay demanda. Dato a medir: composición de cada grupo y cuántos intentos de jefe terminan mal.
-- Los jefes de grupo se diseñan para que **cualquier combinación de 3-4 jugadores pueda ganar**, y que la variedad lo haga más rápido. Prueba: 4 palas, 4 magos y un grupo mixto contra cada jefe (ver paso 2.3 del plan).
+- Los jefes de grupo se diseñan para que **cualquier combinación de 3-4 jugadores pueda ganar**, y que la variedad lo haga más rápido. Prueba: 4 paladines, 4 magos y un grupo mixto contra cada jefe (ver paso 2.3 del plan).
 
 **Buscador de grupo (LFG)** para que juntar gente sea fácil aunque haya pocos jugadores:
 1. **Canal de chat "Buscar grupo"** además de mapa, global y nación. Un mensaje armado por botón ("Cripta olvidada, difícil, 2/4, falta daño") con un botón **Unirme** que le manda el pedido al líder.

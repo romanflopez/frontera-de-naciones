@@ -103,7 +103,7 @@ test('ítems únicos T4-T7 y jefes D4-D7: cada banda supera a la anterior y la T
 test('uniqueItem: fijos con variación ±10 %, calidad sorteada y extras según la calidad al final de `a`', async () => {
     const { uniqueItem, newEcon } = await import('../src/economy.ts');
     const { EXTRAS_BY_QUALITY } = await import('@fdn/world');
-    const st = newEcon('pala', 'solmar');
+    const st = newEcon('paladin', 'solmar');
     for (const u of UNIQUE_BASES) {
         const it = uniqueItem(st, u);
         // banda sin calidad pedida → Azul (2); jefe → su escalera (D1-D2 Azul o Violeta; D3-D7 Violeta o Dorado)
