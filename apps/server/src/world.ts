@@ -12,7 +12,7 @@ import { dailyOffers } from './dailyShop.ts';
 const BOSS_SHARE_RANGE = 30;
 import { hitRoll, pvpMagicComp, AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, MEDITATE, pvpMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionLockMs, potionMp, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, POTION_LOCK_PVP_MS, PVP_COMBAT_MS, pvpCap, pvpScale, pvpVsCtrl, RECALL_PVP_LOCK_MS, INVIS_CD_MS, DETECT_CD_MS, SECOND_WIND, secondWindHeal, progressFromEcon, PVP_SPELLS, BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, POISON_HEAL_TAKEN, HEAL_THREAT, CLERIGO_SKILLS, STUN_SPELLS, healAmount, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, K8_SKILLS, skillMpCost, SHIELD_MS, BUFF, withBuffs, buffTakenMult, type DmgKind } from './systems/pvpCombat.ts';
 import { HUBS, QUESTS, RECALL, TRAINING, trainingLockedMsg, trainingOfMap, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef, checkSkill, skillDeniedText } from '@fdn/world';
-import { applyParalysis, applySlow, applyBless, applyPoison, applyBuff, applyShield, absorbShield, activeBuffs, clearBuffs, hasBuff, shieldOf, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, isBlessed, isPoisoned, isSlowed, updateStatus, clearBlessings } from './systems/statusSystem.ts';
+import { applyParalysis, applySlow, applyBless, applyPoison, applyBuff, applyShield, absorbShield, activeBuffs, clearBuffs, hasBuff, shieldOf, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, canRemover, startRemoverCd, REMOVER_SELF_MS, REMOVER_OTHER_MS, IMMUNITY_MS, expireTimed, isBlessed, isPoisoned, isSlowed, updateStatus, clearBlessings } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
 import type { GameWorldConfig, Settings } from './config.ts';
 import { adjacentCellsAt45, distance, findNearestFreeLocation, nextGridDirection } from './location.ts';
@@ -627,7 +627,7 @@ export class GameWorld {
                 case 'projectileLaunchRequest': this.handleProjectileLaunch(p, payload.value); break;
                 case 'playerPositionRequest': this.handlePositionRequest(p, payload.value.x, payload.value.y); break;
                 case 'spellCastStartRequest': this.startCast(p, payload.value.spell); break;
-                case 'spellCastCancelRequest': if (p.cast && !p.cast.fired) p.cast = null; break;
+                case 'spellCastCancelRequest': if (p.cast && !p.cast.fired) p.cast = null; p.removerSeq++; break;
                 case 'playerMovementStateChangeRequest': {
                     p.setRunningMode(payload.value.runningMode);
                     const m = M.playerMovementStateChanged(p.playerId, p.runningMode, p.movementSpeedMs);
@@ -689,13 +689,7 @@ export class GameWorld {
                     p.detectCdUntil = now + DETECT_CD_MS;
                     this.changeStatus(p, () => castDetectInvisible(p.status, now)); break;
                 }
-                case 'removerRequest': {
-                    if (!this.kitOk(p, 'remover') || p.mp < UTIL_MP.remover || !castRemover(p.status, Date.now())) break;
-                    this.payMp(p, UTIL_MP.remover);
-                    const m = M.pvpHit(p.playerId, { fx: 'sphere', x: p.posX, y: p.posY, targetId: p.playerId, dmg: 0, secs: -1, r: 0 });
-                    p.send(m); this.broadcastNear(p, m);
-                    break;
-                }
+                case 'removerRequest': this.startRemover(p, payload.value.targetId); break;
                 case 'mobHitRequest': if (!this.kitOk(p, payload.value.spell ?? '') || !this.castOk(p, payload.value.spell ?? '', Date.now())) break; this.changeStatus(p, () => breakInvisibility(p.status)); this.mobSim?.hit(p, payload.value); break;
                 case 'pveStatusRequest': this.mobSim?.status(p, payload.value); break;
                 case 'changePlayerProfileRequest': {
@@ -780,6 +774,7 @@ export class GameWorld {
         moveStats.ok++;
         p.fx = x; p.fy = y; p.fCell = { x: p.posX, y: p.posY };
         if (p.cast && !p.cast.fired) p.cast = null; // moverse cancela el cast que no salió
+        p.removerSeq++; // y el Remover en curso
         this.broadcastNear(p, M.playerPositionUpdate(p.playerId, x, y));
     }
 
@@ -913,7 +908,35 @@ export class GameWorld {
             return;
         }
         if (p.cast && !p.cast.fired) p.cast = null; // un paso cancela el cast
+        p.removerSeq++;
         this.moveTo(p, p.posX, p.posY, req.destX, req.destY, req.dashAttack);
+    }
+
+    // ---------- Remover (D.4) ----------
+    /** Alcance del Remover sobre un aliado, en celdas. */
+    private static readonly REMOVER_RANGE = 6;
+    /** Empieza un Remover: 1,5 s sobre uno mismo (se puede estando paralizado) o 1 s sobre un aliado. El efecto se aplica al terminar, si no te moviste. */
+    private startRemover(p: Player, rawTarget: bigint): void {
+        const now = Date.now();
+        if (p.isDead || !this.kitOk(p, 'remover')) return;
+        if (now < p.status.removerCooldown) { p.send(M.sendMessage(`Purga se está recargando (faltan ${Math.ceil((p.status.removerCooldown - now) / 1000)} s).`)); return; }
+        if (p.mp < UTIL_MP.remover) return;
+        const t = this.allyTarget(p, rawTarget, GameWorld.REMOVER_RANGE);
+        if (typeof t === 'string') { p.send(M.sendMessage(t.replace('curar', 'purgar'))); return; }
+        if (!canRemover(t.status, now)) { p.send(M.sendMessage(t === p ? 'No tenés nada que purgar.' : `${t.characterName} no tiene nada que purgar.`)); return; }
+        const seq = ++p.removerSeq;
+        this.playerTimer(p, t === p ? REMOVER_SELF_MS : REMOVER_OTHER_MS, (w) => w.finishRemover(p, t, seq));
+    }
+    private finishRemover(p: Player, t: Player, seq: number): void {
+        const now = Date.now();
+        if (p.removerSeq !== seq || p.isDead || t.isDead || t.disconnected) return;
+        if (t !== p && Math.hypot(t.posX - p.posX, t.posY - p.posY) > GameWorld.REMOVER_RANGE + 1.5) { p.send(M.sendMessage('Está muy lejos.')); return; }
+        if (now < p.status.removerCooldown || !canRemover(t.status, now)) return; // se purgó solo, o lo purgaron: no se gasta nada
+        if (!this.payMp(p, UTIL_MP.remover)) return;
+        this.changeStatus(t, () => castRemover(t.status, now));
+        startRemoverCd(p.status, now);
+        const m = M.pvpHit(p.playerId, { fx: 'sphere', x: t.posX, y: t.posY, targetId: t.playerId, dmg: 0, secs: -IMMUNITY_MS / 1000, r: 0 }); // secs < 0: se purgó; el número es la inmunidad
+        p.send(m); if (t !== p) t.send(m); this.broadcastNear(t, m);
     }
 
     // ---------- casteo (el cast time lo decide el server) ----------

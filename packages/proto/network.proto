@@ -720,7 +720,8 @@ message SpellCastFailed {
 
 /** El cliente avisa su bando, clase y equipo visible: "bando;clase;pieza,pieza,...". */
 /** PvP entre jugadores: el cliente que lanza avisa un efecto y, si hay target_id, daño/parálisis para ese jugador. */
-message RemoverRequest {}
+/** target_id 0 = uno mismo (1,5 s); un aliado cerca (1 s). */
+message RemoverRequest { int64 target_id = 1; }
 message InvisibilityRequest {}
 message DetectInvisibleRequest {}
 message LootAttr { string key = 1; int32 value = 2; }

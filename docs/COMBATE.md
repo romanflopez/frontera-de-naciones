@@ -153,7 +153,7 @@ Desbloqueos de la versión 4 del kit (`packages/world/src/kits.ts`, PR #14): del
 | 15 | Mago | Escudo de maná (`escudomana`) | — | 10 s | 45 | Escudo propio del 33 % de la vida, 10 s |
 | 20 | Mago | Parpadeo (`blink`) | — | 12 s | 0 | Ya estaba |
 | 25 | Mago | Clarividencia (`clarividencia`) | — | 30 s | 60 | 10 s: 25 % de crítico (×1,8) en los hechizos contra monstruos; contra jugadores no hay críticos |
-| 30 | Mago | Purga (`remover`) | — | 24 s | 30 | Se saca congelado, aturdido y frenado; 8 s de inmunidad a parálisis |
+| 1 | Todas | Purga (`remover`) (D.4) | — | 24 s | 30 | Se castea **1,5 s sobre uno mismo** (también paralizado) o **1 s sobre un aliado** a ≤ 6 celdas; un paso lo corta. Saca congelado, aturdido y frenado; 4 s de inmunidad a parálisis. No reinicia el rendimiento decreciente. La recarga es del que castea |
 | 35 | Mago | Intelecto arcano (`intelecto`) | 0,8 s | 10 s | 60 | +8 de Magia de equipo a la party y a los aliados a 14 celdas: 15 min afuera, 90 s en la arena |
 | 15 | Clérigo | Escudo guardián (`guardian`) | — | 12 s | 28 | Escudo del 40 % de la vida del aliado, 10 s |
 | 20 | Clérigo | Paso de luz (`pasoluz`, por `BlinkRequest.skill`) | — | 15 s | 0 | Hasta 6 celdas hacia donde apunta (mismas reglas de celda que el Parpadeo) y se saca el frenado |

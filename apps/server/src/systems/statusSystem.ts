@@ -44,9 +44,11 @@ export function drApply(status: CharacterStatus, kind: CcKind, now: number, dura
 }
 
 export const MAX_PARALYSIS_MS = 5000; // Chains of Ice: freeze 5 s
-export const IMMUNITY_MS = 8000;
-/** Purga (Cleanse de Valdrys, K8): recarga 24 s. */
+/** Inmunidad a parálisis después de un Remover (D.4: 4 s). */
+export const IMMUNITY_MS = 4000;
+/** Purga (Remover, K8): recarga 24 s. D.4: se castea 1,5 s sobre uno mismo (también paralizado) y 1 s sobre un aliado. */
 export const REMOVER_CD_MS = 24000;
+export const REMOVER_SELF_MS = 1500, REMOVER_OTHER_MS = 1000;
 
 export function createDefaultStatus(): CharacterStatus {
     return { isParalyzed: false, paralysisEndTime: 0, immunityEndTime: 0, removerCooldown: 0, isInvisible: false, invisibleEndTime: 0, hasDetectInvisible: false, detectInvisibleEndTime: 0, slowEndTime: 0, blessEndTime: 0, poisonEndTime: 0, dirty: false, buffs: {}, statDirty: false, shield: 0, shieldEndTime: 0, vitalsDirty: false, dr: {} };
@@ -65,19 +67,20 @@ export function applyParalysis(status: CharacterStatus, now: number, durationMs 
     return ms;
 }
 
+/** ¿Hay algo que purgar? (congelado, aturdido o frenado). */
+export const canRemover = (status: CharacterStatus, now: number): boolean => status.isParalyzed || now < status.slowEndTime;
 /**
- * Purga (antes Remover, K8): se saca el congelado, el aturdido y el frenado, y da 8 s de inmunidad a parálisis.
- * Solo sirve con alguno de esos estados encima y fuera de su recarga.
+ * Purga (antes Remover, K8): se saca el congelado, el aturdido y el frenado de `status` (el del objetivo) y da `IMMUNITY_MS` de inmunidad a parálisis.
+ * Solo sirve con alguno de esos estados encima. La recarga es del que castea (`startRemoverCd`), no del objetivo. No toca el rendimiento decreciente (`dr`).
  */
 export function castRemover(status: CharacterStatus, now: number): boolean {
-    const slowed = now < status.slowEndTime;
-    if ((!status.isParalyzed && !slowed) || now < status.removerCooldown) return false;
-    if (slowed) { status.slowEndTime = 0; status.dirty = true; }
+    if (!canRemover(status, now)) return false;
+    if (now < status.slowEndTime) { status.slowEndTime = 0; status.dirty = true; }
     status.isParalyzed = false;
     status.immunityEndTime = now + IMMUNITY_MS;
-    status.removerCooldown = now + REMOVER_CD_MS;
     return true;
 }
+export const startRemoverCd = (caster: CharacterStatus, now: number): void => { caster.removerCooldown = now + REMOVER_CD_MS; };
 
 export const INVISIBLE_MS = 15000;
 export const DETECT_MS = 10000;

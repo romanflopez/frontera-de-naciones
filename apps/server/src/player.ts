@@ -103,6 +103,8 @@ export class Player {
     /** Recargas de Invisibilidad y Detectar que lleva el server. */
     invisCdUntil = 0;
     detectCdUntil = 0;
+    /** Remover en curso (D.4): cada pedido nuevo, paso o cancelación sube el número y el remate viejo se descarta. */
+    removerSeq = 0;
     /** Segundo aliento: fin del canal en curso (0 = no canaliza), fin de la recarga y época (invalida el temporizador al cortar). */
     windUntil = 0;
     windCdUntil = 0;

@@ -236,7 +236,7 @@ interface ClassDef { id: string; name: string; hidden?: boolean; desc: string; h
 const CLASSES: ClassDef[] = [
     { id: 'paladin', name: 'Paladín', desc: 'Tanque: aguanta, aturde y pega cuerpo a cuerpo.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: ['golpe', 'juicio', 'escudo', 'mandato', 'aturdir', 'aura', 'represalia', 'escudodivino', 'amparo', 'furia', 'giro', 'carga', 'grito', 'remover', 'aliento'] },
     { id: 'mago', name: 'Mago', desc: 'Frágil: frío para frenar, fuego para rematar.', head: 'head_short', armor: 'Túnica de mago', hp: 90, hpL: 10, mp: 200, mpL: 12, melee: [2, 4], weapon: 'Báculo de fresno', spells: ['proyectil', 'esquirla', 'paralisis', 'nova', 'ignicion', 'bola', 'lluvia', 'escudomana', 'clarividencia', 'intelecto', 'furia', 'remover', 'invisibilidad', 'detectar', 'blink', 'aliento'] },
-    { id: 'clerigo', name: 'Clérigo', desc: 'Apoyo: cura, bendice y corta casteos.', head: 'head_short', armor: 'Túnica de mago', hp: 110, hpL: 14, mp: 110, mpL: 13, melee: [3, 6], weapon: 'Báculo de fresno', spells: ['castigo', 'curacion', 'renovar', 'bendicion', 'novasagrada', 'reprender', 'orbe', 'guardian', 'esfera', 'grupo', 'furia', 'pasoluz', 'despertar', 'detectar', 'aliento'] },
+    { id: 'clerigo', name: 'Clérigo', desc: 'Apoyo: cura, bendice y corta casteos.', head: 'head_short', armor: 'Túnica de mago', hp: 110, hpL: 14, mp: 110, mpL: 13, melee: [3, 6], weapon: 'Báculo de fresno', spells: ['castigo', 'curacion', 'renovar', 'bendicion', 'novasagrada', 'reprender', 'orbe', 'guardian', 'esfera', 'grupo', 'furia', 'remover', 'pasoluz', 'despertar', 'detectar', 'aliento'] },
     { id: 'arquero', name: 'Arquero', hidden: true, desc: 'Sin kit todavía.', head: 'head_short', armor: 'Coraza de cuero', hp: 140, hpL: 18, mp: 40, mpL: 4, melee: [5, 9], weapon: 'Espada corta', spells: [] }, // esqueleto (D.0): no se puede crear hasta que tenga kit
 ];
 let CLS: ClassDef = CLASSES[0];
@@ -308,12 +308,12 @@ function onServer(m: ServerPayload) {
             // control sobre alguien inmune (jefe, Bendición, Purga o rendimiento decreciente): lo avisa el server, venga de quien venga
             if (v.fx === 'resist') { float(v.x, v.y - 0.5, 'Inmune', '#9fe8ff'); break; }
             if (v.fx === 'miss') { float(v.x, v.y - 0.5, 'Falló', '#c9c9c9'); break; }
+            if (v.targetId === myId && v.secs < 0) { P.frozenUntil = 0; P.slowEnd = 0; P.immEnd = now() - v.secs; log(`¡Te purgaron! No te paralizan por ${-v.secs} s.`, true); break; } // el server manda la inmunidad como secs negativo (D.4)
             if (v.casterId === myId) { // el server me confirma mi golpe con el daño que calculó
                 P.pvpAt = now(); // en combate PvP: no regenera vida (HP_REGEN)
                 if (v.secs > 0) float(v.x, v.y - 0.6, 'Paralizado', '#7fd6ff'); break;
             }
             if (v.fx === 'blizz') fx.push({ k: 'blizz', x: v.x, y: v.y, t: 0, r: v.r || 2.7, d: 3.2 }); else if (v.fx) efxLocal(v.fx, v.x, v.y, v.targetId ? 8 : 0);
-            if (v.targetId === myId && v.secs < 0) { P.frozenUntil = 0; P.immEnd = now() + 8; log('¡Removiste la parálisis! Sos inmune 8 s.', true); break; }
             if (v.targetId === myId && !P.dead) {
                 {
                     P.pvpAt = now();
@@ -796,7 +796,7 @@ const LIB: Record<string, SpellDef> = {
         cast(m) { if (!isMob(m)) return false; efx('tajobrutal', m.x, m.y); damageMob(m, 'golpe'); } },
     lluvia: { name: 'Infierno', mp: 90, cd: 18, col: '#ff7a2f', range: VIEW_RANGE, target: true, aoe: 4.5, // Inferno (Valdrys)
         cast(m) { if (!m) return false; zone(m.x, m.y, 4.5, 1, 0, () => Math.round((rint(14, 21) + P.lvl * 2 + totals().mag) * 1.2), 'meteoro', 0, 'lluvia'); } },
-    remover: { name: 'Purga', mp: 30, cd: 24, col: '#9fe8ff', range: 0, target: false, instant: true, // Cleanse (Valdrys): saca congelado, aturdido y frenado
+    remover: { name: 'Purga', mp: 30, cd: 24, col: '#9fe8ff', range: 0, target: false, instant: true, // Remover (D.4): se castea 1,5 s en vos o 1 s en un aliado (castRemoverSpell); saca congelado, aturdido y frenado
         cast() { if (P.frozenUntil <= now() && P.slowEnd <= now()) { toast('No tenés nada que purgar.'); return false; } net.send({ $case: 'removerRequest', value: {} }); } },
     invisibilidad: { name: 'Invisibilidad', mp: 40, cd: 20, col: '#9fb8ff', range: 0, target: false,
         cast() { efx('humo', P.x, P.y); net.send({ $case: 'invisibilityRequest', value: {} }); } },
@@ -1039,6 +1039,7 @@ function cast(i: number) {
     if (P.casting && !s.instant) { toast('Ya estás casteando.'); return; }
     if (cds[i] > now()) { toast(`${s.name} se está recargando.`); return; }
     if (P.mp < s.mp) { toast('No te alcanza el maná.'); return; }
+    if (s.id === 'remover') { castRemoverSpell(i); return; }
     if (s.instant) { instantCast(i); return; }
     P.ready = null; P.engage = false; P.queued = null; P.path = []; holding = false;
     const T = now(), len = s.castT ?? CAST_T; P.casting = { i, start: T, end: T + len, len };
@@ -1046,6 +1047,18 @@ function cast(i: number) {
     useCastStore.getState().startCast(s.name, len * 1000, ty, spellIcon(s.id ?? '', s.col)); castBarOf = P.casting; // antes de avisar al server
     combatText.showCastingSpell(P.x, P.y, s.name, ty); // predicción local, antes de avisar al server
     net.send({ $case: 'spellCastStartRequest', value: { spellId: 0, spell: s.id ?? '' } }); // el server cuenta el cast time desde acá
+}
+/** Remover (D.4): se castea 1,5 s sobre uno mismo (también paralizado) o 1 s sobre el aliado elegido. Los tiempos son solo para dibujar la barra: el server los cuenta y aplica el efecto. */
+const REMOVER_SELF_S = 1.5, REMOVER_OTHER_S = 1.0, REMOVER_RANGE = 6;
+function castRemoverSpell(i: number) {
+    const s = SPELLS[i], al = allyTarget(), mine = P.frozenUntil > now() || P.slowEnd > now();
+    const other = !mine && al && dist(P, al) <= REMOVER_RANGE ? al : null;
+    if (!mine && !other) { toast(al ? 'Está muy lejos.' : 'No tenés nada que purgar.'); return; }
+    P.ready = null; P.engage = false; P.queued = null; P.path = []; holding = false;
+    const T = now(), len = other ? REMOVER_OTHER_S : REMOVER_SELF_S;
+    P.casting = { i, start: T, end: T + len, len };
+    useCastStore.getState().startCast(s.name, len * 1000, spellTypeOf(s.id), spellIcon(s.id ?? '', s.col)); castBarOf = P.casting;
+    net.send({ $case: 'removerRequest', value: { targetId: other ? other.id : 0n } });
 }
 /** Habilidades de clase sin casteo: salen al instante (las de objetivo toman el seleccionado, el del cursor o el enemigo más cercano). */
 function instantCast(i: number) {
@@ -1061,6 +1074,7 @@ function instantCast(i: number) {
 }
 function finishCast() {
     const c = P.casting!, s = SPELLS[c.i]; P.casting = null; useCastStore.getState().cancelCast(); castBarOf = null;
+    if (s.id === 'remover') { cds[c.i] = now() + s.cd; return; } // el efecto lo aplica el server
     if (!s.target) { fire(c.i, null); return; }
     P.ready = { i: c.i, t: now() };
 }

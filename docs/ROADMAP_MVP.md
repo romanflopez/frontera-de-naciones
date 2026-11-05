@@ -227,7 +227,6 @@ Hoy ERIS no tiene puntos de stats: la vida, el maná y el daño salen de la clas
 | **Nada es inmune:** siempre pasa una parte del golpe; los bichos de tier 7 o más ignoran 30 % de tu absorción (+10 % por tier, hasta 70 % en la 11) | Evita el equipo que lo anula todo; freno natural al apilado | Fase 2 |
 | Topes: absorción mágica de jugadores 60 % (general + elemental sumados), bichos 80 % | Topes de atributos | Fase 2 |
 | Golpe aplastante físico y mágico son stats distintos | Claridad de equipo | Post-beta |
-| Concentración: chance de que no te interrumpan al lanzar (sube con Inteligencia y un poco con Vitalidad); un golpe de 5 o más interrumpe el hechizo | Profundidad del mago | Post-beta |
 | Recall se bloquea 10 s después de que un jugador te ataque y exige 3 s quieto | Evita escapar | Fase 3 |
 | Asistencias: se cuenta una asistencia por dañar, curar a un aliado que golpea o paralizar | PvP de naciones | Fase 3 |
 | Críticos con puntos recargables; encadenar golpes da bonus parejo para todas las armas | Ya anotado | Fase 2 |
