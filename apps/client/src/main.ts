@@ -305,6 +305,7 @@ function onServer(m: ServerPayload) {
             const v = m.value;
             // control sobre alguien inmune (jefe, Bendición, Purga o rendimiento decreciente): lo avisa el server, venga de quien venga
             if (v.fx === 'resist') { float(v.x, v.y - 0.5, 'Inmune', '#9fe8ff'); break; }
+            if (v.fx === 'miss') { float(v.x, v.y - 0.5, 'Falló', '#c9c9c9'); break; }
             if (v.casterId === myId) { // el server me confirma mi golpe con el daño que calculó
                 P.pvpAt = now(); // en combate PvP: no regenera vida (HP_REGEN)
                 if (v.secs > 0) float(v.x, v.y - 0.6, 'Paralizado', '#7fd6ff'); break;

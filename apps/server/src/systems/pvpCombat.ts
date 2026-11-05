@@ -5,7 +5,7 @@
  */
 import { KEY_RECIPES } from '@fdn/world';
 import { hasBuff, type BuffId, type CharacterStatus } from './statusSystem.ts';
-import { isClass, type ClassId, BASE_BY_NAME, UNIQUE_BY_NAME, activeSets, fitsSlot, classBaseHp, classBaseMp, powerLevel, CRIT_BASE, CRIT_MULT, MAX_LEVEL, PVE_MP_REGEN, MEDITATE, aspdTotal, critTotal, itemDfTotal, itemRmTotal, leechTotal, meleeIntervalSecs, statBonus, upMult, type Stats } from '@fdn/world';
+import { isClass, type ClassId, BASE_BY_NAME, UNIQUE_BY_NAME, activeSets, fitsSlot, classBaseHp, classBaseMp, powerLevel, STAT_BASE, CRIT_BASE, CRIT_MULT, MAX_LEVEL, PVE_MP_REGEN, MEDITATE, aspdTotal, critTotal, itemDfTotal, itemRmTotal, leechTotal, meleeIntervalSecs, statBonus, upMult, type Stats } from '@fdn/world';
 export type Stat = 'mag' | 'wdmg' | 'melee';
 export interface PvpSpell {
     dmg?: [number, number]; lvlK?: number; stat?: Stat;
@@ -206,7 +206,7 @@ export const combatMpRegen = (maxMp: number): number => Math.max(PVE_MP_REGEN.mi
 export { PVE_MP_REGEN, MEDITATE };
 export const potionMp = (maxMp: number, pvp = false) => Math.max(pvp ? 20 : 40, Math.round(maxMp * 0.5 * (pvp ? POTION_PVP_MULT : 1)));
 
-export interface CombatStats { lvl: number; /** nivel de poder (escala vieja 1-40): el daño y las curas por nivel se miden con este */ plvl: number; cls: string; /** multiplicadores de daño por Fuerza (físico) y Magia (hechizos) */ meleeMult: number; magicMult: number; /** % de crítico en hechizos de daño (Inteligencia) */ critMag?: number; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; /** crítico total %, velocidad de ataque %, robo de vida % y chance de veneno % (ya con topes) */ crit: number; aspd: number; leech: number; poison: number; savedHp: number; maxMp: number; savedMp: number; /** K8: Daño base extra (Bendición de poder) */ dmgBonus: number; /** efectos especiales de los ítems Dorado de jefe puestos (docs/ITEMS.md): quemadura, aturdir, vampirismo */ fx?: string[] }
+export interface CombatStats { lvl: number; /** Destreza y Magia repartidas (para la chance de golpe y de impacto mágico en PvP) */ dexStat?: number; magStat?: number; /** nivel de poder (escala vieja 1-40): el daño y las curas por nivel se miden con este */ plvl: number; cls: string; /** multiplicadores de daño por Fuerza (físico) y Magia (hechizos) */ meleeMult: number; magicMult: number; /** % de crítico en hechizos de daño (Inteligencia) */ critMag?: number; mag: number; wdmg: [number, number]; maxHp: number; def: number; rm: number; rpar: number; /** crítico total %, velocidad de ataque %, robo de vida % y chance de veneno % (ya con topes) */ crit: number; aspd: number; leech: number; poison: number; savedHp: number; maxMp: number; savedMp: number; /** K8: Daño base extra (Bendición de poder) */ dmgBonus: number; /** efectos especiales de los ítems Dorado de jefe puestos (docs/ITEMS.md): quemadura, aturdir, vampirismo */ fx?: string[] }
 
 export const DEFAULT_STATS: CombatStats = { lvl: 1, plvl: 1, cls: 'guerrero', meleeMult: 1, magicMult: 1, mag: 0, wdmg: [0, 0], maxHp: 140, def: 0, rm: 0, rpar: 0, crit: 5, aspd: 0, leech: 0, poison: 0, savedHp: 140, maxMp: 40, savedMp: 40, dmgBonus: 0 };
 
@@ -238,7 +238,7 @@ export function statsFromChar(o: StatSource | undefined, uncapCrit = false): Com
     s.def += itemDfTotal(itemDf); s.rm += itemRmTotal(itemRm); // la DF/RM de ATRIBUTOS se topea; la base de las armaduras no
     s.crit = uncapCrit ? Math.min(100, CRIT_BASE + itemCrit) : critTotal(itemCrit); s.aspd = aspdTotal(itemAspd); s.leech = leechTotal(itemLeech); s.poison = Math.min(100, s.poison); // topes del paso 1.3
     const baseHp = classBaseHp(cls, lvl), sb = statBonus(o.stats, baseHp); // puntos de Fuerza, Vitalidad, Destreza y Magia (Vitalidad en % de la vida base)
-    bonusHp += sb.hp; bonusMp += sb.mp; s.def += sb.def; s.meleeMult = sb.meleeMult; s.magicMult = sb.magicMult; s.critMag = sb.critMag;
+    bonusHp += sb.hp; bonusMp += sb.mp; s.def += sb.def; s.dexStat = o.stats?.dex ?? STAT_BASE; s.magStat = o.stats?.mag ?? STAT_BASE; s.meleeMult = sb.meleeMult; s.magicMult = sb.magicMult; s.critMag = sb.critMag;
     s.maxHp = baseHp + bonusHp;
     s.maxMp = classBaseMp(cls, lvl) + bonusMp;
     s.savedMp = Math.max(0, Math.min(s.maxMp, Math.round(Number(o.mp) || 0)));
@@ -254,6 +254,25 @@ export function progressFromEcon(st: { lvl: number; q: { i: number; keys: Record
     for (const k of Object.keys(KEY_RECIPES)) if (st.mats?.[k]) keys[k] = st.mats[k];
     return { qi: st.q.i, lvl: st.lvl, keys, unlocked: [...st.u], faction: st.faction };
 }
+
+// ---------- golpe en PvP (chance de pegar entre jugadores; doc del proyecto "formulas de stats y hit ratio") ----------
+/**
+ * Chance de que un golpe de jugador le pegue a otro jugador: `lo que ataca / lo que defiende × K`, topeada entre 10 % y 90 %.
+ * Físico: ataca 100 + (DEX − 50) si DEX > 50; defiende 2 × DEX del objetivo. Mágico: ataca 100 + (MAG − 50) si MAG > 50; defiende 100 + (MAG − 50)
+ * del objetivo. La armadura (DF/RM) NO entra acá: ya mitiga el daño después. Solo vale contra jugadores (los monstruos no esquivan).
+ * `K` de la referencia es 50 y ahí la armadura entra en la defensa; acá la armadura mitiga el daño aparte, y con K = 90 un duelo parejo dura lo mismo que sin tirada de golpe (calibrado con `sim:pvp`: con 50 el paladín contra paladín tardaba 133 s en vez de 48).
+ */
+export const HIT = { skill: 100, k: Number(process.env.FDN_HITK) || 90, min: 10, max: 90, threshold: 50 };
+/** Encendido salvo bajo `node --test` (los tests de combate no dependen del azar; los de golpe lo prenden a mano) o con FDN_HITROLL=0. */
+export const HIT_ROLL = { enabled: process.env.FDN_HITROLL !== '0' && !process.env.NODE_TEST_CONTEXT };
+const above = (n: number): number => Math.max(0, n - HIT.threshold);
+export function hitChance(att: CombatStats, def: CombatStats, kind: DmgKind): number {
+    const a = kind === 'magic' ? HIT.skill + above(att.magStat ?? STAT_BASE) : HIT.skill + above(att.dexStat ?? STAT_BASE);
+    const d = kind === 'magic' ? 100 + above(def.magStat ?? STAT_BASE) : 2 * (def.dexStat ?? STAT_BASE);
+    return Math.min(HIT.max, Math.max(HIT.min, (a / Math.max(1, d)) * HIT.k)) / 100;
+}
+/** ¿Pega? (tirada con `rnd`, por defecto Math.random). Apagable con FDN_HITROLL=0. */
+export const hitRoll = (att: CombatStats, def: CombatStats, kind: DmgKind, rnd: () => number = Math.random): boolean => !HIT_ROLL.enabled || rnd() < hitChance(att, def, kind);
 
 /** Mitigación con rendimiento decreciente: daño × 100 / (100 + X), con X = DF (físico) o RM (mágico). Mínimo 1. */
 export const mitigate = (raw: number, x: number): number => Math.max(1, Math.round((raw * 100) / (100 + Math.max(0, x))));

@@ -19,7 +19,7 @@ import { WorldRegistry } from '../src/registry.ts';
 import type { PersistedPlayer, Player } from '../src/player.ts';
 import type { GameWorld } from '../src/world.ts';
 import { MobSim, type MobHost } from '../src/mobs.ts';
-import { castMsOf, PvpLimiter, statsFromChar } from '../src/systems/pvpCombat.ts';
+import { castMsOf, HIT_ROLL, PvpLimiter, statsFromChar } from '../src/systems/pvpCombat.ts';
 import { applyBless, applyShield, isSlowed, shieldOf } from '../src/systems/statusSystem.ts';
 
 let clock = 120_000_000;
@@ -35,7 +35,7 @@ class MemStorage implements Storage {
 }
 const pkt = (w: GameWorld, sid: string, $case: string, value: object) => w.handleClientPacket(sid, { payload: { $case, value } } as never);
 const resists = (log: ServerMessage[]) => log.filter((m) => m.payload?.$case === 'pvpHit' && (m.payload.value as { fx: string }).fx === 'resist').length;
-type Priv = { burnPlayer(t: Player, s: Player): void; mobSim?: unknown; restat(p: Player): void };
+type Priv = { damagePlayer(p: Player, raw: number, kind: 'phys' | 'magic', killer: Player | null): number; burnPlayer(t: Player, s: Player): void; mobSim?: unknown; restat(p: Player): void };
 const priv = (w: GameWorld) => w as unknown as Priv;
 const advance = (w: GameWorld, ms: number) => { for (let t = 0; t < ms; t += 100) { clock += 100; w.tick(); } };
 
@@ -183,4 +183,21 @@ test('huida: el mob que huye no arrastra a otros, ni de su pit ni de otro por el
     assert.ok(A.x > B.x, 'pasó por al lado de B');
     assert.equal(B.state, 'idle', 'el otro pit no se entera');
     assert.equal(C.state, 'idle', 'huyendo no contagia ni a los de su pit');
+});
+
+test('golpe entre jugadores (paso 1): una tirada alta falla y manda "Falló"; una baja pega', () => {
+    const { w, mago, enemigo } = world();
+    enemigo.p.combat = { ...enemigo.p.combat, dexStat: 200 }; mago.p.combat = { ...mago.p.combat, dexStat: 10, magStat: 10 };
+    HIT_ROLL.enabled = true;
+    const rnd = mock.method(Math, 'random', () => 0.99);
+    try {
+        const hp = enemigo.p.hp;
+        assert.equal(priv(w).damagePlayer(enemigo.p, 50, 'phys', mago.p), 0, 'falla');
+        assert.equal(enemigo.p.hp, hp);
+        assert.ok(mago.log.some((m) => m.payload?.$case === 'pvpHit' && (m.payload.value as { fx: string }).fx === 'miss'), 'el que pegó ve "Falló"');
+        assert.ok(enemigo.log.some((m) => m.payload?.$case === 'pvpHit' && (m.payload.value as { fx: string }).fx === 'miss'), 'el que esquivó también');
+        rnd.mock.mockImplementation(() => 0.01);
+        assert.ok(priv(w).damagePlayer(enemigo.p, 50, 'phys', mago.p) > 0, 'con tirada baja pega');
+        assert.ok(enemigo.p.hp < hp);
+    } finally { rnd.mock.restore(); HIT_ROLL.enabled = false; }
 });
