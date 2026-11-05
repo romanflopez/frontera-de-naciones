@@ -33,6 +33,7 @@ import { bookListHtml, bookTreeHtml, bookTipHtml } from './spellbook.ts';
 import { Saver, parseSave, type CharSave, type SavedItem } from './persist.ts';
 import { coinIcon, itemIcon, keyIcon, miscIconUrl, potionIcon, setPieceOf, shardIcon } from './itemicons.ts';
 import { initLoginUI } from './loginui.ts';
+import { createEmailPrompt, createRecoverUI } from './recover.ts';
 import { createMinimap, type Minimap } from './minimap.ts';
 import { createAuctionUI } from './auction.ts';
 import { createDepositUI } from './deposit.ts';
@@ -3234,7 +3235,13 @@ try { const f = localStorage.getItem('fdn:faction'); if (FACTIONS.some((x) => x.
 let selectedClass = 'paladin';
 try { const c = localStorage.getItem('fdn:class'); if (CLASSES.some((x) => x.id === c && !x.hidden)) selectedClass = c!; } catch { /* sin almacenamiento */ }
 // pantallas de login / selección / clase / facción / creación (ver loginui.ts)
+/** D.17: recuperar la contraseña (también desde el link del mail: `?reset=<código>`) y pedir el email a las cuentas viejas. */
+const recover = createRecoverUI({ url: serverUrl, onDone: () => { ($('passIn') as HTMLInputElement).value = ''; ($('passIn') as HTMLInputElement).focus(); } });
+const emailPrompt = createEmailPrompt({ send: (p) => net.send(p) });
+let pendingReset = new URLSearchParams(location.search).get('reset') ?? '';
+if (pendingReset) { const u = new URL(location.href); u.searchParams.delete('reset'); history.replaceState(null, '', u.toString()); } // el código no se queda en la barra
 const flow = initLoginUI({
+    onForgot: (account) => recover.open('ask', '', account),
     classes: CLASSES.filter((c) => !c.hidden), factions: FACTIONS, spellName: (id) => LIB[id]?.name ?? id,
     cityName: (f) => f === 'solmar' ? 'Villa de Solmar' : f === 'vhar' ? 'Ciudadela de Vhar' : HUBS[f] ? (cityAt(HUBS[f].x, HUBS[f].y)?.name ?? 'Ciudad de ' + f) : f,
     get: () => ({ cls: selectedClass, faction: selectedFaction }),
@@ -3319,6 +3326,7 @@ function showLogin(error = '') {
     try { nameIn.value ||= localStorage.getItem('fdn:lastName') ?? ''; } catch { /* sin almacenamiento */ }
     try { ($('rememberIn') as HTMLInputElement).checked = localStorage.getItem('fdn:remember') !== '0'; } catch { /* sin almacenamiento */ }
     nameIn.focus();
+    if (pendingReset) { recover.open('reset', pendingReset); pendingReset = ''; } // llegó desde el link del mail
 }
 $('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -3336,6 +3344,8 @@ $('loginForm').addEventListener('submit', async (e) => {
     flowActive = false; inFlow = false;
     net.onMessage = (m) => {
         if (m.$case === 'characterList') {
+            if (m.value.needEmail) { emailPrompt.show(m.value.error); return; } // D.17: cuenta vieja sin email: lo carga antes de elegir personaje
+            emailPrompt.hide();
             const chars = m.value.characters.map((c) => ({ name: c.name, cls: c.cls, faction: c.faction, lvl: c.level, zone: c.zone }));
             lastChars = chars; dropMapLoading(); // si venía de elegir personaje, el server lo rechazó: vuelve a la selección
             if (flowActive) { inFlow = true; flow.update(chars, m.value.error); return; }
@@ -3364,7 +3374,7 @@ $('loginForm').addEventListener('submit', async (e) => {
         showLogin(was ? `Se cortó la conexión: ${reason}` : reason); btn.disabled = false;
     };
     if (isBlocked() || await checkVersionNow()) { btn.disabled = false; return; } // versión vieja: la pantalla de actualización ya está arriba
-    try { await net.connect(serverUrl(), storedId(name), name, password); }
+    try { await net.connect(serverUrl(), storedId(name), name, password, flow.email()); }
     catch (err) { $('loginErr').textContent = `${(err as Error).message} ¿Está corriendo el server (pnpm dev)?`; btn.disabled = false; }
 });
 let autoEnter = false, inFlow = false, backToLogin = false;

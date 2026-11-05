@@ -144,6 +144,9 @@ message ClientMessage {
     // Guilds (ver docs/GUILDS.md). Rango propio de tags desde 1500.
     GuildRequest guild_request = 1500;
     ContribRequest contrib_request = 1600;
+    SetEmailRequest set_email_request = 1601;
+    ForgotPasswordRequest forgot_password_request = 1602;
+    ResetPasswordRequest reset_password_request = 1603;
   }
   // P0-A: el cliente ya no fija números de combate (velocidad de movimiento, de ataque, de casteo, alcance, daño, stun).
   // Los calcula el server. Tags retirados: no reutilizar.
@@ -314,6 +317,8 @@ message AuthenticateRequest {
   string character_name = 2;
   /** Cuenta: si el nombre no existe se crea con esta contraseña; si existe tiene que coincidir. */
   string password = 3;
+  /** Solo al CREAR la cuenta (D.17): obligatorio y único. Una cuenta que ya existe lo ignora. */
+  string email = 4;
 }
 
 /** Crea un personaje en la cuenta (máximo 3). El server responde con CharacterList (con `error` si no se pudo). */
@@ -572,6 +577,7 @@ message ServerMessage {
     TradeInvite trade_invite = 1301;
     // Guilds (ver docs/GUILDS.md). Rango propio de tags desde 1500.
     GuildState guild_state = 1500;
+    PasswordResetResult password_reset_result = 1700;
     GuildInvited guild_invited = 1501;
   }
 }
@@ -799,6 +805,8 @@ message CharacterList {
   repeated CharacterSummary characters = 1;
   int32 max = 2;
   string error = 3;
+  /** D.17: la cuenta todavía no tiene email (cuentas viejas): hay que cargarlo con SetEmailRequest antes de elegir o crear personajes. */
+  bool need_email = 4;
 }
 message ChangePlayerProfileRequest {
   string profile = 1;
@@ -1721,6 +1729,14 @@ message DepositState {
  *   crest   = cambiar el escudo (arg = "forma,fondo,figura,símbolo", índices); motd = cambiar el lema (arg); disband = disolver (solo el líder, cofre vacío).
  *   info    = pedir el estado (GuildState).
  */
+/** D.17: cuenta vieja sin email: lo carga al entrar (responde CharacterList: con `error` o sin `need_email`). */
+message SetEmailRequest { string email = 1; }
+/** D.17: se pide ANTES de autenticar. `identifier` = nombre de la cuenta o su email. Responde siempre lo mismo exista o no la cuenta. */
+message ForgotPasswordRequest { string identifier = 1; }
+/** D.17: se manda ANTES de autenticar, con el código del mail (vale 30 minutos y una sola vez). */
+message ResetPasswordRequest { string token = 1; string password = 2; }
+/** Respuesta a Forgot/Reset (`kind` = forgot | reset). */
+message PasswordResetResult { string kind = 1; bool ok = 2; string text = 3; }
 /** Tienda de contribución (D.10): action = buy | equip | unequip; id = el del título. */
 message ContribRequest { string action = 1; string id = 2; }
 message GuildRequest {

@@ -176,6 +176,9 @@ export interface ClientMessage {
     /** Guilds (ver docs/GUILDS.md). Rango propio de tags desde 1500. */
     { $case: "guildRequest"; value: GuildRequest }
     | { $case: "contribRequest"; value: ContribRequest }
+    | { $case: "setEmailRequest"; value: SetEmailRequest }
+    | { $case: "forgotPasswordRequest"; value: ForgotPasswordRequest }
+    | { $case: "resetPasswordRequest"; value: ResetPasswordRequest }
     | undefined;
 }
 
@@ -352,6 +355,8 @@ export interface AuthenticateRequest {
   characterName: string;
   /** Cuenta: si el nombre no existe se crea con esta contraseña; si existe tiene que coincidir. */
   password: string;
+  /** Solo al CREAR la cuenta (D.17): obligatorio y único. Una cuenta que ya existe lo ignora. */
+  email: string;
 }
 
 /** Crea un personaje en la cuenta (máximo 3). El server responde con CharacterList (con `error` si no se pudo). */
@@ -634,6 +639,7 @@ export interface ServerMessage {
     | //
     /** Guilds (ver docs/GUILDS.md). Rango propio de tags desde 1500. */
     { $case: "guildState"; value: GuildState }
+    | { $case: "passwordResetResult"; value: PasswordResetResult }
     | { $case: "guildInvited"; value: GuildInvited }
     | undefined;
 }
@@ -989,6 +995,8 @@ export interface CharacterList {
   characters: CharacterSummary[];
   max: number;
   error: string;
+  /** D.17: la cuenta todavía no tiene email (cuentas viejas): hay que cargarlo con SetEmailRequest antes de elegir o crear personajes. */
+  needEmail: boolean;
 }
 
 export interface ChangePlayerProfileRequest {
@@ -2023,6 +2031,29 @@ export interface DepositState {
   canTake: boolean;
 }
 
+/** D.17: cuenta vieja sin email: lo carga al entrar (responde CharacterList: con `error` o sin `need_email`). */
+export interface SetEmailRequest {
+  email: string;
+}
+
+/** D.17: se pide ANTES de autenticar. `identifier` = nombre de la cuenta o su email. Responde siempre lo mismo exista o no la cuenta. */
+export interface ForgotPasswordRequest {
+  identifier: string;
+}
+
+/** D.17: se manda ANTES de autenticar, con el código del mail (vale 30 minutos y una sola vez). */
+export interface ResetPasswordRequest {
+  token: string;
+  password: string;
+}
+
+/** Respuesta a Forgot/Reset (`kind` = forgot | reset). */
+export interface PasswordResetResult {
+  kind: string;
+  ok: boolean;
+  text: string;
+}
+
 /** Tienda de contribución (D.10): action = buy | equip | unequip; id = el del título. */
 export interface ContribRequest {
   action: string;
@@ -2443,6 +2474,15 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         break;
       case "contribRequest":
         ContribRequest.encode(message.payload.value, writer.uint32(12802).fork()).join();
+        break;
+      case "setEmailRequest":
+        SetEmailRequest.encode(message.payload.value, writer.uint32(12810).fork()).join();
+        break;
+      case "forgotPasswordRequest":
+        ForgotPasswordRequest.encode(message.payload.value, writer.uint32(12818).fork()).join();
+        break;
+      case "resetPasswordRequest":
+        ResetPasswordRequest.encode(message.payload.value, writer.uint32(12826).fork()).join();
         break;
     }
     return writer;
@@ -3189,6 +3229,36 @@ export const ClientMessage: MessageFns<ClientMessage> = {
             message.payload = { $case: "contribRequest", value: ContribRequest.decode(reader, reader.uint32()) };
             continue;
           }
+          case 1601: {
+            if (tag !== 12810) {
+              break;
+            }
+
+            message.payload = { $case: "setEmailRequest", value: SetEmailRequest.decode(reader, reader.uint32()) };
+            continue;
+          }
+          case 1602: {
+            if (tag !== 12818) {
+              break;
+            }
+
+            message.payload = {
+              $case: "forgotPasswordRequest",
+              value: ForgotPasswordRequest.decode(reader, reader.uint32()),
+            };
+            continue;
+          }
+          case 1603: {
+            if (tag !== 12826) {
+              break;
+            }
+
+            message.payload = {
+              $case: "resetPasswordRequest",
+              value: ResetPasswordRequest.decode(reader, reader.uint32()),
+            };
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -3780,6 +3850,30 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       case "contribRequest": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "contribRequest", value: ContribRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "setEmailRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = { $case: "setEmailRequest", value: SetEmailRequest.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "forgotPasswordRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "forgotPasswordRequest",
+            value: ForgotPasswordRequest.fromPartial(object.payload.value),
+          };
+        }
+        break;
+      }
+      case "resetPasswordRequest": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "resetPasswordRequest",
+            value: ResetPasswordRequest.fromPartial(object.payload.value),
+          };
         }
         break;
       }
@@ -5724,7 +5818,7 @@ export const LogoutCancelledRequest: MessageFns<LogoutCancelledRequest> = {
 };
 
 function createBaseAuthenticateRequest(): AuthenticateRequest {
-  return { id: "", characterName: "", password: "" };
+  return { id: "", characterName: "", password: "", email: "" };
 }
 
 export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
@@ -5737,6 +5831,9 @@ export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
     }
     if (message.password !== "") {
       writer.uint32(26).string(message.password);
+    }
+    if (message.email !== "") {
+      writer.uint32(34).string(message.email);
     }
     return writer;
   },
@@ -5778,6 +5875,14 @@ export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
             message.password = reader.string();
             continue;
           }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.email = reader.string();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -5798,6 +5903,7 @@ export const AuthenticateRequest: MessageFns<AuthenticateRequest> = {
     message.id = object.id ?? "";
     message.characterName = object.characterName ?? "";
     message.password = object.password ?? "";
+    message.email = object.email ?? "";
     return message;
   },
 };
@@ -7857,6 +7963,9 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "guildState":
         GuildState.encode(message.payload.value, writer.uint32(12002).fork()).join();
         break;
+      case "passwordResetResult":
+        PasswordResetResult.encode(message.payload.value, writer.uint32(13602).fork()).join();
+        break;
       case "guildInvited":
         GuildInvited.encode(message.payload.value, writer.uint32(12010).fork()).join();
         break;
@@ -8850,6 +8959,17 @@ export const ServerMessage: MessageFns<ServerMessage> = {
             message.payload = { $case: "guildState", value: GuildState.decode(reader, reader.uint32()) };
             continue;
           }
+          case 1700: {
+            if (tag !== 13602) {
+              break;
+            }
+
+            message.payload = {
+              $case: "passwordResetResult",
+              value: PasswordResetResult.decode(reader, reader.uint32()),
+            };
+            continue;
+          }
           case 1501: {
             if (tag !== 12010) {
               break;
@@ -9626,6 +9746,15 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       case "guildState": {
         if (object.payload?.value !== undefined && object.payload?.value !== null) {
           message.payload = { $case: "guildState", value: GuildState.fromPartial(object.payload.value) };
+        }
+        break;
+      }
+      case "passwordResetResult": {
+        if (object.payload?.value !== undefined && object.payload?.value !== null) {
+          message.payload = {
+            $case: "passwordResetResult",
+            value: PasswordResetResult.fromPartial(object.payload.value),
+          };
         }
         break;
       }
@@ -13280,7 +13409,7 @@ export const CharacterSummary: MessageFns<CharacterSummary> = {
 };
 
 function createBaseCharacterList(): CharacterList {
-  return { characters: [], max: 0, error: "" };
+  return { characters: [], max: 0, error: "", needEmail: false };
 }
 
 export const CharacterList: MessageFns<CharacterList> = {
@@ -13293,6 +13422,9 @@ export const CharacterList: MessageFns<CharacterList> = {
     }
     if (message.error !== "") {
       writer.uint32(26).string(message.error);
+    }
+    if (message.needEmail !== false) {
+      writer.uint32(32).bool(message.needEmail);
     }
     return writer;
   },
@@ -13334,6 +13466,14 @@ export const CharacterList: MessageFns<CharacterList> = {
             message.error = reader.string();
             continue;
           }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.needEmail = reader.bool();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -13354,6 +13494,7 @@ export const CharacterList: MessageFns<CharacterList> = {
     message.characters = object.characters?.map((e) => CharacterSummary.fromPartial(e)) || [];
     message.max = object.max ?? 0;
     message.error = object.error ?? "";
+    message.needEmail = object.needEmail ?? false;
     return message;
   },
 };
@@ -25269,6 +25410,262 @@ export const DepositState: MessageFns<DepositState> = {
     message.scope = object.scope ?? "";
     message.log = object.log?.map((e) => e) || [];
     message.canTake = object.canTake ?? false;
+    return message;
+  },
+};
+
+function createBaseSetEmailRequest(): SetEmailRequest {
+  return { email: "" };
+}
+
+export const SetEmailRequest: MessageFns<SetEmailRequest> = {
+  encode(message: SetEmailRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.email !== "") {
+      writer.uint32(10).string(message.email);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SetEmailRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseSetEmailRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.email = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<SetEmailRequest>, I>>(base?: I): SetEmailRequest {
+    return SetEmailRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SetEmailRequest>, I>>(object: I): SetEmailRequest {
+    const message = createBaseSetEmailRequest();
+    message.email = object.email ?? "";
+    return message;
+  },
+};
+
+function createBaseForgotPasswordRequest(): ForgotPasswordRequest {
+  return { identifier: "" };
+}
+
+export const ForgotPasswordRequest: MessageFns<ForgotPasswordRequest> = {
+  encode(message: ForgotPasswordRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.identifier !== "") {
+      writer.uint32(10).string(message.identifier);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ForgotPasswordRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseForgotPasswordRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.identifier = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<ForgotPasswordRequest>, I>>(base?: I): ForgotPasswordRequest {
+    return ForgotPasswordRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ForgotPasswordRequest>, I>>(object: I): ForgotPasswordRequest {
+    const message = createBaseForgotPasswordRequest();
+    message.identifier = object.identifier ?? "";
+    return message;
+  },
+};
+
+function createBaseResetPasswordRequest(): ResetPasswordRequest {
+  return { token: "", password: "" };
+}
+
+export const ResetPasswordRequest: MessageFns<ResetPasswordRequest> = {
+  encode(message: ResetPasswordRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.token !== "") {
+      writer.uint32(10).string(message.token);
+    }
+    if (message.password !== "") {
+      writer.uint32(18).string(message.password);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ResetPasswordRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseResetPasswordRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.token = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.password = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<ResetPasswordRequest>, I>>(base?: I): ResetPasswordRequest {
+    return ResetPasswordRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ResetPasswordRequest>, I>>(object: I): ResetPasswordRequest {
+    const message = createBaseResetPasswordRequest();
+    message.token = object.token ?? "";
+    message.password = object.password ?? "";
+    return message;
+  },
+};
+
+function createBasePasswordResetResult(): PasswordResetResult {
+  return { kind: "", ok: false, text: "" };
+}
+
+export const PasswordResetResult: MessageFns<PasswordResetResult> = {
+  encode(message: PasswordResetResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.kind !== "") {
+      writer.uint32(10).string(message.kind);
+    }
+    if (message.ok !== false) {
+      writer.uint32(16).bool(message.ok);
+    }
+    if (message.text !== "") {
+      writer.uint32(26).string(message.text);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PasswordResetResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBasePasswordResetResult();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.kind = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.ok = reader.bool();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.text = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create<I extends Exact<DeepPartial<PasswordResetResult>, I>>(base?: I): PasswordResetResult {
+    return PasswordResetResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PasswordResetResult>, I>>(object: I): PasswordResetResult {
+    const message = createBasePasswordResetResult();
+    message.kind = object.kind ?? "";
+    message.ok = object.ok ?? false;
+    message.text = object.text ?? "";
     return message;
   },
 };
