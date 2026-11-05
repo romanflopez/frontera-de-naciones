@@ -1296,7 +1296,7 @@ export class GameWorld {
                 return [`Velocidad: ${p.movementSpeedMs} ms por celda${p.gmMoveMs === null ? ' (la del juego)' : ''}.`];
             }
             case 'nivel': {
-                const n = num(args[0]); if (n === undefined) return ['Uso: /gm nivel <1-60>'];
+                const n = num(args[0]); if (n === undefined) return ['Uso: /gm nivel <1-120>'];
                 if (!this.econ?.gmSet(p, { lvl: n })) return ['Tu personaje todavía no tiene economía.'];
                 this.restat(p); p.hp = p.combat.maxHp; p.mp = p.combat.maxMp; this.sendVitals(p, true); this.econ.snapshot(p);
                 return [`Nivel ${p.combat.lvl}, vida y maná al máximo.`];
