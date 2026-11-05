@@ -1,8 +1,9 @@
 // Cursor propio del juego (estilo MMO clásico): flecha de madera y oro, variantes según lo que hay bajo el mouse
 // y el indicador de lanzamiento de hechizos: anillo AZUL que se llena mientras el hechizo carga y retícula ROJA
 // cuando está listo para hacer clic en el objetivo (gris tachada si el blanco no sirve o está lejos).
-// Solo visualización: no toca reglas de combate ni tiempos. La posición se actualiza en pointermove (sin esperar
-// al loop del juego); el dibujo del estado se rehace en update(), que el juego llama una vez por frame.
+// Solo visualización: no toca reglas de combate ni tiempos.
+// La flecha y sus variantes (espada, globo, portal, moneda, retícula) son cursor NATIVO del sistema (`cursor: image-set(...)` con
+// hotspot): lo dibuja el SO con el mouse real, sin lag. El canvas overlay queda solo para el anillo de casteo, que es animado.
 
 export type CursorHover = 'ground' | 'mob' | 'enemy' | 'npc' | 'portal' | 'drop';
 export interface CursorState {
@@ -14,7 +15,8 @@ export interface CursorState {
 }
 export interface GameCursor { update(s: CursorState): void }
 
-const S = 88, C = S / 2, K = 1.3; // tamaño del overlay (px CSS), su centro = punto caliente, y escala de las formas
+const S = 88, OV_C = S / 2, K = 1.3; // overlay del anillo de casteo (px CSS), su centro = punto caliente, y escala de las formas
+const NS = 64, HX = 8, NC = NS / 2; // cursor nativo: lado de la imagen (px CSS; el tope del navegador es 128), hotspot de las formas que salen hacia abajo-derecha, y centro de la retícula
 const BLUE = '#4aa8ff', RED = '#ff3b2e';
 const imgs = new Map<string, HTMLImageElement>();
 function img(src: string) { let i = imgs.get(src); if (!i) { i = new Image(); i.src = src; imgs.set(src, i); } return i; }
@@ -73,7 +75,7 @@ function spellChip(c: CanvasRenderingContext2D, src: string, x: number, y: numbe
     c.restore();
 }
 /** Anillo de carga azul alrededor del punto caliente. */
-function chargeRing(c: CanvasRenderingContext2D, k: number) {
+function chargeRing(c: CanvasRenderingContext2D, k: number, C = OV_C) {
     const r = 17, a0 = -Math.PI / 2;
     c.save(); c.lineCap = 'round';
     c.strokeStyle = 'rgba(8,14,30,.72)'; c.lineWidth = 6; c.beginPath(); c.arc(C, C, r, 0, 7); c.stroke();
@@ -83,7 +85,7 @@ function chargeRing(c: CanvasRenderingContext2D, k: number) {
     c.restore();
 }
 /** Retícula: roja (lista, clic lanza) o gris tachada (blanco inválido o lejos). */
-function reticle(c: CanvasRenderingContext2D, ok: boolean, pulse: number) {
+function reticle(c: CanvasRenderingContext2D, ok: boolean, pulse: number, C = OV_C) {
     const r = 13 * (1 + pulse * 0.08), col = ok ? RED : '#9a9a9a';
     c.save(); c.lineCap = 'round';
     for (const [w, s] of [[4.2, 'rgba(0,0,0,.7)'], [2, col]] as const) {
@@ -98,7 +100,6 @@ function reticle(c: CanvasRenderingContext2D, ok: boolean, pulse: number) {
 }
 
 const CSS = `
-#cv.cur-own{cursor:none}
 .game-cursor{position:fixed;left:0;top:0;width:${S}px;height:${S}px;pointer-events:none;z-index:2147483000;will-change:transform;contain:strict}
 .sw.cur-cast::after,.sw.cur-ready::after,.pot.cur-cast::after{content:'';position:absolute;inset:-5px;border-radius:14px;pointer-events:none;padding:3px;
  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
@@ -108,28 +109,60 @@ const CSS = `
 @media (prefers-reduced-motion:reduce){.sw.cur-ready::after{animation:none}}
 `;
 
+/** Dibuja un cursor en un canvas de NS×NS px CSS a la densidad `d` y lo devuelve como data URL. */
+function render(d: number, draw: (c: CanvasRenderingContext2D) => void): string {
+    const k = document.createElement('canvas'); k.width = k.height = NS * d;
+    const c = k.getContext('2d')!; c.setTransform(d, 0, 0, d, 0, 0); draw(c); return k.toDataURL();
+}
+/** `cursor:` CSS con imagen a 1x y 2x (pantalla normal y retina) y hotspot en px CSS. */
+function cssCursor(draw: (c: CanvasRenderingContext2D) => void, hx: number, hy: number): string {
+    const u1 = render(1, draw), u2 = render(2, draw);
+    return `-webkit-image-set(url(${u1}) 1x,url(${u2}) 2x) ${hx} ${hy},image-set(url(${u1}) 1x,url(${u2}) 2x) ${hx} ${hy},default`;
+}
+/** Las formas se dibujan a escala 1 desde el hotspot y se agrandan K veces desde ahí. */
+const shape = (f: (c: CanvasRenderingContext2D, x: number, y: number) => void) => (c: CanvasRenderingContext2D) => {
+    c.translate(HX, HX); c.scale(K, K); c.translate(-HX, -HX); f(c, HX, HX);
+};
+
 export function createCursor(cv: HTMLCanvasElement, reduce: boolean): GameCursor {
     const st = document.createElement('style'); st.textContent = CSS; document.head.append(st);
     // cursor normal propio (en CSS, sin overlay) para la UI del juego: ventanas, HUD, chat
     const ui = document.createElement('canvas'); ui.width = 24; ui.height = 26; const uc = ui.getContext('2d')!; arrow(uc, 2, 1);
     st.textContent += `#game{cursor:url(${ui.toDataURL()}) 2 1,default}#game input,#game textarea{cursor:text}`;
 
+    // variantes del canvas del mundo: una por lo que hay bajo el mouse, armadas una sola vez
+    const hoverCur: Record<CursorHover, string> = {
+        ground: cssCursor(shape((c, x, y) => arrow(c, x, y)), HX, HX),
+        mob: cssCursor(shape((c, x, y) => sword(c, x, y, false)), HX, HX),
+        enemy: cssCursor(shape((c, x, y) => sword(c, x, y, true)), HX, HX),
+        npc: cssCursor(shape((c, x, y) => { arrow(c, x, y); bubble(c, x + 11, y + 14); }), HX, HX),
+        portal: cssCursor(shape((c, x, y) => { arrow(c, x, y); portal(c, x + 19, y + 10, 0); }), HX, HX),
+        drop: cssCursor(shape((c, x, y) => { arrow(c, x, y); coin(c, x + 16, y + 22); }), HX, HX),
+    };
+    // retícula de "hechizo listo": depende del ícono, así que se arma cuando la imagen ya cargó y se guarda
+    const readyCache = new Map<string, string>();
+    const readyCur = (icon: string, ok: boolean) => {
+        const key = icon + (ok ? '1' : '0'), hit = readyCache.get(key); if (hit) return hit;
+        const im = img(icon); if (!(im.complete && im.naturalWidth)) return null; // todavía no cargó: se reintenta en el próximo frame
+        const v = cssCursor((c) => { reticle(c, ok, 0.5, NC); spellChip(c, icon, NC + 13, NC + 13, ok ? RED : '#8a8a8a'); }, NC, NC);
+        readyCache.set(key, v); return v;
+    };
+
     const ov = document.createElement('canvas'); ov.className = 'game-cursor'; ov.setAttribute('aria-hidden', 'true'); ov.hidden = true;
     document.body.append(ov);
     const ctx = ov.getContext('2d')!; let dpr = 0;
-    let onCanvas = false, touch = false, px = -1e4, py = -1e4;
-    const place = () => { ov.style.transform = `translate3d(${px - C}px,${py - C}px,0)`; };
-    const show = () => { const v = onCanvas && !touch; if (ov.hidden === v) ov.hidden = !v; cv.classList.toggle('cur-own', !touch); };
+    let onCanvas = false, touch = false, px = -1e4, py = -1e4, casting = false;
+    const place = () => { ov.style.transform = `translate3d(${px - OV_C}px,${py - OV_C}px,0)`; };
+    const show = () => { const v = onCanvas && !touch && casting; if (ov.hidden === v) ov.hidden = !v; };
     window.addEventListener('pointermove', (e) => {
-        touch = e.pointerType === 'touch'; onCanvas = e.target === cv; px = e.clientX; py = e.clientY; place(); show();
+        touch = e.pointerType === 'touch'; onCanvas = e.target === cv; px = e.clientX; py = e.clientY; if (casting) place(); show();
     }, { capture: true, passive: true });
     window.addEventListener('pointerdown', (e) => { touch = e.pointerType === 'touch'; onCanvas = e.target === cv; show(); }, { capture: true, passive: true });
     window.addEventListener('mouseout', (e) => { if (!e.relatedTarget) { onCanvas = false; show(); } }); // el mouse salió de la ventana
     cv.addEventListener('pointerleave', () => { onCanvas = false; show(); });
     window.addEventListener('blur', () => { onCanvas = false; show(); });
 
-    let lastKey = '', slot: HTMLElement | null = null;
-    const t0 = performance.now();
+    let lastKey = '', lastCur = '', slot: HTMLElement | null = null;
     return {
         update(s) {
             // indicador en el botón del hechizo (sirve en táctil, donde no hay cursor)
@@ -137,22 +170,22 @@ export function createCursor(cv: HTMLCanvasElement, reduce: boolean): GameCursor
             if (slot && slot !== sl) slot.classList.remove('cur-cast', 'cur-ready');
             slot = sl;
             if (sl) { sl.classList.toggle('cur-cast', !!s.cast); sl.classList.toggle('cur-ready', !s.cast && !!s.ready); if (s.cast) sl.style.setProperty('--ck', s.cast.k.toFixed(3)); }
+
+            // cursor nativo del canvas: solo se toca el estilo cuando cambia
+            const cur = !s.cast && s.ready ? readyCur(s.ready.icon, s.ready.ok) ?? hoverCur.ground : hoverCur[s.cast ? 'ground' : s.hover];
+            if (cur !== lastCur) { lastCur = cur; cv.style.cursor = cur; }
+
+            // overlay: solo el anillo de casteo (más el chip del hechizo), centrado en el hotspot
+            const was = casting; casting = !!s.cast;
+            if (casting !== was) { if (casting) place(); show(); }
+            if (!s.cast) { lastKey = ''; return; }
             if (ov.hidden) return;
-            const t = (performance.now() - t0) / 1000, pulse = reduce ? 0 : 0.5 + 0.5 * Math.sin(t * 6);
-            const animated = (!!s.ready && s.ready.ok && !reduce) || (s.hover === 'portal' && !s.cast && !s.ready && !reduce);
-            const key = s.cast ? `c${s.cast.k.toFixed(3)}${s.cast.icon}` : s.ready ? `r${s.ready.ok}${s.ready.icon}` : s.hover;
-            if (key === lastKey && !animated) return; lastKey = key;
+            const key = `c${s.cast.k.toFixed(3)}${s.cast.icon}`;
+            if (key === lastKey) return; lastKey = key;
             const d = Math.min(2, window.devicePixelRatio || 1);
             if (d !== dpr) { dpr = d; ov.width = ov.height = S * d; }
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, S, S);
-            if (s.cast) { chargeRing(ctx, s.cast.k); arrow(ctx, C, C, 0.9); spellChip(ctx, s.cast.icon, C + 14, C + 15, BLUE); return; }
-            if (s.ready) { reticle(ctx, s.ready.ok, pulse); spellChip(ctx, s.ready.icon, C + 14, C + 15, s.ready.ok ? RED : '#8a8a8a'); return; }
-            ctx.translate(C, C); ctx.scale(K, K); ctx.translate(-C, -C); // las formas se dibujan a escala 1 y se agrandan desde el punto caliente
-            if (s.hover === 'mob' || s.hover === 'enemy') { sword(ctx, C, C, s.hover === 'enemy'); return; }
-            arrow(ctx, C, C);
-            if (s.hover === 'npc') bubble(ctx, C + 11, C + 14);
-            else if (s.hover === 'portal') portal(ctx, C + 19, C + 10, reduce ? 0 : t * 4);
-            else if (s.hover === 'drop') coin(ctx, C + 16, C + 22);
+            chargeRing(ctx, s.cast.k); spellChip(ctx, s.cast.icon, OV_C + 14, OV_C + 15, BLUE);
         },
     };
 }
