@@ -44,17 +44,17 @@ export const spellDmgKind = (id: string): DmgKind => { const sp = PVP_SPELLS[id]
 /** Movimiento: una sola velocidad, la de correr del cliente de referencia (8 cuadros de 39 ms = 312 ms/celda, de EntityMotion.h del cliente 3.82; el ritmo del paso lo marca la animación). Casteás corriendo: el cast te frena y un paso lo corta. WALK_MS = RUN_MS por compatibilidad del protocolo. MOVE_CAP_MS es el piso para buffs de velocidad. */
 export const WALK_MS = 312, RUN_MS = 312, MOVE_CAP_MS = 200;
 /** Alcance máximo de hechizos y habilidades a distancia, en celdas: lo que se ve desde el centro hasta la esquina más lejana de la pantalla (el campo de visión es fijo; ver VIEW_* del cliente), para que se pueda tirar a cualquier punto visible como en el cliente de referencia. */
-export const VIEW_RANGE = 10.5;
+export const VIEW_RANGE = 20;
 /** Escala de cast times (ms). */
 export const CAST_FAST_MS = 750, CAST_NORMAL_MS = 1000, CAST_HEAVY_MS = 1500, CAST_TELEGRAPH_MS = 2400;
 /** true si el hechizo es un cast (no golpe cuerpo a cuerpo): esos no se pueden lanzar corriendo. */
 /** Cast time de cada hechizo (ms); los que no figuran usan CAST_FAST_MS. Lo decide el server: el cliente no lo puede cambiar. */
 /** Bendiciones de grupo (Valdrys: 0,8 s). */
 export const CAST_BUFF_MS = 800;
-export const CAST_MS: Record<string, number> = { proyectil: CAST_FAST_MS, esquirla: CAST_NORMAL_MS, paralisis: CAST_NORMAL_MS, bola: CAST_HEAVY_MS, lluvia: CAST_TELEGRAPH_MS, juicio: CAST_NORMAL_MS,
-    castigo: CAST_NORMAL_MS, curacion: CAST_HEAVY_MS, orbe: CAST_HEAVY_MS,
-    intelecto: CAST_BUFF_MS, grito: CAST_BUFF_MS, amparo: CAST_BUFF_MS, grupo: CAST_BUFF_MS, despertar: CAST_TELEGRAPH_MS };
-export const castMsOf = (id: string): number => CAST_MS[id] ?? CAST_FAST_MS;
+/** Casteo único para TODOS los hechizos, como en el cliente de referencia: la animación de magia son 16 cuadros de 88 ms = 1408 ms, igual para cualquier hechizo (`MapData.cpp` del cliente 3.82). Una sola constante para ajustar. */
+export const CAST_HB_MS = 1408;
+export const CAST_MS: Record<string, number> = {};
+export const castMsOf = (_id: string): number => CAST_HB_MS;
 /** Margen de red al validar que el cast terminó (ms). */
 export const CAST_SLACK_MS = 150;
 /** Cuánto vale un cast terminado sin soltar (el cliente lo deja "listo" hasta que elegís objetivo). */

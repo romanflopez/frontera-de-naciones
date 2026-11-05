@@ -19,7 +19,7 @@ import { WorldRegistry } from '../src/registry.ts';
 import type { PersistedPlayer, Player } from '../src/player.ts';
 import type { GameWorld } from '../src/world.ts';
 import { MobSim, type MobHost } from '../src/mobs.ts';
-import { CAST_MS, PvpLimiter, statsFromChar } from '../src/systems/pvpCombat.ts';
+import { castMsOf, PvpLimiter, statsFromChar } from '../src/systems/pvpCombat.ts';
 import { applyBless, applyShield, isSlowed, shieldOf } from '../src/systems/statusSystem.ts';
 
 let clock = 120_000_000;
@@ -90,7 +90,7 @@ test('un golpe que se come entero el escudo igual "entró": la Ignición quema y
     assert.equal(enemigo.p.hp, hp, 'el escudo se lo comió entero');
     assert.ok(shieldOf(enemigo.p.status, clock) < sh, 'pegó');
     assert.ok(enemigo.p.burnUntil > clock, 'quedó quemado');
-    pkt(w, mago.sid, 'spellCastStartRequest', { spellId: 0, spell: 'esquirla' }); clock += CAST_MS.esquirla;
+    pkt(w, mago.sid, 'spellCastStartRequest', { spellId: 0, spell: 'esquirla' }); clock += castMsOf('esquirla');
     hitPvp('esquirla');
     assert.equal(enemigo.p.hp, hp);
     assert.ok(isSlowed(enemigo.p.status, clock), 'quedó frenado');

@@ -17,7 +17,7 @@ export const TWO_V_TWO: Matchup[] = [
     [[P, H], [P, M]], [[P, H], [M, H]], [[P, M], [M, H]], [[P, H], [P, H]], [[P, M], [P, M]], [[M, H], [M, H]],
 ].map(([a, b]) => ({ name: `${a.map((c) => CLS_NAME[c]).join('+')} vs ${b.map((c) => CLS_NAME[c]).join('+')}`, a, b }));
 
-export const TARGET = { oneMin: 20, oneMax: 45, twoMax: 60, twoTol: 65, winnerHpMax: 65, burstMax: 55, maxSecs: 180 };
+export const TARGET = { oneMin: 20, oneMax: 50, twoMax: 60, twoTol: 65, winnerHpMax: 65, burstMax: 55, maxSecs: 180 };
 
 export interface Row {
     name: string; size: 1 | 2; n: number;

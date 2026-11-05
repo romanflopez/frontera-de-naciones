@@ -15,7 +15,7 @@ import { PartyService, setParties } from '../src/party.ts';
 import type { PersistedPlayer, Player } from '../src/player.ts';
 import type { GameWorld } from '../src/world.ts';
 import { MobSim, type MobHost } from '../src/mobs.ts';
-import { BUFF, CAST_MS, PvpLimiter, SHIELD_MS, SKILLS, healAmount, rollSpellDamage, statsFromChar, withBuffs } from '../src/systems/pvpCombat.ts';
+import { BUFF, castMsOf, PvpLimiter, SHIELD_MS, SKILLS, healAmount, rollSpellDamage, statsFromChar, withBuffs } from '../src/systems/pvpCombat.ts';
 import { REMOVER_CD_MS, absorbShield, applyShield, applySlow, createDefaultStatus, hasBuff, isSlowed, shieldOf } from '../src/systems/statusSystem.ts';
 
 let clock = 80_000_000;
@@ -65,7 +65,7 @@ function setup(instance = '') {
     return { w, host, mago, pala, healer, enemigo, join };
 }
 const advance = (w: GameWorld, ms: number) => { for (let t = 0; t < ms; t += 100) { clock += 100; w.tick(); } };
-const castFor = (w: GameWorld, sid: string, spell: string) => { pkt(w, sid, 'spellCastStartRequest', { spellId: 0, spell }); clock += CAST_MS[spell] ?? 750; };
+const castFor = (w: GameWorld, sid: string, spell: string) => { pkt(w, sid, 'spellCastStartRequest', { spellId: 0, spell }); clock += castMsOf(spell); };
 const skill = (w: GameWorld, sid: string, s: string, targetId = 0n, mobId = 0) => pkt(w, sid, 'skillRequest', { skill: s, targetId, mobId });
 
 // ---------- la tabla ----------
@@ -83,7 +83,7 @@ test('K8: del 13 al 40 las habilidades salen en el 15, 20, 25, 30 y 35 (escape d
     assert.equal(canUseSkill('mago', 40, 'escudodivino'), false, 'cada escudo es de su clase');
     assert.equal(canUseSkill('guerrero', 40, 'despertar'), false);
     assert.equal(SKILLS.escudomana.shield, 0.33); assert.equal(SKILLS.escudodivino.shield, 0.6); assert.equal(SKILLS.guardian.shield, 0.4);
-    assert.equal(CAST_MS.grito, 800); assert.equal(CAST_MS.despertar, 2400);
+    assert.equal(castMsOf('grito'), 1408); assert.equal(castMsOf('despertar'), 1408);
     assert.equal(SHIELD_MS, 10000);
 });
 

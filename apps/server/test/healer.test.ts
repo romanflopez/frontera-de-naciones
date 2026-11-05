@@ -14,7 +14,7 @@ import { WorldRegistry } from '../src/registry.ts';
 import type { PersistedPlayer, Player } from '../src/player.ts';
 import type { GameWorld } from '../src/world.ts';
 import { MobSim, type MobHost } from '../src/mobs.ts';
-import { POISON_HEAL_TAKEN, BLESS_DMG_TAKEN, CAST_MS, HEAL_THREAT, PVP_SPELLS, PvpLimiter, SKILLS, healAmount, healPower, skillMpCost, PVP_HEAL_MP_MULT, statsFromChar } from '../src/systems/pvpCombat.ts';
+import { POISON_HEAL_TAKEN, BLESS_DMG_TAKEN, castMsOf, HEAL_THREAT, PVP_SPELLS, PvpLimiter, SKILLS, healAmount, healPower, skillMpCost, PVP_HEAL_MP_MULT, statsFromChar } from '../src/systems/pvpCombat.ts';
 import { applyParalysis, applyPoison, isBlessed } from '../src/systems/statusSystem.ts';
 
 let clock = 50_000_000;
@@ -58,7 +58,7 @@ function setup() {
 /** Avanza el reloj y corre el mundo (temporizadores de curas en el tiempo, vencimiento de estados). */
 const advance = (w: GameWorld, ms: number) => { for (let t = 0; t < ms; t += 100) { clock += 100; w.tick(); } };
 /** Castea en el server: empieza, espera el tiempo del hechizo y vuelve. */
-const castFor = (w: GameWorld, sid: string, spell: string) => { pkt(w, sid, 'spellCastStartRequest', { spellId: 0, spell }); clock += CAST_MS[spell] ?? 750; };
+const castFor = (w: GameWorld, sid: string, spell: string) => { pkt(w, sid, 'spellCastStartRequest', { spellId: 0, spell }); clock += castMsOf(spell); };
 const skill = (w: GameWorld, sid: string, s: string, targetId = 0n, mobId = 0) => pkt(w, sid, 'skillRequest', { skill: s, targetId, mobId });
 
 // ---------- la clase ----------
@@ -86,7 +86,7 @@ test('K5: la vida del healer queda entre la del paladín y la del mago; maná: e
 });
 
 test('K5: tabla de habilidades (Valdrys, con el maná escalado al pool de ERIS)', () => {
-    assert.equal(CAST_MS.castigo, 1000); assert.equal(CAST_MS.curacion, 1500); assert.equal(CAST_MS.orbe, 1500);
+    for (const id of ['castigo', 'curacion', 'orbe']) assert.equal(castMsOf(id), 1408, 'casteo único para todos');
     assert.equal(PVP_SPELLS.castigo.mp, 18); assert.equal(PVP_SPELLS.castigo.refund, 9); assert.equal(PVP_SPELLS.castigo.lifesteal, 0.35);
     assert.equal(PVP_SPELLS.reprender.secs, 3); assert.equal(PVP_SPELLS.reprender.cast, false);
     assert.equal(SKILLS.curacion.heal, 0.4); assert.equal(SKILLS.orbe.heal, 0.2); assert.equal(SKILLS.orbe.aoe, 4);
@@ -96,13 +96,13 @@ test('K5: tabla de habilidades (Valdrys, con el maná escalado al pool de ERIS)'
 });
 
 // ---------- Curación ----------
-test('Curación: castea 1,5 s y cura al aliado el 40 % de su vida; sin el cast terminado no cura', () => {
+test('Curación: castea 1,4 s y cura al aliado el 40 % de su vida; sin el cast terminado no cura', () => {
     const { w, healer, aliado } = setup();
     aliado.p.hp = 100;
     skill(w, healer.sid, 'curacion', aliado.p.playerId);
     assert.equal(aliado.p.hp, 100, 'sin cast no hay cura');
     assert.equal(denied(healer.log, 'curacion'), 1);
-    pkt(w, healer.sid, 'spellCastStartRequest', { spellId: 0, spell: 'curacion' }); clock += 800;
+    pkt(w, healer.sid, 'spellCastStartRequest', { spellId: 0, spell: 'curacion' }); clock += 700;
     skill(w, healer.sid, 'curacion', aliado.p.playerId);
     assert.equal(aliado.p.hp, 100, 'cast a medias: no cura');
     clock += 800;
@@ -134,7 +134,7 @@ test('Curación: sin objetivo se cura a sí mismo; muy lejos no llega', () => {
     healer.p.hp = 50;
     castFor(w, healer.sid, 'curacion'); skill(w, healer.sid, 'curacion', 0n);
     assert.ok(healer.p.hp > 50, 'se curó');
-    clock += 6000; aliado.p.hp = 100; aliado.p.setPosition(healer.p.posX + 20, healer.p.posY);
+    clock += 6000; aliado.p.hp = 100; aliado.p.setPosition(healer.p.posX + 30, healer.p.posY);
     castFor(w, healer.sid, 'curacion'); skill(w, healer.sid, 'curacion', aliado.p.playerId);
     assert.equal(aliado.p.hp, 100);
 });
