@@ -123,7 +123,7 @@ export const SKILLS: Record<string, ClassSkill> = {
     orbe: { cls: 'healer', mp: 56, range: VIEW_RANGE, cd: 10, cast: true, aoe: 4, heal: 0.2 },                                   // Orbe sagrado: cast 1,5 s, 20 % en área
     guardian: { cls: 'healer', mp: 28, range: VIEW_RANGE, cd: 12, cast: false, shield: 0.4 },                                    // Escudo guardián: 40 % de la vida del aliado
     esfera: { cls: 'healer', mp: 34, range: VIEW_RANGE, cd: 8, cast: false, heal: 0.13, bounce: { n: 8, jump: 6 } },             // Esfera celestial: 8 curas del 13 %
-    despertar: { cls: 'healer', mp: 54, range: 10, cd: 20, cast: true, revive: 0.5 },                                   // Despertar: cast 2,4 s, revive con 50 %
+    despertar: { cls: 'healer', mp: 54, range: VIEW_RANGE, cd: 20, cast: true, revive: 0.5 },                                   // Despertar: cast 2,4 s, revive con 50 %
     grupo: { cls: 'healer', mp: 28, range: 0, cd: 10, cast: true, aoe: 14, party: true, buff: ['fortaleza', 'espiritu'], buffSecs: 90, buffSecsLong: BLESSING_LONG_S }, // Bendición de grupo: Fortaleza + Espíritu divino (90 s en la arena, 15 min afuera)
 };
 /** K8: habilidades de nivel 15 a 35 que se piden por skillRequest (escudos, bendiciones, auras, Esfera y Despertar). Paso de luz va por blinkRequest. */
