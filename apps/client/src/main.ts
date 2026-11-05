@@ -132,7 +132,7 @@ const ATTR_FMT: Record<AttrId, (v: number) => string> = {
 const ATTRS = ATTR_IDS.map((id) => ({ id, r: ATTR_RANGES[id], f: ATTR_FMT[id] }));
 interface Item extends Base { id: number; rar: Rarity; attrs: { id: AttrId; v: number }[]; /** nivel de mejora (+N) */ up?: number; /** reforjas hechas */ rf?: number }
 const itName = (it: { name: string; up?: number }) => (it.up ? `+${it.up} ` : '') + it.name;
-let forgeStones = 0;
+let zemBag = 0; // zem de la bolsa (D.9; antes piedras de forja). La forja usa solo el del depósito.
 /** Puntos de stats repartidos y libres (los manda el server en InventoryState; el server decide, esto solo se muestra y se refleja en los números). */
 let stats: Stats = defaultStats(), statFree = 0;
 /** Topes de DF y RM de atributos de ítems de esta semana del server y cuándo suben (ms; 0 = ya están en el máximo). Los manda el server en `inventoryState` (D.6). */
@@ -568,7 +568,7 @@ function onLootPicked(v: { lootId: string; playerId: string; itemName: string; a
         logToChat('combat', 'System', `¡Has obtenido ${item} x${v.amount}!`, undefined, true); // canal combat: sale en All y en System
     } else if (v.playerName && partyRows.has(v.playerName)) logToChat('party', '', `[${esc(v.playerName)}] obtuvo ${item}`, undefined, true);
 }
-function onKillReward(v: { mobId: number; x: number; y: number; exp: number; gold: number; goldD: number; item?: InvItemMsg; bagFull: boolean; potion: string; shard: string; forge?: number; newLvl: number; questReady: boolean; questProg: number }) {
+function onKillReward(v: { mobId: number; x: number; y: number; exp: number; gold: number; goldD: number; item?: InvItemMsg; bagFull: boolean; potion: string; shard: string; zem?: number; newLvl: number; questReady: boolean; questProg: number }) {
     const mob = mobMap.get(v.mobId), boss = !!mob?.boss;
     combatText.showAt(P.x, P.y, `+${v.exp} exp`, '#f0c84a', 22, myId.toString()); // sobre mi personaje, no sobre el mob (ahí va el daño)
     if (v.item) {
@@ -579,7 +579,7 @@ function onKillReward(v: { mobId: number; x: number; y: number; exp: number; gol
         else logToChat('combat', 'Loot', `¡Has obtenido [${it.name}] x1!`, it.rar.c);
     }
     if (v.gold || v.goldD) log(`Juntaste ${fmtNum(v.goldD || v.gold)} de oro.`);
-    if (v.forge) log(`Encontraste ${v.forge} piedra${v.forge > 1 ? 's' : ''} de forja.`, true);
+    if (v.zem) log(`Encontraste ${v.zem} zem.`, true);
     if (v.potion === 'hp' || v.potion === 'mp') log(`Encontraste una ${POTS[v.potion].name.toLowerCase()}.`, true);
     if (v.shard === 'cripta' || v.shard === 'foso') { const kd = KEYDEFS[v.shard]; log(`El boss soltó una <b>${kd.shard}</b>. Con ${SHARDS_PER_KEY} esquirlas y ${kd.gold} de oro el Capitán te forja una ${kd.name}.`, true); }
     // los avisos de misión llegan como econResult (quest_ready); la cadena vieja de 10 quedó jubilada
@@ -2365,7 +2365,7 @@ function renderBag() {
     const gear: InvEnt[] = P.bag.map((it, i) => ({ key: 'g' + i, html: `<button type="button" class="cl${sel && sel.it === it ? ' sel' : ''}" data-bag="${i}" data-r="${it.rar.k}" aria-label="${esc(it.name)}, ${it.rar.n}" title="${esc(it.name)}" style="--rc:${rarCol(it)}">${ico(it)}</button>` }));
     const cons: InvEnt[] = (['hp', 'mp'] as const).filter((k) => pots[k] > 0).map((k) => ({ key: 'p' + k, html: `<button type="button" class="cl${selX && selX.id === k ? ' sel' : ''}" data-pot="${k}" aria-label="${POTS[k].name}, ${pots[k]}" title="${POTS[k].name}" style="--rc:${k === 'hp' ? '#8a3a34' : '#345a8a'}"><img class="iico" alt="" src="${potionIcon(k)}"><span class="q">${pots[k]}</span><i class="cdv" data-gcd></i></button>` }));
     const mats: InvEnt[] = [];
-    if (forgeStones > 0) mats.push({ key: 'forge', html: `<button type="button" class="cl${selX && selX.id === 'forge' ? ' sel' : ''}" data-mat="forge" aria-label="Piedra de forja, ${forgeStones}" title="Piedra de forja" style="--rc:#c9833a"><img class="iico" alt="" src="${FORGE_ICON}"><span class="q">${forgeStones}</span></button>` });
+    if (zemBag > 0) mats.push({ key: 'forge', html: `<button type="button" class="cl${selX && selX.id === 'forge' ? ' sel' : ''}" data-mat="forge" aria-label="Zem, ${zemBag}" title="Zem" style="--rc:#c9833a"><img class="iico" alt="" src="${FORGE_ICON}"><span class="q">${zemBag}</span></button>` });
     for (const kid of ['cripta', 'foso'] as KeyId[]) {
         const kd = KEYDEFS[kid];
         if (Q.shards[kid] > 0) mats.push({ key: 's' + kid, html: `<button type="button" class="cl${selX && selX.id === 's' + kid ? ' sel' : ''}" data-mat="s${kid}" aria-label="${kd.shard}, ${Q.shards[kid]}" title="${kd.shard}" style="--rc:#6a4aa0"><img class="iico" alt="" src="${shardIcon(kid)}"><span class="q">${Q.shards[kid]}</span></button>` });
@@ -2412,7 +2412,7 @@ function renderTip() {
         else if (selX.id[0] === 'x') d.innerHTML = `<div><div class="iname" style="color:#c77dff">Piedra de reforja</div><div class="sub">Material · ×${QB?.mats[MAT_REFORJA] ?? 0}</div><div>Sirve para reforjar UN stat extra de un ítem único en un herrero (la calidad y los atributos fijos no cambian). La sueltan solo los jefes de mazmorra. El costo se duplica con cada reforja del mismo ítem.</div></div>`;
         else if (selX.id[0] === 'j') { const id = selX.id.slice(1), n = QB?.mats[id] ?? 0; d.innerHTML = `<div><div class="iname" style="color:#b8b2cc">${esc(matName(id))}</div><div class="sub">Basura · ×${n}</div><div>Se vende a ${junkValue(id)} de oro cada una: usá «Vender basura» en cualquier mercader o vendedor.</div></div>`; }
         else if (selX.id[0] === 'q') { d.innerHTML = keyMatTip(selX.id.slice(1)); d.querySelector<HTMLElement>('[data-combine]')?.addEventListener('click', (e) => combineKey((e.currentTarget as HTMLElement).dataset.combine!)); }
-        else if (selX.id === 'forge') d.innerHTML = `<div><div class="iname" style="color:#e5a65a">Piedra de forja</div><div class="sub">Material · ×${forgeStones}</div><div>Sirve para mejorar ítems únicos (+1 a +${UP_MAX}) en un herrero. La sueltan los mobs, más en pits y mazmorras, y los jefes.</div></div>`;
+        else if (selX.id === 'forge') d.innerHTML = `<div><div class="iname" style="color:#e5a65a">Zem</div><div class="sub">Material · ×${zemBag}</div><div>Sirve para mejorar ítems únicos (+1 a +${UP_MAX}) en un herrero, pero la forja solo usa el zem del <b>depósito</b>. Lo sueltan los mobs. <b>Si morís contra un jugador en zona roja, se cae todo el que llevás encima:</b> depositalo.</div></div>`;
         else { const id = selX.id, kid = id.slice(1) as KeyId, kd = KEYDEFS[kid], shard = id[0] === 's'; d.innerHTML = `<div><div class="iname" style="color:${shard ? '#b99cff' : '#ffd24a'}">${shard ? kd.shard : kd.name}</div><div class="sub">Material · ×${shard ? Q.shards[kid] : Q.keys[kid]}</div><div>${shard ? `Con ${SHARDS_PER_KEY} esquirlas y ${kd.gold} de oro el Capitán forja la ${kd.name}.` : 'Abre la escalera sellada del portal correspondiente.'}</div></div>`; }
         return;
     }
@@ -2651,7 +2651,7 @@ function renderBook(n: Npc) {
     // repetible
     const extra = Object.entries(QB.mats).filter(([id, c]) => c >= REPEAT_MATS && !RESERVED_MATS.has(id));
     add(`<b>Sobrantes</b>: ${REPEAT_MATS} materiales iguales por oro o una piedra de forja.${extra.length ? '' : ' Todavía no juntaste suficientes.'}`);
-    for (const [id, c] of extra) add(`${matName(id)} <small>×${c}</small>`, [['Oro', () => bookSend(n, 'r_turnin', `${id}|gold`)], ['Piedra', () => bookSend(n, 'r_turnin', `${id}|forge`)]], true);
+    for (const [id, c] of extra) add(`${matName(id)} <small>×${c}</small>`, [['Oro', () => bookSend(n, 'r_turnin', `${id}|gold`)], ['Zem', () => bookSend(n, 'r_turnin', `${id}|forge`)]], true);
     const keyMats = Object.keys(QUEST_MATS).filter((id) => QB!.mats[id]).map((id) => `${matName(id)}: ${QB!.mats[id]}`);
     if (keyMats.length) add(`<b>Para las llaves</b>: ${keyMats.join(' · ')}`);
 }
@@ -2663,7 +2663,7 @@ const rewardTile = (src: string, n: string, label: string, col = '#7a6a3e') => `
 /** Recompensas de la cadena: exp, oro, piedras de forja y el único (si hay). */
 function mainRewardsHtml(rw: MainQuest['reward']): string {
     let h = rewardTile(miscIconUrl('pergamino_quest'), `${rw.expPct}%`, 'Exp. de tu nivel', '#8fd4ff') + rewardTile(miscIconUrl('oro'), String(rw.gold), 'Oro', '#d8a53c');
-    if (rw.forge) h += rewardTile(miscIconUrl('piedra_reforja'), String(rw.forge), 'Piedras de forja', '#b99cff');
+    if (rw.forge) h += rewardTile(miscIconUrl('piedra_reforja'), String(rw.forge), 'Zem', '#b99cff');
     if (rw.unique) h += rewardTile(miscIconUrl('cofre'), '', rw.unique === 'class_t1_random' ? 'Un único de tu clase' : 'Un único a elección', '#d8a53c');
     return h;
 }
@@ -2796,7 +2796,7 @@ const auction = createAuctionUI({ send: (p) => net.send(p), bag: () => P.bag, go
 const trade = createTradeUI({ send: (p) => net.send(p), bag: () => P.bag, gold: () => P.gold, fromInv: itemFromInv, icon: ico, attrText, esc, fmt: fmtNum, toast });
 /** Guild (ventana propia en guild.ts; el server valida todo, ver docs/GUILDS.md). El cofre compartido es una pestaña del depósito. */
 const guild = createGuildUI({ send: (p) => net.send(p), esc, me: () => P.name, mapName: (id) => getMapDef(id)?.name ?? id, toast });
-const deposit = createDepositUI({ send: (p) => net.send(p), bag: () => P.bag, gold: () => P.gold, pots: () => pots, keys: () => Q.keys, shards: () => Q.shards, fromInv: itemFromInv, icon: ico, attrText, esc, fmt: fmtNum, requestClose: () => closeShop(), guild: () => (guild.state ? { name: guild.state.name, tag: guild.state.tag } : null) });
+const deposit = createDepositUI({ send: (p) => net.send(p), bag: () => P.bag, gold: () => P.gold, pots: () => pots, keys: () => Q.keys, shards: () => Q.shards, zem: () => zemBag, fromInv: itemFromInv, icon: ico, attrText, esc, fmt: fmtNum, requestClose: () => closeShop(), guild: () => (guild.state ? { name: guild.state.name, tag: guild.state.tag } : null) });
 $('openGuild').addEventListener('click', () => guild.toggle());
 /** Burbuja de saludo del NPC (textura NPC Bubble del pack), sobre su cabeza durante unos segundos; sigue a la cámara. */
 let bubble: { n: Npc; until: number } | null = null;
@@ -3283,7 +3283,7 @@ function applyInventory(v: InventoryState) {
     P.bag = v.bag.map(itemFromInv);
     for (const sl of SLOTS) P.eq[sl] = null;
     for (const e of v.eq) if (e.item && (SLOTS as string[]).includes(e.slot)) P.eq[e.slot as Slot] = itemFromInv(e.item);
-    pots.hp = v.potsHp; pots.mp = v.potsMp; forgeStones = v.forge;
+    pots.hp = v.potsHp; pots.mp = v.potsMp; zemBag = v.zem;
     stats = { str: v.statStr || 10, vit: v.statVit || 10, dex: v.statDex || 10, mag: v.statMag || 10 }; statFree = v.statFree; capDf = v.capDf || 60; capRm = v.capRm || 75; capNextAt = Number(v.capNextAt);
     Q.i = v.questI; Q.st = v.questState === 'active' || v.questState === 'ready' ? v.questState : 'new'; Q.prog = v.questProg;
     Q.keys.cripta = v.keysCripta; Q.keys.foso = v.keysFoso; Q.shards.cripta = v.shardsCripta; Q.shards.foso = v.shardsFoso;

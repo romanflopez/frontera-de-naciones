@@ -15,9 +15,9 @@ export const DEPOT_STACK_MAX = 9999;
 /** Tope de llaves y esquirlas que se pueden llevar encima (el mismo que usa la economía del server). */
 export const MAT_MAX = 99;
 
-/** Stacks que se pueden guardar: pociones, llaves y esquirlas. */
-export type DepotStackId = 'pot_hp' | 'pot_mp' | 'key_cripta' | 'key_foso' | 'shard_cripta' | 'shard_foso';
-export interface DepotStackDef { id: DepotStackId; name: string; kind: 'pot' | 'key' | 'shard'; ref: PotKind | KeyId; carryMax: number }
+/** Stacks que se pueden guardar: pociones, llaves, esquirlas y zem (D.9: la forja solo usa el zem del depósito). */
+export type DepotStackId = 'pot_hp' | 'pot_mp' | 'key_cripta' | 'key_foso' | 'shard_cripta' | 'shard_foso' | 'zem';
+export interface DepotStackDef { id: DepotStackId; name: string; kind: 'pot' | 'key' | 'shard' | 'zem'; ref: PotKind | KeyId | 'zem'; carryMax: number }
 export const DEPOT_STACKS: DepotStackDef[] = [
     { id: 'pot_hp', name: POTS.hp.name, kind: 'pot', ref: 'hp', carryMax: POT_MAX },
     { id: 'pot_mp', name: POTS.mp.name, kind: 'pot', ref: 'mp', carryMax: POT_MAX },
@@ -25,6 +25,7 @@ export const DEPOT_STACKS: DepotStackDef[] = [
     { id: 'key_foso', name: KEYDEFS.foso.name, kind: 'key', ref: 'foso', carryMax: MAT_MAX },
     { id: 'shard_cripta', name: KEYDEFS.cripta.shard, kind: 'shard', ref: 'cripta', carryMax: MAT_MAX },
     { id: 'shard_foso', name: KEYDEFS.foso.shard, kind: 'shard', ref: 'foso', carryMax: MAT_MAX },
+    { id: 'zem', name: 'Zem', kind: 'zem', ref: 'zem', carryMax: Number.MAX_SAFE_INTEGER }, // sin tope para llevar encima (es riesgo en PvP)
 ];
 export const DEPOT_STACK_BY_ID = new Map(DEPOT_STACKS.map((s) => [s.id, s]));
 /** Acciones del pedido `DepositRequest.action`. */

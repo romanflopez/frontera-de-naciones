@@ -1829,7 +1829,7 @@ export interface InventoryState {
   /** Oro real (puede pasar de 2^31: `gold` queda topado a int32 solo por compatibilidad; el cliente usa gold_d). */
   goldD: number;
   /** Piedras de forja (materiales para mejorar ítems únicos). */
-  forge: number;
+  zem: number;
   /** Puntos de stats repartidos y puntos libres (paso 1.2). Los stats de las cuentas viejas valen 10. */
   statStr: number;
   statVit: number;
@@ -1869,7 +1869,8 @@ export interface KillReward {
   questReady: boolean;
   questProg: number;
   goldD: number;
-  forge: number;
+  /** zem que cayó con este kill (D.9) */
+  zem: number;
 }
 
 /** Recoger el item del suelo `id`: el server valida que exista, distancia <= 2 celdas, que sea tuyo (o ya libre) y que haya lugar en la bolsa. */
@@ -23030,7 +23031,7 @@ function createBaseInventoryState(): InventoryState {
     cls: "",
     faction: "",
     goldD: 0,
-    forge: 0,
+    zem: 0,
     statStr: 0,
     statVit: 0,
     statDex: 0,
@@ -23101,8 +23102,8 @@ export const InventoryState: MessageFns<InventoryState> = {
     if (message.goldD !== 0) {
       writer.uint32(145).double(message.goldD);
     }
-    if (message.forge !== 0) {
-      writer.uint32(152).int32(message.forge);
+    if (message.zem !== 0) {
+      writer.uint32(152).int32(message.zem);
     }
     if (message.statStr !== 0) {
       writer.uint32(160).int32(message.statStr);
@@ -23305,7 +23306,7 @@ export const InventoryState: MessageFns<InventoryState> = {
               break;
             }
 
-            message.forge = reader.int32();
+            message.zem = reader.int32();
             continue;
           }
           case 20: {
@@ -23431,7 +23432,7 @@ export const InventoryState: MessageFns<InventoryState> = {
     message.cls = object.cls ?? "";
     message.faction = object.faction ?? "";
     message.goldD = object.goldD ?? 0;
-    message.forge = object.forge ?? 0;
+    message.zem = object.zem ?? 0;
     message.statStr = object.statStr ?? 0;
     message.statVit = object.statVit ?? 0;
     message.statDex = object.statDex ?? 0;
@@ -23541,7 +23542,7 @@ function createBaseKillReward(): KillReward {
     questReady: false,
     questProg: 0,
     goldD: 0,
-    forge: 0,
+    zem: 0,
   };
 }
 
@@ -23586,8 +23587,8 @@ export const KillReward: MessageFns<KillReward> = {
     if (message.goldD !== 0) {
       writer.uint32(105).double(message.goldD);
     }
-    if (message.forge !== 0) {
-      writer.uint32(112).int32(message.forge);
+    if (message.zem !== 0) {
+      writer.uint32(112).int32(message.zem);
     }
     return writer;
   },
@@ -23714,7 +23715,7 @@ export const KillReward: MessageFns<KillReward> = {
               break;
             }
 
-            message.forge = reader.int32();
+            message.zem = reader.int32();
             continue;
           }
         }
@@ -23747,7 +23748,7 @@ export const KillReward: MessageFns<KillReward> = {
     message.questReady = object.questReady ?? false;
     message.questProg = object.questProg ?? 0;
     message.goldD = object.goldD ?? 0;
-    message.forge = object.forge ?? 0;
+    message.zem = object.zem ?? 0;
     return message;
   },
 };

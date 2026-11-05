@@ -19,3 +19,7 @@ Una línea por duda: qué, dónde, qué opciones se ven.
 - **D.18, muñeco pixelado:** ahora es nítido y de escala entera, pero el sprite es de 64 px; para que no se vea pixelado hacen falta sprites en mayor resolución (HD / bundle de SmallScaleInt).
 - **D.18, estilo global:** sin versales ni dorado se aplicó solo a las 3 pantallas de entrada; HUD, tiendas y ventanas siguen con `Alegreya SC`/`Cinzel` y bordes dorados. Confirmar que la regla vale para todo y en qué paso va.
 
+- **D.9, piedras viejas:** las piedras de forja guardadas pasaron a zem en la **bolsa** (1:1), o sea en riesgo si morís contra un jugador en zona roja; hay que depositarlas para forjar. Opción: mandarlas directo al depósito de la cuenta en la migración.
+- **D.9, jefes:** los jefes de mazmorra y de mundo siguen soltando 3-5 zem fijos en vez del 7-10 %; `DISEÑO.md` dice "todos los mobs al 7-10 %". Opción: pasarlos al porcentaje.
+- **D.9, textos:** el resto de los docs (`ITEMS.md`, `JEFE_DE_MUNDO.md`, etc.) todavía dicen "piedra de forja"; y las recompensas de misiones siguen en el campo `forge` de `quests.ts` (ahora pagan zem a la bolsa). El renombre de misiones es D.11.
+- **D.9, caída y party:** el zem y el oro de la caída se reparten entre la party del que mató como el oro (partes iguales).

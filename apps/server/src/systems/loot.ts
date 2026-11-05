@@ -26,12 +26,12 @@ export interface LootEntry {
 }
 
 /**
- * [DM] Reparto entre la party: el oro se divide en partes iguales (lo que sobra, de a 1 a compañeros al azar) y un material
+ * [DM] Reparto entre la party: el oro (y el zem de una caída de PvP) se divide en partes iguales (lo que sobra, de a 1 a compañeros al azar) y un material
  * le toca entero a uno al azar. Devuelve cuánto le toca a cada índice de `n` (solo los que reciben algo).
  */
 export function splitLoot(itemId: string, amount: number, n: number, rnd: () => number = Math.random): { i: number; amount: number }[] {
     if (n <= 1) return [{ i: 0, amount }];
-    if (itemId !== 'gold') return [{ i: Math.min(n - 1, Math.floor(rnd() * n)), amount }];
+    if (itemId !== 'gold' && itemId !== 'zem') return [{ i: Math.min(n - 1, Math.floor(rnd() * n)), amount }]; // el zem de una caída de PvP se reparte como el oro
     const share = Math.floor(amount / n), parts = Array.from({ length: n }, () => share), idx = [...Array(n).keys()];
     for (let left = amount - share * n; left > 0; left--) { const j = Math.floor(rnd() * idx.length); parts[idx[j]]++; idx.splice(j, 1); }
     return parts.map((a, i) => ({ i, amount: a })).filter((x) => x.amount > 0);

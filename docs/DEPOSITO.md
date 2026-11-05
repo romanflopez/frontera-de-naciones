@@ -20,6 +20,7 @@ Hablar con él (clic, o caminar hasta él) abre la ventana. Se cierra con la ×,
 | Oro | Sin tope de juego. Techo técnico `Number.MAX_SAFE_INTEGER`, igual que el oro de la bolsa; si una operación lo pasaría, se rechaza (no se pierde oro). |
 | Pociones de vida y de maná | Stack por tipo, hasta 9.999 cada uno (`DEPOT_STACK_MAX`). Encima se siguen pudiendo llevar como mucho 99 (`POT_MAX`). |
 | Llaves (cripta, foso) y esquirlas (cripta, foso) | Stack por tipo, hasta 9.999. Encima, como mucho 99 (`MAT_MAX`, el mismo tope que ya usaba la economía). |
+| **Zem** (`zem`, D.9) | Stack hasta 9.999. Encima, sin tope. **La forja (mejora +N) solo gasta el zem del depósito**; el de la bolsa se cae entero si morís contra un jugador en zona roja. |
 
 Es **de la cuenta** (`AccountRecord.vault`), no del personaje: si un día hay varios personajes por cuenta, lo comparten. Hoy hay uno.
 
@@ -30,7 +31,7 @@ Constantes y nombres de los stacks: `packages/world/src/deposit.ts` (las usa el 
 - `open`: manda el contenido.
 - `put` (uid de la bolsa) / `take` (uid del depósito): mover un item.
 - `gold_in` / `gold_out` (`amount`): oro.
-- `stack_in` / `stack_out` (`stack` + `amount`): pociones, llaves o esquirlas (`pot_hp`, `pot_mp`, `key_cripta`, `key_foso`, `shard_cripta`, `shard_foso`).
+- `stack_in` / `stack_out` (`stack` + `amount`): pociones, llaves, esquirlas o zem (`zem`, `pot_hp`, `pot_mp`, `key_cripta`, `key_foso`, `shard_cripta`, `shard_foso`).
 - `sort`: ordena el depósito por tipo, rareza y nombre (la bolsa tiene su propio "Ordenar").
 
 Validaciones: sesión con personaje, ritmo (~6 pedidos/s por cuenta, ráfaga de 12, como en subastas), vivo, **no durante el cruce de mapa** (el jugador no está en ningún mundo entre `MapTransfer` y `MapReady`; además el pedido nunca llega a un mundo que no lo tiene), NPC con rol `depositario` en el mapa del jugador y cerca, propiedad (el uid tiene que estar en la bolsa / en el depósito de esa cuenta), lugar en el destino (bolsa < 18, depósito < 48), montos enteros positivos y suficientes, topes de stack. Los errores vuelven en `EconResult` con texto en español ("El depósito está lleno (48 / 48).", "La bolsa está llena (18 / 18): hacé lugar antes de retirar.", "No hay tanto oro en el depósito: hay 1.000.", "Solo podés llevar 99 de Poción de vida (podés retirar 2).", "Estás muy lejos del Depositario.", ...).
