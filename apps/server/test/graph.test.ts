@@ -47,7 +47,7 @@ test('el mapa viejo no tiene portal a los mapas de prueba; los de prueba no hace
     assert.equal(MAPS.solmar_legacy.links.find((l) => l.id === 'solmar_a_caza'), undefined);
     assert.ok(MAPS.prueba_caza.debugOnly && MAPS.prueba_mazmorra.debugOnly);
     // un mapa normal sin entrada sí es error
-    const d = clone(); d.prueba_caza = { ...d.prueba_caza, debugOnly: false }; d.prueba_mazmorra = { ...d.prueba_mazmorra, debugOnly: false }; d.prueba_pelea = { ...d.prueba_pelea, debugOnly: false };
+    const d = clone(); d.prueba_caza = { ...d.prueba_caza, debugOnly: false }; d.prueba_mazmorra = { ...d.prueba_mazmorra, debugOnly: false }; d.prueba_pelea = { ...d.prueba_pelea, debugOnly: false }; d.prueba_grande = { ...d.prueba_grande, debugOnly: false };
     assert.ok(validateMapGraph(d).some((x) => x.includes("'prueba_caza' no se alcanza desde")));
 });
 test('detecta que el destino sea una celda disparadora (rebotaría)', () => {

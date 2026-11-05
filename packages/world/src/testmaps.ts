@@ -163,8 +163,8 @@ export function buildPruebaPelea(): WorldMap {
 }
 
 /**
- * Gran claro (etapa E5 del diseño HB de nivel 120): mapa de prueba de 250x250 celdas con la densidad de un mapa de caza de Helbreath
- * (~350 objetos vivos, la capacidad de los mapas de caza de HB) para medir cuadros por segundo del cliente y carga del server antes de
+ * Gran claro (etapa E5 del diseño de nivel 120): mapa de prueba de 250x250 celdas con la densidad de un mapa de caza de referencia
+ * (~350 objetos vivos, la capacidad de los mapas de caza de la referencia) para medir cuadros por segundo del cliente y carga del server antes de
  * decidir el tamaño de los mapas reales. Solo para GM (debugOnly): se entra por un portal del Campo de pelea.
  */
 export const PRUEBA_GRANDE = {
