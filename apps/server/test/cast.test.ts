@@ -13,7 +13,7 @@ import type { AccountRecord, Storage } from '../src/storage.ts';
 import { WorldRegistry } from '../src/registry.ts';
 import type { PersistedPlayer } from '../src/player.ts';
 import type { GameWorld } from '../src/world.ts';
-import { castMsOf, RUN_MS, WALK_MS } from '../src/systems/pvpCombat.ts';
+import { castMsOf, MOVE_CAP_MS, RUN_MS, WALK_MS } from '../src/systems/pvpCombat.ts';
 
 const settings = loadSettings();
 class MemStorage implements Storage {
@@ -54,15 +54,18 @@ function setup() {
     return { w, A, B, fire };
 }
 
-test('movimiento: el server fija una sola velocidad (336 ms/celda) e ignora la velocidad del guardado y del cliente', () => {
+test('movimiento: correr es el default; el server fija la velocidad e ignora la del guardado y la del cliente', () => {
     const { w, A } = setup();
-    assert.equal(A.p.movementSpeedMs, WALK_MS);
-    assert.equal(WALK_MS, RUN_MS, 'ya no hay modo caminar');
-    pkt(w, A.sid, 'changePlayerMovementSpeedRequest', { movementSpeedMs: 100 }); // mensaje retirado del proto
+    assert.equal(A.p.runningMode, true, 'se entra corriendo');
+    assert.equal(A.p.movementSpeedMs, RUN_MS);
+    assert.ok(RUN_MS < WALK_MS, 'correr es más rápido que caminar');
+    pkt(w, A.sid, 'changePlayerMovementSpeedRequest', { movementSpeedMs: 1 }); // mensaje retirado del proto
+    assert.equal(A.p.movementSpeedMs, RUN_MS);
+    pkt(w, A.sid, 'playerMovementStateChangeRequest', { runningMode: false });
     assert.equal(A.p.movementSpeedMs, WALK_MS);
     pkt(w, A.sid, 'playerMovementStateChangeRequest', { runningMode: true });
     assert.equal(A.p.movementSpeedMs, RUN_MS);
-    assert.ok(A.p.movementSpeedMs >= 200, 'cap duro de combate');
+    assert.ok(A.p.movementSpeedMs >= MOVE_CAP_MS, 'cap duro de combate');
 });
 
 test('cast: un golpe de hechizo sin cast empezado en el server se descarta', () => {
@@ -112,12 +115,12 @@ test('movimiento: el ritmo se mide en promedio; el jitter de red no paraliza, ir
     try {
         const { w, A } = setup();
         const step = (i: number) => { const dx = i % 2 ? 1 : -1; pkt(w, A.sid, 'requestMovement', { curX: A.p.posX, curY: A.p.posY, destX: A.p.posX + dx, destY: A.p.posY, gameWorldId: w.mapId, dashAttack: false }); };
-        // 60 pasos de ~335 ms de promedio pero llegando de a pares (230 / 440): ritmo legal con jitter
-        for (let i = 0; i < 60; i++) { c.advance(i % 2 ? 230 : 440); step(i); }
+        // 60 pasos al ritmo de correr pero llegando de a pares (0,7 / 1,3 veces RUN_MS): ritmo legal con jitter
+        for (let i = 0; i < 60; i++) { c.advance(Math.round(RUN_MS * (i % 2 ? 0.7 : 1.3))); step(i); }
         assert.equal(count(A.log, 'playerParalyzed'), 0, 'el jitter no es trampa');
         assert.equal(count(A.log, 'resetPosition'), 0, 'ningún paso rechazado');
-        // ahora de verdad al doble (160 ms por celda): se rechaza y termina paralizado
-        for (let i = 0; i < 40; i++) { c.advance(160); step(i); }
+        // ahora de verdad al doble (RUN_MS / 2 por celda): se rechaza y termina paralizado
+        for (let i = 0; i < 40; i++) { c.advance(RUN_MS / 2); step(i); }
         assert.equal(count(A.log, 'playerParalyzed'), 1, 'eso sí paraliza');
         assert.ok(count(A.log, 'resetPosition') > 0, 'y paralizado, cada paso se rechaza');
     } finally { c.restore(); }

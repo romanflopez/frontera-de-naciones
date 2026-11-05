@@ -163,7 +163,7 @@ const P = {
     target: null as Mob | null, engage: false, pickup: null as Drop | null, repath: 0, queued: null as number | null,
     lvl: 1, exp: 0, hp: 100, mp: 60, fury: 0, shield: 0, shieldEnd: 0, slowEnd: 0, blessEnd: 0, poisonEnd: 0, inv: false, det: false, invEnd: 0, detEnd: 0, immEnd: 0, gold: 0, nextAtk: 0, dead: false, deadT: 0,
     bag: [] as Item[], eq: { arma: null, armadura: null, cabeza: null, guantes: null, botas: null, amuleto: null, anillo: null, anillo2: null } as Record<Slot, Item | null>,
-    running: false, casting: null as Casting | null, ready: null as { i: number; t: number } | null, sentDir: -1,
+    running: true, casting: null as Casting | null, ready: null as { i: number; t: number } | null, sentDir: -1,
 };
 
 /** Otros jugadores, según lo que manda el server. */
@@ -1446,14 +1446,29 @@ function inputVec(): { dx: number; dy: number } | null {
 /** Celdas libres para el cuerpo: paredes y otros jugadores. */
 const freeBody = (cx: number, cy: number) => freeForMe(cx, cy);
 /** Mueve a P continuo hacia (dx,dy) este frame y avisa al server unas 20 veces por segundo como mucho. */
+/** Arranque y giro (D.12): el cliente nunca va más rápido que la velocidad del server, solo arranca de a poco y afloja al girar fuerte. Se afinan jugando. */
+const ACCEL_START = 0.6, ACCEL_S = 0.14, TURN_DOT = 0.3, TURN_KEEP = 0.7;
+let accel = 1, lastDx = 0, lastDy = 0;
 function moveFree(dx: number, dy: number, dt: number, T: number) {
-    const sp = (1000 / P.stepMs) / (P.slowEnd > T ? 1.7 : 1);
+    const l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l;
+    if (!P.mv) accel = ACCEL_START; // venía parado: arranca de a poco
+    else if (ux * lastDx + uy * lastDy < TURN_DOT) accel = Math.min(accel, TURN_KEEP); // giro de más de ~70°: pierde ritmo
+    accel = Math.min(1, accel + (1 - ACCEL_START) * dt / ACCEL_S); lastDx = ux; lastDy = uy;
+    const sp = (1000 / P.stepMs) * accel / (P.slowEnd > T ? 1.7 : 1);
     const r = stepFree({ x: P.x, y: P.y, dx, dy, speed: sp, dt, free: freeBody });
     if (r.moved > 0) {
         turnTo(P, r.x - P.x, r.y - P.y, dt);
         P.phase = (P.phase || 0) + r.moved / (P.ref || 3.4);
         P.x = r.x; P.y = r.y; P.cell = { x: Math.floor(r.x), y: Math.floor(r.y) }; P.moving = true; P.mv = true;
     } else if (Math.hypot(dx, dy) > 0.01) turnTo(P, dx, dy, dt);
+}
+/** Correr es el default; se camina solo mientras se castea o hay un hechizo listo. El cliente pide el modo y la velocidad real la manda el server (`P.stepMs`). */
+let runReqAt = 0;
+function syncRunMode(T: number) {
+    if (!connected) return;
+    const want = !(P.casting || P.ready);
+    if (want === P.running || T - runReqAt < 0.2) return;
+    runReqAt = T; net.send({ $case: 'playerMovementStateChangeRequest', value: { runningMode: want } });
 }
 /** Cada cuánto se manda la posición al server mientras te movés (20 por segundo; los demás te ven con PLAYER_DELAY de atraso). */
 const POS_SEND_S = 0.05;
@@ -1709,6 +1724,7 @@ function update(dt: number) {
                 if (T >= P.nextAtk && T >= P.frozenUntil) { const iv = meleeIntervalSecs(tot.aspd); P.nextAtk = T + iv; sendFacing(); oneShot(P, 'swing', Math.min(0.4, iv)); later(0.18, () => { if (isEnemy(f) && dist(P, f) < 1.9 && !P.dead) { pvpDamage(f, 'ataque', ''); } }); }
             }
         }
+        syncRunMode(T);
         // movimiento continuo: cada frame se mueve hacia donde apuntás ahora (teclado, clic mantenido o camino), el server valida la velocidad
         P.mv = false;
         if (!P.casting && T >= P.frozenUntil) {

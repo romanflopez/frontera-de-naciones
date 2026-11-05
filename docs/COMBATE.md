@@ -9,11 +9,13 @@
 - Cliente: TW = 96, TH = 48 (solo para render; el server usa celdas int32)
 
 ## Movimiento (sin stamina)
-- Walk: 333 ms/celda (~3 tiles/s). Permite castear.
-- Run: 200 ms/celda (~5 tiles/s). NO permite castear (el cast se cancela o no inicia).
+- **Run (default): 170 ms/celda** (`RUN_MS`, ~5,9 tiles/s). Se entra corriendo.
+- **Walk: 280 ms/celda** (`WALK_MS`, ~3,6 tiles/s). El cliente lo pide solo mientras castea o tiene un hechizo listo (`syncRunMode` en `main.ts`) y vuelve a correr al soltarlo.
+- Valores de la **primera prueba de D.12**: se afinan jugando, tocando solo `WALK_MS`/`RUN_MS`/`MOVE_CAP_MS` en `pvpCombat.ts`.
 - Fuera de combate: 166–142 ms/celda (sprint/montura), solo en zonas safe.
 - El server calcula movement_speed_ms según estado (walk/run). El cliente NO manda el número.
-- Cap duro en combate/PvP: 200 ms/celda. Ningún buff puede bajarlo de ahí.
+- Cap duro en combate/PvP: `MOVE_CAP_MS` = 170 (igual a correr; antes 200). Ningún buff puede bajarlo de ahí.
+- Arranque y giro (solo cliente, nunca supera la velocidad del server): arranca al 60 % y llega al 100 % en 0,14 s; un giro de más de ~70° baja al 70 %. Constantes `ACCEL_*` / `TURN_*` en `moveFree`. Frenar sigue siendo en seco.
 - NO existe barra de stamina. La decisión es walk (castear) vs run (moverse).
 
 ## Cast times (escala)

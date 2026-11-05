@@ -119,12 +119,12 @@ Código: `apps/client/index.html` (bloque `#login`), `apps/client/src/loginui.ts
 
 ## 8. Juego: moverse, mouse, pegar, castear, morir
 
-**Estado:** movimiento continuo con predicción local (`moveFree`, 20 envíos/s), velocidad que manda el server (333 ms/celda caminar, 200 correr). Cursor nativo (`cursor: image-set(...)` a 1x y 2x, con hotspot) para la flecha y sus variantes (espada, globo, portal, moneda, retícula de hechizo listo) en `cursor.ts`; el canvas overlay de 88 px queda solo para el anillo de casteo.
+**Estado:** movimiento continuo con predicción local (`moveFree`, 20 envíos/s), velocidad que manda el server (280 ms/celda caminar, 170 correr; D.12). Cursor nativo (`cursor: image-set(...)` a 1x y 2x, con hotspot) para la flecha y sus variantes (espada, globo, portal, moneda, retícula de hechizo listo) en `cursor.ts`; el canvas overlay de 88 px queda solo para el anillo de casteo.
 
 **A corregir**
-- [ ] **Se mueve lento** (Román, 5/11). No es red: es el valor. Probar 280 ms caminar / 170 correr (server, `movementSpeedMs`) y decidir jugando; el tope de 200 en combate de `COMBATE.md` se revisa con el mismo criterio.
+- [x] **Se mueve lento** (D.12, hecho; falta que Román lo pruebe y afine) (Román, 5/11). No es red: es el valor. Probar 280 ms caminar / 170 correr (server, `movementSpeedMs`) y decidir jugando; el tope de 200 en combate de `COMBATE.md` se revisa con el mismo criterio.
 - [x] **Mouse con "sensibilidad loca"** (D.13, hecho; falta que Román lo pruebe) (Román, 5/11). Causa: el cursor es un overlay que va un frame atrás del mouse real y flota cuando bajan los fps. Arreglo: la flecha pasa a **cursor nativo** (`cursor: url(...)`, con hotspot) y el canvas queda solo para el anillo de casteo y la retícula. Verificar además que el clic caiga en la celda bajo la flecha con `devicePixelRatio` ≠ 1 y con el canvas escalado.
-- [ ] **La movilidad es lo que está mal, antes que todo lo demás** (Román, 5/11): es el primer ítem de esta sección a resolver, jugando, no en papel. Velocidad, aceleración al arrancar/frenar, giro, y que correr sea el default.
+- [x] **La movilidad es lo que está mal, antes que todo lo demás** (D.12, hecho: correr por defecto, caminar al castear, arranque y giro; falta frenado y la prueba de Román) (Román, 5/11): es el primer ítem de esta sección a resolver, jugando, no en papel. Velocidad, aceleración al arrancar/frenar, giro, y que correr sea el default.
 - [ ] **Castear necesita una animación piola** (Román, 5/11): hoy hay texto y anillo en el cursor; falta la pose/animación del personaje (manos, brillo en el piso, partículas del color del hechizo) y el "suelte" al terminar el casteo. Entra con el pipeline de sprites (Character Creator 2D tiene animación de cast).
 - [ ] Pegar: depende de las animaciones (Román, 5/11); se revisa cuando estén.
 - [x] Morir y revivir: está bien (Román, 5/11).
