@@ -35,3 +35,7 @@ __pycache__/
 # Se copian con tools/src/ui/install_craftpix.py y tools/src/ui/extract_login_psd.py.
 # TEMPORAL: subidas a git para verlas en prod; volver a ignorarlas al pasar el repo a privado.
 # apps/client/public/assets/ui/craftpix/
+
+# Packs de sprites comprados (licencia: no redistribuir los archivos crudos): nunca al repo
+reference/sprites-comprados/
+assets-crudos/
