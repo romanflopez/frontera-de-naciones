@@ -1082,7 +1082,6 @@ function fire(i: number, m: Target | null) {
 }
 function cancelCast(why?: string | null) { if (!P.casting && !P.ready) return; P.casting = null; useCastStore.getState().cancelCast(); castBarOf = null; P.ready = null; net.send({ $case: 'spellCastCancelRequest', value: {} }); if (why) toast(why); }
 /** Walk (castea, 333 ms/celda) o run (no castea, 200 ms/celda). La velocidad la manda el server en playerMovementStateChanged. */
-function toggleRun() { P.running = !P.running; net.send({ $case: 'playerMovementStateChangeRequest', value: { runningMode: P.running } }); toast(P.running ? 'Corriendo.' : 'Caminando (misma velocidad).'); }
 let toastT: ReturnType<typeof setTimeout> | undefined;
 function toast(t: string) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 1600); }
 
@@ -1319,7 +1318,9 @@ function drawWorld(id: number, x: number, y: number) { const e = EXT[id]; if (e)
 const cv = $('cv') as HTMLCanvasElement, ctx = cv.getContext('2d')!;
 const gameCursor = createCursor(cv, reduce);
 let W = 0, H = 0, DPR = 1, Z = 1;
-function resize() { DPR = Math.min(2, window.devicePixelRatio || 1); W = cv.clientWidth; H = cv.clientHeight; cv.width = W * DPR; cv.height = H * DPR; Z = clamp(Math.min(W, H) / 520, 0.9, 1.45); }
+/** Campo de visión fijo, como en el cliente de referencia: todos ven la misma porción de mapa sin importar el monitor (el zoom se ajusta al tamaño de la ventana; ninguna dimensión muestra más que la referencia). */
+const VIEW_ZOOM = 1.45, VIEW_REF_W = 1366, VIEW_REF_H = 768;
+function resize() { DPR = Math.min(2, window.devicePixelRatio || 1); W = cv.clientWidth; H = cv.clientHeight; cv.width = W * DPR; cv.height = H * DPR; Z = Math.max(0.7, VIEW_ZOOM * Math.max(W / VIEW_REF_W, H / VIEW_REF_H)); }
 window.addEventListener('resize', resize); resize();
 const cam = { x: 0, y: 0, sx: 0, sy: 0 };
 const toScreen = (gx: number, gy: number) => { const p = iso(gx, gy); return { x: (p.x - cam.x) * Z + W / 2 + cam.sx, y: (p.y - cam.y) * Z + H / 2 + cam.sy }; };
@@ -1629,7 +1630,6 @@ window.addEventListener('keydown', (e) => {
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'q' || e.key === 'Q')) { usePotion('hp'); return; }
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'e' || e.key === 'E')) { usePotion('mp'); return; }
     if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'h' || e.key === 'H')) { toggleRecall(); return; }
-    if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 't' || e.key === 'T')) { toggleRun(); return; }
     if (e.key === 'Tab' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (document.activeElement === cv || document.activeElement === document.body)) { // en un botón o ventana, Tab sigue navegando
          e.preventDefault(); focusToTarget(); return; }
     const hk = SPELLS.findIndex((x) => SPECIAL_KEY[x.id ?? ''] === e.key.toLowerCase()) >= 0 ? SPELLS.findIndex((x) => SPECIAL_KEY[x.id ?? ''] === e.key.toLowerCase()) : KEYS.indexOf(e.key), dm = /^(?:Digit|Numpad)([0-9])$/.exec(e.code), k = hk >= 0 ? hk : dm ? KEYS.indexOf(dm[1]) : null;
