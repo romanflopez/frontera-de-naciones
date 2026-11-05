@@ -28,7 +28,7 @@ async function connect() {
     });
     await new Promise<void>((r, j) => { ws.once('open', () => r()); ws.once('error', j); });
     const send = (payload: NonNullable<ClientMessage['payload']>) => ws.send(ClientMessage.encode({ payload } as ClientMessage).finish());
-    send({ $case: 'authenticateRequest', value: { id: '', characterName: NAME, password: 'test1234' } });
+    send({ $case: 'authenticateRequest', value: { id: '', characterName: NAME, password: 'test1234', email: `${NAME.toLowerCase().replace(/[^a-z0-9]/g, '')}@prueba.test` } });
     for (let i = 0; i < 120 && !st.ready; i++) await sleep(50);
     if (!st.ready) throw new Error('no entró al mundo');
     await sleep(300);

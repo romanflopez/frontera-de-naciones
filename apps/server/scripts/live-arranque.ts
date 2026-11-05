@@ -43,7 +43,7 @@ class Bot {
             }
         });
         await new Promise<void>((r, j) => { this.ws.once('open', () => r()); this.ws.once('error', j); });
-        this.send({ $case: 'authenticateRequest', value: { id: '', characterName: this.name, password: 'test1234' } });
+        this.send({ $case: 'authenticateRequest', value: { id: '', characterName: this.name, password: 'test1234', email: `${this.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@prueba.test` } });
         await Promise.race([got, sleep(5000).then(() => { throw new Error('no entró'); })]);
     }
     send(p: Payload) { this.ws.send(ClientMessage.encode({ payload: p } as ClientMessage).finish()); }
