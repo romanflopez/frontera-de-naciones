@@ -1427,9 +1427,9 @@ function inputVec(): { dx: number; dy: number } | null {
     if (holding && mouse.x >= 0) {
         // Sin celdas ni esperas: la dirección es "del cuerpo al cursor" en este mismo frame, así que mover el mouse un poco ya cambia el rumbo (caderear).
         const g = toGrid(mouse.x, mouse.y), vx = g.x - P.x, vy = g.y - P.y, l = Math.hypot(vx, vy);
-        if (l < 0.06) return null;
-        const k = Math.min(1, l / 0.3) / l; // frena suave al llegar al cursor, sin zona muerta
-        return { dx: vx * k, dy: vy * k };
+        // Siempre a velocidad completa (antes frenaba con el cursor cerca del cuerpo y se sentía lento); se detiene al llegar, en una zona muy chica.
+        if (l < 0.12) return null;
+        return { dx: vx / l, dy: vy / l };
     }
     return null;
 }
