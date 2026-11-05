@@ -14,7 +14,7 @@
  * Lo que no está en el server y es supuesto de la sim: un jugador no actúa más rápido que cada 250-400 ms (tiempo de reacción).
  */
 import { pvpMagicComp, BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, BURN_EVERY, BURN_TICKS, AURA_HEAL_FRAC, FURY_MS, POISON_HEAL_TAKEN, POTION_HOT_EVERY_MS, PVP_COMBAT_MS, PVP_SPELLS, PvpLimiter, RUN_MS, SECOND_WIND, SKILLS, STUN_SPELLS, UTIL_MP, WALK_MS, burnTickDmg, castMsOf, damageAfterDefense, healAmount, hitRoll, isCast, paralysisSecs, potionHpSplit, rollSpellDamage, secondWindHeal, skillMpCost, spellDmgKind, type CombatStats, type DmgKind } from '../../../../apps/server/src/systems/pvpCombat.ts';
-import { applyBless, applyParalysis, applyPoison, applySlow, castRemover, createDefaultStatus, expireTimed, isBlessed, isPoisoned, isSlowed, updateStatus, type CharacterStatus } from '../../../../apps/server/src/systems/statusSystem.ts';
+import { REMOVER_CD_MS, REMOVER_SELF_MS, applyBless, applyParalysis, applyPoison, applySlow, canRemover, castRemover, createDefaultStatus, expireTimed, isBlessed, isPoisoned, isSlowed, updateStatus, type CharacterStatus } from '../../../../apps/server/src/systems/statusSystem.ts';
 import { canUseSkill } from '@fdn/world';
 import { cap, potHp, potMp, scale, vsCtrl, type Rules } from './rules.ts';
 import { buildStats, type Cls } from './builds.ts';
@@ -35,6 +35,8 @@ export interface Fighter {
     potReadyAt: number; lastPotAt: number; pvpUntil: number;
     burnSeq: number; burnUntil: number; renewSeq: number; renewUntil: number;
     nextActAt: number; furyCdUntil: number; furyUntil: number;
+    /** Remover (D.4): en curso (se castea 1,5 s sobre uno mismo, también paralizado; moverse lo corta) y fin de su recarga. */
+    removing: { at: number } | null; removerCdUntil: number;
     lastCast: Map<string, number>; lastMelee: number;
     /** memoria libre para la política (objetivo fijado, etc.) */
     mem: Record<string, number>;
@@ -260,13 +262,14 @@ export class Sim {
         if (!a) return;
         if (a.t === 'move') {
             if (this.frozen(f)) return;
+            f.removing = null;
             if (f.cast) { f.cast = null; }
             if (f.windUntil) { f.windUntil = 0; f.m.windsCut++; }
             const ms = (a.run ? RUN_MS : WALK_MS) * (isSlowed(f.st, this.now) ? 2 : 1), step = this.spec.dtMs! / ms, d = Math.hypot(a.dx, a.dy) || 1;
             f.x += (a.dx / d) * step; f.y += (a.dy / d) * step; this.clamp(f); return;
         }
         if (this.now < f.nextActAt) return;
-        if (a.t === 'remover') { if (this.has(f, 'remover') && f.mp >= UTIL_MP.remover && castRemover(f.st, this.now)) { f.mp -= UTIL_MP.remover; busy(); this.log(`${f.name} Remover`); } return; }
+        if (a.t === 'remover') { if (this.has(f, 'remover') && !f.removing && f.mp >= UTIL_MP.remover && this.now >= f.removerCdUntil && canRemover(f.st, this.now)) { f.removing = { at: this.now + REMOVER_SELF_MS }; busy(); this.log(`${f.name} empieza Remover`); } return; }
         if (this.frozen(f)) return;
         if (a.t === 'furia') { if (this.now >= f.furyCdUntil && this.pay(f, UTIL_MP.furia)) { f.furyUntil = this.now + FURY_MS; f.furyCdUntil = this.now + 90000; busy(); } return; }
         if (a.t === 'wind') {
@@ -290,6 +293,11 @@ export class Sim {
             f.windUntil = 0; f.windCdUntil = this.now + SECOND_WIND.cdMs; f.m.winds++;
             const h = secondWindHeal(f.s.maxHp, f.s.maxMp, isPoisoned(f.st, this.now));
             f.mp = Math.min(f.s.maxMp, f.mp + h.mp); this.heal(f, h.hp); this.log(`${f.name} termina el Segundo aliento`);
+        }
+        // Remover que termina (D.4): si ya no hay nada que purgar, no se gasta nada
+        if (f.removing && this.now >= f.removing.at) {
+            f.removing = null;
+            if (f.mp >= UTIL_MP.remover && canRemover(f.st, this.now)) { f.mp -= UTIL_MP.remover; castRemover(f.st, this.now); f.removerCdUntil = this.now + REMOVER_CD_MS; this.log(`${f.name} Remover`); }
         }
         // cast que termina
         if (f.cast && this.now >= f.cast.at) { const c = f.cast; f.cast = null; if (!this.frozen(f) && this.fire(f, c.id, c.tgt)) this.log(`${f.name} suelta ${c.id}`); }
@@ -338,7 +346,7 @@ export function simulate(spec: SimSpec): SimResult {
             const f: Fighter = {
                 id: id++, team: ti as 0 | 1, cls: side.cls, name: `${ti ? 'B' : 'A'}${k + 1}-${side.cls}`, s, hp: s.maxHp, mp: s.maxMp,
                 x: (ti ? 1 : -1) * gap / 2, y: (k - (team.length - 1) / 2) * 3, st: createDefaultStatus(), lim, cast: null, windUntil: 0, windCdUntil: 0,
-                potReadyAt: 0, lastPotAt: -1e12, pvpUntil: 0, burnSeq: 0, burnUntil: 0, renewSeq: 0, renewUntil: 0, nextActAt: 0, furyCdUntil: 0, furyUntil: 0,
+                potReadyAt: 0, lastPotAt: -1e12, pvpUntil: 0, burnSeq: 0, burnUntil: 0, renewSeq: 0, renewUntil: 0, nextActAt: 0, furyCdUntil: 0, furyUntil: 0, removing: null, removerCdUntil: 0,
                 lastCast: new Map(), lastMelee: -1e12, mem: {}, taken: [], deadAt: 0,
                 m: { dmg: 0, heal: 0, pots: 0, potsMp: 0, starved: 0, winds: 0, windsCut: 0, casts: 0, interrupted: 0, ccSecs: 0, bySpell: {} },
             };

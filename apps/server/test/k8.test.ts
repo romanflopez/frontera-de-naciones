@@ -15,8 +15,8 @@ import { PartyService, setParties } from '../src/party.ts';
 import type { PersistedPlayer, Player } from '../src/player.ts';
 import type { GameWorld } from '../src/world.ts';
 import { MobSim, type MobHost } from '../src/mobs.ts';
-import { BUFF, castMsOf, PvpLimiter, SHIELD_MS, SKILLS, healAmount, rollSpellDamage, statsFromChar, withBuffs } from '../src/systems/pvpCombat.ts';
-import { REMOVER_CD_MS, absorbShield, applyShield, applySlow, createDefaultStatus, hasBuff, isSlowed, shieldOf } from '../src/systems/statusSystem.ts';
+import { BUFF, UTIL_MP, castMsOf, PvpLimiter, SHIELD_MS, SKILLS, healAmount, rollSpellDamage, statsFromChar, withBuffs } from '../src/systems/pvpCombat.ts';
+import { IMMUNITY_MS, REMOVER_CD_MS, absorbShield, applyParalysis, applyShield, applySlow, createDefaultStatus, hasBuff, isSlowed, shieldOf } from '../src/systems/statusSystem.ts';
 
 let clock = 80_000_000;
 mock.method(Date, 'now', () => clock);
@@ -71,7 +71,7 @@ const skill = (w: GameWorld, sid: string, s: string, targetId = 0n, mobId = 0) =
 // ---------- la tabla ----------
 test('K8: del 13 al 40 las habilidades salen en el 15, 20, 25, 30 y 35 (escape de todas en el 20)', () => {
     const table: [string, string, number][] = [
-        ['mago', 'escudomana', 15], ['mago', 'blink', 20], ['mago', 'clarividencia', 25], ['mago', 'remover', 30], ['mago', 'intelecto', 35],
+        ['mago', 'escudomana', 15], ['mago', 'blink', 20], ['mago', 'clarividencia', 25], ['mago', 'intelecto', 35],
         ['paladin', 'escudodivino', 15], ['paladin', 'carga', 20], ['paladin', 'represalia', 25], ['paladin', 'grito', 30], ['paladin', 'amparo', 35],
         ['clerigo', 'guardian', 15], ['clerigo', 'pasoluz', 20], ['clerigo', 'despertar', 25], ['clerigo', 'esfera', 30], ['clerigo', 'grupo', 35],
     ];
@@ -331,16 +331,68 @@ test('Intelecto arcano: +8 de Magia de equipo 15 min a los aliados (más Daño m
     assert.equal(clerigo.p.combat.mag, mag0);
 });
 
-test('Purga (remover): saca el frenado y el congelado, recarga 24 s', () => {
+// ---------- Remover (D.4) ----------
+const para = (p: Player, ms = 5000) => applyParalysis(p.status, clock, ms);
+test('D.4 Remover propio: paralizado se castea 1,5 s, después 4 s sin que te paralicen, recarga 24 s', () => {
     const { w, mago } = setup();
-    applySlow(mago.p.status, clock, 3000);
-    assert.ok(isSlowed(mago.p.status, clock));
-    pkt(w, mago.sid, 'removerRequest', {});
-    assert.equal(isSlowed(mago.p.status, clock), false);
+    para(mago.p); const mp0 = mago.p.mp;
+    assert.ok(mago.p.isParalyzed(clock));
+    pkt(w, mago.sid, 'removerRequest', { targetId: 0n });
+    advance(w, 1400);
+    assert.ok(mago.p.status.isParalyzed, 'a los 1,4 s todavía está casteando');
+    assert.equal(mago.p.mp, mp0, 'el maná se cobra al terminar');
+    advance(w, 200);
+    assert.equal(mago.p.status.isParalyzed, false, 'a los 1,6 s se sacó la parálisis');
+    assert.equal(mago.p.mp, mp0 - UTIL_MP.remover);
+    const fx = cases(mago.log, 'pvpHit').at(-1)!.payload as { value: { targetId: bigint; secs: number } };
+    assert.equal(fx.value.targetId, mago.p.playerId); assert.equal(fx.value.secs, -IMMUNITY_MS / 1000, 'avisa la inmunidad como secs negativo');
+    assert.equal(IMMUNITY_MS, 4000);
+    assert.equal(para(mago.p, 3000), 0, 'inmune a parálisis');
+    advance(w, 4000);
+    assert.equal(para(mago.p), 2500, 'a los 4 s ya te paralizan (el rendimiento decreciente sigue: 2.º control al 50 %)');
+    pkt(w, mago.sid, 'removerRequest', { targetId: 0n });
+    advance(w, 1700);
+    assert.ok(mago.p.status.isParalyzed, 'en recarga (24 s) no sale');
     assert.equal(REMOVER_CD_MS, 24000);
-    clock += 10_000; applySlow(mago.p.status, clock, 3000);
-    pkt(w, mago.sid, 'removerRequest', {});
-    assert.ok(isSlowed(mago.p.status, clock), 'en recarga no sale');
+});
+
+test('D.4 Remover sobre un aliado: 1 s, la recarga es de quien castea y el aliado queda inmune', () => {
+    const { w, mago, clerigo } = setup();
+    para(mago.p);
+    pkt(w, clerigo.sid, 'removerRequest', { targetId: mago.p.playerId });
+    advance(w, 900);
+    assert.ok(mago.p.status.isParalyzed, 'a los 0,9 s todavía no');
+    advance(w, 200);
+    assert.equal(mago.p.status.isParalyzed, false, 'a 1 s sale');
+    assert.ok(clerigo.p.status.removerCooldown > clock, 'la recarga la paga el que castea');
+    assert.equal(mago.p.status.removerCooldown, 0);
+    assert.equal(para(mago.p), 0, 'el aliado queda inmune');
+});
+
+test('D.4 Remover: a un enemigo no, sin nada que purgar no gasta, y moverse lo cancela', () => {
+    const { w, mago, clerigo, enemigo } = setup();
+    para(enemigo.p);
+    pkt(w, clerigo.sid, 'removerRequest', { targetId: enemigo.p.playerId });
+    advance(w, 1500);
+    assert.ok(enemigo.p.status.isParalyzed, 'no se purga a un enemigo');
+    const mp = mago.p.mp;
+    pkt(w, mago.sid, 'removerRequest', { targetId: 0n });
+    advance(w, 1700);
+    assert.equal(mago.p.mp, mp, 'sin nada que purgar no gasta maná');
+    applySlow(mago.p.status, clock, 5000);
+    pkt(w, mago.sid, 'removerRequest', { targetId: 0n });
+    advance(w, 500);
+    pkt(w, mago.sid, 'playerPositionRequest', { x: mago.p.posX + 0.7, y: mago.p.posY + 0.5 });
+    advance(w, 1500);
+    assert.ok(isSlowed(mago.p.status, clock), 'dar un paso cortó el Remover');
+});
+
+test('D.4 Remover respeta el rendimiento decreciente: purgar no lo reinicia', () => {
+    const { w, mago } = setup();
+    assert.equal(para(mago.p), 5000); assert.equal(para(mago.p), 2500);
+    pkt(w, mago.sid, 'removerRequest', { targetId: 0n });
+    advance(w, 1700 + 4100);
+    assert.equal(para(mago.p), 1250, 'el tercer control de la ventana sigue al 25 %');
 });
 
 // ---------- clerigo ----------

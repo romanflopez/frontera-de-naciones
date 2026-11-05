@@ -57,7 +57,7 @@ test('kits: cada habilidad del server pertenece a por lo menos una clase', () =>
 test('kits: el escape o acercamiento de cada clase sale a la vez, en el nivel 20', () => {
     assert.equal(checkSkill('paladin', kitLevel(20), 'carga').ok, true); assert.equal(checkSkill('paladin', kitLevel(19), 'carga').ok, false);
     assert.equal(checkSkill('mago', kitLevel(20), 'blink').ok, true); assert.equal(checkSkill('mago', kitLevel(19), 'blink').ok, false);
-    assert.deepEqual(checkSkill('mago', kitLevel(29), 'remover'), { ok: false, reason: 'nivel', need: kitLevel(30) }, 'Purga pasa al 30');
+    for (const cls of ['paladin', 'mago', 'clerigo']) assert.equal(checkSkill(cls, kitLevel(1), 'remover').ok, true, `D.4: ${cls} tiene Remover desde el 1`);
     assert.deepEqual(checkSkill('paladin', kitLevel(29), 'grito'), { ok: false, reason: 'nivel', need: kitLevel(30) }, 'Bendición de poder pasa al 30');
 });
 

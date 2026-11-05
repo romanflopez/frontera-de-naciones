@@ -19,15 +19,15 @@ const KITS_BASE: Record<ClassId, Readonly<Record<string, number>>> = {
         furia: 1, remover: 1, aliento: 1,
     },
     mago: {
-        ataque: 1, proyectil: 1, esquirla: 1, paralisis: 3, nova: 5, ignicion: 7, bola: 9, lluvia: 12, escudomana: 15, blink: 20, clarividencia: 25, remover: 30, intelecto: 35,
-        furia: 1, invisibilidad: 1, detectar: 1, aliento: 1,
+        ataque: 1, proyectil: 1, esquirla: 1, paralisis: 3, nova: 5, ignicion: 7, bola: 9, lluvia: 12, escudomana: 15, blink: 20, clarividencia: 25, intelecto: 35,
+        furia: 1, remover: 1, invisibilidad: 1, detectar: 1, aliento: 1,
     },
     // Clérigo sagrado de Valdrys (K5): Castigo y Curación desde el 1, Renovar 3, Bendición 5, Nova 7, Reprender 9, Orbe 12.
     // K8: Escudo guardián 15, Paso de luz 20 (escape), Despertar 25, Esfera celestial 30, Bendición de grupo 35 (Fortaleza + Espíritu divino).
     clerigo: {
         ataque: 1, castigo: 1, curacion: 1, renovar: 3, bendicion: 5, novasagrada: 7, reprender: 9, orbe: 12,
         guardian: 15, pasoluz: 20, despertar: 25, esfera: 30, grupo: 35,
-        furia: 1, detectar: 1, aliento: 1,
+        furia: 1, remover: 1, detectar: 1, aliento: 1,
     },
     // Esqueleto (D.0): registrada sin habilidades y sin poder crearse hasta que tenga kit (ver CREATABLE_CLASS_IDS).
     arquero: {},

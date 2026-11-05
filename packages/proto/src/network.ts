@@ -829,8 +829,9 @@ export interface CastEffect {
 export interface SpellCastFailed {
 }
 
-/** PvP entre jugadores: el cliente que lanza avisa un efecto y, si hay target_id, daño/parálisis para ese jugador. */
+/** target_id 0 = uno mismo (1,5 s); un aliado cerca (1 s). */
 export interface RemoverRequest {
+  targetId: bigint;
 }
 
 export interface InvisibilityRequest {
@@ -11487,11 +11488,17 @@ export const SpellCastFailed: MessageFns<SpellCastFailed> = {
 };
 
 function createBaseRemoverRequest(): RemoverRequest {
-  return {};
+  return { targetId: 0n };
 }
 
 export const RemoverRequest: MessageFns<RemoverRequest> = {
-  encode(_: RemoverRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+  encode(message: RemoverRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.targetId !== 0n) {
+      if (BigInt.asIntN(64, message.targetId) !== message.targetId) {
+        throw new globalThis.Error("value provided for field message.targetId of type int64 too large");
+      }
+      writer.uint32(8).int64(message.targetId);
+    }
     return writer;
   },
 
@@ -11508,6 +11515,14 @@ export const RemoverRequest: MessageFns<RemoverRequest> = {
       while (reader.pos < end) {
         const tag = reader.uint32();
         switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.targetId = reader.int64() as bigint;
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -11523,8 +11538,9 @@ export const RemoverRequest: MessageFns<RemoverRequest> = {
   create<I extends Exact<DeepPartial<RemoverRequest>, I>>(base?: I): RemoverRequest {
     return RemoverRequest.fromPartial(base ?? ({} as any));
   },
-  fromPartial<I extends Exact<DeepPartial<RemoverRequest>, I>>(_: I): RemoverRequest {
+  fromPartial<I extends Exact<DeepPartial<RemoverRequest>, I>>(object: I): RemoverRequest {
     const message = createBaseRemoverRequest();
+    message.targetId = (object.targetId !== undefined && object.targetId !== null) ? BigInt(object.targetId) : 0n;
     return message;
   },
 };
