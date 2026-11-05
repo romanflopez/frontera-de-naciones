@@ -749,20 +749,20 @@ function healCast(skill: string, range: number): false | void {
 function renewCast(): false | void {
     const en = mouse.x >= 0 && !hover ? pickEnemy(mouse.x, mouse.y) : null, foe = hover ?? en;
     if (foe) {
-        if (dist(P, foe) > 12) { toast('Está muy lejos. Acercate más.'); return false; }
+        if (dist(P, foe) > VIEW_RANGE) { toast('Está muy lejos. Acercate más.'); return false; }
         efx('flamme', foe.x, foe.y, 8);
         if (hover) skillSend('renovar', 0n, hover.id); else skillSend('renovar', en!.id);
         return;
     }
-    return healCast('renovar', 12);
+    return healCast('renovar', VIEW_RANGE);
 }
 /** Despertar: al aliado elegido si está caído; si no, al aliado caído más cercano a 10 celdas. */
 function reviveCast(): false | void {
     const dead = (o: Other) => !o.gone && facOf(o.profile) === selectedFaction && !isEnemy(o) && o.hp !== undefined && o.hp <= 0;
     let t = P.ally && dead(P.ally) ? P.ally : null;
-    if (!t) { let bd = 10.5; for (const o of others.values()) if (dead(o) && dist(P, o) <= bd) { bd = dist(P, o); t = o; } }
+    if (!t) { let bd = VIEW_RANGE; for (const o of others.values()) if (dead(o) && dist(P, o) <= bd) { bd = dist(P, o); t = o; } }
     if (!t) { toast('No hay ningún aliado caído cerca.'); return false; }
-    if (dist(P, t) > 10.5) { toast(`${t.name} está muy lejos.`); return false; }
+    if (dist(P, t) > VIEW_RANGE) { toast(`${t.name} está muy lejos.`); return false; }
     skillSend('despertar', t.id);
 }
 const LIB: Record<string, SpellDef> = {
@@ -820,9 +820,9 @@ const LIB: Record<string, SpellDef> = {
     intelecto: { name: 'Intelecto arcano', mp: 60, cd: 10, col: '#b9a3ff', range: 0, target: false, aoe: 14, // Arcane Intellect: +8 de Magia a la party y a los aliados cerca: 15 min afuera, 90 s en la arena
         cast() { skillSend('intelecto'); } },
     guardian: { name: 'Escudo guardián', mp: 28, cd: 12, col: '#bfe8ff', range: VIEW_RANGE, target: false, instant: true, // Guardian Shield: escudo del 40 % de la vida del aliado
-        cast() { return healCast('guardian', 12); } },
+        cast() { return healCast('guardian', VIEW_RANGE); } },
     esfera: { name: 'Esfera celestial', mp: 34, cd: 8, col: '#fff2a8', range: VIEW_RANGE, target: false, instant: true, // Celestial Sphere: 13 % que salta 8 veces entre aliados
-        cast() { return healCast('esfera', 12); } },
+        cast() { return healCast('esfera', VIEW_RANGE); } },
     despertar: { name: 'Despertar', mp: 54, cd: 20, col: '#ffffff', range: 10, target: false, // Reawaken: revive con 50 % (en mazmorra o arena, dentro de los 10 s)
         cast() { return reviveCast(); } },
     grupo: { name: 'Bendición de grupo', mp: 28, cd: 10, col: '#ffb07a', range: 0, target: false, aoe: 14, // Fortitude + Divine Spirit: +6 % de vida y +50 % de regen de maná: 15 min afuera, 90 s en la arena (a toda la party)
@@ -837,15 +837,15 @@ const LIB: Record<string, SpellDef> = {
     reprender: { name: 'Reprender', mp: 30, cd: 15, col: '#fff2a8', range: VIEW_RANGE, target: true, ctrl: true, instant: true, // Chastise (Valdrys): aturde 3 s
         cast(m) { return control(m, 'reprender', 3, 'Aturdiste', 'El aturdimiento', 'solar'); } },
     curacion: { name: 'Curación', mp: 48, cd: 5, col: '#8af0a8', range: VIEW_RANGE, target: false, // Generous Heal (Valdrys): 40 % de la vida
-        cast() { return healCast('curacion', 12); } },
+        cast() { return healCast('curacion', VIEW_RANGE); } },
     renovar: { name: 'Renovar', mp: 26, cd: 3, col: '#b8f5a0', range: VIEW_RANGE, target: false, instant: true, // Renew (Valdrys): cura en 6 s; con el cursor sobre un enemigo, lo quema
         cast() { return renewCast(); } },
     bendicion: { name: 'Bendición sagrada', mp: 30, cd: 20, col: '#ffe9a0', range: VIEW_RANGE, target: false, instant: true, // Holy Blessing (Valdrys): 10 s
-        cast() { return healCast('bendicion', 12); } },
+        cast() { return healCast('bendicion', VIEW_RANGE); } },
     novasagrada: { name: 'Nova sagrada', mp: 36, cd: 6, col: '#fff0b0', range: 0, target: false, aoe: 4.5, instant: true, // Holy Nova (Valdrys)
         cast() { skillSend('novasagrada'); } },
     orbe: { name: 'Orbe sagrado', mp: 56, cd: 10, col: '#a8ffd0', range: VIEW_RANGE, target: false, // Holy Orb (Valdrys): 20 % al objetivo y a los de al lado
-        cast() { return healCast('orbe', 12); } },
+        cast() { return healCast('orbe', VIEW_RANGE); } },
     furia: { name: 'Furia', mp: 15, cd: 90, col: '#ffd23f', range: 0, target: false,
         cast() { sfx('berserk', 0.7); efxLocal('pilar', P.x, P.y); pvpSend('pilar', P.x, P.y, 0n, 'furia'); P.fury = now() + 60; float(P.x, P.y - 0.4, '¡FURIA!', '#ffd23f', true); fx.push({ k: 'ring', x: P.x, y: P.y, t: 0, c: '#ffd23f' }); log(`Furia: +${selectedClass === 'mago' ? 35 : selectedClass === 'healer' ? 20 : 15}% de daño por 60 s.`, true); } },
 };
