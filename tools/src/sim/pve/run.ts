@@ -8,6 +8,7 @@
  *
  * Sale con código 1 si algún nivel queda fuera de las metas (pve/targets.ts).
  */
+import { HORAS_META } from './targets.ts';
 import { BOSS_LEVELS, hpRegenPerSec, killsToLevel, MAX_LEVEL, MEDITATE, type MobType } from '@fdn/world';
 import { buildStats, CLS_NAME, type Cls } from '../pvp/builds.ts';
 import { farm, foeAt, many } from './engine.ts';
@@ -34,14 +35,21 @@ for (const cls of clss) {
 
 if (process.argv.includes('--horas') || !arg('lvl')) {
     console.log('\n## Horas hasta cada nivel (un mob por vez, farmeo encadenado)\n');
-    console.log('| Clase | 1 → 10 | 10 → 20 | 20 → 30 | 30 → 40 | Total |');
+    console.log('| Clase | 1 → 10 | 10 → 40 | 40 → 80 | 80 → 120 | Total 1 → 120 |');
     console.log('|---|---|---|---|---|---|');
+    const totals: number[] = [];
     for (const cls of clss) {
         const per: number[] = [];
-        for (let L = 1; L < Math.min(MAX_LEVEL, 40); L++) per.push(killsToLevel(L) / farmAt(cls, L, 900).killsPerHour);
+        for (let L = 1; L < MAX_LEVEL; L++) per.push(killsToLevel(L) / farmAt(cls, L, 900).killsPerHour);
         const sum = (a: number, b: number) => per.slice(a - 1, b - 1).reduce((x, y) => x + y, 0);
-        console.log(`| ${CLS_NAME[cls]} | ${f1(sum(1, 10))} | ${f1(sum(10, 20))} | ${f1(sum(20, 30))} | ${f1(sum(30, 40))} | ${f1(sum(1, 40))} |`);
+        const total = sum(1, MAX_LEVEL);
+        console.log(`| ${CLS_NAME[cls]} | ${f1(sum(1, 10))} | ${f1(sum(10, 40))} | ${f1(sum(40, 80))} | ${f1(sum(80, 120))} | ${f1(total)} |`);
+        totals.push(total);
+        if (sum(1, 10) >= HORAS_META.hasta10Max) bad++;
     }
+    const mean = totals.reduce((a, b) => a + b, 0) / totals.length, off = Math.abs(mean - HORAS_META.total) > HORAS_META.total * HORAS_META.tol;
+    if (off) bad++;
+    console.log(`\nMeta (D.1): 1 → 10 en menos de ${HORAS_META.hasta10Max} h y ~${HORAS_META.total} h al ${MAX_LEVEL} (±${HORAS_META.tol * 100} %) en promedio de las clases. Promedio: ${f1(mean)} h ${off ? '✗' : '✓'}. La diferencia entre clases (kills/h) es balance: D.20.`);
     console.log('\n## Jefes de mazmorra de a uno, con el escalado para jugar solo del PR #17 (vida ×0,5, daño ×0,85)\n');
     console.log('| Jefe | Nivel | Vida | Clase | Tiempo | Gana | Pociones |');
     console.log('|---|---|---|---|---|---|---|');
