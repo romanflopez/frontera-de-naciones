@@ -31,17 +31,17 @@ export const statPointsFree = (lvl: number, s: Stats): number => statPointsTotal
 
 /** Vida y maná por clase: [base, por nivel de poder]. Compartidos: el server decide y el cliente muestra los mismos números. */
 
-export const CLASS_HP: Record<string, [number, number]> = { guerrero: [593, 76], mago: [381, 42], healer: [470, 54] };
-export const CLASS_MP: Record<string, [number, number]> = { guerrero: [40, 4], mago: [200, 12], healer: [110, 13] }; // etapa 6b: el maná base del mago pasó de 90 a 200 (con los costos de Valdrys meditaba 30-40 % del tiempo entre el nivel 3 y el 10; docs/COMBATE.md)
+export const CLASS_HP: Record<string, [number, number]> = { paladin: [593, 76], mago: [381, 42], clerigo: [470, 54] };
+export const CLASS_MP: Record<string, [number, number]> = { paladin: [40, 4], mago: [200, 12], clerigo: [110, 13] }; // etapa 6b: el maná base del mago pasó de 90 a 200 (con los costos de Valdrys meditaba 30-40 % del tiempo entre el nivel 3 y el 10; docs/COMBATE.md)
 /** Vida y maná base de la clase al nivel `lvl` (1-120): crecen con el nivel de PODER (escala vieja 1-40), no con el nivel crudo. */
-export const classBaseHp = (cls: string, lvl: number): number => { const [a, b] = CLASS_HP[cls] ?? CLASS_HP.guerrero; return Math.round(a + (powerLevel(Math.max(1, lvl || 1)) - 1) * b); };
-export const classBaseMp = (cls: string, lvl: number): number => { const [a, b] = CLASS_MP[cls] ?? CLASS_MP.guerrero; return Math.round(a + (powerLevel(Math.max(1, lvl || 1)) - 1) * b); };
+export const classBaseHp = (cls: string, lvl: number): number => { const [a, b] = CLASS_HP[cls] ?? CLASS_HP.paladin; return Math.round(a + (powerLevel(Math.max(1, lvl || 1)) - 1) * b); };
+export const classBaseMp = (cls: string, lvl: number): number => { const [a, b] = CLASS_MP[cls] ?? CLASS_MP.paladin; return Math.round(a + (powerLevel(Math.max(1, lvl || 1)) - 1) * b); };
 
 /** Lo que dan los stats: se suma a lo de la clase, el nivel y el equipo. */
 export interface StatBonus { hp: number; mp: number; def: number; meleeMult: number; magicMult: number; /** % de crítico en hechizos de daño (Inteligencia) */ critMag: number }
 /**
  * `baseHp` es la vida base de la clase a ese nivel (classBaseHp): la Vitalidad da +0,2 % de eso por punto,
- * así vale lo mismo para un mago que para un guerrero y no se desinfla a nivel alto (antes eran +2,5 planos, trampa).
+ * así vale lo mismo para un mago que para un paladín y no se desinfla a nivel alto (antes eran +2,5 planos, trampa).
  */
 export function statBonus(s: Stats | undefined, baseHp = 0): StatBonus {
     const d = (id: StatId): number => Math.max(0, (s?.[id] ?? STAT_BASE) - STAT_BASE);
@@ -63,9 +63,9 @@ export interface StatTip {
     /** Consejo para esa clase, en una frase. */
     advice: string;
 }
-/** Qué stat escala cada clase: el Paladín pega con Fuerza (todas sus habilidades de daño), el Mago y el Healer con Magia (hechizos y curas). Salen de `stat` en pvpCombat.ts. */
+/** Qué stat escala cada clase: el Paladín pega con Fuerza (todas sus habilidades de daño), el Mago y el Clérigo con Magia (hechizos y curas). Salen de `stat` en pvpCombat.ts. */
 const STAT_FIT: Record<string, Record<StatId, [StatFit, string]>> = {
-    guerrero: {
+    paladin: {
         str: ['clave', 'Clave para el Paladín: todas sus habilidades de daño escalan con Fuerza.'],
         vit: ['clave', 'Más vida para aguantar al frente. Cada punto rinde más a medida que subís de nivel, porque se calcula sobre tu vida base.'],
         dex: ['util', 'Sirve para tankear, pero cada punto rinde poco: a más defensa, menos mejora cada punto nuevo.'],
@@ -79,12 +79,12 @@ const STAT_FIT: Record<string, Record<StatId, [StatFit, string]>> = {
         int: ['util', 'Cada punto suma chance de crítico a tus hechizos de daño: rinde mucho cuando ya tenés Magia alta.'],
         mag: ['clave', 'Clave para el Mago: sube el daño de todos tus hechizos y te da el maná para lanzarlos.'],
     },
-    healer: {
+    clerigo: {
         str: ['bajo', 'Tus hechizos y curas no escalan con Fuerza: solo te da un poco de vida. No pongas puntos acá.'],
         vit: ['util', 'Más vida para aguantar un golpe mientras curás.'],
         dex: ['bajo', 'Poca defensa por punto: casi siempre conviene Magia o Vitalidad.'],
         int: ['bajo', 'Solo da crítico a los hechizos de daño, no a las curas: casi nunca conviene.'],
-        mag: ['clave', 'Clave para el Healer: sube lo que curás y lo que dañás, y te da el maná para seguir casteando.'],
+        mag: ['clave', 'Clave para el Clérigo: sube lo que curás y lo que dañás, y te da el maná para seguir casteando.'],
     },
 };
 const pct = (x: number): string => (Math.round(x * 10) / 10).toString().replace('.', ',');
@@ -94,7 +94,7 @@ const pct = (x: number): string => (Math.round(x * 10) / 10).toString().replace(
  */
 export function statTip(id: StatId, cls: string, lvl: number, stats: Stats): StatTip {
     const spent = Math.max(0, stats[id] - STAT_BASE), baseHp = classBaseHp(cls, lvl);
-    const [fit, advice] = (STAT_FIT[cls] ?? STAT_FIT.guerrero)[id];
+    const [fit, advice] = (STAT_FIT[cls] ?? STAT_FIT.paladin)[id];
     const hpPerVit = 0.002 * baseHp;
     let perPoint: string, now: string;
     if (id === 'str') {

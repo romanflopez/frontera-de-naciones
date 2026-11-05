@@ -72,7 +72,7 @@ class Bot {
             const p = ServerMessage.decode(new Uint8Array(d)).payload as Srv | undefined; if (!p) return;
             switch (p.$case) {
                 case 'characterLoaded': this.loaded = { exists: p.value.exists, data: p.value.data }; break;
-                case 'characterList': this.send(p.value.characters.some((c) => c.name === this.name) ? { $case: 'selectCharacterRequest', value: { name: this.name } } : { $case: 'createCharacterRequest', value: { name: this.name, cls: 'guerrero', faction: 'solmar' } }); if (p.value.error) throw new Error(p.value.error); break;
+                case 'characterList': this.send(p.value.characters.some((c) => c.name === this.name) ? { $case: 'selectCharacterRequest', value: { name: this.name } } : { $case: 'createCharacterRequest', value: { name: this.name, cls: 'paladin', faction: 'solmar' } }); if (p.value.error) throw new Error(p.value.error); break;
                 case 'initialState': this.id = p.value.playerId; break;
                 case 'initialGameWorldState': this.x = p.value.playerX; this.y = p.value.playerY; ready(); break;
                 case 'inventoryState': this.inv = p.value; this.invCount++; break;
@@ -146,7 +146,7 @@ async function main() {
         { n: 'Maza', r: 0, a: [{ id: 'crit', v: 4 }] }, // común con atributo de más
         ...Array.from({ length: 20 }, () => ({ n: 'Espada corta', r: 0, a: [] })),
     ];
-    seedLegacyAccount(migName, { v: 1, faction: 'solmar', cls: 'guerrero', lvl: 60, exp: 100, gold: 999999999, hp: 500, mp: 50, bag, eq: { arma: { n: 'Mandoble', r: 3, a: [{ id: 'df', v: 9999 }] }, armadura: null, cabeza: null, anillo: null }, q: { i: 3, st: 'new', prog: 0, keys: { cripta: 99, foso: 0 }, shards: { cripta: 0, foso: 0 } }, pots: { hp: 99, mp: 400 }, u: [] });
+    seedLegacyAccount(migName, { v: 1, faction: 'solmar', cls: 'paladin', lvl: 60, exp: 100, gold: 999999999, hp: 500, mp: 50, bag, eq: { arma: { n: 'Mandoble', r: 3, a: [{ id: 'df', v: 9999 }] }, armadura: null, cabeza: null, anillo: null }, q: { i: 3, st: 'new', prog: 0, keys: { cripta: 99, foso: 0 }, shards: { cripta: 0, foso: 0 } }, pots: { hp: 99, mp: 400 }, u: [] });
     const rich = new Bot(migName); await rich.connect();
     const inv0 = rich.inv!;
     check(rich.loaded?.exists === true, '(m) la cuenta vieja se reconoce como personaje existente');
@@ -166,7 +166,7 @@ async function main() {
     // ---------- (a) un save inflado no cambia nada ----------
     await rich.saveClaim('mago');
     const inv1 = await rich.refresh();
-    check(inv1.goldD === inv0.goldD && inv1.lvl === inv0.lvl && inv1.bag.length === inv0.bag.length && inv1.cls === 'guerrero', '(a) un save con oro/nivel/items/clase inflados no cambia el estado del server');
+    check(inv1.goldD === inv0.goldD && inv1.lvl === inv0.lvl && inv1.bag.length === inv0.bag.length && inv1.cls === 'paladin', '(a) un save con oro/nivel/items/clase inflados no cambia el estado del server');
     rich.close(); await sleep(500);
     const rich2 = new Bot(migName); await rich2.connect();
     check(rich2.inv!.goldD === 999999999 && rich2.inv!.lvl === 40, '(a) tras reconectar sigue igual (lo importado se guardó una sola vez)');
@@ -174,9 +174,9 @@ async function main() {
     // ---------- personaje nuevo ----------
     const fresh = new Bot(`new${RUN}`); await fresh.connect();
     check(fresh.loaded?.exists === false && fresh.inv === null, '(n) cuenta nueva: sin personaje hasta el primer save');
-    await fresh.saveClaim('guerrero');
+    await fresh.saveClaim('paladin');
     check(!!fresh.inv && fresh.inv.goldD === 0 && fresh.inv.lvl === 1 && fresh.inv.bag.length === 0 && fresh.inv.potsHp === 3, '(a) personaje nuevo: kit inicial, sin oro, aunque el save dijera otra cosa');
-    check(fresh.inv?.eq.some((e) => e.slot === 'arma' && e.item?.base === 'Espada corta') === true, '(n) kit de guerrero: Espada corta equipada');
+    check(fresh.inv?.eq.some((e) => e.slot === 'arma' && e.item?.base === 'Espada corta') === true, '(n) kit de paladín: Espada corta equipada');
 
     // ---------- (b) sin oro ----------
     await fresh.goNear('armero_s');
@@ -317,7 +317,7 @@ async function main() {
     const SCALE = Number(process.env.LOOT_SCALE ?? '1');
     const FREE_LOOT = 60_000 * SCALE;
     const swords = (n: number) => Array.from({ length: n }, (_, i) => ({ n: i % 2 ? 'Espada corta' : 'Maza', r: 0, a: [] }));
-    const legacy = (extra: Record<string, unknown>) => ({ v: 1, faction: 'solmar', cls: 'guerrero', lvl: 1, exp: 0, gold: 100, hp: 500, mp: 50, bag: [], eq: { arma: { n: 'Espada corta', r: 0, a: [] }, armadura: null, cabeza: null, anillo: null }, q: { i: 0, st: 'new', prog: 0, keys: { cripta: 0, foso: 0 }, shards: { cripta: 0, foso: 0 } }, pots: { hp: 3, mp: 3 }, u: [], ...extra });
+    const legacy = (extra: Record<string, unknown>) => ({ v: 1, faction: 'solmar', cls: 'paladin', lvl: 1, exp: 0, gold: 100, hp: 500, mp: 50, bag: [], eq: { arma: { n: 'Espada corta', r: 0, a: [] }, armadura: null, cabeza: null, anillo: null }, q: { i: 0, st: 'new', prog: 0, keys: { cripta: 0, foso: 0 }, shards: { cripta: 0, foso: 0 } }, pots: { hp: 3, mp: 3 }, u: [], ...extra });
     const spot = { x: 60, y: 60 };
     {
         // ---- (G-e) tirar desde la bolsa lo deja en el suelo y se puede recoger ----

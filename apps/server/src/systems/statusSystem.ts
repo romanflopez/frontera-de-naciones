@@ -12,7 +12,7 @@ export interface CharacterStatus {
     detectInvisibleEndTime: number;
     /** Ralentización: vence sola; `dirty` avisa al mundo que hay que anunciarlo. */
     slowEndTime: number;
-    /** Bendición sagrada del healer (K5): menos daño, más curación recibida e inmunidad a congelado y aturdido. */
+    /** Bendición sagrada del clérigo (K5): menos daño, más curación recibida e inmunidad a congelado y aturdido. */
     blessEndTime: number;
     /** Veneno (K5): −30 % de curación recibida mientras dura (lo pone el golpe físico con chance de veneno o un mob tóxico). */
     poisonEndTime: number;

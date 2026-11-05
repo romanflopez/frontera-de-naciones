@@ -13,7 +13,7 @@ export const CHANGELOG: { date: string; items: string[] }[] = [
         'Movimiento libre: el personaje responde al instante (clic mantenido, WASD o flechas) y se puede caderear y amagar.',
         'La Saeta ígnea y la Bola de fuego ahora son proyectiles: se pueden esquivar moviéndote. Si fallan, igual gastan maná.',
         'Jefe de mundo (Coloso de piedra), botín de jefe sin ninjas, quests que cuentan en party y encargo de dungeon que devuelve una llave.',
-        'Las bendiciones del healer duran 15 min y le llegan a toda la party.',
+        'Las bendiciones del clérigo duran 15 min y le llegan a toda la party.',
         'Balance de PvE: los bichos pegan según el nivel, la vida y el maná se recuperan por porcentaje.',
         'Botín personal: lo que suelta un mob va directo a tu bolsa (y a la de tu party cerca), con menos oro y basura pero más grande, y pociones seguido para el sustain.',
     ] },

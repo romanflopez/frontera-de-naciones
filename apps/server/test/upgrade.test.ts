@@ -26,8 +26,8 @@ function setup() {
         world.playerConnected(session.sessionId, name, (m) => log.push(m), () => {}, persisted);
         mem.put(`acc-${name}`, { name, salt: '', hash: '', created: 0, lastLogin: 0 });
         world.bindAccount(session.sessionId, `acc-${name}`);
-        world.onClientSave(session.sessionId, JSON.stringify({ cls: 'guerrero', faction }));
-        world.handleClientPacket(session.sessionId, { payload: { $case: 'changePlayerProfileRequest', value: { profile: `${faction};guerrero;` } } } as never);
+        world.onClientSave(session.sessionId, JSON.stringify({ cls: 'paladin', faction }));
+        world.handleClientPacket(session.sessionId, { payload: { $case: 'changePlayerProfileRequest', value: { profile: `${faction};paladin;` } } } as never);
         reg.sessionHook = (id) => (id === session.sessionId ? { session } : undefined);
         return { session, log, p: world.playerOf(session.sessionId)! };
     };
@@ -65,7 +65,7 @@ test('mejora +N: las probabilidades arrancan en 33 % y nunca superan el 33 %', a
 
 test('mejora +N: sube los stats base (+4 % por nivel) en el cálculo de combate del server', async () => {
     const { statsFromChar } = await import('../src/systems/pvpCombat.ts');
-    const base = statsFromChar({ lvl: 5, cls: 'guerrero', eq: { arma: { n: 'Espada del Cañón' } } }), up5 = statsFromChar({ lvl: 5, cls: 'guerrero', eq: { arma: { n: 'Espada del Cañón', up: 5 } } });
+    const base = statsFromChar({ lvl: 5, cls: 'paladin', eq: { arma: { n: 'Espada del Cañón' } } }), up5 = statsFromChar({ lvl: 5, cls: 'paladin', eq: { arma: { n: 'Espada del Cañón', up: 5 } } });
     assert.ok(up5.wdmg[1] > base.wdmg[1] && up5.wdmg[0] >= base.wdmg[0]);
     assert.equal(up5.wdmg[1], Math.round(base.wdmg[1] * 1.2));
 });

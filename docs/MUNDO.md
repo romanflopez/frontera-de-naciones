@@ -1,5 +1,7 @@
 # El mundo: de un mapa único a mapas separados
 
+> Las decisiones de diseño viven en [`DISEÑO.md`](DISEÑO.md); este archivo es nota de implementación y estado, y puede estar desactualizado.
+
 Estado: **Fases 0 y 1 implementadas** (infraestructura multi-mapa con 3 mapas de prueba) **Fase 2 hecha en sus dos ciudades** (Villa de Solmar y Ciudadela de Vhar, exterior + 8 interiores cada una) y **Fase 3 hecha: núcleo de caza** (Llanos del Alba, La Frontera, Camposanto Viejo y Páramo Reseco con pits de 45-60 mobs). Ver «Estado de la implementación» al final de la sección 4. El resto sigue en diseño. Diagrama: [`mundo-grafo.html`](mundo-grafo.html) (SVG autocontenido; se abre en el navegador).
 Base que se mantiene: la curva de niveles y mobs de [`ZONAS.md`](ZONAS.md) (niveles 1-12), la cadena de misiones del Capitán y los portales de `packages/world/src/training.ts`.
 

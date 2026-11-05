@@ -29,7 +29,7 @@ function setup() {
         const sid = `s-${name}`, sp = MAPS[w.mapId].spawn;
         w.playerConnected(sid, name, () => {}, () => {}, { mapId: w.mapId, worldId: w.mapId, x: sp.x, y: sp.y, direction: 4, gender: 0, skinColor: 0, hairStyleIndex: 0, underwearColorIndex: 0, movementSpeedMs: 270, runningMode: true, attackMode: true });
         mem.put(`acc-${name}`, { name, salt: '', hash: '', created: 0, lastLogin: 0 }); w.bindAccount(sid, `acc-${name}`);
-        w.onClientSave(sid, JSON.stringify({ cls: 'guerrero', faction: 'solmar' }));
+        w.onClientSave(sid, JSON.stringify({ cls: 'paladin', faction: 'solmar' }));
         const p = w.playerOf(sid)!; p.econ!.lvl = 60; return p;
     };
     return { reg, svc, said, mk, setRnd: (v: number) => { r = v; } };

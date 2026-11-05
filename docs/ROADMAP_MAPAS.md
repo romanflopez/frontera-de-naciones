@@ -1,5 +1,7 @@
 # Roadmap de mapas: dónde estamos
 
+> Las decisiones de diseño viven en [`DISEÑO.md`](DISEÑO.md); este archivo es nota de implementación y estado, y puede estar desactualizado.
+
 Documento vivo para no perder el hilo. Última actualización: 4/11/2026. El detalle técnico está en `MAPAS_FLARE.md` (importador, relleno, licencias) y en `TIERS_DE_ZONA.md` (tiers, niveles y jefes).
 
 ## 1. El mundo hoy

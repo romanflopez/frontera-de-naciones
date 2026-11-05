@@ -455,11 +455,11 @@ export function applyQuestEvent(b: QuestBook, e: QuestEvent | null, have: QuestH
     return { msgs: out, paid };
 }
 
-/** Ítems que se pueden elegir (o sortear) como premio, según la clase. El mago y el healer usan lo que da Magia; el guerrero, lo que no. */
+/** Ítems que se pueden elegir (o sortear) como premio, según la clase. El mago y el clérigo usan lo que da Magia; el paladín, lo que no. */
 export function rewardUniques(kind: NonNullable<QuestReward['unique']>, cls: string): UniqueBase[] {
     const boss = /^boss_(d\d)_choice$/.exec(kind)?.[1] as DungeonId | undefined;
     if (boss) return BOSS_UNIQUES[DUNGEON_BOSS[boss]] ?? [];
-    const caster = cls === 'mago' || cls === 'healer';
+    const caster = cls === 'mago' || cls === 'clerigo';
     return (UNIQUES_BY_TIER[1] ?? []).filter((u) => u.slot === 'anillo' || (caster ? (u.mag ?? 0) > 0 : !(u.mag ?? 0)));
 }
 

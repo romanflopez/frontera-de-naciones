@@ -168,7 +168,7 @@ export class Sim {
         return true;
     }
 
-    /** Habilidad de SKILLS (= handleSkill / healerSkill / handleBlink). */
+    /** Habilidad de SKILLS (= handleSkill / clerigoSkill / handleBlink). */
     private skill(f: Fighter, id: string, tgt?: Fighter): boolean {
         const sp = SKILLS[id], now = this.now;
         const mp = skillMpCost(id, true); // en la sim todo es combate PvP

@@ -33,7 +33,7 @@ function setup(names: string[]) {
         w.playerConnected(session.sessionId, name, (m) => log.push(m), () => {}, persisted);
         mem.put(`acc-${name}`, { name, salt: '', hash: '', created: 0, lastLogin: 0 });
         w.bindAccount(session.sessionId, `acc-${name}`);
-        w.onClientSave(session.sessionId, JSON.stringify({ cls: 'guerrero', faction: 'solmar' }));
+        w.onClientSave(session.sessionId, JSON.stringify({ cls: 'paladin', faction: 'solmar' }));
         const p = w.playerOf(session.sessionId)!;
         p.econ!.lvl = 5; p.econ!.gold = 1000;
         const sync = () => { p.prog = progressFromEcon(p.econ); };

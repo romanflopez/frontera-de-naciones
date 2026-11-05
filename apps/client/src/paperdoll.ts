@@ -7,9 +7,9 @@ interface PaperMeta { cw: number; ch: number; ax: number; ay: number; cols: numb
 
 /** Equipo inicial de cada clase (mismos looks que sus items base de packages/world/src/economy.ts) y dirección que mejor se ve de frente. */
 const LOOKS: Record<string, { set: string; head: string; main?: string; off?: string; dir: number }> = {
-    guerrero: { set: 'leather', head: 'head_short', main: 'shortsword', off: 'buckler', dir: 5 },
+    paladin: { set: 'leather', head: 'head_short', main: 'shortsword', off: 'buckler', dir: 5 },
     mago: { set: 'mage', head: 'head_short', main: 'staff', dir: 6 },
-    healer: { set: 'mage', head: 'head_short', main: 'staff', dir: 4 }, // marcador hasta que lleguen los sprites del healer
+    clerigo: { set: 'mage', head: 'head_short', main: 'staff', dir: 4 }, // marcador hasta que lleguen los sprites del clérigo
 };
 
 let metaP: Promise<PaperMeta | null> | null = null;
@@ -24,7 +24,7 @@ const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** Compone los cuadros de la pausa (uno por frame) de una dirección con todas las capas en su orden de dibujo. */
 async function compose(clsId: string, meta: PaperMeta): Promise<{ frames: HTMLCanvasElement[]; dir: number }> {
-    const L = LOOKS[clsId] ?? LOOKS.guerrero;
+    const L = LOOKS[clsId] ?? LOOKS.paladin;
     const names = [...(meta.sets[L.set] ?? meta.sets.default), L.head, ...(L.main ? [L.main] : []), ...(L.off ? [L.off] : [])];
     const ims = await Promise.all(names.map(loadImg));
     const A = meta.anims.stance, frames: HTMLCanvasElement[] = [];

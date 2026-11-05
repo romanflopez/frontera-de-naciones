@@ -10,7 +10,7 @@ import { PARTY_SHARE_RANGE, partyExpMult, partyMates } from './party.ts';
 import { dailyOffers } from './dailyShop.ts';
 /** Hasta dónde llega el botín personal de un élite o jefe de mundo para los que participaron (celdas desde donde murió). */
 const BOSS_SHARE_RANGE = 30;
-import { hitRoll, AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, MEDITATE, pvpMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionLockMs, potionMp, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, POTION_LOCK_PVP_MS, PVP_COMBAT_MS, pvpCap, pvpScale, pvpVsCtrl, RECALL_PVP_LOCK_MS, INVIS_CD_MS, DETECT_CD_MS, SECOND_WIND, secondWindHeal, progressFromEcon, PVP_SPELLS, BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, POISON_HEAL_TAKEN, HEAL_THREAT, HEALER_SKILLS, STUN_SPELLS, healAmount, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, K8_SKILLS, skillMpCost, SHIELD_MS, BUFF, withBuffs, buffTakenMult, type DmgKind } from './systems/pvpCombat.ts';
+import { hitRoll, AOE_MAX_TARGETS, AURA_HEAL_FRAC, BURN_EVERY, BURN_TICKS, burnTickDmg, CAST_MULTI_HIT_MS, CAST_READY_MS, CAST_SLACK_MS, castMsOf, combatMpRegen, MEDITATE, pvpMpRegen, isCast, aoeMult, damageAfterDefense, FURY_MS, paralysisSecs, potionHp, potionHpSplit, potionLockMs, potionMp, POTION_GCD_SLACK_MS, POTION_HOT_EVERY_MS, POTION_LOCK_PVP_MS, PVP_COMBAT_MS, pvpCap, pvpScale, pvpVsCtrl, RECALL_PVP_LOCK_MS, INVIS_CD_MS, DETECT_CD_MS, SECOND_WIND, secondWindHeal, progressFromEcon, PVP_SPELLS, BLESS_DMG_TAKEN, BLESS_HEAL_TAKEN, POISON_HEAL_TAKEN, HEAL_THREAT, CLERIGO_SKILLS, STUN_SPELLS, healAmount, rollSpellDamage, SKILLS, spellDmgKind, statsFromChar, UTIL_MP, K8_SKILLS, skillMpCost, SHIELD_MS, BUFF, withBuffs, buffTakenMult, type DmgKind } from './systems/pvpCombat.ts';
 import { HUBS, QUESTS, RECALL, TRAINING, trainingLockedMsg, trainingOfMap, WAYPOINT_RANGE, factionHome, recallBlockedReason, findLink, inMapRect, linkGateReason, portalGate, respawnTarget, trainingUnlocked, waypointTarget, type Link, type MapDef, checkSkill, skillDeniedText } from '@fdn/world';
 import { applyParalysis, applySlow, applyBless, applyPoison, applyBuff, applyShield, absorbShield, activeBuffs, clearBuffs, hasBuff, shieldOf, breakInvisibility, castDetectInvisible, castInvisibility, castRemover, expireTimed, isBlessed, isPoisoned, isSlowed, updateStatus, clearBlessings } from './systems/statusSystem.ts';
 import type { ClientMessage, ServerMessage } from '@fdn/proto';
@@ -994,7 +994,7 @@ export class GameWorld {
     }
 
     /**
-     * Mago: Blink (7 tiles). Healer: Paso de luz (K8, 6 tiles, además se saca el frenado). Hacia (x, y), atraviesa jugadores y mobs,
+     * Mago: Blink (7 tiles). Clérigo: Paso de luz (K8, 6 tiles, además se saca el frenado). Hacia (x, y), atraviesa jugadores y mobs,
      * pero no muros: la línea no puede cruzar celdas bloqueadas, y el destino tiene que ser caminable, libre (sin jugador ni mob),
      * sin portal y del mismo lado de la zona segura.
      */
@@ -1049,14 +1049,14 @@ export class GameWorld {
         return -1;
     }
 
-    /** Paladin: Carga / Tajo giratorio / Grito de guerra. */
+    /** Paladín: Carga / Tajo giratorio / Grito de guerra. */
     private handleSkill(p: Player, skill: string, targetId: bigint, mobId: number): void {
         if (skill === 'aliento') return this.startWind(p);
-        if (!['carga', 'giro', 'nova', 'mandato', 'aura'].includes(skill) && !(HEALER_SKILLS as readonly string[]).includes(skill) && !(K8_SKILLS as readonly string[]).includes(skill)) return;
+        if (!['carga', 'giro', 'nova', 'mandato', 'aura'].includes(skill) && !(CLERIGO_SKILLS as readonly string[]).includes(skill) && !(K8_SKILLS as readonly string[]).includes(skill)) return;
         if (!this.skillGate(p, skill)) return;
         const sp = SKILLS[skill], now = Date.now();
         if ((K8_SKILLS as readonly string[]).includes(skill)) return this.k8Skill(p, skill, targetId, now);
-        if (sp.cls === 'healer') return this.healerSkill(p, skill, targetId, mobId, now);
+        if (sp.cls === 'clerigo') return this.clerigoSkill(p, skill, targetId, mobId, now);
         const rollDmg = (tgt?: Player) => rollSpellDamage(skill, p.combat, p.pvp.fury(now) && (!tgt || this.inPvp(tgt, now))); // K6: la Furia no vale en el primer golpe
         const hitPlayer = (tgt: Player, control: boolean) => {
             const dmg = this.damagePlayer(tgt, rollDmg(tgt), 'phys', p, '', skill);
@@ -1452,8 +1452,8 @@ export class GameWorld {
         for (const o of this.nearbyPlayers(tgt.posX, tgt.posY, tgt.sessionId)) if (!this.hiddenFrom(o, tgt)) o.send(m);
     }
     /**
-     * Cura del server a un jugador (robo de vida, Juicio, Aura sagrada, curas del healer). La Bendición sagrada la sube un 30 %.
-     * Si la tira otro (`by`, el healer), los monstruos que pelean con el curado le suman amenaza. Devuelve lo que curó de verdad.
+     * Cura del server a un jugador (robo de vida, Juicio, Aura sagrada, curas del clérigo). La Bendición sagrada la sube un 30 %.
+     * Si la tira otro (`by`, el clérigo), los monstruos que pelean con el curado le suman amenaza. Devuelve lo que curó de verdad.
      */
     private healPlayer(p: Player, n: number, by?: Player, spell = ''): number {
         if (p.isDead || n <= 0) return 0;
@@ -1472,8 +1472,8 @@ export class GameWorld {
         p.mp = Math.min(p.combat.maxMp, p.mp + n); this.sendVitals(p, false);
     }
 
-    // ---------- healer (K5) ----------
-    /** Aliado al que el healer puede curar o bendecir: él mismo o alguien de su nación, vivo, que no sea su enemigo en este lugar (arena, todos contra todos). */
+    // ---------- clerigo (K5) ----------
+    /** Aliado al que el clérigo puede curar o bendecir: él mismo o alguien de su nación, vivo, que no sea su enemigo en este lugar (arena, todos contra todos). */
     private isAlly(p: Player, o: Player): boolean {
         if (o === p) return true;
         return !o.disconnected && !o.isDead && this.sideOf(o) === this.sideOf(p) && !this.isEnemyPair(p, o);
@@ -1505,7 +1505,7 @@ export class GameWorld {
     }
     /**
      * Escudo de maná, Escudo divino, Escudo guardián; Aura de represalia y Clarividencia; Bendición de poder (`grito`), Bendición de amparo,
-     * Intelecto arcano y Bendición de grupo del healer (a los aliados a 14 celdas); Esfera celestial; Despertar. Paso de luz va por `handleBlink`.
+     * Intelecto arcano y Bendición de grupo del clérigo (a los aliados a 14 celdas); Esfera celestial; Despertar. Paso de luz va por `handleBlink`.
      */
     private k8Skill(p: Player, skill: string, targetId: bigint, now: number): void {
         const sp = SKILLS[skill];
@@ -1524,7 +1524,7 @@ export class GameWorld {
             this.skillBroadcast(p, skill, o.posX, o.posY);
             return;
         }
-        if (sp.shield) { // propio (mago y paladín) o al aliado elegido (healer)
+        if (sp.shield) { // propio (mago y paladín) o al aliado elegido (clerigo)
             const tgt = sp.range > 0 ? this.allyTarget(p, targetId, sp.range) : p;
             if (typeof tgt === 'string') return this.skillDenied(p, skill, tgt);
             this.skillCommit(p, skill);
@@ -1562,7 +1562,7 @@ export class GameWorld {
         this.skillBroadcast(p, skill, p.posX, p.posY);
     }
     /** Curación, Renovar, Bendición sagrada, Nova sagrada y Orbe sagrado. Castigo y Reprender van por pvpHitRequest y mobHitRequest. */
-    private healerSkill(p: Player, skill: string, targetId: bigint, mobId: number, now: number): void {
+    private clerigoSkill(p: Player, skill: string, targetId: bigint, mobId: number, now: number): void {
         const sp = SKILLS[skill];
         if (sp.cast && !this.castOk(p, skill, now)) return this.skillDenied(p, skill, ''); // Curación y Orbe se castean (1,5 s) y el server lo cuenta
         const fx = (o: Player) => this.broadcastNear(p, M.pvpHit(p.playerId, { fx: skill === 'bendicion' ? 'spread' : 'sphere', x: o.posX, y: o.posY, targetId: o.playerId, dmg: 0, secs: 0, r: 0 }));
@@ -1609,8 +1609,8 @@ export class GameWorld {
             tgt.renewUntil = now + hot.ticks * hot.every * 1000;
             for (let k = 1; k <= hot.ticks; k++) this.playerTimer(tgt, k * hot.every * 1000, (w) => {
                 if (tgt.renewSeq !== seq || tgt.isDead || tgt.disconnected) return;
-                const healer = w.playersById.get(p.playerId);
-                w.healPlayer(tgt, per, healer && !healer.disconnected ? healer : undefined, skill);
+                const clerigo = w.playersById.get(p.playerId);
+                w.healPlayer(tgt, per, clerigo && !clerigo.disconnected ? clerigo : undefined, skill);
             });
         } else if (skill === 'bendicion') { applyBless(tgt.status, now, sp.bless! * 1000); this.announceStatus(tgt); }
         else if (skill === 'orbe') { // al objetivo y a los aliados a 4 celdas de él

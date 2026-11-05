@@ -26,7 +26,7 @@ function setup() {
         world.playerConnected(session.sessionId, name, (m) => log.push(m), () => {}, persisted);
         mem.put(`acc-${name}`, { name, salt: '', hash: '', created: 0, lastLogin: 0 });
         world.bindAccount(session.sessionId, `acc-${name}`);
-        world.onClientSave(session.sessionId, JSON.stringify({ cls: 'guerrero', faction: 'solmar' }));
+        world.onClientSave(session.sessionId, JSON.stringify({ cls: 'paladin', faction: 'solmar' }));
         return { session, log, p: world.playerOf(session.sessionId)!, mem };
     };
     return { mem, eco, reg, join };
@@ -130,7 +130,7 @@ test('la exp de las misiones pesa lo mismo que antes sobre la curva (±1 %)', ()
 
 // ---------- F. migración ----------
 test('migración v2 -> v3: conserva la fracción de progreso del nivel y no regala niveles', () => {
-    const st = newEcon('guerrero', 'solmar');
+    const st = newEcon('paladin', 'solmar');
     st.v = 2; st.lvl = 5; st.exp = Math.round(legacyExpToLevel(5) * 0.5);
     assert.equal(migrateEcon(st), true);
     assert.equal(st.v, ECON_VERSION); assert.equal(st.lvl, 5);
@@ -147,7 +147,7 @@ test('migración: un nivel por encima del tope se recorta al tope (120) con exp 
 
 test('migración al cargar la cuenta: una cuenta guardada en v2 se migra y se vuelve a guardar', () => {
     const { mem, eco } = setup();
-    const old = newEcon('guerrero', 'solmar'); old.v = 2; old.lvl = 7; old.exp = Math.round(legacyExpToLevel(7) * 0.25);
+    const old = newEcon('paladin', 'solmar'); old.v = 2; old.lvl = 7; old.exp = Math.round(legacyExpToLevel(7) * 0.25);
     mem.put('acc-vieja', { name: 'vieja', salt: '', hash: '', created: 0, lastLogin: 0, econ: old });
     const st = eco.load('acc-vieja')!;
     assert.equal(st.v, ECON_VERSION); assert.ok(Math.abs(st.exp / expToLevel(7) - 0.25) < 0.01);

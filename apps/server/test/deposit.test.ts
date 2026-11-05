@@ -21,7 +21,7 @@ class MemStorage implements Storage {
 function setup() {
     const storage = new MemStorage();
     const mk = (key: string, name: string, gold = 1000): Actor => {
-        const econ = newEcon('guerrero', 'solmar'); econ.gold = gold; econ.bag = [];
+        const econ = newEcon('paladin', 'solmar'); econ.gold = gold; econ.bag = [];
         storage.put(key, { name, salt: '', hash: '', created: 0, lastLogin: 0, econ });
         return { key, name, econ };
     };
@@ -150,7 +150,7 @@ test('ordenar: por tipo, rareza y nombre', () => {
 test('persistencia tras reinicio (archivos): bolsa y depósito quedan en el mismo archivo de la cuenta', () => {
     const dir = mkdtempSync(join(tmpdir(), 'fdn-dep-'));
     const st1 = new FileStorage(dir, 10_000);
-    const econ = newEcon('guerrero', 'solmar'); econ.gold = 500; econ.bag = [{ u: 50, n: 'Maza', r: 2, a: [{ id: 'hp', v: 9 }, { id: 'crit', v: 3 }] }]; econ.nextUid = 51; econ.pots = { hp: 9, mp: 0 };
+    const econ = newEcon('paladin', 'solmar'); econ.gold = 500; econ.bag = [{ u: 50, n: 'Maza', r: 2, a: [{ id: 'hp', v: 9 }, { id: 'crit', v: 3 }] }]; econ.nextUid = 51; econ.pots = { hp: 9, mp: 0 };
     st1.put('aa', { name: 'A', salt: '', hash: '', created: 0, lastLogin: 0, econ });
     const d1 = new Depot(st1); d1.log = () => {};
     const a: Actor = { key: 'aa', name: 'A', econ };
