@@ -27,3 +27,4 @@ Una línea por duda: qué, dónde, qué opciones se ven.
 - **D.10, dónde está la tienda:** se abre con la tecla N desde cualquier lado; el diseño la llama "tienda propia". Opción: un NPC (intendente) en los cuarteles de cada nación.
 
 - **D.11, premios en zem:** las misiones pagan zem **a la bolsa** (en riesgo en zona roja). Si se prefiere, que paguen directo al depósito.
+- **D.7, la tienda de gemas no existe:** `PLAN_DE_TRABAJO.md` dice que el ítem "entra con la tienda de gemas" (`ECONOMIA_Y_MONEDAS.md`), pero no hay moneda de gemas, tienda ni pagos en el código. Se hizo el ticket (el efecto y su seguridad en el server); falta que la tienda lo venda. Hay que definir cuándo se arma esa tienda, cuánto cuesta el ticket y cómo se consiguen las gemas.

@@ -1851,6 +1851,8 @@ export interface InventoryState {
   contrib: number;
   titles: string[];
   title: string;
+  /** Tickets de reset de stats (D.7): mismo efecto que reasignar por oro, sin pagarlo. Los va a vender la tienda de gemas. */
+  resetTickets: number;
 }
 
 /** Respuesta a una acción de economía: ok=false con un motivo (code) y texto para mostrar. */
@@ -23068,6 +23070,7 @@ function createBaseInventoryState(): InventoryState {
     contrib: 0,
     titles: [],
     title: "",
+    resetTickets: 0,
   };
 }
 
@@ -23177,6 +23180,9 @@ export const InventoryState: MessageFns<InventoryState> = {
     }
     if (message.title !== "") {
       writer.uint32(274).string(message.title);
+    }
+    if (message.resetTickets !== 0) {
+      writer.uint32(280).int32(message.resetTickets);
     }
     return writer;
   },
@@ -23466,6 +23472,14 @@ export const InventoryState: MessageFns<InventoryState> = {
             message.title = reader.string();
             continue;
           }
+          case 35: {
+            if (tag !== 280) {
+              break;
+            }
+
+            message.resetTickets = reader.int32();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -23517,6 +23531,7 @@ export const InventoryState: MessageFns<InventoryState> = {
     message.contrib = object.contrib ?? 0;
     message.titles = object.titles?.map((e) => e) || [];
     message.title = object.title ?? "";
+    message.resetTickets = object.resetTickets ?? 0;
     return message;
   },
 };

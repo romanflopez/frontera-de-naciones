@@ -196,7 +196,7 @@ export const inventoryState = (st: Econ): ServerMessage => { const caps = curren
         potsHp: st.pots.hp, potsMp: st.pots.mp,
         questI: st.q.i, questState: st.q.st, questProg: st.q.prog,
         keysCripta: st.q.keys.cripta, keysFoso: st.q.keys.foso, shardsCripta: st.q.shards.cripta, shardsFoso: st.q.shards.foso,
-        unlocked: st.u, cls: st.cls, faction: st.faction, zem: st.zem ?? 0, ek: st.ek ?? 0, contrib: st.contrib ?? 0, titles: st.titles ?? [], title: st.title ?? '',
+        unlocked: st.u, cls: st.cls, faction: st.faction, zem: st.zem ?? 0, ek: st.ek ?? 0, contrib: st.contrib ?? 0, titles: st.titles ?? [], title: st.title ?? '', resetTickets: st.resetTickets ?? 0,
         statStr: st.stats.str, statVit: st.stats.vit, statDex: st.stats.dex, statMag: st.stats.mag, statLuk: 10, /* la Suerte se eliminó; el campo queda en el protocolo con el valor neutro */ statFree: statPointsFree(st.lvl, st.stats),
         capDf: caps.df, capRm: caps.rm, capNextAt: BigInt(caps.nextAt),
         questBook: st.qb ? JSON.stringify(questBookView(st.qb, { mats: st.mats ?? {}, maxUp: Math.max(0, ...st.bag.map((i) => i.up ?? 0), ...Object.values(st.eq).map((i) => i?.up ?? 0)) }, Date.now())) : '',

@@ -1562,6 +1562,8 @@ message InventoryState {
   int32 contrib = 32;
   repeated string titles = 33;
   string title = 34;
+  // Tickets de reset de stats (D.7): mismo efecto que reasignar por oro, sin pagarlo. Los va a vender la tienda de gemas.
+  int32 reset_tickets = 35;
 }
 /** Respuesta a una acción de economía: ok=false con un motivo (code) y texto para mostrar. */
 message EconResult { bool ok = 1; string code = 2; string text = 3; }
