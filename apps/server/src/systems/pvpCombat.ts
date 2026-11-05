@@ -41,8 +41,8 @@ export interface PvpSpell {
 export type DmgKind = 'phys' | 'magic';
 /** Físico = ataque cuerpo a cuerpo, golpe, tajo, sismo (todo lo que escala con el arma); mágico = el resto de los hechizos. */
 export const spellDmgKind = (id: string): DmgKind => { const sp = PVP_SPELLS[id]; return sp && (sp.stat === 'melee' || sp.stat === 'wdmg' || sp.melee) ? 'phys' : 'magic'; };
-/** Movimiento: una sola velocidad, la de correr del cliente de referencia (8 cuadros de 39 ms = 312 ms/celda, de EntityMotion.h del cliente 3.82; el ritmo del paso lo marca la animación). Casteás corriendo: el cast te frena y un paso lo corta. WALK_MS = RUN_MS por compatibilidad del protocolo. MOVE_CAP_MS es el piso para buffs de velocidad. */
-export const WALK_MS = 312, RUN_MS = 312, MOVE_CAP_MS = 200;
+/** Movimiento (D.12, primera prueba; se afina jugando): correr es el default (RUN_MS) y caminar (WALK_MS) solo mientras se castea o se tiene un hechizo listo. MOVE_CAP_MS es el tope duro de velocidad en combate y el piso para buffs: igual a RUN_MS, así correr no queda recortado. Si Román toca un número, es este. */
+export const WALK_MS = 280, RUN_MS = 170, MOVE_CAP_MS = 170;
 /** Alcance máximo de hechizos y habilidades a distancia, en celdas: lo que se ve desde el centro hasta la esquina más lejana de la pantalla (el campo de visión es fijo; ver VIEW_* del cliente), para que se pueda tirar a cualquier punto visible como en el cliente de referencia. */
 export const VIEW_RANGE = 20;
 /** Escala de cast times (ms). */

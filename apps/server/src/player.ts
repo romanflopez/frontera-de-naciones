@@ -125,8 +125,8 @@ export class Player {
     godMode = false;
     /** Solo pruebas de GM (/gm espada): levanta el tope de crítico del equipo para este jugador. No se guarda. */
     gmCritUncap = false;
-    /** Walk (false) o run (true). Arranca caminando: es el estado que permite castear (docs/COMBATE.md). */
-    runningMode = false;
+    /** Run (true, el default) o walk (false). El cliente pide walk mientras castea o tiene un hechizo listo; el server decide la velocidad. */
+    runningMode = true;
     attackMode = true;
     attackStunDurationMs = 500;
     attackRangeCells = 3;
@@ -265,8 +265,8 @@ export class Player {
         this.skinColor = p.skinColor ?? 0;
         this.hairStyleIndex = p.hairStyleIndex ?? 0;
         this.underwearColorIndex = p.underwearColorIndex ?? 0;
-        // movementSpeedMs y runningMode del guardado se ignoran: la velocidad la calcula el server y siempre se entra caminando.
-        this.runningMode = false;
+        // movementSpeedMs y runningMode del guardado se ignoran: la velocidad la calcula el server y siempre se entra corriendo.
+        this.runningMode = true;
         this.attackMode = p.attackMode ?? true;
     }
 }
