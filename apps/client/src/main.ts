@@ -1354,10 +1354,13 @@ async function initKnight() {
  * de ampliar. La celda del mundo (TW x TH) no cambia nunca: la resolución del arte y la geometría son cosas separadas.
  */
 const EXT: Record<number, { im: CanvasImageSource; p: number[] }> = {};
-function drawWorld(id: number, x: number, y: number) { const e = EXT[id]; if (e) { const q = e.p; ctx.drawImage(e.im, q[0], q[1], q[2], q[3], Math.round(x - q[4] * GS), Math.round(y - q[5] * GS), q[6] * GS, q[7] * GS); return; } const w = WORLD[id]; if (!w) return; ctx.drawImage(IMG.world, w[0], w[1], w[2], w[3], x - w[4] * GS, y - w[5] * GS, w[2] * GS, w[3] * GS); }
+/** El contexto del canvas principal (se asigna al crearlo, más abajo; `drawWorld` también dibuja en los bloques del caché de terreno). */
+let mainCtx!: CanvasRenderingContext2D;
+function drawWorld(id: number, x: number, y: number, ctx: CanvasRenderingContext2D = mainCtx) { const e = EXT[id]; if (e) { const q = e.p; ctx.drawImage(e.im, q[0], q[1], q[2], q[3], Math.round(x - q[4] * GS), Math.round(y - q[5] * GS), q[6] * GS, q[7] * GS); return; } const w = WORLD[id]; if (!w) return; ctx.drawImage(IMG.world, w[0], w[1], w[2], w[3], x - w[4] * GS, y - w[5] * GS, w[2] * GS, w[3] * GS); }
 
 // ---------- canvas ----------
 const cv = $('cv') as HTMLCanvasElement, ctx = cv.getContext('2d')!;
+mainCtx = ctx;
 const gameCursor = createCursor(cv, reduce);
 let W = 0, H = 0, DPR = 1, Z = 1;
 /** Campo de visión fijo, como en el cliente de referencia: todos ven la misma porción de mapa sin importar el monitor (el zoom se ajusta al tamaño de la ventana; ninguna dimensión muestra más que la referencia). */
@@ -1972,8 +1975,80 @@ function runDoorLine(): { t: string; c: string } {
         ? { t: `Tu party ya está adentro (${inside}/${ms.length}): entrás a su instancia`, c: '#8af0a8' }
         : { t: `Party 0/${ms.length} adentro: el primero que entre crea la instancia, solo la party puede pasar`, c: '#ffd24a' };
 }
+// ---------- caché del terreno ----------
+/**
+ * Medido (D.20 rendimiento): el cuadro cuesta ~9 µs por `drawImage`, sin importar cuántos píxeles ni cuántos mobs, y el terreno hacía ~1.800 por cuadro
+ * (con 180 mobs: 35 ms por cuadro, 28 fps; sin ningún `drawImage`, 8 ms). El terreno y las calcomanías no cambian mientras se está en el mapa, así que se dibujan
+ * una vez en bloques de GC_CH x GC_CH píxeles del dispositivo (a la escala actual, DPR × zoom) y cada cuadro se pegan solo los que se ven (~20 órdenes en vez de ~1.800).
+ * Armar un bloque cuesta unas decenas de ms la primera vez que se pega, así que se reparte: como mucho GC_BUILDS por cuadro (varios mientras se carga el mapa, detrás
+ * de la pantalla de carga), se precargan los vecinos de lo que se ve, y mientras falta un bloque visible ese pedazo se dibuja directo, sin que se note.
+ * Los menos usados se descartan; al cambiar de mapa o de escala se tiran todos.
+ */
+const GC_CH = 256, GC_MAX = 400, GC_BUILDS = 1, GC_BUILDS_LOADING = 10;
+const gc = { map: null as unknown, scale: 0, chunks: new Map<string, { cv: HTMLCanvasElement; used: number }>(), frame: 0, on: true };
+/** Dibuja en `c` (con la transformación que tenga) el terreno y las calcomanías que tocan el rectángulo del mundo. Devuelve las imágenes usadas. */
+function groundDraw(c: CanvasRenderingContext2D, wx0: number, wy0: number, wx1: number, wy1: number): Set<CanvasImageSource> {
+    const mg = 4 * TH, g = (wx: number, wy: number) => ({ x: (wx / (TW / 2) + wy / (TH / 2)) / 2, y: (wy / (TH / 2) - wx / (TW / 2)) / 2 });
+    const k = [g(wx0 - mg, wy0 - mg), g(wx1 + mg, wy0 - mg), g(wx0 - mg, wy1 + mg), g(wx1 + mg, wy1 + mg)];
+    const gx0 = Math.max(0, Math.floor(Math.min(...k.map((q) => q.x)))), gx1 = Math.min(N - 1, Math.ceil(Math.max(...k.map((q) => q.x))));
+    const gy0 = Math.max(0, Math.floor(Math.min(...k.map((q) => q.y)))), gy1 = Math.min(N - 1, Math.ceil(Math.max(...k.map((q) => q.y))));
+    const used = new Set<CanvasImageSource>();
+    const put = (id: number, x: number, y: number) => { const e = EXT[id]; used.add(e ? e.im : IMG.world); drawWorld(id, x, y, c); };
+    for (let y = gy0; y <= gy1; y++) for (let x = gx0; x <= gx1; x++) { const p = iso(x + 0.5, y + 0.5); put(tiles[y][x], p.x, p.y); }
+    for (const d of decals) { const p = iso(d.x, d.y); if (p.x > wx0 - mg && p.x < wx1 + mg && p.y > wy0 - mg && p.y < wy1 + mg) put(d.id, p.x, p.y); }
+    return used;
+}
+function groundChunk(ix: number, iy: number, s: number): HTMLCanvasElement | null {
+    const cvs = document.createElement('canvas'); cvs.width = cvs.height = GC_CH;
+    const c = cvs.getContext('2d'); if (!c) return null;
+    c.setTransform(s, 0, 0, s, -ix * GC_CH, -iy * GC_CH); c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'low'; // el atlas está casi a la escala de pantalla: 'high' no se nota y cuesta mucho más
+    const wx0 = (ix * GC_CH) / s, wy0 = (iy * GC_CH) / s, used = groundDraw(c, wx0, wy0, wx0 + GC_CH / s, wy0 + GC_CH / s);
+    for (const im of used) if (im instanceof HTMLImageElement && !im.complete) return null; // un atlas todavía cargando: no se guarda un bloque incompleto
+    return cvs;
+}
+/** Dibuja el terreno desde los bloques (los que falten, directo). false = el caché está apagado: el llamador dibuja todo directo. */
+function groundCached(): boolean {
+    if (!gc.on) return false;
+    const s = DPR * Z;
+    if (gc.map !== MAP || Math.abs(gc.scale - s) > 1e-6) { gc.chunks.clear(); gc.map = MAP; gc.scale = s; }
+    const left = cam.x - (W / 2 + cam.sx) / Z, right = cam.x + (W / 2 - cam.sx) / Z, top = cam.y - (H / 2 + cam.sy) / Z, bottom = cam.y + (H / 2 - cam.sy) / Z;
+    const ix0 = Math.floor((left * s) / GC_CH), ix1 = Math.floor((right * s) / GC_CH), iy0 = Math.floor((top * s) / GC_CH), iy1 = Math.floor((bottom * s) / GC_CH);
+    gc.frame++;
+    /** ¿El bloque toca el mapa? (el mundo va de -N·TW/2 a N·TW/2 en x y de 0 a N·TH en y; fuera de eso no hay nada que dibujar). */
+    const inMap = (ix: number, iy: number) => (ix + 1) * GC_CH / s > -N * TW / 2 && ix * GC_CH / s < N * TW / 2 && (iy + 1) * GC_CH / s > -TH && iy * GC_CH / s < N * TH + TH;
+    let budget = mapLoading || !worldReady ? GC_BUILDS_LOADING : GC_BUILDS;
+    const build = (ix: number, iy: number): { cv: HTMLCanvasElement; used: number } | null => {
+        const b0 = performance.now(), cvs = groundChunk(ix, iy, s); prof.add('chunkBuild', performance.now() - b0);
+        if (!cvs) return null; const ch = { cv: cvs, used: gc.frame }; gc.chunks.set(`${ix},${iy}`, ch); budget--; return ch;
+    };
+    const have: { ix: number; iy: number; ch: { cv: HTMLCanvasElement; used: number } }[] = [], missing: { ix: number; iy: number }[] = [];
+    const cx = (ix0 + ix1) / 2, cy = (iy0 + iy1) / 2, byCenter = (a: { ix: number; iy: number }, b: { ix: number; iy: number }) => Math.hypot(a.ix - cx, a.iy - cy) - Math.hypot(b.ix - cx, b.iy - cy);
+    for (let iy = iy0; iy <= iy1; iy++) for (let ix = ix0; ix <= ix1; ix++) { const ch = gc.chunks.get(`${ix},${iy}`); if (ch) { ch.used = gc.frame; have.push({ ix, iy, ch }); } else if (inMap(ix, iy)) missing.push({ ix, iy }); }
+    missing.sort(byCenter);
+    const direct: { ix: number; iy: number }[] = [];
+    for (const m of missing) { const ch = budget > 0 ? build(m.ix, m.iy) : null; if (ch) have.push({ ix: m.ix, iy: m.iy, ch }); else direct.push(m); }
+    // precarga: los vecinos de lo que se ve, uno por cuadro, para que no falten cuando la cámara llegue
+    if (!direct.length && budget > 0) {
+        const ring: { ix: number; iy: number }[] = [];
+        for (let iy = iy0 - 1; iy <= iy1 + 1; iy++) for (let ix = ix0 - 1; ix <= ix1 + 1; ix++) if ((ix < ix0 || ix > ix1 || iy < iy0 || iy > iy1) && !gc.chunks.has(`${ix},${iy}`) && inMap(ix, iy)) ring.push({ ix, iy });
+        ring.sort(byCenter); if (ring[0]) build(ring[0].ix, ring[0].iy);
+    }
+    if (gc.chunks.size > GC_MAX) { const old = [...gc.chunks.entries()].sort((a, b) => a[1].used - b[1].used); for (const [k] of old.slice(0, gc.chunks.size - GC_MAX)) gc.chunks.delete(k); }
+    const tx = DPR * (W / 2 - cam.x * Z + cam.sx), ty = DPR * (H / 2 - cam.y * Z + cam.sy);
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    for (const { ix, iy, ch } of have) ctx.drawImage(ch.cv, Math.round(tx + ix * GC_CH), Math.round(ty + iy * GC_CH));
+    ctx.restore();
+    for (const d of direct) { // pedazo sin bloque todavía: se dibuja directo, recortado a su rectángulo
+        const wx0 = (d.ix * GC_CH) / s, wy0 = (d.iy * GC_CH) / s;
+        ctx.save(); ctx.beginPath(); ctx.rect(wx0, wy0, GC_CH / s, GC_CH / s); ctx.clip(); groundDraw(ctx, wx0, wy0, wx0 + GC_CH / s, wy0 + GC_CH / s); ctx.restore();
+    }
+    return true;
+}
+/** Marcas por sección de `render` del cuadro en curso (para explicar los cuadros lentos en `prof.hitches`). */
+let rsec: [string, number][] = [];
+const rmark = (k: string) => { rsec.push([k, performance.now()]); };
 function render() {
-    const T = now();
+    const T = now(); rsec = []; rmark('inicio');
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#0d100e'; ctx.fillRect(0, 0, cv.width, cv.height);
     ctx.setTransform(DPR * Z, 0, 0, DPR * Z, DPR * (W / 2 - cam.x * Z + cam.sx), DPR * (H / 2 - cam.y * Z + cam.sy));
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
@@ -1990,8 +2065,13 @@ function render() {
         }
         ctx.globalAlpha = 1;
     }
-    for (let y = minY; y <= maxY; y++) for (let x = minX; x <= maxX; x++) { const p = iso(x + 0.5, y + 0.5); drawWorld(tiles[y][x], p.x, p.y); }
-    for (const d of decals) { const p = iso(d.x, d.y); drawWorld(d.id, p.x, p.y); }
+    rmark('prep');
+    // Terreno y calcomanías (estáticos): en bloques ya dibujados (una orden por bloque) en vez de ~1.800 `drawImage` por cuadro. Si falta algún bloque, ese cuadro se dibuja directo.
+    if (!groundCached()) {
+        for (let y = minY; y <= maxY; y++) for (let x = minX; x <= maxX; x++) { const p = iso(x + 0.5, y + 0.5); drawWorld(tiles[y][x], p.x, p.y); }
+        for (const d of decals) { const p = iso(d.x, d.y); drawWorld(d.id, p.x, p.y); }
+    }
+    rmark('terreno');
     for (const q of WAYPOINTS) if (q.x >= minX - 3 && q.x <= maxX + 3 && q.y >= minY - 3 && q.y <= maxY + 3) drawPortalPad(q, T);
     for (const q of LINK_WPS) if (q.x >= minX - 3 && q.x <= maxX + 3 && q.y >= minY - 3 && q.y <= maxY + 3) drawPortalPad(q, T);
     for (const f of fx) if (f.k === 'click') { const p = iso(f.x, f.y); ctx.globalAlpha = 1 - f.t / 0.6; ctx.strokeStyle = '#d6a445'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(p.x, p.y, 10 + f.t * 30, (10 + f.t * 30) / 2, 0, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
@@ -2006,6 +2086,7 @@ function render() {
     }
     // selección bajo los pies
     for (const m of [P.target, hover]) if (m && mobs.includes(m)) { const p = iso(m.x, m.y); ctx.strokeStyle = m === P.target ? 'rgba(226,85,63,.9)' : 'rgba(255,255,255,.45)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 17, 8.5, 0, 0, Math.PI * 2); ctx.stroke(); }
+    rmark('suelo');
     // objetos por profundidad
     const objs: { d: number; f: () => void }[] = [];
     for (const o of props) if (o.x > minX - 3 && o.x < maxX + 3 && o.y > minY - 3 && o.y < maxY + 3) objs.push({ d: o.d ?? o.x + o.y, f: () => { const p = iso(o.x, o.y); drawWorld(o.id, p.x, p.y); } });
@@ -2024,11 +2105,11 @@ function render() {
             if (P.med) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const k = 0.5 + 0.5 * Math.sin(T * 3); ctx.strokeStyle = `rgba(110,170,255,${0.35 + k * 0.4})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 16 + k * 14, (16 + k * 14) / 2, 0, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.ellipse(p.x, p.y - 20 - k * 22, 5, 2.5, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
             drawSprite(heroKey(), a, t, P.dir, p.x, p.y, P.flash > 0 ? 'rgba(255,70,50,.35)' : P.inv ? 'rgba(150,200,255,.25)' : bz ? `rgba(255,${190 + (0.5 + 0.5 * Math.sin(T * 9)) * 50 | 0},60,.32)` : null, P.inv ? 0.4 + 0.1 * Math.sin(T * 5) : 1);
         } } });
-    objs.sort((a, b) => a.d - b.d).forEach((o) => o.f());
+    rmark('armar objetos'); objs.sort((a, b) => a.d - b.d); rmark('ordenar'); objs.forEach((o) => o.f()); rmark('dibujar objetos');
     // nombres arriba de todo
     for (const o of others.values()) { if (unseen(o)) continue; const p = iso(o.x, o.y); nameTag(taggedName(o.name, guildTagOf(o.profile)), p.x, p.y - 70, factionCol(o.profile.split(';')[0]), o.gone ? 0.5 : 1); { const tt = titleOf(o.profile); if (tt) nameTag(`«${tt}»`, p.x, p.y - 82, '#d6a445', o.gone ? 0.5 : 0.9, 9); } if (o.maxHp && o.hp !== undefined && (o.hp < o.maxHp || (o.shield ?? 0) > 0)) { const f = Math.max(0, o.hp / o.maxHp); ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(p.x - 17, p.y - 66, 34, 5); ctx.fillStyle = isEnemy(o) ? '#d9443a' : '#58b85a'; ctx.fillRect(p.x - 16, p.y - 65, 32 * f, 3); if ((o.shield ?? 0) > 0) { ctx.fillStyle = '#9fd8ff'; ctx.fillRect(p.x - 16, p.y - 65, 32 * Math.min(1, o.shield! / o.maxHp), 1.5); } } }
     { const p = iso(P.x, P.y); nameTag(taggedName(P.name, guild.state?.tag ?? ''), p.x, p.y - 70, factionCol(selectedFaction)); const mt = CONTRIB_BY_ID.get(myTitle)?.name; if (mt) nameTag(`«${mt}»`, p.x, p.y - 82, '#d6a445', 0.9, 9); }
-    drawPortalLabels(); drawLinkLabels();
+    rmark('nombres'); drawPortalLabels(); drawLinkLabels();
     for (const n of MAP.npcs) {
         const p = iso(n.x + 0.5, n.y + 0.5);
         nameTag(n.name, p.x, p.y - 70, '#9fd36b'); drawRoleMark(roleOf(n), p.x, p.y - 100);
@@ -2908,12 +2989,15 @@ function renderShop() {
         const icon = it ? ico(it) : `<img class="iico" alt="" src="${potionIcon(st.pot!)}">`;
         return `<button type="button" class="srow${poor ? ' poor' : ''}" data-buy="${i}" title="${esc(stockInfo(st))}">${icon}<span style="color:${it ? '#e7e2d3' : POTS[st.pot!].col}">${esc(stockLabel(st))}<small>${esc(stockInfo(st))}</small></span><em>${st.price}</em></button>`;
     }).join('');
-    const junk = junkTotal(), dailyBlock = roleOf(shopNpc) === 'mercader' && daily.length ? `<div class="label">Oferta del día (cambia a diario, igual para todos)</div>${dailyRows()}` : '';
+    const junk = junkTotal(), dailyBlock = roleOf(shopNpc) === 'mercader' && daily.length ? `<div class="shp-sub">Oferta del día (cambia a diario, igual para todos)</div>${dailyRows()}` : '';
     // la basura se vende toda junta desde el pie de la ventana (el "REPAIR ME" del diseño)
     $('shopJunk').innerHTML = junk.n ? `<button type="button" class="qw-btn" id="sellJunk" title="${junk.n} material${junk.n > 1 ? 'es' : ''} del botín">Vender basura · ${junk.gold} oro</button>` : '';
-    $('shopList').innerHTML = `${dailyBlock}<div class="label">Comprar</div>${buy}<div class="label">Tu bolsa · tocá un item para venderlo</div>` + (P.bag.length
-        ? P.bag.map((it, i) => `<button type="button" class="srow" data-sell="${i}">${ico(it)}<span style="color:${it.rar.c}">${esc(it.name)}<small>${it.rar.n} · ${it.slot}</small></span><em>${sellPrice(it.name, it.rar.k)}</em></button>`).join('')
-        : `<div class="label">La bolsa está vacía</div>`);
+    const sell = P.bag.length
+        ? P.bag.map((it, i) => `<button type="button" class="srow" data-sell="${i}" title="Vender por ${sellPrice(it.name, it.rar.k)} de oro">${ico(it)}<span style="color:${it.rar.c}">${esc(it.name)}<small>${it.rar.n} · ${it.slot}</small></span><em aria-label="Te pagan ${sellPrice(it.name, it.rar.k)} de oro">${sellPrice(it.name, it.rar.k)}</em></button>`).join('')
+        : `<p class="shp-empty">La bolsa está vacía.</p>`;
+    // dos paneles lado a lado: lo que vende el NPC y tu bolsa, cada uno con su scroll vertical
+    $('shopList').innerHTML = `<section class="shp"><h3>Comprar</h3><div class="shp-list">${dailyBlock}${dailyBlock ? '<div class="shp-sub">Siempre en stock</div>' : ''}${buy}</div></section>`
+        + `<section class="shp"><h3>Tu bolsa<small>Tocá un ítem para venderlo. El número es lo que te pagan.</small></h3><div class="shp-list">${sell}</div></section>`;
     document.querySelectorAll<HTMLElement>('[data-buy]').forEach((b) => (b.onclick = () => buyStock(def.stock[+b.dataset.buy!])));
     document.querySelectorAll<HTMLElement>('[data-daily]').forEach((b) => (b.onclick = () => {
         const i = +b.dataset.daily!, o = daily[i]; if (!o || !shopNpc) return;
@@ -2984,12 +3068,44 @@ const diag = {
     },
 };
 const perf = { build: 0, minimap: 0, fps: 0, frames: 0, since: 0 };
+// ---------- opción `?half`: hojas de sprites de los mobs del mapa a la mitad de resolución ----------
+/**
+ * Las hojas de sprites decodificadas son enormes (cursed_grave 180 MB, minotauro 167, wyvern 158, antlion/fire_ant/ice_ant 126 cada una; las 15 juntas ~1,5 GB) porque están guardadas a
+ * escala nativa x2. Medido en una GPU Apple M3 Pro (`?debug` → `__fdn.prof().hitches`): cuando se dibujan 5 tipos de mob distintos a la vez (~290 MB de texturas) los cuadros
+ * se congelan 1 a 3 segundos, y entero (no solo la primera vez) mientras haya esa mezcla a la vista. Con `?half` las hojas de los mobs del mapa se achican a la mitad al entrar
+ * (`createImageBitmap` con `resize`, en otro hilo, detrás de la pantalla de carga): 4 veces menos memoria y los congelamientos bajan a una quinta parte. Pierde definición de
+ * los sprites (se ven más suaves), así que NO es el comportamiento por defecto: se prueba con `?half` hasta decidir el arreglo de fondo (ver docs/RENDIMIENTO.md).
+ */
+const sheetOrig = new Map<string, CanvasImageSource>(), sheetBitmaps = new Map<string, ImageBitmap>(), sheetMeta = new Map<string, (typeof SPR)[string]>();
+let sheetsReady = true;
+async function useSheetBitmaps(names: Set<string>) {
+    for (const [n, bm] of sheetBitmaps) if (!names.has(n)) { IMG[n] = sheetOrig.get(n) ?? IMG[n]; const m0 = sheetMeta.get(n); if (m0) { SPR[n] = m0; sheetMeta.delete(n); } bm.close(); sheetBitmaps.delete(n); }
+    await Promise.all([...names].map(async (n) => {
+        const im = IMG[n], M = SPR[n];
+        if (sheetBitmaps.has(n) || !(im instanceof HTMLImageElement) || im.naturalWidth * im.naturalHeight < 8e6 || !M) return;
+        if (M.cw % 2 || M.ch % 2 || im.naturalWidth % 2 || im.naturalHeight % 2) return; // las celdas tienen que quedar enteras
+        try {
+            const bm = await createImageBitmap(im, { resizeWidth: im.naturalWidth / 2, resizeHeight: im.naturalHeight / 2, resizeQuality: 'high' });
+            sheetMeta.set(n, { ...M }); SPR[n] = { ...M, cw: M.cw / 2, ch: M.ch / 2, ax: M.ax / 2, ay: M.ay / 2, s: (M.s ?? 1) * 0.5 };
+            sheetOrig.set(n, im); sheetBitmaps.set(n, bm); IMG[n] = bm;
+        } catch { /* sin bitmap: queda la imagen de siempre */ }
+    }));
+}
+function prepareSheets(zones: { type: MobType }[]) {
+    if (!new URLSearchParams(location.search).has('half')) return;
+    const names = new Set<string>();
+    for (const z of zones) { try { names.add(mobDef(z.type, z as never).sprite ?? z.type); } catch { /* tipo raro */ } }
+    sheetsReady = false;
+    const t0 = performance.now();
+    void Promise.race([useSheetBitmaps(names), new Promise((r) => setTimeout(r, 25_000))]).then(() => { sheetsReady = true; prof.add('sheetBitmaps', performance.now() - t0); });
+}
 function loadMap(def: MapDef): string {
     const t0 = performance.now();
     if (MAP_DEF?.id !== def.id && def.name) logToChat('system', 'System', `Entraste a ${def.name}.`);
     MAP_DEF = def; MAP = def.build(); N = MAP.size; lastRed = null;
     ({ tiles, blocked, safe, props, decals } = MAP);
     ZONES = MAP.zones; WAYPOINTS = MAP.waypoints ?? []; LINKS = def.links; LINK_WPS = linkWps(LINKS);
+    prepareSheets(ZONES);
     // lo que era del mapa anterior: mobs, otros jugadores, suelo, efectos, estado de portales y diálogos
     P.target = null; P.engage = false; P.pickup = null; P.queued = null; // checklist de instancia: al cambiar de mapa no queda nada apuntando al mapa viejo
     mobs.length = 0; mobMap.clear(); others.clear(); drops.length = 0; corpses.length = 0; projs.length = 0; scorch.length = 0; floats.length = 0; fx.length = 0; bossCasts.clear(); bossMarks.length = 0; bossZones.clear(); bossRage.clear();
@@ -3223,16 +3339,30 @@ function minimapTick() {
 /** Tope de cuadros por segundo (0 = libre: sigue al monitor, 144/240 Hz). Se cambia con /fps y se recuerda. */
 let fpsCap = (() => { try { const v = Number(localStorage.getItem('fdn.fpscap')); return v >= 20 && v <= 1000 ? v : 0; } catch { return 0; } })();
 let lastDrawTs = 0;
+/** Perfilador por partes del cuadro (barato: unas pocas marcas por cuadro). `?debug` → `__fdn.prof()` da promedio, p95 y máximo de cada parte en los últimos segundos. */
+const prof = {
+    parts: new Map<string, { t: number; ms: number }[]>(),
+    /** Cuadros lentos (más de 30 ms en `render`), con dónde estaba el jugador: ayuda a ver si coinciden con algo que aparece por primera vez. */
+    hitches: [] as { at: number; ms: number; sec: string; x: number; y: number; map: string; mobs: number; chunks: number }[],
+    add(k: string, ms: number) { let a = this.parts.get(k); if (!a) this.parts.set(k, (a = [])); const t = performance.now(); a.push({ t, ms }); while (a.length && t - a[0].t > 6000) a.shift(); },
+    stats(): Record<string, { n: number; avg: number; p95: number; max: number }> {
+        const out: Record<string, { n: number; avg: number; p95: number; max: number }> = {};
+        for (const [k, a] of this.parts) { const v = a.map((x) => x.ms).sort((x, y) => x - y); if (!v.length) continue; out[k] = { n: v.length, avg: +(v.reduce((s, x) => s + x, 0) / v.length).toFixed(2), p95: +v[Math.floor(v.length * 0.95)].toFixed(2), max: +v[v.length - 1].toFixed(2) }; }
+        return out;
+    },
+};
+const timed = <T>(k: string, fn: () => T): T => { const t0 = performance.now(); const r = fn(); prof.add(k, performance.now() - t0); return r; };
 function frame(ts: number = performance.now()) {
     if (fpsCap > 0 && lastDrawTs && ts - lastDrawTs < 1000 / fpsCap - 1.5) { requestAnimationFrame(frame); return; }
     lastDrawTs = ts;
     // El paso de simulación sale del reloj del propio cuadro (rAF), que es parejo; performance.now() dentro del callback varía con la carga y mete temblor al moverse.
     const T = now(); const tf = ts / 1000; let dt = Math.min(0.1, Math.max(0, tf - last)); diag.frame(tf, T, dt); last = tf;
     if (hitstop > 0) { hitstop -= dt; dt = 0; }
-    if (!mapLoading) { update(dt); checkPortals(); checkLinks(); wpTick(); npcTick(); }
+    if (!mapLoading) timed('update', () => { update(dt); checkPortals(); checkLinks(); wpTick(); npcTick(); });
     updateCam(Math.min(0.05, T - lastCam)); lastCam = T;
-    updateHover(); { const r0 = performance.now(); render(); diag.render(performance.now() - r0); } hud(); winTick(T); minimapTick();
-    if (revealPending && T >= homeWaitUntil) hideMapLoading(); // el mapa ya se dibujó en este cuadro
+    timed('hover', updateHover); { const r0 = performance.now(); render(); const rm = performance.now() - r0; diag.render(rm); prof.add('render', rm); if (rm > 30 && prof.hitches.length < 60) prof.hitches.push({ at: Math.round(performance.now()), ms: Math.round(rm), sec: rsec.map((q, i) => `${q[0]} ${i ? Math.round(q[1] - rsec[i - 1][1]) : 0}`).join(' | '), x: P.cell.x, y: P.cell.y, map: MAP_DEF.id, mobs: mobs.length, chunks: gc.chunks.size }); } timed('hud', hud); timed('winTick', () => winTick(T)); timed('minimap', minimapTick);
+    prof.add('frameMs', dt * 1000);
+    if (revealPending && T >= homeWaitUntil && sheetsReady) hideMapLoading(); // el mapa ya se dibujó en este cuadro
     requestAnimationFrame(frame);
     perf.frames++; { const t = performance.now(); if (t - perf.since >= 1000) { perf.fps = (perf.frames * 1000) / (t - perf.since); perf.frames = 0; perf.since = t; } }
 }
@@ -3481,7 +3611,7 @@ async function boot() {
     loadBuildingImages();
     refreshLook(); void initKnight();
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as Record<string, unknown>).__fdn = { others, mobs, drops, toScreen, damageMob, tp: (x: number, y: number) => { P.x = x; P.y = y; P.cell = { x: Math.floor(x), y: Math.floor(y) }; P.path = []; P.mv = false; }, P, BASES, RAR, refreshLook, equip: (n: string) => { const b = BASES.find((x) => x.name === n)!; P.eq[b.slot] = { id: uid++, ...b, rar: RAR[0], attrs: [] }; refreshLook(); } };
-    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, worldReady: () => worldReady, perf: () => ({ ...perf }), setQb: (v: QuestBookView | null) => { QB = v; renderQuest(); }, questDlg: (name: string) => openQuestDlg({ id: 'capitan_s', name, x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), questLog: toggleQuestLog, arenaInvite: (mode = '2v2') => showArenaInvite(mode, Date.now() + 30_000, true), arenaDbg: (v: ArenaInfo | null) => { $('arena').hidden = false; renderArena(v); }, shopDbg: (role = 'mercader') => openShop({ id: role + '_s', name: 'Mercader', x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), uid: () => uid++, RARS: RAR, mobCount: () => mobs.length, arrows: () => arrows.length });
+    if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { efx, MAP, map: () => MAP, openShop, toScreen, mapId: () => MAP_DEF.id, worldId: () => MAP_WORLD_ID, links: () => LINKS, loading: () => mapLoading, worldReady: () => worldReady, perf: () => ({ ...perf }), sheets: () => ({ bitmaps: [...sheetBitmaps.keys()], ready: sheetsReady }), groundCache: (on?: boolean, clear?: boolean) => { if (on !== undefined) gc.on = on; if (clear) gc.chunks.clear(); return { on: gc.on, chunks: gc.chunks.size }; }, prof: () => ({ fps: +perf.fps.toFixed(1), parts: prof.stats(), hitches: prof.hitches }), profReset: () => prof.parts.clear(), setQb: (v: QuestBookView | null) => { QB = v; renderQuest(); }, questDlg: (name: string) => openQuestDlg({ id: 'capitan_s', name, x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), questLog: toggleQuestLog, arenaInvite: (mode = '2v2') => showArenaInvite(mode, Date.now() + 30_000, true), arenaDbg: (v: ArenaInfo | null) => { $('arena').hidden = false; renderArena(v); }, shopDbg: (role = 'mercader') => openShop({ id: role + '_s', name: 'Mercader', x: P.cell.x, y: P.cell.y, dir: 0 } as unknown as Npc), uid: () => uid++, RARS: RAR, mobCount: () => mobs.length, arrows: () => arrows.length });
     if (new URLSearchParams(location.search).has('debug')) Object.assign((window as unknown as { __fdn: Record<string, unknown> }).__fdn, { net, drop: () => (net as unknown as { ws: WebSocket }).ws.close(4000, 'prueba'), connected: () => connected, Q, UNLOCKED, WAYPOINTS, openWp, wpGo, trainOpen, refreshUnlocks, saver, warp: (x: number, y: number) => net.send({ $case: 'playerTeleportRequested', value: { x, y } }), go: (x: number, y: number) => moveTo(x + 0.5, y + 0.5), recall: () => ({ on: !!recall, k: recallK(now()), cd: Math.max(0, recallCdEnd - now()) }) });
     const pt = iso(P.x, P.y); cam.x = pt.x; cam.y = pt.y;
     showLogin();
