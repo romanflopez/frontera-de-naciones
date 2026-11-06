@@ -9,11 +9,13 @@ export type MobType = 'goblin' | 'zombie' | 'skeleton' | 'barbaro' | 'goblin_eli
     | 'goblin_jefe' | 'antlion_reina' | 'caballero_cripta' | 'mago_mayor' | 'wyvern_aire' | 'demonio_foso'
     // jefe de la mazmorra del T7 (D7)
     | 'verdugo'
-    | 'coloso';
+    | 'coloso'
+    // prueba de arte (Goblin Scout de SovDigital): mismo juego que `goblin`, sprite nuevo
+    | 'goblin_scout';
 /** Orden fijo: el protocolo manda el índice del tipo. */
 export const MOB_TYPES: MobType[] = ['goblin', 'zombie', 'skeleton', 'barbaro', 'goblin_elite', 'antlion', 'skeleton_mage', 'fire_ant', 'wyvern', 'minotaur', 'arana', 'golem', 'demonio',
     'hobgoblin', 'hobgoblin_archer', 'skeleton_archer', 'zombie_dark', 'cursed_grave', 'ice_ant', 'antlion_small', 'wyvern_fire', 'wyvern_ice',
-    'goblin_jefe', 'antlion_reina', 'caballero_cripta', 'mago_mayor', 'wyvern_aire', 'demonio_foso', 'verdugo', 'coloso'];
+    'goblin_jefe', 'antlion_reina', 'caballero_cripta', 'mago_mayor', 'wyvern_aire', 'demonio_foso', 'verdugo', 'coloso', 'goblin_scout'];
 /** Habilidad de boss: cada `every` s, si el jugador está a menos de `range`, carga un golpe y lo lanza a los 0,8 s. Alcanza a quien esté a menos de `r`. */
 export interface BossSpecial { name: string; every: number; range: number; r: number; dmg?: [number, number]; stun?: number; col: string }
 export interface BossDef { respawn: number; minRar: number; gold: [number, number]; special: BossSpecial }
@@ -28,6 +30,7 @@ export interface MobDef { name: string; lvl: number; hp: number; dmg: [number, n
     sprite?: MobType }
 export const MOBS: Record<MobType, MobDef> = {
     goblin: { name: 'Goblin lancero', lvl: 1, hp: 42, dmg: [4, 7], spd: 1.8, ref: 2.6, exp: 14, hitR: 20, head: 42, atk: 1.3 },
+    goblin_scout: { name: 'Goblin explorador', lvl: 1, hp: 42, dmg: [4, 7], spd: 1.8, ref: 2.6, exp: 14, hitR: 20, head: 42, atk: 1.3 },
     zombie: { name: 'Zombi del pantano', lvl: 3, hp: 85, dmg: [7, 11], spd: 1.0, ref: 1.5, exp: 30, hitR: 22, head: 50, atk: 1.6 },
     barbaro: { name: 'Bárbaro sangriento', lvl: 8, hp: 900, dmg: [18, 28], spd: 1.3, ref: 2.4, exp: 420, hitR: 21, head: 46, sprite: 'goblin_elite', atk: 1.8, boss: { respawn: 120, minRar: 2, gold: [60, 110], special: { name: 'Rugido', every: 11, range: 3.2, r: 3, stun: 1.2, dmg: [8, 12], col: '#ff8a4a' } } },
     arana: { name: 'Reina araña', lvl: 7, hp: 720, dmg: [14, 22], spd: 1.7, ref: 2.8, exp: 520, hitR: 24, head: 40, sprite: 'antlion', atk: 1.4, boss: { respawn: 150, minRar: 2, gold: [70, 120], special: { name: 'Telaraña', every: 9, range: 4, r: 3.5, stun: 1.8, col: '#9fe8ff' } } },

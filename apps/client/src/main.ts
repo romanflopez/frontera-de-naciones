@@ -3601,6 +3601,8 @@ async function boot() {
         ldTotal = 2 + atlases.length + names.length + 1;
         const imgs = await Promise.all(names.map((n) => loadT(`assets/${n}.webp`)));
         names.forEach((n, i) => (IMG[n] = imgs[i]));
+        // Goblin Scout (SovDigital): el .webp es local y NO va al repo (licencia, ver docs/DUDAS.md); si falta, `goblin_scout` se dibuja con el goblin de siempre
+        try { IMG.goblin_scout = await load('assets/goblin_scout.webp'); } catch { IMG.goblin_scout = IMG.goblin; SPR.goblin_scout = SPR.goblin; console.info('[arte] falta assets/goblin_scout.webp: uso el goblin normal'); }
     } catch { setLoading(1, 'No se pudieron cargar los gráficos. Recargá la página.'); return; }
     try { FXM = await (await fetch('assets/fx.json')).json(); IMG.fx = await load('assets/fx.webp'); } catch { FXM = null; }
     setLoading(1);
