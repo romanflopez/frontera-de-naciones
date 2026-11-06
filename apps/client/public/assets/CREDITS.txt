@@ -89,3 +89,8 @@ Mapas abiertos Nv7-11 (Paso de Stormrock, Cenizas I-III): mapas "stormrock_pass"
   - sfx/hurt.ogg: recorte del quejido (0,10 s a 0,70 s, filtrado) de "melee weapon hit with male moan body fall" por paul368, Freesound #264062 (https://freesound.org/s/264062/), convertido de WAV a OGG. Licencia: PENDIENTE DE CONFIRMAR en la página de Freesound.
   - sfx/berserk.ogg: "power-up-bright-a" por InspectorJ, Freesound #411460 (https://freesound.org/s/411460/), recortado a 2 s (el resto era silencio) y convertido de WAV a OGG. Licencia: PENDIENTE DE CONFIRMAR en la página de Freesound.
   - sfx/spider-attack.ogg: "spider attack" por kongg, Freesound #672710 (https://freesound.org/s/672710/), convertido de MP3 a OGG. Licencia: PENDIENTE DE CONFIRMAR en la página de Freesound.
+
+Prueba de arte (pendiente de decidir si se queda):
+  - goblin_scout.webp: Goblin Scout (Free Sampler v2.0.5) de SovDigital (https://sovdigital.itch.io). Licencia: uso comercial permitido dentro del juego; NO se puede redistribuir como asset suelto. Ver docs/DUDAS.md.
+  - wolf.webp, hellhound.webp, knight_free.webp, zombie_worker.webp, mounted_knight.webp, blade_assassin.webp: Free Wolf / Hellhound / Knight Sampler / Zombie Office Worker / Mounted Knight / Blade Assassin de SovDigital (misma licencia y condición).
+  - skeleton_free.webp: Free Skeleton v1.2.6 de SovDigital (misma licencia y misma condición que el Goblin Scout).

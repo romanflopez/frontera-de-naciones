@@ -9,11 +9,16 @@ export type MobType = 'goblin' | 'zombie' | 'skeleton' | 'barbaro' | 'goblin_eli
     | 'goblin_jefe' | 'antlion_reina' | 'caballero_cripta' | 'mago_mayor' | 'wyvern_aire' | 'demonio_foso'
     // jefe de la mazmorra del T7 (D7)
     | 'verdugo'
-    | 'coloso';
+    | 'coloso'
+    // prueba de arte (Goblin Scout de SovDigital): mismo juego que `goblin`, sprite nuevo
+    | 'goblin_scout' | 'skeleton_free'
+    // prueba de arte (packs de SovDigital): atlas locales, ver docs/DUDAS.md
+    | 'wolf' | 'hellhound' | 'knight_free' | 'zombie_worker' | 'mounted_knight' | 'blade_assassin';
 /** Orden fijo: el protocolo manda el índice del tipo. */
 export const MOB_TYPES: MobType[] = ['goblin', 'zombie', 'skeleton', 'barbaro', 'goblin_elite', 'antlion', 'skeleton_mage', 'fire_ant', 'wyvern', 'minotaur', 'arana', 'golem', 'demonio',
     'hobgoblin', 'hobgoblin_archer', 'skeleton_archer', 'zombie_dark', 'cursed_grave', 'ice_ant', 'antlion_small', 'wyvern_fire', 'wyvern_ice',
-    'goblin_jefe', 'antlion_reina', 'caballero_cripta', 'mago_mayor', 'wyvern_aire', 'demonio_foso', 'verdugo', 'coloso'];
+    'goblin_jefe', 'antlion_reina', 'caballero_cripta', 'mago_mayor', 'wyvern_aire', 'demonio_foso', 'verdugo', 'coloso', 'goblin_scout', 'skeleton_free',
+    'wolf', 'hellhound', 'knight_free', 'zombie_worker', 'mounted_knight', 'blade_assassin'];
 /** Habilidad de boss: cada `every` s, si el jugador está a menos de `range`, carga un golpe y lo lanza a los 0,8 s. Alcanza a quien esté a menos de `r`. */
 export interface BossSpecial { name: string; every: number; range: number; r: number; dmg?: [number, number]; stun?: number; col: string }
 export interface BossDef { respawn: number; minRar: number; gold: [number, number]; special: BossSpecial }
@@ -28,13 +33,21 @@ export interface MobDef { name: string; lvl: number; hp: number; dmg: [number, n
     sprite?: MobType }
 export const MOBS: Record<MobType, MobDef> = {
     goblin: { name: 'Goblin lancero', lvl: 1, hp: 42, dmg: [4, 7], spd: 1.8, ref: 2.6, exp: 14, hitR: 20, head: 42, atk: 1.3 },
+    goblin_scout: { name: 'Goblin explorador', lvl: 1, hp: 42, dmg: [4, 7], spd: 1.8, ref: 2.6, exp: 14, hitR: 20, head: 42, atk: 1.3 },
     zombie: { name: 'Zombi del pantano', lvl: 3, hp: 85, dmg: [7, 11], spd: 1.0, ref: 1.5, exp: 30, hitR: 22, head: 50, atk: 1.6 },
     barbaro: { name: 'Bárbaro sangriento', lvl: 8, hp: 900, dmg: [18, 28], spd: 1.3, ref: 2.4, exp: 420, hitR: 21, head: 46, sprite: 'goblin_elite', atk: 1.8, boss: { respawn: 120, minRar: 2, gold: [60, 110], special: { name: 'Rugido', every: 11, range: 3.2, r: 3, stun: 1.2, dmg: [8, 12], col: '#ff8a4a' } } },
     arana: { name: 'Reina araña', lvl: 7, hp: 720, dmg: [14, 22], spd: 1.7, ref: 2.8, exp: 520, hitR: 24, head: 40, sprite: 'antlion', atk: 1.4, boss: { respawn: 150, minRar: 2, gold: [70, 120], special: { name: 'Telaraña', every: 9, range: 4, r: 3.5, stun: 1.8, col: '#9fe8ff' } } },
     golem: { name: 'Gólem de hielo', lvl: 10, hp: 1300, dmg: [24, 34], spd: 1.0, ref: 1.8, exp: 900, hitR: 40, head: 130, sprite: 'minotaur', atk: 2.0, boss: { respawn: 180, minRar: 2, gold: [110, 170], special: { name: 'Grito helado', every: 10, range: 3, r: 3, dmg: [30, 42], stun: 0.8, col: '#7fd6ff' } } },
     demonio: { name: 'Demonio del foso', lvl: 12, hp: 1900, dmg: [30, 44], spd: 1.4, ref: 2.4, exp: 1500, hitR: 32, head: 90, sprite: 'wyvern_fire', atk: 1.7, boss: { respawn: 240, minRar: 3, gold: [180, 260], special: { name: 'Salto sísmico', every: 12, range: 4.5, r: 3.2, dmg: [45, 60], stun: 1, col: '#ff5a3c' } } },
-    skeleton: { name: 'Esqueleto guerrero', lvl: 5, hp: 150, dmg: [11, 17], spd: 1.5, ref: 2.1, exp: 62, hitR: 23, head: 53, atk: 1.4 },
-    goblin_elite: { name: 'Goblin de élite', lvl: 2, hp: 62, dmg: [5, 9], spd: 1.9, ref: 2.6, exp: 22, hitR: 21, head: 46, atk: 1.2 },
+    skeleton: { name: 'Esqueleto guerrero', lvl: 5, hp: 150, dmg: [11, 17], spd: 1.5, ref: 2.1, exp: 62, hitR: 23, head: 53, atk: 1.4, sprite: 'skeleton_free' }, // PRUEBA DE ARTE: sprite del Free Skeleton (sacar `sprite` para volver al de siempre)
+    skeleton_free: { name: 'Esqueleto guerrero', lvl: 5, hp: 150, dmg: [11, 17], spd: 1.5, ref: 2.1, exp: 62, hitR: 23, head: 53, atk: 1.4 },
+    wolf: { name: 'Lobo', lvl: 2, hp: 62, dmg: [5, 9], spd: 2.4, ref: 2.6, exp: 22, hitR: 20, head: 40, atk: 1.1 }, // PRUEBA DE ARTE
+    hellhound: { name: 'Perro infernal', lvl: 4, hp: 125, dmg: [9, 15], spd: 2.2, ref: 2.4, exp: 45, hitR: 22, head: 46, atk: 1.2 }, // PRUEBA DE ARTE
+    knight_free: { name: 'Caballero errante', lvl: 3, hp: 85, dmg: [8, 13], spd: 1.5, ref: 2.2, exp: 30, hitR: 22, head: 56, atk: 1.5 }, // PRUEBA DE ARTE
+    zombie_worker: { name: 'Zombi oficinista', lvl: 2, hp: 62, dmg: [5, 9], spd: 1.0, ref: 1.5, exp: 22, hitR: 21, head: 54, atk: 1.6 }, // PRUEBA DE ARTE
+    mounted_knight: { name: 'Caballero montado', lvl: 4, hp: 420, dmg: [12, 18], spd: 2.0, ref: 2.4, exp: 45, hitR: 30, head: 86, atk: 1.7 }, // PRUEBA DE ARTE
+    blade_assassin: { name: 'Asesino de la hoja', lvl: 4, hp: 1260, dmg: [14, 22], spd: 1.8, ref: 2.4, exp: 60, hitR: 30, head: 76, atk: 1.4 }, // PRUEBA DE ARTE
+    goblin_elite: { name: 'Goblin de élite', lvl: 2, hp: 62, dmg: [5, 9], spd: 1.9, ref: 2.6, exp: 22, hitR: 21, head: 46, atk: 1.2, sprite: 'goblin_scout' }, // PRUEBA DE ARTE: sprite del Goblin Scout (sacar `sprite` para volver al de siempre)
     antlion: { name: 'Hormiga león', lvl: 4, hp: 115, dmg: [9, 14], spd: 1.5, ref: 2.0, exp: 45, hitR: 24, head: 40, atk: 1.5 },
     skeleton_mage: { name: 'Esqueleto hechicero', lvl: 5, hp: 130, dmg: [12, 18], spd: 1.3, ref: 2.1, exp: 58, hitR: 22, head: 55, atk: 1.6 },
     fire_ant: { name: 'Hormiga de fuego', lvl: 6, hp: 190, dmg: [13, 20], spd: 1.7, ref: 2.0, exp: 80, hitR: 24, head: 42, atk: 1.3 },

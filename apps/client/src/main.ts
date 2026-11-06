@@ -3601,6 +3601,10 @@ async function boot() {
         ldTotal = 2 + atlases.length + names.length + 1;
         const imgs = await Promise.all(names.map((n) => loadT(`assets/${n}.webp`)));
         names.forEach((n, i) => (IMG[n] = imgs[i]));
+        // Goblin Scout (SovDigital): el .webp es local y NO va al repo (licencia, ver docs/DUDAS.md); si falta, `goblin_scout` se dibuja con el goblin de siempre
+        // Atlas de arte de SovDigital: son locales y NO van al repo (licencia, ver docs/DUDAS.md); si falta uno, ese mob se dibuja con su sprite de siempre
+        const LOCAL_ART: [string, string][] = [['goblin_scout', 'goblin'], ['skeleton_free', 'skeleton'], ['wolf', 'goblin'], ['hellhound', 'goblin'], ['knight_free', 'skeleton'], ['zombie_worker', 'zombie'], ['mounted_knight', 'minotaur'], ['blade_assassin', 'minotaur']];
+        await Promise.all(LOCAL_ART.map(async ([n, fb]) => { try { IMG[n] = await load(`assets/${n}.webp`); } catch { IMG[n] = IMG[fb]; SPR[n] = SPR[fb]; console.info(`[arte] falta assets/${n}.webp: uso ${fb}`); } }));
     } catch { setLoading(1, 'No se pudieron cargar los gráficos. Recargá la página.'); return; }
     try { FXM = await (await fetch('assets/fx.json')).json(); IMG.fx = await load('assets/fx.webp'); } catch { FXM = null; }
     setLoading(1);
