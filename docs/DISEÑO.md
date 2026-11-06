@@ -29,7 +29,7 @@ Referencias: Helbreath (PvP, naciones, casteo, items), Dreadmyst (mazmorras, loo
 
 ## 3. Progresión
 
-- **Tope 120. Meta: ~30 horas hasta el tope** matando un mob por vez (1-10 en menos de 1 h). La curva actual está en ~60 h y se corrige (`killsToLevel`, `targets.ts`, sim `sim:pve --horas`).
+- **Tope 120. Meta: ~30 horas hasta el tope** matando un mob por vez (1-10 en menos de 1 h). La curva tiene la forma de Helbreath (D.21): potencia `~2,7·L^0,735` kills por nivel, arranque rápido (nivel 1 con 3 kills) y exp por mob que crece ~como la vida para que cazar arriba pague. Mide ~29 h (`killsToLevel`, `targets.ts`, sim `sim:pve --horas`).
 - **Las 30 horas son el tutorial largo; el juego es el endgame**: mapa central, mazmorras, calidades, +N, sets, arenas. Ahí va el esfuerzo de contenido.
 - Exp: solo grindeo. Misiones y jefes casi no dan exp; dan oro, materiales y llaves.
 - Morir: −5 % de la exp del nivel.

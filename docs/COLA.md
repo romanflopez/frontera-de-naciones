@@ -26,6 +26,7 @@ columna "Probás" y mergea. Recién ahí arranca el siguiente. Si un paso deja a
 | 18 | **D.16** Ventanas sin scroll | D.15 | En 1366×768 ninguna ventana scrollea si no hace falta; la bolsa muestra todas las casillas |
 | 19 | **D.19** NPCs: tienda directa | — | Hablarle a un vendedor abre la tienda sin diálogo; el Capitán sigue con diálogo |
 | 20 | **D.8** Compensador de nación | D.5 | Después de la beta |
+| 21 | **D.21** Curva de exp con forma HB | D.1 | Con un personaje nuevo subís al nivel 2 con 3 kills y al 4 en un par de minutos; `sim:pve --horas` sigue en ~30 h; un personaje guardado conserva su nivel y su fracción de exp |
 
 Los pasos sin dependencia (2, 3, 5, 8, 9, 15, 17, 19) se pueden adelantar si alguno se traba. Los de economía y stats (6, 7, 11, 12, 14) van estrictamente en este orden.
 

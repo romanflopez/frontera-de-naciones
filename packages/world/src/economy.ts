@@ -146,18 +146,18 @@ export const sellPrice = (baseName: string, rarity: number): number => Math.roun
 
 // ---------- misiones y llaves ----------
 export interface Quest { name: string; zone: string; type: MobType; n: number; xp: number; gold: number; say: string; shard?: 'cripta' | 'foso' }
-/** Las recompensas de exp están calculadas para pesar lo mismo que antes sobre la curva de nivel (paso 1.1: ~12 % del nivel 1 la primera, ~3 % las del final). Reescaladas en D.1 con la curva de 30 h (mismo porcentaje de su nivel, menos exp absoluta). */
+/** Las recompensas de exp están calculadas para pesar lo mismo que antes sobre la curva de nivel (paso 1.1: ~12 % del nivel 1 la primera, ~3 % las del final). Reescaladas en D.1 con la curva de 30 h y en D.21 con la curva de forma HB y la exp de mobs reforzada (siempre el mismo porcentaje de su nivel). */
 export const QUESTS: Quest[] = [
-    { name: 'Goblins del campamento', zone: 'Campamento goblin', type: 'goblin', n: 5, xp: 19, gold: 30, say: 'Unos goblins lanceros rondan al sureste y asustan a los mercaderes. Matá a 5 y volvé.' },
-    { name: 'La avanzada goblin', zone: 'Avanzada goblin', type: 'goblin_elite', n: 4, xp: 19, gold: 55, say: 'Más al norte armaron una avanzada con goblins de élite. Eliminá a 4.' },
-    { name: 'Hoyos traicioneros', zone: 'Hoyos de hormiga león', type: 'antlion', n: 5, xp: 20, gold: 80, say: 'Al oeste las hormigas león cavaron hoyos en el camino. Acabá con 5.' },
-    { name: 'El pantano muerto', zone: 'Pantano muerto', type: 'zombie', n: 5, xp: 33, gold: 110, say: 'Del pantano del este salen zombis. Necesito que mates a 5.' },
-    { name: 'Huesos inquietos', zone: 'Cementerio viejo', type: 'skeleton', n: 5, xp: 39, gold: 150, say: 'Los esqueletos del cementerio ya no descansan. Derrotá a 5.' },
-    { name: 'Magia prohibida', zone: 'Ruinas del nigromante', type: 'skeleton_mage', n: 4, xp: 49, gold: 190, say: 'Hay hechiceros esqueleto en las ruinas del sur. Cuidado con sus hechizos: matá a 4.' },
-    { name: 'Fuego en el hormiguero', zone: 'Hormiguero ardiente', type: 'fire_ant', n: 6, xp: 61, gold: 260, shard: 'cripta', say: 'El hormiguero ardiente del noreste es peligroso. Si volvés con 6 cabezas te doy una esquirla de llave: con 3 más de los bosses te forjo la llave de la cripta.' },
-    { name: 'Alas de ceniza', zone: 'Nidal de ceniza', type: 'wyvern', n: 4, xp: 76, gold: 320, say: 'Al sur del páramo hay un corredor que baja a las Tierras de ceniza. Los wyverns anidan en el centro: derribá a 4.' },
-    { name: 'El osario ardiente', zone: 'Osario ardiente', type: 'skeleton_mage', n: 5, xp: 86, gold: 400, say: 'Más al este, los hechiceros del osario no se apagan. Acabá con 5.' },
-    { name: 'La cantera del minotauro', zone: 'Cantera del minotauro', type: 'minotaur', n: 2, xp: 119, gold: 650, shard: 'foso', say: 'Los minotauros de la cantera cuidan el camino al foso. Si matás a 2 te doy una esquirla del foso: con 3 y 120 de oro te forjo la llave de la Cámara del foso.' },
+    { name: 'Goblins del campamento', zone: 'Campamento goblin', type: 'goblin', n: 5, xp: 5, gold: 30, say: 'Unos goblins lanceros rondan al sureste y asustan a los mercaderes. Matá a 5 y volvé.' },
+    { name: 'La avanzada goblin', zone: 'Avanzada goblin', type: 'goblin_elite', n: 4, xp: 13, gold: 55, say: 'Más al norte armaron una avanzada con goblins de élite. Eliminá a 4.' },
+    { name: 'Hoyos traicioneros', zone: 'Hoyos de hormiga león', type: 'antlion', n: 5, xp: 31, gold: 80, say: 'Al oeste las hormigas león cavaron hoyos en el camino. Acabá con 5.' },
+    { name: 'El pantano muerto', zone: 'Pantano muerto', type: 'zombie', n: 5, xp: 39, gold: 110, say: 'Del pantano del este salen zombis. Necesito que mates a 5.' },
+    { name: 'Huesos inquietos', zone: 'Cementerio viejo', type: 'skeleton', n: 5, xp: 71, gold: 150, say: 'Los esqueletos del cementerio ya no descansan. Derrotá a 5.' },
+    { name: 'Magia prohibida', zone: 'Ruinas del nigromante', type: 'skeleton_mage', n: 4, xp: 89, gold: 190, say: 'Hay hechiceros esqueleto en las ruinas del sur. Cuidado con sus hechizos: matá a 4.' },
+    { name: 'Fuego en el hormiguero', zone: 'Hormiguero ardiente', type: 'fire_ant', n: 6, xp: 119, gold: 260, shard: 'cripta', say: 'El hormiguero ardiente del noreste es peligroso. Si volvés con 6 cabezas te doy una esquirla de llave: con 3 más de los bosses te forjo la llave de la cripta.' },
+    { name: 'Alas de ceniza', zone: 'Nidal de ceniza', type: 'wyvern', n: 4, xp: 160, gold: 320, say: 'Al sur del páramo hay un corredor que baja a las Tierras de ceniza. Los wyverns anidan en el centro: derribá a 4.' },
+    { name: 'El osario ardiente', zone: 'Osario ardiente', type: 'skeleton_mage', n: 5, xp: 198, gold: 400, say: 'Más al este, los hechiceros del osario no se apagan. Acabá con 5.' },
+    { name: 'La cantera del minotauro', zone: 'Cantera del minotauro', type: 'minotaur', n: 2, xp: 296, gold: 650, shard: 'foso', say: 'Los minotauros de la cantera cuidan el camino al foso. Si matás a 2 te doy una esquirla del foso: con 3 y 120 de oro te forjo la llave de la Cámara del foso.' },
 ];
 export const SHARDS_PER_KEY = 3;
 /** Llaves de mazmorra: se forjan con esquirlas que sueltan los bosses (la de la cripta, los de afuera; la del foso, el jefe de la cripta). */

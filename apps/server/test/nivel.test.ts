@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
-import { relevel, MAX_LEVEL, QUESTS, expToLevel, expToLevelV8, killsToLevel, legacyExpToLevel, levelExpMult, levelGapMult, mobDef } from '@fdn/world';
+import { relevel, MAX_LEVEL, QUESTS, expToLevel, expToLevelV8, expToLevelV13, killsToLevel, legacyExpToLevel, levelExpMult, levelGapMult, mobDef, mobExpCurve, mobHpCurve } from '@fdn/world';
 import { loadSettings } from '../src/config.ts';
 import { ECON_VERSION, Economy, MAX_LVL, migrateEcon, newEcon, type EconCtx, type KillInfo } from '../src/economy.ts';
 import type { AccountRecord, Storage } from '../src/storage.ts';
@@ -36,12 +36,19 @@ const ctx = (): EconCtx => ({ npcs: [], restat: () => {}, ground: { add: () => {
 const kill = (type: Parameters<typeof mobDef>[0], lvl: number): KillInfo => ({ mobId: 1, type, def: mobDef(type, { lvl }), zoneName: 'prueba', origin: 'pit', x: 0, y: 0 });
 
 // ---------- A. curvas ----------
-test('curva (D.1): killsToLevel crece, 11 kills en el nivel 1 y ~6.300 en total hasta el 120 (~30 h al tope, ver sim:pve --horas)', () => {
-    assert.equal(killsToLevel(1), 11);
-    assert.ok(killsToLevel(relevel(10)) < 60, 'los primeros niveles son rápidos');
+test('curva (D.21): killsToLevel con forma de potencia (como la referencia), 3 kills en el nivel 1 y ~6.300 en total hasta el 120 (~30 h al tope, ver sim:pve --horas)', () => {
+    assert.equal(killsToLevel(1), 3, 'como en el juego de referencia: el primer nivel sale con un puñado de kills');
+    assert.ok(killsToLevel(10) <= 20, 'los primeros niveles son rápidos');
     let total = 0, prev = 0;
     for (let l = 1; l < MAX_LEVEL; l++) { const k = killsToLevel(l); assert.ok(k >= prev, `nivel ${l}`); prev = k; total += k; }
     assert.ok(total > 5_000 && total < 7_500, `kills totales hasta el ${MAX_LEVEL}: ${total}`);
+});
+
+test('curva (D.21): la exp por mob crece ~como la vida (exp ∝ vida^1,0-1,15, la proporción del juego de referencia): cazar arriba paga', () => {
+    // De p10 a p40 (niveles 28 y 120): en Evolution la exp crece un poco más rápido que la vida (Orc → Dragón: exp ∝ vida^1,07).
+    const [l1, l2] = [relevel(10), 120];
+    const eHp = Math.log(mobExpCurve(l2) / mobExpCurve(l1)) / Math.log(mobHpCurve(l2) / mobHpCurve(l1));
+    assert.ok(eHp > 1.0 && eHp < 1.3, `exp ∝ vida^${eHp.toFixed(2)}`);
 });
 
 test('curva: el multiplicador de exp baja en línea recta de 100 % a ~35 % y nunca sube', () => {
@@ -148,7 +155,19 @@ test('F: migración v8 -> v9 (D.1): la curva de 30 h conserva la fracción de pr
         assert.ok(st.exp < expToLevel(lvl), 'no sube de nivel sola');
         assert.equal(migrateEcon(st), false, 'migrar dos veces no cambia nada');
     }
-    assert.ok(expToLevelV8(60) > expToLevel(60) * 3, 'la curva nueva pide bastante menos');
+    assert.ok(expToLevelV8(60) > expToLevelV13(60) * 3, 'la curva de 30 h pedía bastante menos que la de 60 h');
+});
+
+test('F: migración v13 -> v14 (D.21): la curva nueva conserva la fracción de progreso del nivel', () => {
+    for (const [lvl, frac] of [[1, 0.5], [10, 0.5], [60, 0.8], [119, 0.1]] as const) {
+        const st = newEcon('paladin', 'solmar');
+        st.v = 13; st.lvl = lvl; st.exp = Math.round(expToLevelV13(lvl) * frac); st.gold = 321;
+        assert.equal(migrateEcon(st), true);
+        assert.equal(st.v, ECON_VERSION); assert.equal(st.lvl, lvl); assert.equal(st.gold, 321);
+        assert.ok(Math.abs(st.exp / expToLevel(lvl) - frac) < 0.02, `nivel ${lvl}: fracción ${(st.exp / expToLevel(lvl)).toFixed(3)}`);
+        assert.ok(st.exp < expToLevel(lvl), 'no sube de nivel sola');
+        assert.equal(migrateEcon(st), false, 'migrar dos veces no cambia nada');
+    }
 });
 
 test('migración: un nivel por encima del tope se recorta al tope (120) con exp 0, y la exp casi llena no sube de nivel sola', () => {
