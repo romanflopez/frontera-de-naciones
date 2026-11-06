@@ -1984,7 +1984,7 @@ function runDoorLine(): { t: string; c: string } {
  * de la pantalla de carga), se precargan los vecinos de lo que se ve, y mientras falta un bloque visible ese pedazo se dibuja directo, sin que se note.
  * Los menos usados se descartan; al cambiar de mapa o de escala se tiran todos.
  */
-const GC_CH = 256, GC_MAX = 400, GC_BUILDS = 1, GC_BUILDS_LOADING = 10;
+const GC_CH = 256, GC_MAX = 400, GC_BUILDS = 1, GC_BUILDS_LOADING = 120;
 const gc = { map: null as unknown, scale: 0, chunks: new Map<string, { cv: HTMLCanvasElement; used: number }>(), frame: 0, on: true };
 /** Dibuja en `c` (con la transformación que tenga) el terreno y las calcomanías que tocan el rectángulo del mundo. Devuelve las imágenes usadas. */
 function groundDraw(c: CanvasRenderingContext2D, wx0: number, wy0: number, wx1: number, wy1: number): Set<CanvasImageSource> {
@@ -2016,7 +2016,7 @@ function groundCached(): boolean {
     gc.frame++;
     /** ¿El bloque toca el mapa? (el mundo va de -N·TW/2 a N·TW/2 en x y de 0 a N·TH en y; fuera de eso no hay nada que dibujar). */
     const inMap = (ix: number, iy: number) => (ix + 1) * GC_CH / s > -N * TW / 2 && ix * GC_CH / s < N * TW / 2 && (iy + 1) * GC_CH / s > -TH && iy * GC_CH / s < N * TH + TH;
-    let budget = mapLoading || !worldReady ? GC_BUILDS_LOADING : GC_BUILDS;
+    let budget = mapLoading || !worldReady || revealPending ? GC_BUILDS_LOADING : GC_BUILDS; // el mundo tapado no se dibuja (D.14b): el cuadro del telón arma de una vez los bloques que se ven
     const build = (ix: number, iy: number): { cv: HTMLCanvasElement; used: number } | null => {
         const b0 = performance.now(), cvs = groundChunk(ix, iy, s); prof.add('chunkBuild', performance.now() - b0);
         if (!cvs) return null; const ch = { cv: cvs, used: gc.frame }; gc.chunks.set(`${ix},${iy}`, ch); budget--; return ch;
@@ -3360,7 +3360,9 @@ function frame(ts: number = performance.now()) {
     if (hitstop > 0) { hitstop -= dt; dt = 0; }
     if (!mapLoading) timed('update', () => { update(dt); checkPortals(); checkLinks(); wpTick(); npcTick(); });
     updateCam(Math.min(0.05, T - lastCam)); lastCam = T;
-    timed('hover', updateHover); { const r0 = performance.now(); render(); const rm = performance.now() - r0; diag.render(rm); prof.add('render', rm); if (rm > 30 && prof.hitches.length < 60) prof.hitches.push({ at: Math.round(performance.now()), ms: Math.round(rm), sec: rsec.map((q, i) => `${q[0]} ${i ? Math.round(q[1] - rsec[i - 1][1]) : 0}`).join(' | '), x: P.cell.x, y: P.cell.y, map: MAP_DEF.id, mobs: mobs.length, chunks: gc.chunks.size }); } timed('hud', hud); timed('winTick', () => winTick(T)); timed('minimap', minimapTick);
+    // El mundo se dibuja solo cuando se va a ver: con el mundo listo, o en el cuadro justo antes de levantar el telón (`revealPending`).
+    // En login, selección y pantalla de viaje está tapado, y dibujarlo igual le saca cuadros a esas pantallas y a la entrada.
+    timed('hover', updateHover); if (worldReady || revealPending) { const r0 = performance.now(); render(); const rm = performance.now() - r0; diag.render(rm); prof.add('render', rm); if (rm > 30 && prof.hitches.length < 60) prof.hitches.push({ at: Math.round(performance.now()), ms: Math.round(rm), sec: rsec.map((q, i) => `${q[0]} ${i ? Math.round(q[1] - rsec[i - 1][1]) : 0}`).join(' | '), x: P.cell.x, y: P.cell.y, map: MAP_DEF.id, mobs: mobs.length, chunks: gc.chunks.size }); } timed('hud', hud); timed('winTick', () => winTick(T)); timed('minimap', minimapTick);
     prof.add('frameMs', dt * 1000);
     if (revealPending && T >= homeWaitUntil && sheetsReady) hideMapLoading(); // el mapa ya se dibujó en este cuadro
     requestAnimationFrame(frame);
