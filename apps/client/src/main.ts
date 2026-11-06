@@ -2908,12 +2908,15 @@ function renderShop() {
         const icon = it ? ico(it) : `<img class="iico" alt="" src="${potionIcon(st.pot!)}">`;
         return `<button type="button" class="srow${poor ? ' poor' : ''}" data-buy="${i}" title="${esc(stockInfo(st))}">${icon}<span style="color:${it ? '#e7e2d3' : POTS[st.pot!].col}">${esc(stockLabel(st))}<small>${esc(stockInfo(st))}</small></span><em>${st.price}</em></button>`;
     }).join('');
-    const junk = junkTotal(), dailyBlock = roleOf(shopNpc) === 'mercader' && daily.length ? `<div class="label">Oferta del día (cambia a diario, igual para todos)</div>${dailyRows()}` : '';
+    const junk = junkTotal(), dailyBlock = roleOf(shopNpc) === 'mercader' && daily.length ? `<div class="shp-sub">Oferta del día (cambia a diario, igual para todos)</div>${dailyRows()}` : '';
     // la basura se vende toda junta desde el pie de la ventana (el "REPAIR ME" del diseño)
     $('shopJunk').innerHTML = junk.n ? `<button type="button" class="qw-btn" id="sellJunk" title="${junk.n} material${junk.n > 1 ? 'es' : ''} del botín">Vender basura · ${junk.gold} oro</button>` : '';
-    $('shopList').innerHTML = `${dailyBlock}<div class="label">Comprar</div>${buy}<div class="label">Tu bolsa · tocá un item para venderlo</div>` + (P.bag.length
-        ? P.bag.map((it, i) => `<button type="button" class="srow" data-sell="${i}">${ico(it)}<span style="color:${it.rar.c}">${esc(it.name)}<small>${it.rar.n} · ${it.slot}</small></span><em>${sellPrice(it.name, it.rar.k)}</em></button>`).join('')
-        : `<div class="label">La bolsa está vacía</div>`);
+    const sell = P.bag.length
+        ? P.bag.map((it, i) => `<button type="button" class="srow" data-sell="${i}" title="Vender por ${sellPrice(it.name, it.rar.k)} de oro">${ico(it)}<span style="color:${it.rar.c}">${esc(it.name)}<small>${it.rar.n} · ${it.slot}</small></span><em aria-label="Te pagan ${sellPrice(it.name, it.rar.k)} de oro">${sellPrice(it.name, it.rar.k)}</em></button>`).join('')
+        : `<p class="shp-empty">La bolsa está vacía.</p>`;
+    // dos paneles lado a lado: lo que vende el NPC y tu bolsa, cada uno con su scroll vertical
+    $('shopList').innerHTML = `<section class="shp"><h3>Comprar</h3><div class="shp-list">${dailyBlock}${dailyBlock ? '<div class="shp-sub">Siempre en stock</div>' : ''}${buy}</div></section>`
+        + `<section class="shp"><h3>Tu bolsa<small>Tocá un ítem para venderlo. El número es lo que te pagan.</small></h3><div class="shp-list">${sell}</div></section>`;
     document.querySelectorAll<HTMLElement>('[data-buy]').forEach((b) => (b.onclick = () => buyStock(def.stock[+b.dataset.buy!])));
     document.querySelectorAll<HTMLElement>('[data-daily]').forEach((b) => (b.onclick = () => {
         const i = +b.dataset.daily!, o = daily[i]; if (!o || !shopNpc) return;
