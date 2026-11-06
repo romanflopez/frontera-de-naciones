@@ -337,6 +337,9 @@ Contador EK por personaje; contribución por nación; tienda de contribución (v
 ### D.0 Renombres y esqueleto del arquero (S) — va primero, bloquea a los demás
 `guerrero` → `paladin`, `healer` → `clerigo` en `kits.ts`, `stats.ts`, sims, cliente, docs y tests (con alias de lectura para cuentas guardadas: `migrateEcon`). Clase `arquero` registrada con kit vacío y oculta en la pantalla de crear hasta que tenga kit. **Pruebas:** F migración de cuentas con clase vieja; A `isClass`; typecheck entero.
 
+### D.21 Curva de exp con forma HB y exp por mob ∝ vida (M)
+Con las fórmulas y tablas de Helbreath relevadas (proyecto "eris": `helbreath-olympia-wiki-formulas-y-tablas.md`, `helbreath-evolution-wiki-datos.md`). `killsToLevel` pasa de recta a potencia (`2,7·L^0,735`: 3 kills en Nv1, mismo total ~6.300 y ~30 h; el arranque es el de HB) y `mobExpCurve` de `p^1,5` a `p^1,9` (exp ∝ vida^1,05-1,25, la proporción de Evolution: cazar arriba paga). Los MOBS base y las xp de las misiones se reescalan para seguir pesando lo mismo. **Pruebas:** A curva y proporción exp/vida; F migración v14 (fracción del nivel); D `sim:pve --horas` ~30 h y `sim:pvp` sin empeorar.
+
 ### D.20 Balance general (L, después de definir los ítems)
 Ajustar combate y progresión hasta dejar `sim:pvp` y `sim:pve` dentro de objetivo, usando como referencia el material de Helbreath que pase Román. Se detalla cuando los ítems estén definidos. Hasta entonces, cada paso solo tiene que no empeorar las sims. **Pruebas:** D en verde; E con 2 personas.
 
@@ -360,6 +363,9 @@ Email obligatorio al crear; contraseña mínima 8; Resend; token de 30 min. Cuen
 
 ### D.18 Pantallas de entrada (M)
 Muñeco centrado y sin pixelar, modal de borrar con el kit, última conexión en el detalle, fichas de nación/clase. Logos y escudos los pasa Román. **Pruebas:** E.
+
+### D.21 Rendimiento del cliente (M, medido en `docs/RENDIMIENTO.md`)
+Hecho: caché del terreno y perfilador. Falta el arreglo de las hojas de sprites de los mobs (~1,5 GB decodificadas; con 5 tipos de mob a la vez los cuadros se congelan 1,5-3,3 s): recortar y reexportar a la escala que se usa, variante a escala 1, cargar por mapa. Decide Román después de probar `?half`. **Pruebas:** E (`__fdn.prof()` en Cañón goblin con 150+ mobs y 5 tipos a la vista: sin cuadros de más de 100 ms); medir antes y después.
 
 ### D.19 NPCs: tienda directa (S)
 Vendedor abre la tienda sin diálogo; nombre y rol sobre la cabeza. Los sprites nuevos van con el pipeline de arte. **Pruebas:** E.
