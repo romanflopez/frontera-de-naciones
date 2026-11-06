@@ -186,8 +186,16 @@ export function buildFlareMap(d: FlareMapData): WorldMap {
     for (const e of d.extras) disc(e.cell, SAFE_R);
     if (FIELD_ERIS.has(d.eris)) disc(FLARE_BACK, SAFE_R);
         const zones: Zone[] = thinZones(d.eris, d.zones).map((z) => ({ type: z.type as MobType, x: z.x, y: z.y, r: z.r, n: z.n, name: z.name, lvl: z.lvl, ...(d.dungeon && z.kind !== 'boss' ? { tier: 'dungeon' as const } : {}), respawn: z.kind === 'pit' ? PIT_RESPAWN : LOOSE_RESPAWN, aggro: z.kind === 'pit' ? 3 : 4 }));
-    // PRUEBA DE ARTE: un par de esqueletos cerca de la entrada de los campos para ver el Free Skeleton (sacar junto con el sprite)
-    if (FIELD_ERIS.has(d.eris)) zones.push({ type: 'skeleton', x: 20, y: 44, r: 3, n: 2, name: `Prueba de arte: esqueletos${d.eris.endsWith('_vhar') ? ' (Vhar)' : ''}`, lvl: 4, respawn: PIT_RESPAWN, aggro: 3 });
+    // PRUEBA DE ARTE: mobs con sprites de prueba cerca de la entrada de los campos (sacar junto con los sprites)
+    if (FIELD_ERIS.has(d.eris)) {
+        const sfx = d.eris.endsWith('_vhar') ? ' (Vhar)' : '';
+        const T: [MobType, string, number, number, number, number][] = [
+            ['skeleton', 'esqueletos', 20, 44, 2, 4], ['wolf', 'lobos', 22, 38, 2, 2], ['hellhound', 'perros infernales', 26, 44, 2, 4],
+            ['knight_free', 'caballeros', 28, 38, 2, 3], ['zombie_worker', 'zombis oficinistas', 20, 50, 2, 2],
+            ['mounted_knight', 'caballero montado', 27, 32, 1, 4], ['blade_assassin', 'jefe: asesino de la hoja', 32, 44, 1, 4],
+        ];
+        for (const [type, name, x, y, n, lvl] of T) zones.push({ type, x, y, r: 2, n, name: `Prueba de arte: ${name}${sfx}`, lvl, respawn: PIT_RESPAWN, aggro: 3 });
+    }
     return { size: N, tiles, blocked, safe, props, decals: [], zones, buildings: [], npcs: [], spawn: { ...d.entry }, fire: { x: -50, y: -50 }, ...(d.dungeon ? { dungeon: { x0: 0, y0: 0, x1: N - 1, y1: N - 1 } } : {}) };
 }
 

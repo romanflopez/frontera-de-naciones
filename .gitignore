@@ -43,3 +43,9 @@ assets-crudos/
 # Goblin Scout (SovDigital): licencia sin redistribución, queda solo en local
 apps/client/public/assets/goblin_scout.webp
 apps/client/public/assets/skeleton_free.webp
+apps/client/public/assets/wolf.webp
+apps/client/public/assets/hellhound.webp
+apps/client/public/assets/knight_free.webp
+apps/client/public/assets/zombie_worker.webp
+apps/client/public/assets/mounted_knight.webp
+apps/client/public/assets/blade_assassin.webp
