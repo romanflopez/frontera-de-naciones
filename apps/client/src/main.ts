@@ -3603,6 +3603,7 @@ async function boot() {
         names.forEach((n, i) => (IMG[n] = imgs[i]));
         // Goblin Scout (SovDigital): el .webp es local y NO va al repo (licencia, ver docs/DUDAS.md); si falta, `goblin_scout` se dibuja con el goblin de siempre
         try { IMG.goblin_scout = await load('assets/goblin_scout.webp'); } catch { IMG.goblin_scout = IMG.goblin; SPR.goblin_scout = SPR.goblin; console.info('[arte] falta assets/goblin_scout.webp: uso el goblin normal'); }
+        try { IMG.skeleton_free = await load('assets/skeleton_free.webp'); } catch { IMG.skeleton_free = IMG.skeleton; SPR.skeleton_free = SPR.skeleton; console.info('[arte] falta assets/skeleton_free.webp: uso el esqueleto normal'); } // Free Skeleton (SovDigital): local, no va al repo
     } catch { setLoading(1, 'No se pudieron cargar los gráficos. Recargá la página.'); return; }
     try { FXM = await (await fetch('assets/fx.json')).json(); IMG.fx = await load('assets/fx.webp'); } catch { FXM = null; }
     setLoading(1);

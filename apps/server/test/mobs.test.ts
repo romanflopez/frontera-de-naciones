@@ -9,7 +9,7 @@ const meta = JSON.parse(readFileSync(assets + 'meta.json', 'utf8')) as Record<st
 
 test('el protocolo manda el índice del tipo: los 13 originales no se reordenan y los nuevos van al final', () => {
     assert.deepEqual(MOB_TYPES.slice(0, 13), ['goblin', 'zombie', 'skeleton', 'barbaro', 'goblin_elite', 'antlion', 'skeleton_mage', 'fire_ant', 'wyvern', 'minotaur', 'arana', 'golem', 'demonio']);
-    assert.deepEqual(MOB_TYPES.slice(13), ['hobgoblin', 'hobgoblin_archer', 'skeleton_archer', 'zombie_dark', 'cursed_grave', 'ice_ant', 'antlion_small', 'wyvern_fire', 'wyvern_ice', 'goblin_jefe', 'antlion_reina', 'caballero_cripta', 'mago_mayor', 'wyvern_aire', 'demonio_foso', 'verdugo', 'coloso', 'goblin_scout']);
+    assert.deepEqual(MOB_TYPES.slice(13), ['hobgoblin', 'hobgoblin_archer', 'skeleton_archer', 'zombie_dark', 'cursed_grave', 'ice_ant', 'antlion_small', 'wyvern_fire', 'wyvern_ice', 'goblin_jefe', 'antlion_reina', 'caballero_cripta', 'mago_mayor', 'wyvern_aire', 'demonio_foso', 'verdugo', 'coloso', 'goblin_scout', 'skeleton_free']);
     assert.equal(new Set(MOB_TYPES).size, MOB_TYPES.length, 'sin tipos repetidos');
 });
 
@@ -24,7 +24,7 @@ test('todo tipo tiene definición coherente', () => {
 
 test('los tipos nuevos siguen las curvas de ZONAS.md (vida y exp a ±25 %, salvo la cría, que es más débil a propósito)', () => {
     for (const t of MOB_TYPES.slice(13) as MobType[]) {
-        if (MOBS[t].boss || t === 'goblin_scout') continue; // goblin_scout es un clon de `goblin` (stats originales), solo cambia el sprite
+        if (MOBS[t].boss || t === 'goblin_scout' || t === 'skeleton_free') continue; // goblin_scout es un clon de `goblin` (stats originales), solo cambia el sprite
         const d = MOBS[t], weak = t === 'antlion_small' || t === 'hobgoblin_archer';
         const lo = weak ? 0.55 : 0.75, hi = 1.25;
         assert.ok(d.hp / mobHpCurve(d.lvl) >= lo && d.hp / mobHpCurve(d.lvl) <= hi, `${t} vida ${d.hp} vs curva ${Math.round(mobHpCurve(d.lvl))}`);
@@ -45,7 +45,7 @@ test('un tipo nuevo se reescala a otro nivel de zona como los demás (y no es je
 test('todo tipo tiene su atlas y su meta con las 5 animaciones del cliente en 8 direcciones', () => {
     for (const t0 of MOB_TYPES) {
         const t = MOBS[t0].sprite ?? t0;
-        if (t !== 'goblin_scout') assert.ok(existsSync(assets + t + '.webp'), `falta apps/client/public/assets/${t}.webp`);
+        if (t !== 'goblin_scout' && t !== 'skeleton_free') assert.ok(existsSync(assets + t + '.webp'), `falta apps/client/public/assets/${t}.webp`);
         const m = meta[t];
         assert.ok(m, `falta ${t} en meta.json`);
         for (const a of ['stance', 'run', 'swing', 'hit', 'die']) {

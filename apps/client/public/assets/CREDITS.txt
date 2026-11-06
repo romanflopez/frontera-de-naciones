@@ -92,3 +92,4 @@ Mapas abiertos Nv7-11 (Paso de Stormrock, Cenizas I-III): mapas "stormrock_pass"
 
 Prueba de arte (pendiente de decidir si se queda):
   - goblin_scout.webp: Goblin Scout (Free Sampler v2.0.5) de SovDigital (https://sovdigital.itch.io). Licencia: uso comercial permitido dentro del juego; NO se puede redistribuir como asset suelto. Ver docs/DUDAS.md.
+  - skeleton_free.webp: Free Skeleton v1.2.6 de SovDigital (misma licencia y misma condición que el Goblin Scout).
