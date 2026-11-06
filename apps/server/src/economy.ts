@@ -11,7 +11,7 @@
 import { DROPS } from './drops.ts';
 import {
     ATTR_RANGES, traitExpMult, traitDropMult, BAG_MAX, BASE_BY_NAME, BASES, KEY_IDS, KEYDEFS, POT_MAX, POTS, QUESTS, roleOf, SHARDS_PER_KEY, SHOP_SERVER_RANGE,
-    SHOPS, SLOTS, slotsFor, fitsSlot, TRAINING, cleanStats, defaultStats, expToLevel, expToLevelV8, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statPointsFree, statPointsSpent, statResetCost, STAT_RESET_FREE_LVL, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, sellPrice, trainingUnlocked,
+    SHOPS, SLOTS, slotsFor, fitsSlot, TRAINING, cleanStats, defaultStats, expToLevel, expToLevelV8, expToLevelV13, legacyExpToLevel, STAT_CAP, STAT_IDS, STAT_NAMES, statPointsFree, statPointsSpent, statResetCost, STAT_RESET_FREE_LVL, type StatId, type Stats, levelExpMult, levelGapMult, MAX_LEVEL, sellPrice, trainingUnlocked,
     BOSS_UNIQUES, UNIQUES_BY_TIER, SET_PIECES_BY_TIER, UNIQUE_BASES, UP_MAX, UP_MAX_BY_QUALITY, QUALITY_NAMES, EXTRAS_BY_QUALITY, rollExtra, rollExtras, pickExtra, uniqueIlvl, EXTRA_POOL, upGold, upStones, UNIQUE_BY_NAME, UNIQUE_TIERS_READY, UNIQUE_VARIATION, tierOfLevel, itemBandOfLevel, type UniqueBase,
     type AttrId, type KeyId, type MobDef, type MobType, type Npc, type PotKind, type Slot,
     DAILY_BY_ID, DAILY_EXP_PCT, DUNGEON_KEY, DAILY_LIMIT, DUNGEON_BOSS, DUNGEON_IDS, DUNGEON_MAP, MAIN_QUESTS, QUEST_MATS, BOSS_KEY_DROPS, KEY_RECIPES, keyMatName, junkValue, MAT_REFORJA, reforgeGold, reforgeStones, keyMissing, REPEAT_MATS, RESERVED_MATS, TRAIT_MUTANT, applyQuestEvent, cleanQuestBook, dailyGold,
@@ -27,7 +27,7 @@ import type { AccountRecord, Storage } from './storage.ts';
 /** v3: nivel máximo 40 y curva de exp nueva (migra la exp guardada conservando la fracción del nivel). v4: puntos de stats. */
 /** Tope de tickets de reset de stats que se pueden tener. */
 export const RESET_TICKET_MAX = 99;
-export const ECON_VERSION = 13;
+export const ECON_VERSION = 14;
 export const MAX_LVL = MAX_LEVEL;
 /** Sin límite de oro de juego: el único techo es el técnico (entero exacto en JS / double del protocolo). */
 export const MAX_GOLD = Number.MAX_SAFE_INTEGER;
@@ -302,6 +302,12 @@ export function migrateEcon(st: Econ): boolean {
     }
     // v13 (D.7): tickets de reset de stats; las cuentas viejas arrancan en 0 y un valor raro se sanea.
     if (st.v < 13) st.resetTickets = clampInt(Number(st.resetTickets) || 0, 0, RESET_TICKET_MAX, 0);
+    // v14 (D.21): curva con la forma del juego de referencia y exp de mobs reforzada (×p^0,4). La exp guardada es absoluta: se conserva la
+    // fracción del nivel contra la curva anterior (las cuentas más viejas que v9 ya quedaron convertidas a la curva actual más arriba).
+    if (st.v >= 9 && st.v < 14 && st.lvl < MAX_LVL) {
+        const frac = Math.min(0.999, Math.max(0, st.exp / Math.max(1, expToLevelV13(st.lvl))));
+        st.exp = Math.min(expToLevel(st.lvl) - 1, Math.floor(frac * expToLevel(st.lvl)));
+    }
     st.v = ECON_VERSION;
     refreshUnlocks(st);
     return true;

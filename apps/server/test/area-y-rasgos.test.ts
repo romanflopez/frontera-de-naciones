@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import type { ServerMessage } from '@fdn/proto';
 import { relevel,
     ANTI_DAMAGE_MULT, FLEE_HP_FRAC, MUTANT_DROP_MULT, TRAIT_ANTI_MAGIC, TRAIT_ANTI_PHYS, TRAIT_EXPLOSIVE, TRAIT_MUTANT, TRAIT_TOXIC, TRAIT_WILD,
-    fleeChance, mobDef, traitDropMult, traitExpMult, traitHpMult, traitLabel, type MobType, type WorldMap,
+    expToLevel, fleeChance, mobDef, traitDropMult, traitExpMult, traitHpMult, traitLabel, type MobType, type WorldMap,
 } from '@fdn/world';
 import { MobSim, type MobHost } from '../src/mobs.ts';
 import type { Player } from '../src/player.ts';
@@ -224,7 +224,8 @@ test('exp en el server: matar un mutante da el triple, un salvaje +25 % y los ra
     eco.snapshot(p); st.qb!.d.done = ['pits', 'recolector', 'frontera']; // tope del día alcanzado: el encargo del mutante no se cobra y no suma exp
     const ctx: EconCtx = { npcs: [], restat: () => {}, ground: { add: () => {} } as never };
     const k = (traits: number): KillInfo => ({ mobId: 1, type: 'goblin', def: mobDef('goblin', { lvl: 1 }), zoneName: 'prueba', origin: 'pit', x: 0, y: 0, traits });
-    const gain = (traits: number) => { st.lvl = 1; st.exp = 0; eco.reward(p, ctx, k(traits)); return st.exp; };
+    // Con la curva D.21 el nivel 1 pide pocos kills: un golpe de exp grande (el mutante) puede subir de nivel, así que se cuenta la exp total ganada.
+    const gain = (traits: number) => { st.lvl = 1; st.exp = 0; eco.reward(p, ctx, k(traits)); let g = st.exp; for (let l = 1; l < st.lvl; l++) g += expToLevel(l); return g; };
     const base = gain(0);
     assert.equal(gain(TRAIT_MUTANT), base * 3);
     assert.equal(gain(TRAIT_WILD), Math.round(base * 1.25));
