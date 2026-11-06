@@ -42,3 +42,4 @@ Una línea por duda: qué, dónde, qué opciones se ven.
 - **D.21, qué pantalla usa Román:** el costo de las hojas depende del tamaño de ventana y de la densidad de píxeles (a retina se ven a escala casi 1:1; en 1080p estándar a ~0,7). Si decide una variante a escala 1, hay que fijar desde qué tamaño se usa.
 - **D.16, vender sin confirmación:** tocar un ítem de la bolsa lo vende al instante. Opción: confirmar solo desde cierta rareza (el server igual decide).
 - **D.16, borde dorado del marco de las ventanas:** viene del kit (`.cw`) y se dejó; entra en la decisión de estilo global de D.18.
+- **Fix oro decimal:** un valor no entero en cualquier campo int32 del protocolo hace caer el server si el envío no está dentro de un handler con try/catch (pasó al entrar, en `bindAccount`). Opción: que `Player.send` atrape el error de codificación y avise, en vez de dejar que mate el proceso.

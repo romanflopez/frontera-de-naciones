@@ -27,7 +27,7 @@ import type { AccountRecord, Storage } from './storage.ts';
 /** v3: nivel máximo 40 y curva de exp nueva (migra la exp guardada conservando la fracción del nivel). v4: puntos de stats. */
 /** Tope de tickets de reset de stats que se pueden tener. */
 export const RESET_TICKET_MAX = 99;
-export const ECON_VERSION = 14;
+export const ECON_VERSION = 15;
 export const MAX_LVL = MAX_LEVEL;
 /** Sin límite de oro de juego: el único techo es el técnico (entero exacto en JS / double del protocolo). */
 export const MAX_GOLD = Number.MAX_SAFE_INTEGER;
@@ -308,6 +308,8 @@ export function migrateEcon(st: Econ): boolean {
         const frac = Math.min(0.999, Math.max(0, st.exp / Math.max(1, expToLevelV13(st.lvl))));
         st.exp = Math.min(expToLevel(st.lvl) - 1, Math.floor(frac * expToLevel(st.lvl)));
     }
+    // v15: el oro quedó con decimales (`repeatGold` daba 20 + 6·poder sin redondear) y un oro no entero hace caer el server al mandar el inventario (int32).
+    if (st.v < 15) st.gold = clampInt(st.gold, 0, MAX_GOLD, 0);
     st.v = ECON_VERSION;
     refreshUnlocks(st);
     return true;
@@ -326,7 +328,7 @@ function levelUp(st: Econ): number {
     refreshUnlocks(st);
     return n;
 }
-const addGold = (st: Econ, n: number) => { st.gold = Math.min(MAX_GOLD, Math.max(0, st.gold + n)); };
+const addGold = (st: Econ, n: number) => { st.gold = Math.min(MAX_GOLD, Math.max(0, Math.round(st.gold + n))); }; // siempre entero: el oro viaja en un int32
 /** Lo que tiene el personaje para los objetivos de "tener" de las misiones: materiales y la mejora más alta entre sus únicos. */
 const questHave = (st: Econ): QuestHave => ({ mats: st.mats ?? {}, maxUp: Math.max(0, ...st.bag.map((i) => i.up ?? 0), ...SLOTS.map((sl) => st.eq[sl]?.up ?? 0)) });
 const bonus = (st: Econ, id: AttrId): number => SLOTS.reduce((s, sl) => s + (st.eq[sl]?.a.find((x) => x.id === id)?.v ?? 0), 0);

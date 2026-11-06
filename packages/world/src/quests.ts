@@ -354,7 +354,7 @@ export const msToReset = (now: number): number => (questDay(now) + 1) * DAY_MS +
 
 /** Repetible: N materiales iguales por oro o por una piedra de forja. */
 export const REPEAT_MATS = 10;
-export const repeatGold = (lvl: number): number => 20 + 6 * powerLevel(lvl);
+export const repeatGold = (lvl: number): number => Math.round(20 + 6 * powerLevel(lvl)); // entero: va a un campo int32 del protocolo
 
 // ---------- estado ----------
 export interface QuestBook {
