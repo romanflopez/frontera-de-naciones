@@ -186,6 +186,8 @@ export function buildFlareMap(d: FlareMapData): WorldMap {
     for (const e of d.extras) disc(e.cell, SAFE_R);
     if (FIELD_ERIS.has(d.eris)) disc(FLARE_BACK, SAFE_R);
         const zones: Zone[] = thinZones(d.eris, d.zones).map((z) => ({ type: z.type as MobType, x: z.x, y: z.y, r: z.r, n: z.n, name: z.name, lvl: z.lvl, ...(d.dungeon && z.kind !== 'boss' ? { tier: 'dungeon' as const } : {}), respawn: z.kind === 'pit' ? PIT_RESPAWN : LOOSE_RESPAWN, aggro: z.kind === 'pit' ? 3 : 4 }));
+    // PRUEBA DE ARTE: un par de esqueletos cerca de la entrada de los campos para ver el Free Skeleton (sacar junto con el sprite)
+    if (FIELD_ERIS.has(d.eris)) zones.push({ type: 'skeleton', x: 20, y: 44, r: 3, n: 2, name: `Prueba de arte: esqueletos${d.eris.endsWith('_vhar') ? ' (Vhar)' : ''}`, lvl: 4, respawn: PIT_RESPAWN, aggro: 3 });
     return { size: N, tiles, blocked, safe, props, decals: [], zones, buildings: [], npcs: [], spawn: { ...d.entry }, fire: { x: -50, y: -50 }, ...(d.dungeon ? { dungeon: { x0: 0, y0: 0, x1: N - 1, y1: N - 1 } } : {}) };
 }
 
