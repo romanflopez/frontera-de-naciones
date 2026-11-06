@@ -192,7 +192,7 @@ const invItem = (i: SItem) => ({ uid: i.u, base: i.n, rarity: i.r, attrs: i.a.ma
 export const inventoryState = (st: Econ): ServerMessage => { const caps = currentCaps(); return msg({
     $case: 'inventoryState',
     value: {
-        gold: Math.min(2147483647, st.gold), goldD: st.gold, lvl: st.lvl, exp: st.exp, bag: st.bag.map(invItem),
+        gold: Math.min(2147483647, Math.floor(st.gold)), goldD: st.gold, lvl: st.lvl, exp: st.exp, bag: st.bag.map(invItem),
         eq: (Object.keys(st.eq) as (keyof Econ['eq'])[]).flatMap((slot) => (st.eq[slot] ? [{ slot, item: invItem(st.eq[slot]!) }] : [])),
         potsHp: st.pots.hp, potsMp: st.pots.mp,
         questI: st.q.i, questState: st.q.st, questProg: st.q.prog,
